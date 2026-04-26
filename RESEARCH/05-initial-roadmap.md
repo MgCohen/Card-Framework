@@ -39,7 +39,7 @@ Questions to answer:
 Possible docs:
 
 - Core glossary.
-- Entity and identity model.
+- Entity, definition, instance, and instance ID model.
 - Zone model.
 - Event/history model.
 - Command/decision model.

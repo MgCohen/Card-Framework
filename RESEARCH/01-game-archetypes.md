@@ -22,7 +22,7 @@ Framework lessons:
 - Zones must be first-class, configurable, and capable of hidden/public/ordered/shared/player-owned semantics.
 - The rules scheduler needs more than "play card, resolve card"; it needs priority windows, pending triggers, immediate checks, and event replacement.
 - Effects should be able to watch, replace, prevent, queue, and resolve other effects.
-- Object identity across zone changes needs careful handling. In Magic, many zone changes create a new object for rules purposes.
+- Zone changes need careful handling. In Magic, many zone changes effectively replace one game object with another for rules purposes.
 - A framework should allow stack-based games, even if simpler games do not use a stack.
 
 Sources:
@@ -70,7 +70,7 @@ Framework lessons:
 - Cards are not only combat actions; they can be rewards, penalties, deck-building objects, shop goods, upgrade targets, or event outcomes.
 - Passive systems like relics need the same event/trigger infrastructure as card abilities.
 - Not every game needs multiplayer or hidden opponent state, but deterministic replay and action history still matter for testing and tools.
-- Encounter-local copies and run-persistent deck entries need clear identity boundaries.
+- Encounter-local copies and run-persistent deck entries need clear instance/reference boundaries.
 
 Source:
 
@@ -106,7 +106,7 @@ Sources:
 ## Cross-Archetype Takeaways
 
 - **Cards are entities, not just data rows.** A definition says what a card is; an instance says where this copy is, who owns it, what changed, and what it is doing now.
-- **Zones are rules objects.** A zone can be ordered, hidden, public, spatial, shared, player-owned, temporary, or virtual.
+- **Zones are organization objects.** A zone can own contents, ordering, visibility channels, capacity defaults, and insertion/removal behavior. Game/action rules decide whether something is allowed to move there.
 - **Effects need a scheduler.** The scheduler may be stack-based, queue-based, turn-step-based, tick-based, or a mix.
 - **Game action should be request/validate/resolve.** Presentation requests intent; rules validate and resolve.
 - **Reactive history is central.** Animation, UI, replays, tests, AI, save/load, and networking all benefit from the same ordered stream.

@@ -26,26 +26,27 @@ Reasoning:
 
 ## Recommendation 3: Treat Zones As A Core Primitive
 
-Zones should not be hardcoded as deck/hand/discard. They should be configurable rules objects.
+Zones should not be hardcoded as deck/hand/discard. They should be configurable organization models that game/action rules can query.
 
 Reasoning:
 
-- Magic needs formal zones with visibility, ordering, and stack semantics.
+- Magic needs formal zones with visibility, ordering, and stack organization.
 - Slay needs combat piles, run deck, rewards, shops, exhaust, and relic inventories.
 - Stacklands needs freeform spatial areas, physical stacks, production groups, and card packs.
 - Multiplayer needs zone visibility and hidden-information filtering.
 
-## Recommendation 4: Separate Authoring Entities From Runtime Simulation If Needed
+## Recommendation 4: Explore Scaffold Entities Before Drawing A Hard Boundary
 
-`com.scaffold.entities` looks very useful for authoring and Unity-facing entity instances, but the rules core may still need a Unity-free runtime representation.
+`com.scaffold.entities` looks directly relevant to the current Core Model direction: definitions, runtime instances, variables, modifiers, and composition. Do not force it to be authoring-only or simulation-only yet.
 
 Reasoning:
 
-- Scaffold Entities uses ScriptableObjects and UnityEngine.
-- A pure simulation core is easier to unit test, run in tools, serialize, replay, and potentially host outside Unity.
-- The authoring layer can convert Scaffold entity definitions into pure runtime definitions.
+- The current preferred value model is simple variables inspired by Scaffold Entities.
+- The project may benefit from using the same concepts for authoring and runtime.
+- Scaffold States may still be better for snapshots, mutation history, or canonical state.
+- We do not yet know whether Entities and Store complement each other or duplicate each other.
 
-This is not a final decision. It is a dependency-boundary caution.
+This is not a final package decision. It is a research direction: test the fit before inventing a custom model.
 
 ## Recommendation 5: Make History A First-Class Output
 
@@ -143,7 +144,7 @@ This better tests spatial systems, but it may delay structured rule-engine work.
 ## Current Preferred Path
 
 1. Define vocabulary and invariants.
-2. Design pure local simulation loop.
+2. Design local simulation loop.
 3. Choose the first vertical slice.
 4. Design authoring conversion.
 5. Design presentation and interaction around history.

@@ -4,14 +4,18 @@ These are unresolved design questions worth answering before implementation or d
 
 ## Core Model
 
+Status: initial answers captured in [Core Model Decisions](08-core-model-decisions.md), then incorporated into [Core Glossary](09-core-glossary.md) and [Entity, Definition, And Instance Model](10-entity-definition-instance-model.md).
+
 - Should the pure simulation core depend directly on Scaffold packages, or should Scaffold be used only in Unity-facing adapters?
 - Should card/entity values be stored primarily as flexible variables/tags, typed state records, or a hybrid?
 - What is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?
-- How should identity behave when a card changes zones?
+- How should instances behave when a card changes zones?
 - Do all entities have definitions, or can runtime-only entities exist without definitions?
-- How do attachments, equipment, stacked cards, tokens, and transformed cards relate to base card identity?
+- How do attachments, equipment, stacked cards, tokens, and transformed cards relate to a base card instance?
 
 ## Zones
+
+Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisions.md), then incorporated into [Zone Model](12-zone-model.md).
 
 - What zone traits are mandatory in core?
 - How should spatial board positions relate to zone membership?
@@ -21,6 +25,8 @@ These are unresolved design questions worth answering before implementation or d
 - How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?
 
 ## Rules And Scheduling
+
+Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Scheduler-specific questions remain open.
 
 - Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?
 - Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?
@@ -88,7 +94,7 @@ These are unresolved design questions worth answering before implementation or d
 - Do not overfit to Hearthstone just because the old docs explored SabberStone deeply.
 - Do not overfit to Magic's full rules complexity before simpler schedulers prove themselves.
 - Do not treat Stacklands as "just presentation"; spatial placement and stacking are rules.
-- Do not make multiplayer early implementation work, but do keep command/history/identity boundaries multiplayer-friendly.
+- Do not make multiplayer early implementation work, but do keep command/history/instance-reference boundaries multiplayer-friendly.
 - Do not let data-driven authoring prevent custom code for genuinely complex cards.
 
 ## Likely First Decisions
@@ -97,8 +103,9 @@ The first practical decisions should probably be:
 
 1. Pure core dependency boundary.
 2. Canonical state model.
-3. Entity/definition/instance identity rules.
+3. Entity/definition/instance and instance ID rules.
 4. Zone taxonomy.
 5. Command/task/event/history terminology.
 6. First scheduler model.
 7. First game preset target for a vertical slice.
+

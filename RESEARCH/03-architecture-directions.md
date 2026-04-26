@@ -10,9 +10,10 @@ The strongest direction is a deterministic simulation core with reactive edges:
 flowchart LR
   authoring[Definitions and Game Templates] --> setup[Session Setup]
   setup --> state[Canonical State]
-  input[Presentation Intent] --> command[Command Request]
-  command --> validate[Validation and Choice Correlation]
-  validate --> queue[Task / Effect Queue]
+  input[Presentation Intent] --> request[Request]
+  request --> pipeline[Game Pipeline]
+  pipeline --> command[GameCommand / StateMutation]
+  command --> queue[Task / Effect Queue]
   queue --> state
   state --> events[Events and History]
   events --> triggers[Triggers / Watches]
@@ -22,16 +23,20 @@ flowchart LR
   events --> network[Optional Network Adapter]
 ```
 
+
+
 ## Layer Responsibilities
 
-| Layer | Owns | Must Not Own |
-| --- | --- | --- |
+
+| Layer           | Owns                                                                              | Must Not Own                                       |
+| --------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Core Simulation | state, entities, zones, commands, validation, effects, triggers, choices, history | Unity scene objects, input devices, transport APIs |
-| Authoring | definitions, schemas, catalogs, validation reports, editor-friendly assets | runtime-only state mutation |
-| Presentation | card views, zone views, layout, animation, feedback, view models | final gameplay legality |
-| Interaction | pointer/drag/drop/selection to intent translation | direct state mutation |
-| Networking | command/history/snapshot transport adapters | card rules, effect resolution |
-| Tooling | inspectors, replay viewers, trace/debug utilities | hidden production-only behavior |
+| Authoring       | definitions, schemas, catalogs, validation reports, editor-friendly assets        | runtime-only state mutation                        |
+| Presentation    | card views, zone views, layout, animation, feedback, view models                  | final gameplay legality                            |
+| Interaction     | pointer/drag/drop/selection to intent translation                                 | direct state mutation                              |
+| Networking      | command/history/snapshot transport adapters                                       | card rules, effect resolution                      |
+| Tooling         | inspectors, replay viewers, trace/debug utilities                                 | hidden production-only behavior                    |
+
 
 ## Data Model Direction
 
@@ -62,33 +67,32 @@ Instances are runtime entities:
 - A Stacklands-style resource card on a board.
 - A pending stack item or task source.
 
-Instances need identity, current values, relationships, ownership, visibility, and zone membership.
+Instances need an instance ID for lookup/reference, current values, relationships, ownership, visibility, and zone membership.
 
 ### Values
 
-Values should probably support two layers:
+Values should start from a simple key-value variable model inspired by Scaffold Entities but not dependent on hardcoded framework fields:
 
-- **Common typed concepts** for frequently used things like cost, attack, health, owner, zone, controller, visibility, and card type.
-- **Flexible variables/tags** for game-specific extensions.
+- Base definition variables.
+- Instance values or overrides.
+- Local modifiers.
+- Attached-instance modifiers.
+- External or contextual modifiers.
+- Effective values calculated by deterministic handlers.
 
-This avoids hardcoding every game into the framework while still making common tasks ergonomic.
+Games, presets, schemas, or authoring packages should define variable keys and value types. Typed concepts can still exist later as helper APIs or preset-specific wrappers over those keys. The early model should avoid splitting state into too many competing representations before we know how Scaffold Entities and Scaffold States fit together.
 
 ## Zone Model Direction
 
 Zones need to be more general than deck/hand/discard.
 
-Useful zone traits:
+Zones should be richer organization models, not fixed bags of boolean traits. A zone should define contents, arrangement, visibility, capacity defaults, insertion/removal behavior, and change bookkeeping.
 
-- Ordered vs unordered.
-- Public vs hidden vs partially visible.
-- Shared vs actor-owned.
-- Spatial vs list/pile.
-- Capacity-limited vs unbounded.
-- Allows duplicates or unique occupancy.
-- Allows stacking.
-- Creates new rules identity on entry or preserves identity.
-- Has enter/leave restrictions.
-- Has presentation layout hints.
+Zones should not own broad gameplay legality. A larger game/action rules layer decides whether a card can move to a zone, whether an actor is allowed to perform that move, or whether an effect can ignore a default zone limit.
+
+By default, zone membership should not define the instance. A card or entity remains the same instance when it changes zones unless a game-specific rule explicitly replaces, transforms, destroys, or recreates it.
+
+Spatial placement should not be a core zone requirement for now. It should be view-defined when it is presentation-only, and game-specific when physical position is part of the rules.
 
 Example zone families:
 
@@ -96,25 +100,32 @@ Example zone families:
 - Deckbuilder: draw pile, hand, discard, exhaust, reward offer, shop, relic inventory.
 - Spatial sim: world board, physical stack, card pack, production slot, combat group, storage area.
 
+Visibility should eventually be actor-specific and split at least into membership visibility and detail visibility. An actor may know that a zone contains three instances without knowing the definitions or variables behind those instances.
+
 ## Effect Resolution Direction
 
 A single "effect resolves immediately" model will not be enough. The framework should distinguish:
 
-- **Commands**: external or system intent, such as play card or drag card onto another.
+- **Intents/requests**: external or system attempts, such as play card or drag card onto another.
+- **Game commands**: approved or approvable high-level commands that run through game rules and return results.
+- **State mutations**: low-level already-approved mutations emitted by handlers.
 - **Tasks/actions**: deterministic work items queued by commands, effects, or triggers.
 - **Events**: facts emitted by tasks or state changes.
 - **Triggers**: reactions to events that enqueue more work.
 - **Replacement/prevention hooks**: reactions that modify an event before it commits.
 - **State checks**: automatic stabilization after relevant moments.
+- **History envelopes**: grouped state changes with cause metadata for UI, replay, debugging, and networking.
 
 Open direction: support multiple schedulers behind a common interface.
 
-| Scheduler Style | Good For | Notes |
-| --- | --- | --- |
-| Immediate queue drain | Hearthstone-like effects and simple deckbuilders | Straightforward, deterministic, easy to test. |
-| Stack + priority | Magic-like response windows | Requires choice windows, pass handling, pending triggers, state-based checks. |
-| Turn/phase machine | Traditional turn games | Can host queue/stack inside each phase. |
-| Real-time/tick scheduler | Stacklands-like production and timers | Needs elapsed time, pause, deterministic tick rules. |
+
+| Scheduler Style          | Good For                                         | Notes                                                                         |
+| ------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Immediate queue drain    | Hearthstone-like effects and simple deckbuilders | Straightforward, deterministic, easy to test.                                 |
+| Stack + priority         | Magic-like response windows                      | Requires choice windows, pass handling, pending triggers, state-based checks. |
+| Turn/phase machine       | Traditional turn games                           | Can host queue/stack inside each phase.                                       |
+| Real-time/tick scheduler | Stacklands-like production and timers            | Needs elapsed time, pause, deterministic tick rules.                          |
+
 
 ## Decision Flow Direction
 
@@ -135,6 +146,8 @@ sequenceDiagram
   Rules->>Rules: validate correlation and legality
   Rules->>State: resolve through queue
 ```
+
+
 
 This supports local play, AI, replays, and multiplayer because the decision surface is explicit.
 

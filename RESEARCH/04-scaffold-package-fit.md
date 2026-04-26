@@ -14,16 +14,18 @@ No package wiring should happen during this research pass, but this is the likel
 
 ## High-Fit Packages
 
-| Package | Why It Matters |
-| --- | --- |
-| `com.scaffold.entities` | Strong match for card definitions, runtime instances, variable bags, modifiers, and flyweight-style shared definitions. |
-| `com.scaffold.states` | Strong match for canonical simulation state, immutable-ish slices, mutators, subscriptions, snapshots, and rollback/replay foundations. |
-| `com.scaffold.events` | Useful for in-process domain event publication when a full history stream is not needed or for tooling/presentation decoupling. |
-| `com.scaffold.mvvm` | Useful for reactive binding contracts and deferred binding updates across presentation. |
-| `com.scaffold.model` | Useful for Unity-free observable model state for presentation-facing card/zone models. |
-| `com.scaffold.viewmodel` | Useful for binding orchestration and lifecycle in card/zone/screen view models. |
-| `com.scaffold.view` | Useful for Unity-facing typed views, UI binding, and local view-event routing. |
-| `com.scaffold.autopacker` | Later fit for snapshots, wire payloads, save buffers, and unmanaged-friendly transport contracts. |
+
+| Package                   | Why It Matters                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `com.scaffold.entities`   | Strong match for card definitions, runtime instances, variable bags, modifiers, and flyweight-style shared definitions.                 |
+| `com.scaffold.states`     | Strong match for canonical simulation state, immutable-ish slices, mutators, subscriptions, snapshots, and rollback/replay foundations. |
+| `com.scaffold.events`     | Useful for in-process domain event publication when a full history stream is not needed or for tooling/presentation decoupling.         |
+| `com.scaffold.mvvm`       | Useful for reactive binding contracts and deferred binding updates across presentation.                                                 |
+| `com.scaffold.model`      | Useful for Unity-free observable model state for presentation-facing card/zone models.                                                  |
+| `com.scaffold.viewmodel`  | Useful for binding orchestration and lifecycle in card/zone/screen view models.                                                         |
+| `com.scaffold.view`       | Useful for Unity-facing typed views, UI binding, and local view-event routing.                                                          |
+| `com.scaffold.autopacker` | Later fit for snapshots, wire payloads, save buffers, and unmanaged-friendly transport contracts.                                       |
+
 
 ## Package Notes
 
@@ -45,9 +47,9 @@ Potential fit:
 - Relic/resource/worker/enemy definitions for card-based games.
 - Modifier layering for buffs, equipment, auras, curses, temporary costs, and other dynamic values.
 
-Concern:
+Open concern:
 
-- It references UnityEngine and uses ScriptableObject identity. That may be fine for authoring, but we should decide whether the pure simulation core depends on it directly or maps from authored Scaffold entities into a Unity-free runtime model.
+- It references UnityEngine and uses ScriptableObject asset references. That may be fine for authoring, simulation, both, or neither. For now, do not force a pure-core boundary before testing whether this package helps the runtime model.
 
 ### States
 
@@ -67,9 +69,9 @@ Potential fit:
 - Reactive presentation state.
 - Batch mutation and deferred notifications for large effect resolution.
 
-Concern:
+Open concern:
 
-- We should decide whether every card instance is represented as Store slices, or whether a lower-level entity model owns values and Store holds indexed session state. Simplicity favors one canonical path.
+- We should decide whether every card instance is represented as Store slices, whether Scaffold Entities owns per-entity values, or whether a project-specific hybrid is needed. Simplicity favors one canonical path, but this is not answered yet.
 
 ### MVVM / Model / ViewModel / View
 
@@ -136,7 +138,9 @@ flowchart TB
   networking --> core
 ```
 
-Open issue: if `CardFramework.Core` must be Unity-free, it may not reference `com.scaffold.entities` directly because Entities is Unity-coupled. A clean option is:
+
+
+Open issue: if a later decision requires a Unity-free `CardFramework.Core`, it may not reference `com.scaffold.entities` directly because Entities is Unity-coupled. One possible option would be:
 
 - Use `com.scaffold.entities` in Authoring and Unity runtime adapters.
 - Convert authored definitions into pure runtime definitions for simulation.
@@ -144,25 +148,28 @@ Open issue: if `CardFramework.Core` must be Unity-free, it may not reference `co
 
 ## Candidate Roles By Framework Area
 
-| Framework Area | Scaffold Package Candidate |
-| --- | --- |
-| Card definition authoring | `com.scaffold.entities` |
-| Runtime simulation state | `com.scaffold.states` |
-| Mutable values/modifiers | `com.scaffold.entities`, or custom pure model inspired by it |
-| Card presentation models | `com.scaffold.model`, `com.scaffold.mvvm` |
-| Card presentation controllers | `com.scaffold.viewmodel` |
-| Unity card/zone views | `com.scaffold.view` |
-| Local app notifications | `com.scaffold.events` |
-| Snapshots and payload packing | `com.scaffold.autopacker` |
 
-## Recommendation
+| Framework Area                | Scaffold Package Candidate                                   |
+| ----------------------------- | ------------------------------------------------------------ |
+| Card definition authoring     | `com.scaffold.entities`                                      |
+| Runtime simulation state      | `com.scaffold.states`                                        |
+| Mutable values/modifiers      | `com.scaffold.entities`, or custom pure model inspired by it |
+| Card presentation models      | `com.scaffold.model`, `com.scaffold.mvvm`                    |
+| Card presentation controllers | `com.scaffold.viewmodel`                                     |
+| Unity card/zone views         | `com.scaffold.view`                                          |
+| Local app notifications       | `com.scaffold.events`                                        |
+| Snapshots and payload packing | `com.scaffold.autopacker`                                    |
+
+
+## Current Direction
 
 Use Scaffold as a toolbox, not as a constraint.
 
-The likely best fit is:
+The current fit is:
 
-1. Adopt `com.scaffold.states` early for state/mutator/snapshot exploration.
-2. Explore `com.scaffold.entities` for authoring and definition/instance ergonomics.
+1. Explore `com.scaffold.entities` early because its definition/instance/variable/modifier model fits the current Core Model direction.
+2. Explore `com.scaffold.states` in parallel for state/mutator/snapshot/history support.
 3. Use MVVM packages for presentation once the state/history shape exists.
 4. Defer AutoPacker until command/history payloads are stable.
-5. Keep the rules core free of Unity scene/presentation concerns regardless of package choices.
+5. Keep rules, authoring, presentation, interaction, and networking separated by responsibility, even before package boundaries are decided.
+

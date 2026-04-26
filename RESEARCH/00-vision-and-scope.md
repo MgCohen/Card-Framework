@@ -49,7 +49,7 @@ That suggests a layered framework:
 A future game built on the framework should be able to define:
 
 - Card definitions and card instance behavior.
-- Zone types and zone movement rules.
+- Zone types, organization behavior, and movement flow.
 - Turn, phase, priority, or real-time tick structure.
 - Legal action generation and validation.
 - Effects, triggers, replacement/prevention rules, and reactions.
@@ -62,14 +62,14 @@ A future game built on the framework should be able to define:
 - A fully generic card-game framework can become too abstract to be usable.
 - Magic-style rules, Slay-style combat, and Stacklands-style spatial simulation may require different scheduling models.
 - Data-driven card authoring can become brittle if every special case escapes into custom code.
-- Multiplayer can become invasive if command, history, and identity boundaries are not planned early.
+- Multiplayer can become invasive if command, history, and instance-reference boundaries are not planned early.
 - Presentation can leak rules if drag/drop code decides legality instead of asking the simulation.
 
 ## Working Principle
 
 Favor a small set of strong invariants over a giant hierarchy of game-specific abstractions:
 
-- Cards and related objects are entities with identity.
+- Cards and related objects are represented as instances.
 - Definitions and instances are separate.
 - Zones are first-class.
 - All meaningful changes produce observable events/history.
