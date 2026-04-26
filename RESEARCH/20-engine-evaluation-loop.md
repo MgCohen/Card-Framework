@@ -74,7 +74,7 @@ public sealed class GameEngine
         }
 
         // Queue is empty. Game decides what now.
-        evaluator.OnIdle(this, state);
+        evaluator.OnQueueDrained(this, state);
         running = false;
     }
 }
@@ -84,7 +84,7 @@ Key points:
 
 - `Drain` is **not re-entered**. If a command is dispatched while the loop is already running, it is enqueued and picked up by the current drain cycle.
 - The loop evaluates **after every command**, not once at the end. This is what gives the engine per-step awareness.
-- `OnIdle` is the hook for "queue is empty — does the game need to do something now, or just wait for input?"
+- `OnQueueDrained` is the hook for when a drain just finished: the work queue is empty, so the game can phase-advance, grant priority, publish available actions, or await input. It is not a generic "idle" or presentation concept.
 
 ---
 
@@ -146,9 +146,9 @@ public interface IEngineEvaluator
         CommandResult result,
         IGameState state);
 
-    // Called when the queue is empty.
+    // Called when a drain has finished: the work queue is empty.
     // Game decides: wait for input, advance phase, end game, etc.
-    void OnIdle(GameEngine engine, IGameState state);
+    void OnQueueDrained(GameEngine engine, IGameState state);
 }
 ```
 
@@ -188,7 +188,7 @@ public sealed class SampleGameEvaluator : IEngineEvaluator
         return Array.Empty<GameCommand>();
     }
 
-    public void OnIdle(GameEngine engine, IGameState state)
+    public void OnQueueDrained(GameEngine engine, IGameState state)
     {
         // Queue is empty and PlayArea is empty.
         // Player still has cards in hand and energy — do nothing; await input.
@@ -222,7 +222,7 @@ Evaluator.Evaluate:
   → state.GetZone(PlayArea).HasCards == false
   → return []
 
-Queue empty → OnIdle:
+Queue empty → OnQueueDrained:
   → player still has energy and cards in hand → no action, await input
 ```
 
@@ -230,18 +230,18 @@ The evaluator ran twice: once with a card in the zone (produced `ExecuteCardComm
 
 ---
 
-## 7. OnIdle — What Happens When The Queue Empties
+## 7. OnQueueDrained — What Happens When A Drain Finishes
 
-`OnIdle` is where game-specific phase logic lives. Examples:
+`OnQueueDrained` is where game-specific phase logic lives after the loop has no more work for this pass. Examples:
 
-| Game situation | OnIdle behaviour |
+| Game situation | `OnQueueDrained` behaviour |
 |---|---|
 | Slay the Spire, mid-player-turn | Do nothing — player still has available actions |
 | Slay the Spire, player clicked end turn | `engine.Dispatch(new StartEnemyTurnCommand())` |
 | MTG-like, stack empty, no priority granted | `engine.Dispatch(new GrantPriorityCommand(activePlayer))` |
 | Any game, all players have no legal actions | `engine.Dispatch(new AdvancePhaseCommand())` |
 
-`OnIdle` can dispatch back into the engine — the queue re-fills and Drain continues. It is not a special exit path; it is just another way commands enter.
+`OnQueueDrained` can dispatch back into the engine — the queue re-fills and `Drain` continues. It is not a special exit path; it is just another way commands enter.
 
 ---
 

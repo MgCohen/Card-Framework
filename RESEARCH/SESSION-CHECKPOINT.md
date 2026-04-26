@@ -2,49 +2,47 @@
 
 **Purpose:** One short, **replaceable** handoff for the *next* session. Full reasoning stays in the numbered research files; this file is **only** "where we are, what to read, what to do next." Update or overwrite it when a research milestone ends. Do not duplicate the whole glossary here.
 
-**Last updated:** 2026-04-26
+**Last updated:** 2026-04-26 (session end; refresh when you read this in a new session)
 
 ---
 
 ## Where we stopped
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only (see root `AGENTS.md`).
-- **Core model, zones, and action vocabulary** are largely written up (glossary, decisions, entity/zone model).
-- **Action flow** is largely described: request → `GameCommand` → pipeline → `StateMutation` / semantics → `HistoryEnvelope` → UI.
-- **Engine / orchestration layer** is now defined in [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md).
+- **Core model, zones, and action vocabulary** are largely written up.
+- **Action flow** is described: request → `GameCommand` → pipeline → mutations / semantics → `HistoryEnvelope` → UI.
+- **Engine model** is in [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md): `GameEngine` drain loop, `ICommandPipeline` (one command), `IEngineEvaluator` (state-based follow-ups and **queue-drained** hook).
+- **Naming (done this session in doc 20):** the lifecycle hook is **`OnQueueDrained`**, not `OnIdle` — it runs when a `Drain` pass finishes and the work queue is empty, not as a generic "application idle" concept.
 
-### Latest narrative change (engine defined)
+### Design notes captured in conversation (not all in 20 yet)
 
-- **[20-engine-evaluation-loop.md](20-engine-evaluation-loop.md)** defines the engine as three parts: **`GameEngine`** (the drain loop), **`ICommandPipeline`** (executes one command, unchanged from 18), and **`IEngineEvaluator`** (game-specific rules brain, called after every command).
-- Key decision: the evaluator reads **game state** (zone contents, phase, etc.) rather than pattern-matching on command types. This handles any source putting a card in a zone, not just `PlayCardCommand`.
-- The inline `RunReactions` that was embedded in the dispatcher in doc 18 is **removed**. Follow-up commands are entirely the evaluator's job.
-- **Entry points** (RequestGateway, TimerService, TriggerSystem) all call `engine.Dispatch(command)`. The engine is the single convergence point.
-- Traced example: `PlayCardCommand` moves card into `PlayArea` → evaluator sees zone occupied → enqueues `ExecuteCardCommand` → zone clears → evaluator returns empty → `OnIdle` awaits player input.
-- MTG-like variation shown: same evaluator interface, priority state conditions added before auto-executing the stack.
+- **Wiring direction:** entry points (RequestGateway, timer, triggers) should **hold and call** the engine (e.g. `Dispatch`); the engine should **not** own concrete services. A **composition root** (or game preset factory) can still create engine + services and wire them in one place.
+- **Output from engine:** the engine may need to push **available actions, phase/lock, envelopes** to UI through narrow abstractions (e.g. publishers), separate from the command input path. Worth a short subsection when 20 is expanded.
 
-### Earlier artifacts worth a skim on resume
+### Artifacts to read on resume
 
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — end-to-end flow; **needs a cleanup pass** to replace section 4's inline `RunReactions` and section 6b's `SamplePlayThenExecuteEngine` with the engine/evaluator pattern from doc 20.
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — composite zone moves, sequential `Apply`, segment boundaries. Still accurate.
-- [17-action-definition-proposal.md](17-action-definition-proposal.md) — payloads, results, services, flow graph.
-- [06-open-questions.md](06-open-questions.md) — what is still open vs partially answered.
-- [13-deckmech-command-pipeline-reference.md](13-deckmech-command-pipeline-reference.md) — prior sample project baseline.
+| File | Why |
+|------|-----|
+| [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) | Current engine + evaluator + `OnQueueDrained` |
+| [18-action-flow-snippets.md](18-action-flow-snippets.md) | **Still** uses old `RunReactions` + `SamplePlayThenExecuteEngine` — needs alignment to 20 |
+| [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) | Composites, segments; still good |
+| [06-open-questions.md](06-open-questions.md) | Triage after 20 |
 
 ---
 
-## Suggested next steps (for the next session)
+## Suggested next steps (next session)
 
-1. **Clean up [18-action-flow-snippets.md](18-action-flow-snippets.md)** — Replace section 4 (`GameCommandDispatcher` with inline reactions) and section 6b (`SamplePlayThenExecuteEngine`) to match the engine/evaluator model from doc 20. This is the main continuity gap between the two docs.
-2. **Expand doc 20** — Add a second example evaluator (MTG-like with a real priority state machine) and notes on queue ordering variations (FIFO vs stack vs priority queue).
-3. **Reread [06-open-questions.md](06-open-questions.md)** — Close or promote items now covered by 08–20; add new items raised by the engine definition (evaluator composition, command naming split, queue re-entry contract).
-4. **When leaving research-only** — Add a `PLANS/` entry for the first code milestone (e.g. "minimal engine + pipeline + one evaluator pair") and link from `AGENTS.md`.
+1. **Align [18-action-flow-snippets.md](18-action-flow-snippets.md)** with [20](20-engine-evaluation-loop.md) — remove inline `RunReactions` from the dispatcher, replace section 6b with engine + `IEngineEvaluator` + `OnQueueDrained`. Largest doc continuity gap.
+2. **Optionally add to doc 20** — composition root sketch; output channel (`IAvailableActionsPublisher` / history); one more evaluator example (deeper priority).
+3. **Triage [06-open-questions.md](06-open-questions.md)** — close or promote what 08–20 cover; add items (command naming, evaluator modules, queue ordering, engine output abstractions).
+4. **Code milestone** — when ready, add `PLANS/` for "minimal `GameEngine` + pipeline + one evaluator" and link from `AGENTS.md` if it becomes policy.
 
 ---
 
 ## How to use this file
 
-- **On milestone / session end:** Edit this file in place: refresh date, "where we stopped," and "next steps."
-- **Keep it short** — if it grows past two screens, you are duplicating the numbered docs; trim.
-- **Optional:** A one-line link in the next PR or commit message: "Research checkpoint: `RESEARCH/SESSION-CHECKPOINT.md`."
+- **On milestone / session end:** Edit in place: refresh date, "where we stopped," and "next steps."
+- **Keep it short** — if it grows past two screens, trim; detail belongs in numbered `RESEARCH/` files.
+- **Optional:** In a commit/PR, one line: "Research checkpoint: `RESEARCH/SESSION-CHECKPOINT.md`."
 
-This is **not** a substitute for `DOCS/` for stable architecture once the project is implemented; it is a **spine** for long research threads.
+This is **not** a substitute for `DOCS/` once the project is implemented; it is a **spine** for long research threads.
