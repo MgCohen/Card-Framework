@@ -1,0 +1,310 @@
+# Engine — Orchestrator And Evaluation Loop
+
+This document defines what the **engine** is in the Card Framework: its structure, its responsibilities, and how game-specific rules plug into it. It is research, not a locked API.
+
+Builds on:
+
+- [Action Flow Snippets](18-action-flow-snippets.md) — the existing pipeline that the engine wraps
+- [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md) — what happens inside a single command execution
+
+---
+
+## 1. What The Engine Is
+
+The engine is the **orchestrator**. It is the central point that:
+
+- Receives commands from all entry points (player input, timers, automatic triggers, network)
+- Manages a queue of pending commands
+- Executes one command at a time through the pipeline
+- After each execution, asks game-specific logic what (if anything) comes next
+- When the queue empties, asks game-specific logic what to do now
+
+The engine does not know what any particular command means or what game is being played. That knowledge lives in the **evaluator**, which the game implements. The engine only knows how to run the loop.
+
+---
+
+## 2. The Three Parts
+
+### ICommandPipeline
+
+The framework's executor. Receives one command, runs pre-hooks, invokes the handler, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](18-action-flow-snippets.md).
+
+### IEngineEvaluator
+
+The game's rules brain. Called after each command resolves. Reads the current game state (zones, variables, phase) and returns the commands that should run next — if any. Also called when the queue empties.
+
+### GameEngine
+
+The loop itself. Holds the queue, calls the pipeline, calls the evaluator, and manages the drain cycle.
+
+---
+
+## 3. The Engine Loop
+
+```csharp
+public sealed class GameEngine
+{
+    private readonly Queue<GameCommand> pending = new();
+    private readonly ICommandPipeline pipeline;
+    private readonly IEngineEvaluator evaluator;
+    private readonly IGameState state;
+    private bool running;
+
+    // Single entry point for all sources.
+    public void Dispatch(GameCommand command)
+    {
+        pending.Enqueue(command);
+        if (!running) Drain();
+    }
+
+    private void Drain()
+    {
+        running = true;
+
+        while (pending.Count > 0)
+        {
+            var command = pending.Dequeue();
+            var result = pipeline.Execute(command);
+
+            // Game-specific: given the state after this command,
+            // what commands should run next?
+            var followUps = evaluator.Evaluate(command, result, state);
+            foreach (var next in followUps)
+                pending.Enqueue(next);
+        }
+
+        // Queue is empty. Game decides what now.
+        evaluator.OnIdle(this, state);
+        running = false;
+    }
+}
+```
+
+Key points:
+
+- `Drain` is **not re-entered**. If a command is dispatched while the loop is already running, it is enqueued and picked up by the current drain cycle.
+- The loop evaluates **after every command**, not once at the end. This is what gives the engine per-step awareness.
+- `OnIdle` is the hook for "queue is empty — does the game need to do something now, or just wait for input?"
+
+---
+
+## 4. Entry Points
+
+Everything that wants the engine to act submits a `GameCommand`. The engine does not know or care which entry point created it.
+
+```csharp
+// Player drags a card
+public sealed class RequestGateway
+{
+    private readonly GameEngine engine;
+
+    public void Submit(PlayerRequest request)
+    {
+        var command = Convert(request); // resolve actor, zone, intent
+        engine.Dispatch(command);
+    }
+}
+
+// A turn timer fires
+public sealed class TurnTimerService
+{
+    private readonly GameEngine engine;
+
+    public void OnTimeExpired(ActorId actor)
+    {
+        engine.Dispatch(new ForceEndTurnCommand(actor));
+    }
+}
+
+// A trigger fires (e.g. "at the start of your turn, draw a card")
+public sealed class TriggerSystem
+{
+    private readonly GameEngine engine;
+
+    public void Fire(ITriggeredEffect trigger, ActorId actor)
+    {
+        engine.Dispatch(trigger.CreateCommand(actor));
+    }
+}
+```
+
+---
+
+## 5. The Evaluator — Reading State, Not Just The Last Command
+
+The evaluator's primary lens is the **current game state**, not which specific command just ran. This is the key design point.
+
+If the evaluator matched on command types ("after `PlayCardCommand` → run execute"), it would miss any other way a card could end up in the same zone (an opponent's trigger, a copy effect, a token). State-based evaluation handles all sources the same way.
+
+```csharp
+public interface IEngineEvaluator
+{
+    // Called after each command resolves.
+    // Reads current state, returns 0..N commands to enqueue next.
+    IReadOnlyList<GameCommand> Evaluate(
+        GameCommand justExecuted,
+        CommandResult result,
+        IGameState state);
+
+    // Called when the queue is empty.
+    // Game decides: wait for input, advance phase, end game, etc.
+    void OnIdle(GameEngine engine, IGameState state);
+}
+```
+
+`IGameState` here is the simulation state — zone contents, actor variables, phase info. It is read-only from the evaluator's perspective. The evaluator observes and returns commands; it never mutates state directly.
+
+---
+
+## 6. Sample: Zone-Check Evaluation (Slay The Spire Style)
+
+In this sample game, when a card is played it is moved into a **PlayArea** zone. The rule is: any card sitting in `PlayArea` must be executed. The evaluator does not care that a `PlayCardCommand` just ran — it just checks the zone.
+
+```csharp
+public sealed class SampleGameEvaluator : IEngineEvaluator
+{
+    public IReadOnlyList<GameCommand> Evaluate(
+        GameCommand justExecuted,
+        CommandResult result,
+        IGameState state)
+    {
+        // State-based check: is there a card in PlayArea waiting to be executed?
+        var playArea = state.GetZone(WellKnownZones.PlayArea);
+        if (playArea.HasCards)
+        {
+            var card = playArea.TopCard;
+            return new GameCommand[]
+            {
+                new ExecuteCardCommand
+                {
+                    Actor = state.ActiveActor,
+                    Source = card,
+                    FromPlayZone = WellKnownZones.PlayArea,
+                    DiscardZone = state.DiscardZoneFor(state.ActiveActor)
+                }
+            };
+        }
+
+        return Array.Empty<GameCommand>();
+    }
+
+    public void OnIdle(GameEngine engine, IGameState state)
+    {
+        // Queue is empty and PlayArea is empty.
+        // Player still has cards in hand and energy — do nothing; await input.
+        // If the player clicked "end turn", that would have dispatched
+        // an EndTurnCommand, so we only reach here in the mid-turn idle state.
+    }
+}
+```
+
+### Traced flow
+
+```text
+Player drags card C17 from Hand to PlayArea
+  → RequestGateway.Submit(MoveInstanceToZoneRequest)
+  → engine.Dispatch(PlayCardCommand { Source: C17, FromZone: Hand, ToZone: PlayArea })
+
+Engine dequeues PlayCardCommand:
+  → pipeline executes: C17 removed from Hand, inserted into PlayArea
+  → envelope published
+
+Evaluator.Evaluate:
+  → state.GetZone(PlayArea).HasCards == true
+  → return [ExecuteCardCommand { Source: C17, ... }]
+
+Engine enqueues ExecuteCardCommand and dequeues it:
+  → pipeline executes: effect triggers (heal, damage, draw, etc.)
+  → C17 removed from PlayArea, inserted into Discard
+  → envelope published
+
+Evaluator.Evaluate:
+  → state.GetZone(PlayArea).HasCards == false
+  → return []
+
+Queue empty → OnIdle:
+  → player still has energy and cards in hand → no action, await input
+```
+
+The evaluator ran twice: once with a card in the zone (produced `ExecuteCardCommand`), once with the zone empty (produced nothing). The loop self-terminated.
+
+---
+
+## 7. OnIdle — What Happens When The Queue Empties
+
+`OnIdle` is where game-specific phase logic lives. Examples:
+
+| Game situation | OnIdle behaviour |
+|---|---|
+| Slay the Spire, mid-player-turn | Do nothing — player still has available actions |
+| Slay the Spire, player clicked end turn | `engine.Dispatch(new StartEnemyTurnCommand())` |
+| MTG-like, stack empty, no priority granted | `engine.Dispatch(new GrantPriorityCommand(activePlayer))` |
+| Any game, all players have no legal actions | `engine.Dispatch(new AdvancePhaseCommand())` |
+
+`OnIdle` can dispatch back into the engine — the queue re-fills and Drain continues. It is not a special exit path; it is just another way commands enter.
+
+---
+
+## 8. Variation: Conditional Evaluation (MTG-like Priority)
+
+The same interface handles priority-based games by adding a state condition before auto-executing:
+
+```csharp
+public IReadOnlyList<GameCommand> Evaluate(
+    GameCommand justExecuted,
+    CommandResult result,
+    IGameState state)
+{
+    var stack = state.GetZone(WellKnownZones.Stack);
+
+    if (!stack.HasCards)
+        return Array.Empty<GameCommand>();
+
+    // Card is on the stack. Has priority been resolved?
+    if (state.PriorityState.BothPlayersPassed)
+        return new[] { new ResolveTopOfStackCommand(stack.TopCard) };
+
+    // Card is on the stack but priority is not resolved yet.
+    // Grant priority if not already granted.
+    if (!state.PriorityState.IsGranted)
+        return new[] { new GrantPriorityCommand(state.PriorityState.NextToAct) };
+
+    // Priority is granted and outstanding. Do nothing — wait for player input.
+    return Array.Empty<GameCommand>();
+}
+```
+
+The structure is identical. The only difference is the conditions read from `state.PriorityState`. A Slay the Spire game has no priority state and never reaches those branches.
+
+---
+
+## 9. Relationship To The Existing Pipeline
+
+The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) does not change. The engine wraps it:
+
+| Concern | Where it lives |
+|---|---|
+| Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing) |
+| Decide what command runs next | `IEngineEvaluator` (game-specific) |
+| Drive the loop between them | `GameEngine` (framework) |
+| Submit commands from outside | Entry points (RequestGateway, TimerService, etc.) |
+
+The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute` — it handles one command and returns a result. The inline `RunReactions` call that was inside the dispatcher moves out entirely. Reactions are now the evaluator's job, not the dispatcher's.
+
+---
+
+## 10. Open Choices
+
+- **Command naming:** "GameCommand" covers both player-initiated and automatic commands. A finer split (e.g. `PlayerCommand` vs `SystemCommand`) may be warranted once more command types exist.
+- **Queue ordering:** A simple FIFO queue is shown. Priority queues, interrupt injection, or stack semantics (for MTG-like resolution order) are variations the engine queue shape would need to support.
+- **Evaluator composition:** A single `IEngineEvaluator` implementation is shown. In practice, it may be composed of smaller rule modules (state-based action checks, trigger evaluation, phase rules) rather than one monolithic class.
+- **Concurrency and re-entry:** The `running` guard serializes dispatch. Networking and async input will require a more explicit contract here.
+
+---
+
+## Related
+
+- [18-action-flow-snippets.md](18-action-flow-snippets.md) — the existing end-to-end flow that this engine wraps
+- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — what happens inside a single pipeline execution
+- [17-action-definition-proposal.md](17-action-definition-proposal.md) — payload and result shapes
+- [06-open-questions.md](06-open-questions.md) — scheduler and rules-engine open questions

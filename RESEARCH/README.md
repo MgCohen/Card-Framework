@@ -2,6 +2,10 @@
 
 This folder is the working area for initial thinking, research, and outline work. Nothing here should be treated as final implementation guidance yet.
 
+## Handoff for new sessions
+
+- **[Session checkpoint](SESSION-CHECKPOINT.md)** — short “where we stopped / what to do next” (update when you end a research milestone; full detail remains in the numbered files below).
+
 ## Current Research Set
 
 - [Vision and Scope](00-vision-and-scope.md) - what this framework is trying to become, non-goals for now, and guiding principles.

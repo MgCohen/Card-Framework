@@ -4,7 +4,7 @@ This document sketches a possible end-to-end flow in code-like snippets. It is n
 
 Scenario:
 
-> Player drags a healing card from `Hand` to `PlayArea`. The game accepts the request. The card moves zones. Because this game interprets hand-to-play-area as "play this card," the engine executes the card. The card heals the player for 5. State updates immediately inside the engine. UI receives a grouped envelope and animates the card move plus heal.
+> Player drags a healing card from `Hand` to `PlayArea`. The game accepts the request. `**PlayCardCommand**` only performs placement: hand → play area, with semantics for that step. **Game-specific engine logic** then sees the successful `PlayCardCommand`, decides that “play” implies **execute**, and **creates a second** `ExecuteCardCommand` (linked to the first). The execute step runs the card’s effect (here: heal) and moves the card to **discard** if that is what this game does after resolve. State updates and a grouped envelope (two command steps) drive UI. This sample ignores failure ordering and fine-grained “finished” vs “resolved” naming.
 
 ## 1. Definitions
 
@@ -141,6 +141,8 @@ public sealed class GameCommandDispatcher : IGameCommandDispatcher
         }
 
         var result = pipeline.Handle(pre.Command, envelope);
+        // Reactions (including game-specific “what happens after this command”) may dispatch
+        // further GameCommands, e.g. PlayCard -> ExecuteCard, in the same session/envelope.
         pipeline.RunReactions(pre.Command, result, envelope);
 
         return history.CloseAndPublish(envelope, result);
@@ -151,6 +153,8 @@ public sealed class GameCommandDispatcher : IGameCommandDispatcher
 Payload:
 
 ```csharp
+public readonly record struct GameCommandId;
+
 public abstract record GameCommand
 {
     public required ActorId Actor { get; init; }
@@ -169,6 +173,15 @@ public sealed record PlayCardCommand : GameCommand
         FromZone = fromZone;
         PlayZone = playZone;
     }
+}
+
+// Second step: run definition effect and this game’s post-play moves (e.g. to discard).
+// Created by game-specific engine/reaction after PlayCardCommand succeeds, not by PlayCardHandler.
+public sealed record ExecuteCardCommand : GameCommand
+{
+    public required GameCommandId CausedByPlayCommandId { get; init; }
+    public required ZoneId FromPlayZone { get; init; }
+    public required ZoneId DiscardZone { get; init; }
 }
 ```
 
@@ -196,18 +209,15 @@ public sealed class CanPlayCardPreHook : ICommandPreHook<PlayCardCommand>
 }
 ```
 
-## 6. Handler Resolves Play Card
+## 6. Play Card Handler (Placement Only)
 
-The handler is where the game command turns into state mutations and semantic events. Inserts use each zone’s default placement (ordering, top/bottom, and so on); explicit insertion plans are for exceptional cases, not the usual path.
+`PlayCardHandler` only performs **putting the card into the play area** and the semantics for that **step**. It does **not** run the card’s `Effect` and does **not** move the card to discard. Inserts use each zone’s default placement.
 
 ```csharp
 public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardResult>
 {
     public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
     {
-        var card = scope.GetInstance(command.Source);
-        var definition = scope.GetDefinition(card.DefinitionId);
-
         scope.Semantic(new CardPlayStartedEvent(
             actor: command.Actor,
             card: command.Source,
@@ -222,15 +232,7 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
             fromZone: command.FromZone,
             toZone: command.PlayZone));
 
-        definition.Effect.Trigger(new EffectContext(
-            actor: command.Actor,
-            sourceInstance: command.Source,
-            scope: scope));
-
-        scope.Apply(new RemoveFromZoneMutation(command.PlayZone, command.Source));
-        scope.Apply(new InsertIntoZoneMutation(scope.Game.DiscardZoneFor(command.Actor), command.Source));
-
-        scope.Semantic(new CardPlayFinishedEvent(command.Actor, command.Source));
+        scope.Semantic(new PlayCardResolvedEvent(command.Actor, command.Source, command.PlayZone));
 
         return new PlayCardResult
         {
@@ -241,11 +243,71 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 }
 ```
 
-**Note:** This handler is intentionally granular so each layer is visible. Sequential `scope.Apply` inside one `Handle`, manual `scope.Semantic` next to some applies, and double remove/insert (play area then discard) are discussed as design trade-offs—not as the only way to write handlers—in [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md).
+**Note:** This handler is intentionally granular. Deeper design (composites, segment boundaries, and two-command stories) is in [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md).
+
+## 6b. Engine / Reaction: “Play Succeeded” → `ExecuteCardCommand`
+
+**Undefined, game-specific** logic runs as part of the pipeline after a command is handled (for example, a `CommandReaction` or a pluggable `IGameEngineStep`). It receives the **executed** `PlayCardCommand` and its result, and—because **this** sample game treats “play” as “then execute”—it **creates** a second `GameCommand`. That command is **tied to the first** with `CausedByPlayCommandId` (or another parent/chain field your dispatcher assigns from the play step).
+
+```csharp
+// Illustrative: real placement may be a dedicated reaction, an engine pass, or a preset hook.
+public sealed class SamplePlayThenExecuteEngine : ICommandReaction<PlayCardCommand, PlayCardResult>
+{
+    public void React(PlayCardCommand play, PlayCardResult result, ReactionContext context)
+    {
+        if (result.Status != CommandStatus.Success)
+        {
+            return;
+        }
+
+        // Sample game: after placement, the simulation must “execute” the card (effect, then yard).
+        var execute = new ExecuteCardCommand
+        {
+            CausedByPlayCommandId = context.PlayCommandId,
+            Actor = play.Actor,
+            Source = play.Source,
+            FromPlayZone = play.PlayZone,
+            DiscardZone = context.Game.DiscardZoneFor(play.Actor)
+        };
+
+        // Same envelope/session, new segment, parent link in context — exact shape is implementation.
+        context.DispatchFollowUp(execute);
+    }
+}
+```
+
+## 6c. Execute Card Handler (Effect, Then Discard In This Game)
+
+A **separate** handler for `**ExecuteCardCommand`**: runs the definition’s `Effect` (here: heal via a further child command) and, for this sample, removes from the play area and inserts into `DiscardZone`.
+
+```csharp
+public sealed class ExecuteCardHandler : ICommandHandler<ExecuteCardCommand, ExecuteCardResult>
+{
+    public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scope)
+    {
+        var card = scope.GetInstance(command.Source);
+        var definition = scope.GetDefinition(card.DefinitionId);
+
+        definition.Effect.Trigger(new EffectContext(
+            actor: command.Actor,
+            sourceInstance: command.Source,
+            scope: scope));
+
+        scope.Apply(new RemoveFromZoneMutation(command.FromPlayZone, command.Source));
+        scope.Apply(new InsertIntoZoneMutation(command.DiscardZone, command.Source));
+
+        return new ExecuteCardResult
+        {
+            Status = CommandStatus.Success,
+            ExecutedInstance = command.Source
+        };
+    }
+}
+```
 
 ## 7. Effect Dispatches Heal Command
 
-The effect is simple for now. It dispatches a child game command.
+The effect is simple for now. `Trigger` lives under `**ExecuteCardHandler**`, not under `PlayCardHandler`. The heal path dispatches a child `GameCommand`.
 
 ```csharp
 public readonly struct EffectContext
@@ -400,7 +462,7 @@ public sealed record HistoryEnvelope
 }
 ```
 
-Example envelope:
+Example envelope (collapsed **flat** list; a real system would usually group these into **segments** for `PlayCardCommand` then `ExecuteCardCommand`, with `ExecuteCard` carrying `CausedByPlayCommandId`):
 
 ```text
 HistoryEnvelope
@@ -409,17 +471,20 @@ HistoryEnvelope
     actor: P1
     source: C17
   Result:
-    PlayCardResult(success, C17)
+    (last command in chain, e.g. ExecuteCardResult, or an aggregate; sample-only)
   Entries:
+    # -- segment: PlayCardCommand (placement) --
     CardPlayStarted(P1, C17)
     ZoneContentRemoved(P1.Hand, C17)
     ZoneContentInserted(P1.PlayArea, C17, index: 0)
     CardMoved(C17, P1.Hand, P1.PlayArea)
+    PlayCardResolved(P1, C17, P1.PlayArea)
+    # -- segment: ExecuteCardCommand (effect + discard in this game), tied to play via CausedByPlayCommandId --
+    (child) HealActorCommand / HealActorHandler
     ActorHealed(C17, P1, amount: 5)
     VariableChanged(P1, "life", 10, 15)
     ZoneContentRemoved(P1.PlayArea, C17)
     ZoneContentInserted(P1.Discard, C17, index: 0)
-    CardPlayFinished(P1, C17)
 ```
 
 ## 11. UI Consumes Envelope
@@ -444,6 +509,10 @@ public sealed class CardAnimationEnvelopePlayer
 
                 case CardMovedEvent e:
                     await visuals.Card(e.Card).MoveFromTo(e.FromZone, e.ToZone);
+                    break;
+
+                case PlayCardResolvedEvent e:
+                    await visuals.Card(e.Card).MarkPlacedInPlay();
                     break;
 
                 case ActorHealedEvent e:
@@ -479,15 +548,19 @@ UI drop
       -> StateMutation: RemoveFromZone(Hand, C17)
       -> StateMutation: InsertIntoZone(PlayArea, C17)
       -> Semantic: CardMoved
-      -> Effect.Trigger
+      -> Semantic: PlayCardResolved
+  -> (game-specific engine / reaction, success path)
+  -> Creates ExecuteCardCommand, linked: CausedByPlayCommandId
+  -> ExecuteCardHandler
+      -> definition.Effect.Trigger
           -> HealActorCommand
           -> HealActorHandler
               -> Semantic: ActorHealed
               -> StateMutation: SetVariable(P1, "life", 15)
               -> StateChange: VariableChanged(P1, "life", 10, 15)
-      -> StateMutation: Move card to discard
-      -> Semantic: CardPlayFinished
+      -> StateMutation: RemoveFromZone(PlayArea, C17)
+      -> StateMutation: InsertIntoZone(Discard, C17)
   -> HistoryEnvelope closes
-  -> UI animates card play and heal
+  -> UI animates: place in play, then heal + discard, using segment boundaries as needed
 ```
 
