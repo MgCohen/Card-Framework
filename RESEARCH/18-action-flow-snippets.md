@@ -4,7 +4,7 @@ This document sketches a possible end-to-end flow in code-like snippets. It is n
 
 Scenario:
 
-> Player drags a healing card from `Hand` to `PlayArea`. The game accepts the request. `**PlayCardCommand**` only performs placement: hand → play area, with semantics for that step. **Game-specific engine logic** then sees the successful `PlayCardCommand`, decides that “play” implies **execute**, and **creates a second** `ExecuteCardCommand` (linked to the first). The execute step runs the card’s effect (here: heal) and moves the card to **discard** if that is what this game does after resolve. State updates and a grouped envelope (two command steps) drive UI. This sample ignores failure ordering and fine-grained “finished” vs “resolved” naming.
+> Player drags a healing card from `Hand` to `PlayArea`. The game accepts the request. `**PlayCardCommand**` only performs placement: hand → play area, with semantics for that step. After the pipeline finishes, the **evaluator** reads state, sees a card sitting in `PlayArea`, and returns an `ExecuteCardCommand` for the engine to enqueue next. The execute step runs the card’s effect (here: heal) and moves the card to **discard** if that is what this game does after resolve. State updates and separate envelopes (one per command) drive UI. This sample ignores failure ordering and fine-grained “finished” vs “resolved” naming.
 
 ## 1. Definitions
 
@@ -73,20 +73,21 @@ public sealed record MoveInstanceToZoneRequest
 
 ## 3. Engine Receives Request
 
-The engine resolves actor/session/instance, optionally checks available actions, and converts the request into a game command.
+The gateway resolves actor/session/instance, optionally checks available actions, converts the request into a game command, and hands it to the engine via `Dispatch`. The gateway does not process the command itself.
 
 ```csharp
 public sealed class RequestGateway : IRequestGateway
 {
     private readonly IAvailableActionMatcher actionMatcher;
-    private readonly IGameCommandDispatcher commands;
+    private readonly GameEngine engine;
 
-    public RequestResult Submit(MoveInstanceToZoneRequest request)
+    public void Submit(MoveInstanceToZoneRequest request)
     {
         var match = actionMatcher.TryMatch(request);
         if (match.RequiresMatch && !match.Success)
         {
-            return commands.RejectRequest(request, RejectReason.NotAvailableAction);
+            // Rejected before entering the engine — no command created.
+            return;
         }
 
         // Game-specific interpretation: dragging from hand to play area means play card.
@@ -97,42 +98,29 @@ public sealed class RequestGateway : IRequestGateway
                 fromZone: request.FromZone,
                 playZone: request.ToZone);
 
-        return commands.DispatchRequest(request, command);
+        engine.Dispatch(command);
     }
-}
-```
-
-Result:
-
-```csharp
-public sealed record RequestResult
-{
-    public required RequestStatus Status { get; init; }
-    public RejectReason? Reason { get; init; }
-    public HistoryEnvelopeId? EnvelopeId { get; init; }
 }
 ```
 
 ## 4. Game Command Enters Pipeline
 
-The dispatcher opens an envelope, runs pre-hooks, invokes the handler, runs reactions, and publishes the envelope.
+`ICommandPipeline` opens an envelope, runs pre-hooks, invokes the handler, and publishes the envelope. It handles exactly one command and returns a result. It does not decide what runs next — that is the evaluator's job (see section 6b).
 
 ```csharp
-public sealed class GameCommandDispatcher : IGameCommandDispatcher
+public sealed class CommandPipeline : ICommandPipeline
 {
-    private readonly ICommandPipeline pipeline;
     private readonly IHistoryService history;
 
-    public RequestResult DispatchRequest(Request request, GameCommand command)
+    public CommandResult Execute(GameCommand command)
     {
         using var envelope = history.OpenEnvelope(new EnvelopeCause
         {
-            Request = request,
             Actor = command.Actor,
             SourceInstance = command.Source
         });
 
-        var pre = pipeline.RunPreHooks(command, envelope);
+        var pre = RunPreHooks(command, envelope);
         if (pre.Status != PreHookStatus.Continue)
         {
             var rejected = CommandResult.Rejected(pre.Reason);
@@ -140,10 +128,7 @@ public sealed class GameCommandDispatcher : IGameCommandDispatcher
             return history.CloseAndPublish(envelope, rejected);
         }
 
-        var result = pipeline.Handle(pre.Command, envelope);
-        // Reactions (including game-specific “what happens after this command”) may dispatch
-        // further GameCommands, e.g. PlayCard -> ExecuteCard, in the same session/envelope.
-        pipeline.RunReactions(pre.Command, result, envelope);
+        var result = Handle(pre.Command, envelope);
 
         return history.CloseAndPublish(envelope, result);
     }
@@ -176,10 +161,9 @@ public sealed record PlayCardCommand : GameCommand
 }
 
 // Second step: run definition effect and this game’s post-play moves (e.g. to discard).
-// Created by game-specific engine/reaction after PlayCardCommand succeeds, not by PlayCardHandler.
+// Created by the evaluator after it sees a card in PlayArea — not by PlayCardHandler or the pipeline.
 public sealed record ExecuteCardCommand : GameCommand
 {
-    public required GameCommandId CausedByPlayCommandId { get; init; }
     public required ZoneId FromPlayZone { get; init; }
     public required ZoneId DiscardZone { get; init; }
 }
@@ -245,36 +229,49 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 
 **Note:** This handler is intentionally granular. Deeper design (composites, segment boundaries, and two-command stories) is in [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md).
 
-## 6b. Engine / Reaction: “Play Succeeded” → `ExecuteCardCommand`
+## 6b. Evaluator: “PlayArea Has A Card” → `ExecuteCardCommand`
 
-**Undefined, game-specific** logic runs as part of the pipeline after a command is handled (for example, a `CommandReaction` or a pluggable `IGameEngineStep`). It receives the **executed** `PlayCardCommand` and its result, and—because **this** sample game treats “play” as “then execute”—it **creates** a second `GameCommand`. That command is **tied to the first** with `CausedByPlayCommandId` (or another parent/chain field your dispatcher assigns from the play step).
+After the pipeline returns, the engine calls `IEngineEvaluator.Evaluate`. The evaluator reads the **current game state** — not which command just ran — and returns any follow-up commands to enqueue. This is where game-specific chaining logic lives, not inside the pipeline.
+
+In this sample game the rule is: any card sitting in `PlayArea` must be executed. The evaluator does not match on `PlayCardCommand`; it just checks the zone. Any command that leaves a card in `PlayArea` (a trigger, a copy effect, etc.) produces the same follow-up automatically.
 
 ```csharp
-// Illustrative: real placement may be a dedicated reaction, an engine pass, or a preset hook.
-public sealed class SamplePlayThenExecuteEngine : ICommandReaction<PlayCardCommand, PlayCardResult>
+public sealed class SampleGameEvaluator : IEngineEvaluator
 {
-    public void React(PlayCardCommand play, PlayCardResult result, ReactionContext context)
+    public IReadOnlyList<GameCommand> Evaluate(
+        GameCommand justExecuted,
+        CommandResult result,
+        IGameState state)
     {
-        if (result.Status != CommandStatus.Success)
+        // State-based check: is there a card in PlayArea waiting to be executed?
+        var playArea = state.GetZone(WellKnownZones.PlayArea);
+        if (playArea.HasCards)
         {
-            return;
+            var card = playArea.TopCard;
+            return new GameCommand[]
+            {
+                new ExecuteCardCommand
+                {
+                    Actor = state.ActiveActor,
+                    Source = card,
+                    FromPlayZone = WellKnownZones.PlayArea,
+                    DiscardZone = state.DiscardZoneFor(state.ActiveActor)
+                }
+            };
         }
 
-        // Sample game: after placement, the simulation must “execute” the card (effect, then yard).
-        var execute = new ExecuteCardCommand
-        {
-            CausedByPlayCommandId = context.PlayCommandId,
-            Actor = play.Actor,
-            Source = play.Source,
-            FromPlayZone = play.PlayZone,
-            DiscardZone = context.Game.DiscardZoneFor(play.Actor)
-        };
+        return Array.Empty<GameCommand>();
+    }
 
-        // Same envelope/session, new segment, parent link in context — exact shape is implementation.
-        context.DispatchFollowUp(execute);
+    public void OnQueueDrained(GameEngine engine, IGameState state)
+    {
+        // Queue is empty and PlayArea is empty.
+        // Player still has cards in hand and energy — do nothing; await input.
     }
 }
 ```
+
+The evaluator is also called when the queue empties (`OnQueueDrained`). That is when the game decides to advance a phase, grant priority, or simply await the next player action. See [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the full `GameEngine` drain loop and evaluator interface.
 
 ## 6c. Execute Card Handler (Effect, Then Discard In This Game)
 
@@ -540,27 +537,42 @@ Notes:
 ```text
 UI drop
   -> MoveInstanceToZoneRequest
-  -> RequestGateway.Submit
-  -> PlayCardCommand
-  -> CommandPreHooks
-  -> PlayCardHandler
-      -> Semantic: CardPlayStarted
-      -> StateMutation: RemoveFromZone(Hand, C17)
-      -> StateMutation: InsertIntoZone(PlayArea, C17)
-      -> Semantic: CardMoved
-      -> Semantic: PlayCardResolved
-  -> (game-specific engine / reaction, success path)
-  -> Creates ExecuteCardCommand, linked: CausedByPlayCommandId
-  -> ExecuteCardHandler
-      -> definition.Effect.Trigger
-          -> HealActorCommand
-          -> HealActorHandler
-              -> Semantic: ActorHealed
-              -> StateMutation: SetVariable(P1, "life", 15)
-              -> StateChange: VariableChanged(P1, "life", 10, 15)
-      -> StateMutation: RemoveFromZone(PlayArea, C17)
-      -> StateMutation: InsertIntoZone(Discard, C17)
-  -> HistoryEnvelope closes
-  -> UI animates: place in play, then heal + discard, using segment boundaries as needed
+  -> RequestGateway.Submit -> engine.Dispatch(PlayCardCommand)
+
+Engine dequeues PlayCardCommand:
+  -> ICommandPipeline.Execute
+      -> CommandPreHooks
+      -> PlayCardHandler
+          -> Semantic: CardPlayStarted
+          -> StateMutation: RemoveFromZone(Hand, C17)
+          -> StateMutation: InsertIntoZone(PlayArea, C17)
+          -> Semantic: CardMoved
+          -> Semantic: PlayCardResolved
+      -> HistoryEnvelope published
+  -> IEngineEvaluator.Evaluate(PlayCardCommand, result, state)
+      -> state.GetZone(PlayArea).HasCards == true
+      -> returns [ExecuteCardCommand { Source: C17, ... }]
+  -> Engine enqueues ExecuteCardCommand
+
+Engine dequeues ExecuteCardCommand:
+  -> ICommandPipeline.Execute
+      -> ExecuteCardHandler
+          -> definition.Effect.Trigger
+              -> HealActorCommand dispatched as child
+              -> HealActorHandler
+                  -> Semantic: ActorHealed
+                  -> StateMutation: SetVariable(P1, "life", 15)
+                  -> StateChange: VariableChanged(P1, "life", 10, 15)
+          -> StateMutation: RemoveFromZone(PlayArea, C17)
+          -> StateMutation: InsertIntoZone(Discard, C17)
+      -> HistoryEnvelope published
+  -> IEngineEvaluator.Evaluate(ExecuteCardCommand, result, state)
+      -> state.GetZone(PlayArea).HasCards == false
+      -> returns []
+
+Queue empty -> OnQueueDrained:
+  -> player still has energy and cards in hand -> no action, await input
+
+UI animates: place in play, then heal + discard, using envelopes and segment boundaries as needed
 ```
 
