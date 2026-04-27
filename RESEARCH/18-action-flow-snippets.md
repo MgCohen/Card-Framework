@@ -73,7 +73,7 @@ public sealed record MoveInstanceToZoneRequest
 
 ## 3. Engine Receives Request
 
-The gateway resolves actor/session/instance, optionally checks available actions, converts the request into a game command, and hands it to the engine via `Dispatch`. The gateway does not process the command itself.
+The gateway resolves actor/session/instance, optionally checks available actions, converts the request into a game command, and hands it to the engine via `Dispatch`. It returns a `RequestAcknowledgement` immediately — either a synchronous rejection (before the engine) or an acceptance with a `RequestId` the caller can use to match the future envelope.
 
 ```csharp
 public sealed class RequestGateway : IRequestGateway
@@ -81,25 +81,43 @@ public sealed class RequestGateway : IRequestGateway
     private readonly IAvailableActionMatcher actionMatcher;
     private readonly GameEngine engine;
 
-    public void Submit(MoveInstanceToZoneRequest request)
+    public RequestAcknowledgement Submit(MoveInstanceToZoneRequest request)
     {
         var match = actionMatcher.TryMatch(request);
         if (match.RequiresMatch && !match.Success)
-        {
-            // Rejected before entering the engine — no command created.
-            return;
-        }
+            return RequestAcknowledgement.Rejected(RejectReason.NotAvailableAction);
+
+        var requestId = RequestId.New();
 
         // Game-specific interpretation: dragging from hand to play area means play card.
-        GameCommand command = match.CommandOverride
+        GameCommand command = (match.CommandOverride
             ?? new PlayCardCommand(
                 actor: request.Actor,
                 source: request.SourceInstance,
                 fromZone: request.FromZone,
-                playZone: request.ToZone);
+                playZone: request.ToZone))
+            with { OriginRequestId = requestId };
 
         engine.Dispatch(command);
+        return RequestAcknowledgement.Accepted(requestId);
     }
+}
+```
+
+`RequestAcknowledgement.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginRequestId` matches.
+
+```csharp
+public sealed record RequestAcknowledgement
+{
+    public required RequestStatus Status { get; init; }
+    public RejectReason? Reason { get; init; }
+    public RequestId? RequestId { get; init; }
+
+    public static RequestAcknowledgement Rejected(RejectReason reason) =>
+        new() { Status = RequestStatus.Rejected, Reason = reason };
+
+    public static RequestAcknowledgement Accepted(RequestId id) =>
+        new() { Status = RequestStatus.Accepted, RequestId = id };
 }
 ```
 
@@ -117,7 +135,8 @@ public sealed class CommandPipeline : ICommandPipeline
         using var envelope = history.OpenEnvelope(new EnvelopeCause
         {
             Actor = command.Actor,
-            SourceInstance = command.Source
+            SourceInstance = command.Source,
+            OriginRequestId = command.OriginRequestId
         });
 
         var pre = RunPreHooks(command, envelope);
@@ -144,6 +163,7 @@ public abstract record GameCommand
 {
     public required ActorId Actor { get; init; }
     public required InstanceId Source { get; init; }
+    public RequestId? OriginRequestId { get; init; }
 }
 
 public sealed record PlayCardCommand : GameCommand
@@ -459,25 +479,34 @@ public sealed record HistoryEnvelope
 }
 ```
 
-Example envelope (collapsed **flat** list; a real system would usually group these into **segments** for `PlayCardCommand` then `ExecuteCardCommand`, with `ExecuteCard` carrying `CausedByPlayCommandId`):
+Each engine queue step produces its own envelope. `PlayCardCommand` and `ExecuteCardCommand` are separate pipeline executions, so they produce separate envelopes. Both carry the same `OriginRequestId` — the engine threads it from the initial command onto all evaluator follow-ups.
+
+Child commands dispatched inline via `scope.DispatchChild` (e.g. `HealActorCommand` inside `ExecuteCardHandler`) are **not** separate queue steps. Their entries fold into the current envelope, not a new one.
 
 ```text
+// Envelope 1: PlayCardCommand
 HistoryEnvelope
   Cause:
-    request: MoveInstanceToZone(C17, Hand -> PlayArea)
+    originRequest: R1
     actor: P1
     source: C17
-  Result:
-    (last command in chain, e.g. ExecuteCardResult, or an aggregate; sample-only)
+  Result: PlayCardResult { Status: Success }
   Entries:
-    # -- segment: PlayCardCommand (placement) --
     CardPlayStarted(P1, C17)
     ZoneContentRemoved(P1.Hand, C17)
     ZoneContentInserted(P1.PlayArea, C17, index: 0)
     CardMoved(C17, P1.Hand, P1.PlayArea)
     PlayCardResolved(P1, C17, P1.PlayArea)
-    # -- segment: ExecuteCardCommand (effect + discard in this game), tied to play via CausedByPlayCommandId --
-    (child) HealActorCommand / HealActorHandler
+
+// Envelope 2: ExecuteCardCommand (evaluator follow-up; engine threads OriginRequestId = R1)
+HistoryEnvelope
+  Cause:
+    originRequest: R1
+    actor: P1
+    source: C17
+  Result: ExecuteCardResult { Status: Success }
+  Entries:
+    // HealActorCommand is a child dispatch inside ExecuteCardHandler — same envelope
     ActorHealed(C17, P1, amount: 5)
     VariableChanged(P1, "life", 10, 15)
     ZoneContentRemoved(P1.PlayArea, C17)
@@ -537,9 +566,13 @@ Notes:
 ```text
 UI drop
   -> MoveInstanceToZoneRequest
-  -> RequestGateway.Submit -> engine.Dispatch(PlayCardCommand)
+  -> RequestGateway.Submit
+      -> available action check passes
+      -> requestId = R1
+      -> engine.Dispatch(PlayCardCommand { OriginRequestId: R1 })
+      -> return RequestAcknowledgement.Accepted(R1)   <-- caller gets this immediately
 
-Engine dequeues PlayCardCommand:
+Engine dequeues PlayCardCommand { OriginRequestId: R1 }:
   -> ICommandPipeline.Execute
       -> CommandPreHooks
       -> PlayCardHandler
@@ -548,24 +581,24 @@ Engine dequeues PlayCardCommand:
           -> StateMutation: InsertIntoZone(PlayArea, C17)
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
-      -> HistoryEnvelope published
+      -> Envelope 1 published { OriginRequestId: R1, Result: Success }
   -> IEngineEvaluator.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true
-      -> returns [ExecuteCardCommand { Source: C17, ... }]
-  -> Engine enqueues ExecuteCardCommand
+      -> returns [ExecuteCardCommand { Source: C17 }]
+  -> Engine threads R1 onto follow-up; enqueues ExecuteCardCommand { OriginRequestId: R1 }
 
-Engine dequeues ExecuteCardCommand:
+Engine dequeues ExecuteCardCommand { OriginRequestId: R1 }:
   -> ICommandPipeline.Execute
       -> ExecuteCardHandler
           -> definition.Effect.Trigger
-              -> HealActorCommand dispatched as child
+              -> HealActorCommand dispatched as child (scope.DispatchChild — same envelope)
               -> HealActorHandler
                   -> Semantic: ActorHealed
                   -> StateMutation: SetVariable(P1, "life", 15)
                   -> StateChange: VariableChanged(P1, "life", 10, 15)
           -> StateMutation: RemoveFromZone(PlayArea, C17)
           -> StateMutation: InsertIntoZone(Discard, C17)
-      -> HistoryEnvelope published
+      -> Envelope 2 published { OriginRequestId: R1, Result: Success }
   -> IEngineEvaluator.Evaluate(ExecuteCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == false
       -> returns []
@@ -573,6 +606,7 @@ Engine dequeues ExecuteCardCommand:
 Queue empty -> OnQueueDrained:
   -> player still has energy and cards in hand -> no action, await input
 
-UI animates: place in play, then heal + discard, using envelopes and segment boundaries as needed
+UI receives Envelope 1 (R1): animate card placement
+UI receives Envelope 2 (R1): animate heal popup + discard move
 ```
 
