@@ -2,7 +2,7 @@
 
 **Purpose:** One short, **replaceable** handoff for the *next* session. Full reasoning stays in the numbered research files; this file is **only** "where we are, what to read, what to do next." Update or overwrite it when a research milestone ends. Do not duplicate the whole glossary here.
 
-**Last updated:** 2026-04-26 (session end; refresh when you read this in a new session)
+**Last updated:** 2026-04-27
 
 ---
 
@@ -22,6 +22,17 @@
 - `IAvailableActionsSnapshot` is optional — Stacklands-style games don't publish one; all requests pass.
 - `CommandReaction` as a pipeline step is gone. Follow-ups come from `IEngineEvaluator.Evaluate`.
 
+### Terminology decisions (2026-04-27)
+
+- `Request` → `PlayerIntent`. Covers all player-originated inputs regardless of mechanism. Not "a request for permission" — an expression of intent.
+- `RequestResult` → `IntentResult`.
+- All ID types → `Identifier<T>` base record. No custom ID type per concept.
+- `IAvailableActionMatcher` → `IntentMapper`. Provisional — the full intent/available-action/validation relationship is a deferred design topic.
+- `IEngineEvaluator` → `GameRules`. The engine is the framework loop; `GameRules` is the game-specific plugin.
+- `IGameState` → `GameState`. Drop the `I` prefix.
+- `CommandReaction` removed from glossary. Superseded by `GameRules`.
+- Added to glossary: `StateChange`, `SemanticEvent`, `ResolutionScope`, `EnvelopeCause`, `AvailableActionsSnapshot`, `RelocateInstanceMutation`, `IntentMapper`.
+
 ### Open design notes (not yet in any doc)
 
 - **Effects need async support** — pure logic is sync today, but player-input effects (targeting, choices, mulligan) require suspension. How the pipeline pauses and resumes is unresolved.
@@ -35,13 +46,13 @@
 
 | # | Task | Notes |
 |---|------|-------|
-| 1 | **Terminology review** | Audit naming across all docs; settle or annotate what's still provisional |
-| 2 | **IGameState contract** | Write what the evaluator can and cannot see; read-only boundary |
+| ~~1~~ | ~~**Terminology review**~~ | Done. Glossary updated; renames captured above. Docs 17/18/20 still use old names — update on next pass. |
+| 2 | **`GameState` contract** | Write what `GameRules` can and cannot see; read-only boundary |
 | 3 | **Redesign pre-hook → trigger/reaction system** | Replace `CommandPreHook` placeholder with a proper model |
-| 4 | **Refine engine/evaluator shape** | Identify missing hooks beyond `Evaluate` and `OnQueueDrained` |
+| 4 | **Refine `GameRules` / engine shape** | Identify missing hooks beyond `Evaluate` and `OnQueueDrained` |
 | 5 | **Leverage doc 19 composite actions** | Show scope utilities in at least one handler |
 | 6 | **Rules and scheduling research** | Replacement/prevention effects, simultaneous events, continuous effects, async input suspension |
-| 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + evaluator + one card type |
+| 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type |
 
 ---
 
