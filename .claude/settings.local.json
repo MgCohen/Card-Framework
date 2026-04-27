@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "WebSearch",
+      "mcp__4f2269a7-4277-4ef6-813d-04f2620523c2__notion-fetch"
     ]
   }
 }
