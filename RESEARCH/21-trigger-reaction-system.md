@@ -113,7 +113,7 @@ triggers.OnAfter<HealActorAction>(
 The channel receives the dispatched command and calls `GameRules.OnIncomingCommand` before scheduling it:
 
 ```csharp
-public interface IGameRules
+public interface GameRules
 {
     SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
     IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result, GameState state);

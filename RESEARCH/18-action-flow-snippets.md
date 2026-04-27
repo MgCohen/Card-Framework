@@ -40,7 +40,7 @@ The UI does not move canonical state. It creates a request.
 ```csharp
 public sealed class CardDragController
 {
-    private readonly IRequestGateway requests;
+    private readonly IIntentGateway requests;
 
     public void OnDrop(CardView cardView, ZoneView targetZone, PointerDropContext pointer)
     {
@@ -71,21 +71,21 @@ public sealed record MoveInstanceToZoneRequest
 }
 ```
 
-## 3. Engine Receives Request
+## 3. Engine Receives PlayerIntent
 
-The gateway resolves actor/session/instance, optionally checks available actions, converts the request into a game command, and hands it to the engine via `Dispatch`. It returns a `RequestResult` immediately — either a synchronous rejection (before the engine) or an acceptance with a `RequestId` the caller can use to match the future envelope.
+The gateway resolves actor/session/instance, optionally checks available actions, converts the intent into a game command, and hands it to the engine via `Dispatch`. It returns an `IntentResult` immediately — either a synchronous rejection (before the engine) or an acceptance with a `IntentId` the caller can use to match the future envelope.
 
 ```csharp
-public sealed class RequestGateway : IRequestGateway
+public sealed class IntentGateway : IIntentGateway
 {
-    private readonly IAvailableActionMatcher actionMatcher;
+    private readonly IntentMapper actionMatcher;
     private readonly GameEngine engine;
 
-    public RequestResult Submit(MoveInstanceToZoneRequest request)
+    public IntentResult Submit(MoveInstanceToZoneRequest request)
     {
         var match = actionMatcher.TryMatch(request);
         if (match.RequiresMatch && !match.Success)
-            return new RequestResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+            return new IntentResult { Status = IntentStatus.Rejected, Reason = RejectReason.NotAvailableAction };
 
         var commandChainId = CommandChainId.New();
 
@@ -99,19 +99,19 @@ public sealed class RequestGateway : IRequestGateway
             with { OriginCommandId = commandChainId, OriginIntent = request };
 
         engine.Dispatch(command);
-        return new RequestResult { Status = RequestStatus.Accepted, RequestId = commandChainId };
+        return new IntentResult { Status = IntentStatus.Accepted, IntentId = commandChainId };
     }
 }
 ```
 
-`RequestResult.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginCommandId` matches.
+`IntentResult.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginCommandId` matches.
 
 ```csharp
-public sealed record RequestResult
+public sealed record IntentResult
 {
-    public required RequestStatus Status { get; init; }
+    public required IntentStatus Status { get; init; }
     public RejectReason? Reason { get; init; }
-    public RequestId? RequestId { get; init; }
+    public IntentId? IntentId { get; init; }
 }
 ```
 
@@ -572,11 +572,11 @@ Notes:
 ```text
 UI drop
   -> MoveInstanceToZoneRequest
-  -> RequestGateway.Submit
+  -> IntentGateway.Submit
       -> available action check passes
       -> commandChainId = C1
       -> engine.Dispatch(PlayCardCommand { OriginCommandId: C1, OriginIntent: MoveInstanceToZoneRequest })
-      -> return RequestResult { Accepted, RequestId: C1 }   <-- caller gets this immediately
+      -> return IntentResult { Accepted, IntentId: C1 }   <-- caller gets this immediately
 
 Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
   -> ICommandPipeline.Execute

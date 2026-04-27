@@ -10,8 +10,8 @@ The strongest direction is a deterministic simulation core with reactive edges:
 flowchart LR
   authoring[Definitions and Game Templates] --> setup[Session Setup]
   setup --> state[Canonical State]
-  input[Presentation Intent] --> request[Request]
-  request --> pipeline[Game Pipeline]
+  input[Presentation Intent] --> intent[PlayerIntent]
+  intent --> pipeline[Game Pipeline]
   pipeline --> command[GameCommand / StateMutation]
   command --> queue[Task / Effect Queue]
   queue --> state

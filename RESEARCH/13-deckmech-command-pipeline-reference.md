@@ -137,7 +137,7 @@ This maps very naturally to card-game needs:
 This also fits the zone correction we just made:
 
 ```text
-Request move card to zone
+PlayerIntent move card to zone
   -> game/action rules validate
   -> command pipeline may cancel/replace
   -> handler resolves the exact state commands
@@ -180,7 +180,7 @@ Things not to copy blindly:
 Use DeckMech as the baseline for the next docs:
 
 1. Define the Card Framework action-flow vocabulary.
-2. Decide whether the high-level unit is called `Intent`, `Request`, `Command`, or something else.
+2. ~~Decide whether the high-level unit is called `Intent`, `Request`, `Command`, or something else.~~ **Settled:** `PlayerIntent`. See [Action Definition Proposal](17-action-definition-proposal.md).
 3. Define two lanes: game/rules command vs state mutation command.
 4. Define pre-handler hooks, handler execution, post-result reactions.
 5. Define how results become history.

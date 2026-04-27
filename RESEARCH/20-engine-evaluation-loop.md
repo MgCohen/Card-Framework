@@ -46,7 +46,7 @@ public sealed class GameEngine
 {
     private readonly Queue<GameAction> pending = new();
     private readonly ICommandPipeline pipeline;
-    private readonly IGameRules rules;
+    private readonly GameRules rules;
     private readonly GameState state;
     private bool running;
 
@@ -106,7 +106,7 @@ Everything that wants the engine to act submits a `GameCommand`. The engine does
 
 ```csharp
 // Player drags a card
-public sealed class RequestGateway
+public sealed class IntentGateway
 {
     private readonly GameEngine engine;
 
@@ -151,7 +151,7 @@ The evaluator's primary lens is the **current game state**, not which specific c
 If the evaluator matched on command types ("after `PlayCardCommand` → run execute"), it would miss any other way a card could end up in the same zone (an opponent's trigger, a copy effect, a token). State-based evaluation handles all sources the same way.
 
 ```csharp
-public interface IGameRules
+public interface GameRules
 {
     // Called when any command enters the dispatch channel.
     // Game decides scheduling: interrupt, queue, stash, or discard.
@@ -181,7 +181,7 @@ public enum SchedulingDecision { RunNext, Enqueue, Stash, Discard }
 In this sample game, when a card is played it is moved into a **PlayArea** zone. The rule is: any card sitting in `PlayArea` must be executed. The evaluator does not care that a `PlayCardCommand` just ran — it just checks the zone.
 
 ```csharp
-public sealed class SampleGameRules : IGameRules
+public sealed class SampleGameRules : GameRules
 {
     public SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context)
     {
@@ -228,7 +228,7 @@ public sealed class SampleGameRules : IGameRules
 
 ```text
 Player drags card C17 from Hand to PlayArea
-  → RequestGateway.Submit(MoveInstanceToZoneRequest)
+  → IntentGateway.Submit(MoveInstanceToZoneRequest)
   → engine.Dispatch(PlayCardCommand { Source: C17, FromZone: Hand, ToZone: PlayArea })
 
 Engine dequeues PlayCardCommand:
@@ -316,7 +316,7 @@ The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) doe
 | Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing)                     |
 | Decide what command runs next                     | `GameRules` (game-specific)                |
 | Drive the loop between them                       | `GameEngine` (framework)                          |
-| Submit commands from outside                      | Entry points (RequestGateway, TimerService, etc.) |
+| Submit commands from outside                      | Entry points (IntentGateway, TimerService, etc.) |
 
 
 The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute` — it handles one command and returns a result. The inline `RunReactions` call that was inside the dispatcher moves out entirely. Reactions are now the evaluator's job, not the dispatcher's.
@@ -364,20 +364,20 @@ Games that do not use this system leave `OnQueueDrained` empty or call a no-op p
 
 ### Gateway Fast-Reject
 
-`RequestGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
+`IntentGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
 
 ```csharp
-public RequestResult Submit(MoveInstanceToZoneRequest request)
+public IntentResult Submit(MoveInstanceToZoneRequest request)
 {
     var match = actionMatcher.TryMatch(request); // reads current snapshot; no-op if none published
     if (match.RequiresMatch && !match.Success)
-        return new RequestResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+        return new IntentResult { Status = IntentStatus.Rejected, Reason = RejectReason.NotAvailableAction };
 
     // ... dispatch as normal
 }
 ```
 
-`IAvailableActionMatcher` is a simple reader — it does not compute game logic itself. The game logic that decided what is legal already ran inside `OnQueueDrained`.
+`IntentMapper` is a simple reader — it does not compute game logic itself. The game logic that decided what is legal already ran inside `OnQueueDrained`.
 
 ### When Each Game Uses This
 

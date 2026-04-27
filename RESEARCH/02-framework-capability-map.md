@@ -23,7 +23,7 @@ This is a broad inventory of systems the framework may eventually need. It is in
 | Capability               | Purpose                                           | Examples                                                                           |
 | ------------------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | State Store              | Canonical state model and mutation surface.       | Current zones, entity values, active turn, run data.                               |
-| Intent / Request         | Represents external or system intent.             | Drag card, play card, choose reward, end turn, buy pack.                           |
+| PlayerIntent             | Represents external or system intent.             | Drag card, play card, choose reward, end turn, buy pack.                           |
 | AvailableAction          | Optional engine-exposed affordance.               | Playable card, valid destination, activatable ability.                             |
 | Game Command             | High-level approved or approvable rules command.  | Deal damage, draw card, move instance, play card.                                  |
 | StateMutation            | Low-level already-approved mutation.              | Set variable, insert into zone, add modifier, create instance.                     |

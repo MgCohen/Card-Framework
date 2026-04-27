@@ -10,10 +10,10 @@
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
 - **Docs 14–20 are now aligned.** The `CommandReaction` inline pipeline step has been removed from docs 15 and 17 and replaced with the evaluator pattern from doc 20. `childEnvelopes` removed from envelope shapes.
-- **`RequestAcknowledgement` renamed back to `RequestResult`** in doc 18 — simpler shape, no static factory methods.
+- **`RequestAcknowledgement` renamed to `IntentResult`** (via `RequestResult`) in doc 18 — simpler shape, no static factory methods.
 - **`OriginIntentId` renamed to `OriginCommandId`** throughout docs 18 and 20. `OriginIntent` added to `GameCommand` and `EnvelopeCause` (non-null only on the first command in a chain).
 - **Available actions system documented** in doc 20 section 10 — optional, no-op by default, published via `OnQueueDrained`, read by gateway for fast-reject.
-- **Doc 06 triaged** — scheduler questions closed, new open items added (async input suspension, available actions shape, IGameState contract).
+- **Doc 06 triaged** — scheduler questions closed, new open items added (async input suspension, available actions shape, `GameState` contract).
 - **Trigger and reaction system designed** — doc 21 written. `CommandPreHook` placeholder replaced with a proper model.
 
 ### Key decisions settled this session
@@ -21,7 +21,7 @@
 - `OriginCommandId` is the chain ID, not the request ID. Engine threads it onto all evaluator follow-ups mechanically.
 - `OriginIntent` is carried by the first envelope only, for UI/debug correlation.
 - `IAvailableActionsSnapshot` is optional — Stacklands-style games don't publish one; all requests pass.
-- `CommandReaction` as a pipeline step is gone. Follow-ups come from `IEngineEvaluator.Evaluate`.
+- `CommandReaction` as a pipeline step is gone. Follow-ups come from `GameRules.Evaluate`.
 - `GameCommand` becomes the abstract base for all pipeline-dispatchable types. The old `GameCommand` (executable action) is now `GameAction`. `SemanticEvent` is now `GameSignal`.
 - Trigger fold: `OnBefore<T>` / `OnAfter<T>` where `T : GameCommand`. Only `GameAction` is modifiable in the before fold.
 - All trigger reactions dispatch through one unified channel. `GameRules.OnIncomingCommand` decides scheduling: `RunNext` / `Enqueue` / `Stash` / `Discard`.
@@ -44,7 +44,7 @@
 ### Open design notes (not yet in any doc)
 
 - **Effects need async support** — pure logic is sync today, but player-input effects (targeting, choices, mulligan) require suspension. How the pipeline pauses and resumes is unresolved.
-- **`GameState` contract is vague** — what it exposes to evaluator and trigger Context, what is read-only, and where its boundaries are has not been written down.
+- **`GameState` contract is vague** — what it exposes to `GameRules` and trigger `Context`, what is read-only, and where its boundaries are has not been written down.
 - **Doc 19 composite actions not leveraged** — scope utilities exist in doc 19 but no handler uses them yet.
 - **Trigger subscription lifecycle** — when Register/Unregister is called; what qualifies as "trigger-active" relative to zone state. Tied to GameState contract.
 - **Trigger ordering within fold** — what determines sequence when multiple triggers match the same type.
