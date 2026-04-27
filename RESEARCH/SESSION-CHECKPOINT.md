@@ -53,6 +53,9 @@
 | 5 | **Leverage doc 19 composite actions** | Show scope utilities in at least one handler |
 | 6 | **Rules and scheduling research** | Replacement/prevention effects, simultaneous events, continuous effects, async input suspension |
 | 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type |
+| 8 | **Expand available actions system** | Flesh out shape, lifecycle, and interaction with `IntentMapper`; cover non-trivial filtering cases |
+| 9 | **Revisit `StateChange` and state overall** | Clarify what a `StateChange` is, what it owns, how `GameState` exposes/mutates it, and read-only boundaries |
+| 10 | **Revisit `SemanticEvent` and scope actions** | Enumerate what a `ResolutionScope` can emit/do; relationship between semantic events, history, and presentation hooks |
 
 ---
 
