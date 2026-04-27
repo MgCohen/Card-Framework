@@ -18,7 +18,7 @@ Everything that flows through the pipeline shares a base type: `GameCommand`. Th
 abstract record GameCommand;                     // base — all pipeline-dispatchable types
 
 abstract record GameAction    : GameCommand;     // executable, modifiable, queued through engine
-abstract record CompositeAction : GameCommand;   // executable, runs inline within parent scope
+abstract record CompositeAction : GameCommand;   // reusable StateMutation group, runs inline within a handler
 abstract record GameSignal    : GameCommand;     // not executable — trigger surface only
 ```
 
@@ -29,8 +29,14 @@ The previous `GameCommand` (the executable action type from docs 18–20) is now
 | Type | Executed by | Modifiable in before fold | Goes through engine queue |
 |---|---|---|---|
 | `GameAction` | Handler, via engine queue | Yes | Yes |
-| `CompositeAction` | Inline, within parent scope | No | No |
+| `CompositeAction` | Inline, within parent handler | No | No |
 | `GameSignal` | Nothing — no execution step | No | No |
+
+### CompositeAction vs Effect
+
+`CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit.
+
+An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) for the full layer hierarchy.
 
 ---
 
@@ -189,6 +195,8 @@ scope.Execute(new MoveCardComposite(source, zone)); // CompositeAction — befor
 ```
 
 `scope.Emit` and `scope.Execute` are the scope-level equivalents of `engine.Dispatch` for non-queued types.
+
+A handler should never dispatch another `GameAction` directly. If sequencing multiple `GameAction`s is needed, that is an **Effect**'s responsibility — not a handler's. Handlers apply state changes (via mutations and `CompositeAction`s) and return a `CommandResult`. Effects orchestrate the sequence of commands around and between handlers.
 
 ---
 
