@@ -36,8 +36,8 @@ The framework should provide the shape. Games and presets provide the rules.
 | Game Command     | Approved or approvable high-level command that needs game logic. | Play card, draw card, deal damage, move instance.                 |
 | StateMutation    | Low-level already-approved state mutation.                       | Set variable, insert into zone, remove from zone, apply modifier. |
 | CommandHandler   | Resolves a game command into results and state mutations.        | Damage handler splits shield/health changes.                      |
-| CommandPreHook   | Runs before a handler; can validate, cancel, replace, or modify. | Cost increase, prevention, redirect target.                       |
-| CommandReaction  | Runs after a handler result.                                     | "After damage, draw a card."                                      |
+| OnBefore\<T\>    | Before-trigger fold; `GameAction` can be modified, cancelled, or replaced. | Cost increase, prevention, redirect target. Replaces `CommandPreHook`. |
+| OnAfter\<T\>     | After-trigger fold; dispatches reaction commands into the channel. | "After damage, draw a card." Replaces `CommandReaction`.          |
 | CommandResult    | Structured outcome of a game command.                            | Move rejected, actual destination, damage amount, card drawn.     |
 | State Change     | Concrete change to canonical state.                              | Instance moved, variable changed, modifier added.                 |
 | History Entry    | Ordered fact emitted during resolution.                          | `ZoneChanged`, `VariableChanged`, `DecisionOpened`.               |
@@ -192,19 +192,16 @@ State mutations should not ask broad legality questions. They are the "apply thi
 
 In a Store-based implementation, state mutations likely map to mutators. In a different implementation, they may map to entity/zone operations.
 
-## CommandPreHooks
+## Before Triggers (OnBefore\<T\>)
 
-Command pre-hooks run before the handler.
+> **Note:** The `CommandPreHook` placeholder from earlier drafts has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full design.
 
-They may:
+Before triggers run before the handler. They receive the current `GameCommand` and may:
 
-- Validate a condition.
-- Cancel the command.
-- Replace the command.
-- Modify values.
+- Validate a condition and cancel the action.
+- Replace the action with a different `GameAction`.
+- Modify action values (cost, target, amount).
 - Redirect targets.
-- Add metadata.
-- Force approval.
 
 Examples:
 
@@ -212,9 +209,8 @@ Examples:
 - "Spell costs 1 more this turn."
 - "Redirect damage to another target."
 - "This effect ignores hand size."
-- "Network authority rejected this request."
 
-Command pre-hooks are where many replacement/prevention effects can live.
+Before triggers are where replacement and prevention effects live.
 
 ## Handler
 
@@ -242,9 +238,9 @@ Handle DealDamageCommand
 
 ## CommandReactions
 
-> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline — they are returned by `GameRules.Evaluate` after the pipeline finishes and the envelope is published. The pre-hook concept (`CommandPreHook`) remains valid.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by two separate mechanisms: `OnAfter<T>` triggers (per-instance reactions dispatched through the channel) and `GameRules.Evaluate` (state-based follow-up commands). `CommandPreHook` has been superseded by `OnBefore<T>` triggers. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full trigger model and [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the evaluator pattern.
 
-The evaluator reads current game state after each command and returns any follow-up commands. This replaces the need for a post-reaction pipeline step. The pre-hook layer still handles cancellation, replacement, and redirection before the handler runs.
+The evaluator reads current game state after each command and returns any follow-up actions. After-triggers handle per-instance reactions. Together these replace the need for inline pre/post-hook pipeline steps.
 
 ## CommandResult
 

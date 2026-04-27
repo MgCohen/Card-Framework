@@ -117,28 +117,28 @@ public sealed record IntentResult
 
 ## 4. Game Command Enters Pipeline
 
-`ICommandPipeline` opens an envelope, runs pre-hooks, invokes the handler, and publishes the envelope. It handles exactly one command and returns a result. It does not decide what runs next — that is the evaluator's job (see section 6b).
+`ICommandPipeline` opens an envelope, runs before triggers, invokes the handler, runs after triggers, and publishes the envelope. It handles exactly one command and returns a result. It does not decide what runs next — that is the evaluator's job (see section 6b).
 
 ```csharp
 public sealed class CommandPipeline : ICommandPipeline
 {
     private readonly IHistoryService history;
 
-    public CommandResult Execute(GameCommand command)
+    public CommandResult Execute(GameAction action)
     {
         using var envelope = history.OpenEnvelope(new EnvelopeCause
         {
-            Actor = command.Actor,
-            SourceInstance = command.Source,
-            OriginCommandId = command.OriginCommandId,
-            OriginIntent = command.OriginIntent  // non-null only on the first command in a chain
+            Actor = action.Actor,
+            SourceInstance = action.Source,
+            OriginCommandId = action.OriginCommandId,
+            OriginIntent = action.OriginIntent  // non-null only on the first command in a chain
         });
 
-        var before = triggerSystem.RunBefore(command, context);
+        var before = triggerSystem.RunBefore(action, context);
         if (before.IsCancelled)
         {
             var rejected = CommandResult.Rejected(before.Reason);
-            envelope.Add(new CommandRejectedEntry(command, rejected));
+            envelope.Add(new CommandRejectedEntry(action, rejected));
             return history.CloseAndPublish(envelope, rejected);
         }
 
@@ -149,9 +149,9 @@ public sealed class CommandPipeline : ICommandPipeline
             return CommandResult.Replaced;
         }
 
-        var result = Handle(before.Command, envelope);
+        var result = Handle(before.Action, envelope);
 
-        triggerSystem.RunAfter(before.Command, result, context);
+        triggerSystem.RunAfter(before.Action, result, context);
 
         return history.CloseAndPublish(envelope, result);
     }
@@ -262,8 +262,8 @@ In this sample game the rule is: any card sitting in `PlayArea` must be executed
 ```csharp
 public sealed class SampleGameEvaluator : GameRules
 {
-    public IReadOnlyList<GameCommand> Evaluate(
-        GameCommand justExecuted,
+    public IReadOnlyList<GameAction> Evaluate(
+        GameAction justExecuted,
         CommandResult result,
         GameState state)
     {
@@ -272,7 +272,7 @@ public sealed class SampleGameEvaluator : GameRules
         if (playArea.HasCards)
         {
             var card = playArea.TopCard;
-            return new GameCommand[]
+            return new GameAction[]
             {
                 new ExecuteCardCommand
                 {
@@ -284,7 +284,7 @@ public sealed class SampleGameEvaluator : GameRules
             };
         }
 
-        return Array.Empty<GameCommand>();
+        return Array.Empty<GameAction>();
     }
 
     public void OnQueueDrained(GameEngine engine, GameState state)
@@ -417,9 +417,9 @@ public sealed class ResolutionScope
         history.Add(change);
     }
 
-    public void Semantic(SemanticEvent semanticEvent)
+    public void Emit(GameSignal signal)
     {
-        history.Add(semanticEvent);
+        history.Add(signal);
     }
 
     public CommandResult DispatchChild(GameCommand command)
@@ -492,7 +492,7 @@ Child commands dispatched inline via `scope.DispatchChild` (e.g. `HealActorComma
 HistoryEnvelope
   Cause:
     originCommandId: C1
-    originRequest: MoveInstanceToZoneRequest(C17, Hand -> PlayArea)  // first command only
+    originIntent: MoveInstanceToZoneRequest(C17, Hand -> PlayArea)  // first command only
     actor: P1
     source: C17
   Result: PlayCardResult { Status: Success }
@@ -507,7 +507,7 @@ HistoryEnvelope
 HistoryEnvelope
   Cause:
     originCommandId: C1
-    originRequest: null  // follow-up; no originating request
+    originIntent: null  // follow-up; no originating request
     actor: P1
     source: C17
   Result: ExecuteCardResult { Status: Success }
@@ -580,13 +580,14 @@ UI drop
 
 Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
   -> ICommandPipeline.Execute
-      -> CommandPreHooks
+      -> triggerSystem.RunBefore(PlayCardCommand)
       -> PlayCardHandler
           -> Semantic: CardPlayStarted
           -> StateMutation: RemoveFromZone(Hand, C17)
           -> StateMutation: InsertIntoZone(PlayArea, C17)
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
+      -> triggerSystem.RunAfter(PlayCardCommand, result)
       -> Envelope 1 published { OriginCommandId: C1, OriginIntent: MoveInstanceToZone, Result: Success }
   -> GameRules.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true

@@ -27,7 +27,7 @@ The engine does not know what any particular command means or what game is being
 
 ### ICommandPipeline
 
-The framework's executor. Receives one command, runs pre-hooks, invokes the handler, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](18-action-flow-snippets.md).
+The framework's executor. Receives one action, runs before triggers, invokes the handler, runs after triggers, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](18-action-flow-snippets.md).
 
 ### GameRules
 
@@ -313,7 +313,7 @@ The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) doe
 
 | Concern                                           | Where it lives                                    |
 | ------------------------------------------------- | ------------------------------------------------- |
-| Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing)                     |
+| Execute one action (before triggers, handler, after triggers, history) | `ICommandPipeline` (existing)    |
 | Decide what command runs next                     | `GameRules` (game-specific)                |
 | Drive the loop between them                       | `GameEngine` (framework)                          |
 | Submit commands from outside                      | Entry points (IntentGateway, TimerService, etc.) |

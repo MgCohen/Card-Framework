@@ -1,6 +1,5 @@
 # Handler Mutations, Sequential Apply, And Game Signals
-
-This document responds to design concerns raised about the patterns in [Action Flow Snippets](18-action-flow-snippets.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Semantic` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
+This document responds to design concerns raised about the patterns in [Action Flow Snippets](18-action-flow-snippets.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Emit` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
 
 ## 1. Is Sequential `Apply` A Problem?
 
@@ -51,7 +50,7 @@ There are two different streams in the history model:
 | Stream                                   | Role                                                              | How it often appears                                                                                             |
 | ---------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | **State change** (`StateChange` / diffs) | *What* changed in canonical state                                 | Can often be **derived in one place** when a `StateMutation` is applied.                                         |
-| **Semantic event**                       | *What it means* in game language (`CardPlayed`, `DamageDealt`, …) | Often **not** recoverable from raw diffs alone, because the **same** low-level change can mean different things. |
+| **Game signal** (`GameSignal`)           | *What it means* in game language (`CardPlayed`, `DamageDealt`, …) | Often **not** recoverable from raw diffs alone, because the **same** low-level change can mean different things. |
 
 
 **Example of ambiguity:** A `RemoveFromZone` + `InsertIntoZone` could be “play from hand to battlefield,” “discard from hand,” “sacrifice from battlefield,” or “opponent’s spell resolve.” The **physics** of zone entries can match while the **meaning** for animation and rules differs.
@@ -60,9 +59,9 @@ So:
 
 - **Automatic everything from `InsertIntoZoneMutation` is risky** if the framework guesses the wrong *meaning*.
 - **Automatic `StateChange` from every mutation** is a good default: one implementation path, one place to record `VariableChanged`, `ZoneContentRemoved`, and so on.
-- **Game signals** can still be *partially* **policy-driven** (for example, “when this zone’s insertion is triggered by a `PlayCard` command, emit `CardMoved` with cause play”)—but that drifts into **command-aware** or **context-aware** code, not pure mutation.
+- **Game signals** (`GameSignal`) can still be *partially* **policy-driven** (for example, “when this zone’s insertion is triggered by a `PlayCard` command, emit `CardMoved` with cause play”)—but that drifts into **command-aware** or **context-aware** code, not pure mutation.
 
-**Takeaway:** Repeating `Semantic` at every `Apply` is not a law of nature; it is a **teaching** snippet. The long-term goal is: **low-level diffs** largely automatic from mutations; **high-level meaning** from **where you still need human intent** (handler, command kind, or a small set of **named operations**).
+**Takeaway:** Repeating `Emit` at every `Apply` is not a law of nature; it is a **teaching** snippet. The long-term goal is: **low-level diffs** largely automatic from mutations; **high-level meaning** from **where you still need human intent** (handler, command kind, or a small set of **named operations**).
 
 ## 4. Composite Zone Moves: What It Is, And How The Scope Triggers It
 
@@ -102,7 +101,7 @@ public void RelocateInstance(ZoneId from, ZoneId to, InstanceId instance, Reloca
 1. The **state backend** validates preconditions (instance in `From`, and so on) or returns failure; the handler can react before any other step in the same command.
 2. The backend **removes** the instance from `From`, then **inserts** into `To` with **default** zone policy (no separate “plan” in the handler for the common case; see [Action Flow Snippets](18-action-flow-snippets.md)).
 3. The backend appends to the **current segment’s** history: either **two** `StateChange` lines (out of A, into B) or **one** composite “relocated” line if the game wants coarser history for replay/animation.
-4. Optional: one **default** `Semantic` for the *net* move, if the project chooses policy-driven `CardMoved` for relocations. Game-specific `Semantic` for “played from hand” still lives in the `PlayCard` handler or in a command-aware policy.
+4. Optional: one **default** `Emit` for the *net* move, if the project chooses policy-driven `CardMoved` for relocations. Game-specific `Semantic` for “played from hand” still lives in the `PlayCard` handler or in a command-aware policy.
 
 **When to use composite `Apply` vs two raw mutations**
 
@@ -304,7 +303,7 @@ To avoid the “remove then insert twice, type four events” feel without losin
 ## 8. Open Choices (To Decide In Implementation, Not In Research)
 
 - **Granularity of `StateChange` in history:** finest grain vs composite rows for replay and net sync.
-- **Whether `Semantic` is always explicit for “meaningful” events** vs **inferred** from a small catalog of `NamedGameOperation` types.
+- **Whether `Emit` is always explicit for “meaningful” events** vs **inferred** from a small catalog of `NamedGameOperation` types.
 - **Child commands:** flat list in one envelope vs **tree** of segments; affects how the UI times “play animation” vs “heal number pop.”
 
 These are tuning knobs, not a refutation of the pipeline shape.
@@ -312,7 +311,7 @@ These are tuning knobs, not a refutation of the pipeline shape.
 ## 9. Short Answers To The Original Worries
 
 1. **“We remove then insert hoping the first worked.”** — In a single `Handle` on a `ResolutionScope`, ordered `Apply` is normal. Make failures **loud** or **transactional**; use **composites** if intermediate states are invalid for your game.
-2. **“We have to `Semantic` everywhere we `Apply` for zones.”** — No long-term. Prefer **auto `StateChange*`*, and **composites or defaults** for common `CardMoved` semantics; reserve manual `Semantic` for **meanings the engine cannot infer** from raw data alone.
+2. **”We have to `Emit` everywhere we `Apply` for zones.”** — No long-term. Prefer **auto `StateChange`**, and **composites or defaults** for common `CardMoved` signals; reserve manual `Emit` for **meanings the engine cannot infer** from raw data alone.
 3. **“We do remove/insert twice for hand→play then discard.”** — That is the **play lifecycle**; wrap it in **one or two** named operations (composite or `PlayCard` sub-phases) so handlers read like rules, not like four copy-pasted mutations.
 
 ## Related

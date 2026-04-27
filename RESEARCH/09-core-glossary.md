@@ -62,27 +62,29 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | AvailableAction | Optional engine-exposed affordance that UI may highlight or present. | This card can be played, this target is available, this ability can be activated. |
 | AvailableActionsSnapshot | Read-only artifact published by `GameRules` at queue drain listing currently legal actions per actor. | Optional system — games that do not use it leave it as a no-op. |
 | Command | High-level game command or low-level state command, depending on lane. | Game command: deal damage; state command: set variable. Naming still needs refinement. |
-| GameCommand | High-level command that needs rules logic and returns a result. | Play card, draw card, deal damage, move instance after approval. |
+| GameCommand | Abstract base for all pipeline-dispatchable types: `GameAction`, `CompositeAction`, and `GameSignal`. | Not directly instantiated. Subtypes carry different execution semantics. |
 | StateMutation | Low-level already-approved state mutation. | Insert into zone, set variable, add modifier, create instance. Replaces `StateCommand`. |
 | StateChange | A `HistoryEntry` subtype recording a concrete state diff produced by a `StateMutation`. | `VariableChanged<T>`, `ZoneContentRemoved`, `ZoneContentInserted`. Automatically produced by the state layer. |
-| SemanticEvent | A `HistoryEntry` subtype recording a game-meaningful named fact that cannot be inferred from raw diffs alone. | `CardPlayStartedEvent`, `ActorHealedEvent`. Emitted explicitly by handlers via `scope.Semantic(...)`. |
+| GameSignal | A `GameCommand` subtype (and `HistoryEntry`) recording a game-meaningful named fact that cannot be inferred from raw diffs alone. Not executable — trigger surface only. | `CardPlayStartedSignal`, `ActorHealedSignal`. Emitted explicitly by handlers via `scope.Emit(...)`. Replaces `SemanticEvent`. |
+| GameAction | Executable `GameCommand` subtype — queued through the engine, runs through the full pipeline, modifiable in before-trigger fold. | `PlayCardCommand`, `HealActorCommand`. Replaces the old `GameCommand` executable type. |
 | Decision | Explicit moment where an actor may or must choose from legal options. | Choose card, choose target, choose reward, pass priority, select event branch. |
 | DecisionOption | One legal choice inside a decision. | May include ID, display info, target requirements, payload shape, or validation context. |
 | Validation | Process of checking whether a command or option is legal in current state. | Enough energy, valid target, actor has priority, destination is legal, recipe exists, card is not exhausted. |
 | Task | Deterministic work item produced by commands, effects, triggers, or rules. | Deal damage, draw card, move zone, create token, apply modifier, start timer. |
 | Effect | Rules behavior caused by a card, ability, relic, zone, system, or task. | May create tasks, modify events, apply modifiers, request decisions, or emit history. |
-| CommandPreHook | Pipeline hook before a command handler. Provisional — subject to redesign when the trigger/reaction system is explored. | Validate, cancel, replace, redirect, or modify a game command before state changes. |
+| OnBefore\<T\> | Before-trigger fold that runs before a `GameCommand` handler. `GameAction` payloads can be modified, cancelled, or replaced. | Validate, cancel, replace, redirect, or modify a game action before state changes. Replaces `CommandPreHook`. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md). |
+| OnAfter\<T\> | After-trigger fold that runs after a `GameCommand` handler. Reactions dispatched into the dispatch channel. | Draw a card when another card is healed. Trigger lifecycle effects. |
 | CommandHandler | Resolver for a game command. | Reads state, applies state mutations, returns result. |
 | CommandResult | Structured outcome of a game command. | Approved, rejected, actual destination, damage split, drawn instance ID. |
 | GameRules | Game-specific rules brain plugged into the engine. Called after each command and when the queue empties; returns follow-up commands based on current `GameState`. | Replaces `IEngineEvaluator`. The engine is the framework loop; `GameRules` is the game-specific plugin. |
 | GameState | Read-only view of simulation state passed to `GameRules`. | Zone contents, actor variables, phase info. Exact contract is a named open design task. Replaces `IGameState`. |
-| ResolutionScope | Handler-facing context object for one command execution. Provides `Apply`, `Semantic`, and `DispatchChild`. | Handlers never touch global state directly; all mutations go through the scope. |
+| ResolutionScope | Handler-facing context object for one command execution. Provides `Apply`, `Emit`, `Execute`, and `DispatchChild`. | Handlers never touch global state directly; all mutations go through the scope. |
 | EnvelopeCause | Metadata attached to a `HistoryEnvelope` describing why it was produced. | Actor, source instance, chain ID, and (first envelope only) `OriginIntent` — the originating `PlayerIntent`. |
 | Trigger | Rule that reacts to an event, state change, or command result. Runtime shape is undesigned — part of the deferred trigger/reaction exploration. | Whenever a card is drawn, when this enters play, at end of turn, after damage. |
 | Scheduler | System that decides when tasks, effects, triggers, decisions, and checks execute. | Queue drain, stack and priority, turn/phase machine, real-time tick. |
 | History | Ordered record of meaningful simulation events. | Supports presentation, animation, replay, debugging, tests, and networking later. |
 | HistoryEnvelope | Grouped history entries plus cause metadata for one action-flow boundary. | "Player A played Fireball; these mutations happened." Child commands fold into the envelope; evaluator follow-ups each get their own envelope sharing the chain ID. |
-| HistoryEntry | One ordered fact emitted by the simulation. | Subtyped as `StateChange` (auto-produced) or `SemanticEvent` (explicitly emitted). |
+| HistoryEntry | One ordered fact emitted by the simulation. | Subtyped as `StateChange` (auto-produced) or `GameSignal` (explicitly emitted). |
 | Event | Fact emitted by the simulation. | Entity created, variable changed, entity moved zones, damage dealt, decision opened, task started/ended. May feed history, triggers, or both. |
 
 
@@ -108,7 +110,7 @@ This glossary establishes working language for the Card Framework. Terms may be 
 - Spatial placement is not a base zone concern unless a game-specific spatial system makes it simulation data.
 - UI creates `PlayerIntent`s and reacts to state/history; it should not mutate simulation state directly.
 - History envelopes preserve why state changes happened, not only what changed.
-- `StateChange` entries are produced automatically by the state layer; `SemanticEvent` entries must be emitted explicitly by handlers for meanings the layer cannot infer.
+- `StateChange` entries are produced automatically by the state layer; `GameSignal` entries must be emitted explicitly by handlers via `scope.Emit(...)` for meanings the layer cannot infer.
 - Every entity should have a base definition, including generated tokens or temporary system entities.
 - Attachments and equipment are usually separate instances connected through relationships, not hidden fields on the host.
 - `CommandReaction` (post-result pipeline hooks) is removed. Follow-up commands return from `GameRules.Evaluate`.

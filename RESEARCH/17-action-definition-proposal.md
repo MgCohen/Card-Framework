@@ -1,5 +1,7 @@
 # Action Definition Proposal
 
+> **Status note:** This document predates the trigger system (doc 21) and engine loop (doc 20). References to `CommandPreHook` and `CommandReaction` throughout reflect the design at the time of writing. Both have since been superseded — `CommandPreHook` by `OnBefore<T>` triggers, `CommandReaction` by `OnAfter<T>` triggers and `GameRules.Evaluate`. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) and [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the current model.
+
 This document proposes concrete definitions for the action-related shapes in the Card Framework.
 
 It builds on:
@@ -777,9 +779,11 @@ MoveResult
   wasRedirected
 ```
 
-## Shape 6: CommandPreHook
+## Shape 6: CommandPreHook *(superseded — see [21-trigger-reaction-system.md](21-trigger-reaction-system.md))*
 
-Definition:
+> **Status:** `CommandPreHook` has been replaced by the `OnBefore<T>` trigger fold. The intent described below is valid; the mechanism is not. Refer to doc 21 for the current design.
+
+Definition (historical):
 
 > A `CommandPreHook` runs before the command handler and can validate, cancel, replace, redirect, or modify a `GameCommand`.
 
@@ -840,7 +844,7 @@ Important properties:
 
 > **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `GameRules.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
 
-The `CommandPreHook` concept (before the handler) remains valid. A proper trigger and reaction system that sits above the pipeline — including triggered abilities, replacement effects, and post-result reactions — is a known open design area.
+The `CommandPreHook` placeholder has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold — see [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full design. `CommandReaction` as a post-step is removed; reactions dispatch through `GameRules.OnIncomingCommand` and `GameRules.Evaluate`.
 
 ## Shape 9: HistoryEntry
 

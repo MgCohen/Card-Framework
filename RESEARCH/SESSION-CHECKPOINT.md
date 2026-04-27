@@ -2,19 +2,17 @@
 
 **Purpose:** One short, **replaceable** handoff for the *next* session. Full reasoning stays in the numbered research files; this file is **only** "where we are, what to read, what to do next." Update or overwrite it when a research milestone ends. Do not duplicate the whole glossary here.
 
-**Last updated:** 2026-04-27
+**Last updated:** 2026-04-27 (session 2)
 
 ---
 
 ## Where We Stopped
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
-- **Docs 14–20 are now aligned.** The `CommandReaction` inline pipeline step has been removed from docs 15 and 17 and replaced with the evaluator pattern from doc 20. `childEnvelopes` removed from envelope shapes.
-- **`RequestAcknowledgement` renamed to `IntentResult`** (via `RequestResult`) in doc 18 — simpler shape, no static factory methods.
-- **`OriginIntentId` renamed to `OriginCommandId`** throughout docs 18 and 20. `OriginIntent` added to `GameCommand` and `EnvelopeCause` (non-null only on the first command in a chain).
+- **All docs now use settled terminology.** `GameAction`, `GameSignal`, `scope.Emit`, `OnBefore<T>`/`OnAfter<T>`, `GameRules`, `IntentResult` applied consistently across docs 09, 15, 17, 18, 19, 20. Doc 17 has a status banner; Shape 6 marked superseded. Docs 15 and 17 `CommandPreHook`/`CommandReaction` sections updated with accurate supersession notes.
+- **Trigger and reaction system designed** — doc 21 written. `CommandPreHook` replaced with `OnBefore<T>` / `OnAfter<T>`. `GameRules.OnIncomingCommand` scheduling hook added.
 - **Available actions system documented** in doc 20 section 10 — optional, no-op by default, published via `OnQueueDrained`, read by gateway for fast-reject.
 - **Doc 06 triaged** — scheduler questions closed, new open items added (async input suspension, available actions shape, `GameState` contract).
-- **Trigger and reaction system designed** — doc 21 written. `CommandPreHook` placeholder replaced with a proper model.
 
 ### Key decisions settled this session
 
@@ -45,9 +43,9 @@
 
 - **Effects need async support** — pure logic is sync today, but player-input effects (targeting, choices, mulligan) require suspension. How the pipeline pauses and resumes is unresolved.
 - **`GameState` contract is vague** — what it exposes to `GameRules` and trigger `Context`, what is read-only, and where its boundaries are has not been written down.
-- **Doc 19 composite actions not leveraged** — scope utilities exist in doc 19 but no handler uses them yet.
-- **Trigger subscription lifecycle** — when Register/Unregister is called; what qualifies as "trigger-active" relative to zone state. Tied to GameState contract.
+- **Trigger subscription lifecycle** — when Register/Unregister is called; what qualifies as "trigger-active" relative to zone state. Deferred until game lifecycle is designed (task 12).
 - **Trigger ordering within fold** — what determines sequence when multiple triggers match the same type.
+- **`GameRules` hook completeness** — `OnIncomingCommand`, `Evaluate`, `OnQueueDrained` are defined; verify no other engine seams are missing before implementation begins.
 
 ---
 
@@ -55,7 +53,7 @@
 
 | # | Task | Notes |
 |---|------|-------|
-| ~~1~~ | ~~**Terminology review**~~ | Done. Glossary updated; renames captured above. Docs 17/18/20 still use old names — update on next pass. |
+| ~~1~~ | ~~**Terminology review**~~ | Done. Glossary and all docs updated. |
 | 2 | **`GameState` contract** | Write what `GameRules` and trigger `Context` can and cannot see; read-only boundary |
 | ~~3~~ | ~~**Redesign pre-hook → trigger/reaction system**~~ | Done. Doc 21 written. `CommandPreHook` replaced with `OnBefore<T>` / `OnAfter<T>`. `GameRules.OnIncomingCommand` scheduling hook added. |
 | 4 | **Refine `GameRules` / engine shape** | `OnIncomingCommand` added; verify no other missing hooks |
@@ -65,8 +63,8 @@
 | 8 | **Expand available actions system** | Flesh out shape, lifecycle, and interaction with `IntentMapper`; cover non-trivial filtering cases |
 | 9 | **Revisit `StateChange` and state overall** | Clarify what a `StateChange` is, what it owns, how `GameState` exposes/mutates it, and read-only boundaries |
 | ~~10~~ | ~~**Revisit `SemanticEvent` and scope actions**~~ | Done. `SemanticEvent` → `GameSignal`. Emitted via `scope.Emit`; goes through trigger fold; folds into parent envelope. |
-| 11 | **Align docs 18–20 with new naming** | `GameAction`, `GameSignal`, `OnBefore`/`OnAfter`, `GameRules.OnIncomingCommand` not yet reflected in older docs |
-| 12 | **Trigger subscription lifecycle** | When Register/Unregister is called; zone-based activation; relationship to GameState contract |
+| ~~11~~ | ~~**Align docs 18–20 with new naming**~~ | Done. `GameAction`, `GameSignal`, `scope.Emit`, `OnBefore`/`OnAfter` applied across docs 09, 15, 17, 18, 19, 20. `CommandPreHook` superseded notes added to 15 and 17. |
+| 12 | **Game lifecycle design** | Full game flow: session start, turn structure, phase transitions, end conditions — prerequisite for subscription lifecycle and many other detailed systems |
 
 ---
 
@@ -75,9 +73,9 @@
 | File | Why |
 |------|-----|
 | [21-trigger-reaction-system.md](21-trigger-reaction-system.md) | Trigger system design — most recent doc |
-| [18-action-flow-snippets.md](18-action-flow-snippets.md) | Primary code-level reference; needs naming update pass |
-| [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) | Engine loop, GameRules, available actions; needs `OnIncomingCommand` added |
-| [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) | Composite actions and scope utilities |
+| [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) | Engine loop, `GameRules`, available actions — current reference |
+| [18-action-flow-snippets.md](18-action-flow-snippets.md) | Primary end-to-end code reference |
+| [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) | Composite actions, `MoveCardComposite`, scope utilities |
 | [06-open-questions.md](06-open-questions.md) | Current open question state |
 
 ---
