@@ -71,21 +71,21 @@ public sealed record MoveInstanceToZoneRequest
 }
 ```
 
-## 3. Engine Receives Request
+## 3. Engine Receives PlayerIntent
 
-The gateway resolves actor/session/instance, optionally checks available actions, converts the request into a game command, and hands it to the engine via `Dispatch`. It returns a `RequestResult` immediately — either a synchronous rejection (before the engine) or an acceptance with a `RequestId` the caller can use to match the future envelope.
+The gateway resolves actor/session/instance, optionally checks available actions, converts the intent into a game command, and hands it to the engine via `Dispatch`. It returns an `IntentResult` immediately — either a synchronous rejection (before the engine) or an acceptance with a `RequestId` the caller can use to match the future envelope.
 
 ```csharp
 public sealed class RequestGateway : IRequestGateway
 {
-    private readonly IAvailableActionMatcher actionMatcher;
+    private readonly IntentMapper actionMatcher;
     private readonly GameEngine engine;
 
-    public RequestResult Submit(MoveInstanceToZoneRequest request)
+    public IntentResult Submit(MoveInstanceToZoneRequest request)
     {
         var match = actionMatcher.TryMatch(request);
         if (match.RequiresMatch && !match.Success)
-            return new RequestResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+            return new IntentResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
 
         var commandChainId = CommandChainId.New();
 
@@ -99,15 +99,15 @@ public sealed class RequestGateway : IRequestGateway
             with { OriginCommandId = commandChainId, OriginIntent = request };
 
         engine.Dispatch(command);
-        return new RequestResult { Status = RequestStatus.Accepted, RequestId = commandChainId };
+        return new IntentResult { Status = RequestStatus.Accepted, RequestId = commandChainId };
     }
 }
 ```
 
-`RequestResult.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginCommandId` matches.
+`IntentResult.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginCommandId` matches.
 
 ```csharp
-public sealed record RequestResult
+public sealed record IntentResult
 {
     public required RequestStatus Status { get; init; }
     public RejectReason? Reason { get; init; }
@@ -247,17 +247,17 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 
 ## 6b. Evaluator: “PlayArea Has A Card” → `ExecuteCardCommand`
 
-After the pipeline returns, the engine calls `IEngineEvaluator.Evaluate`. The evaluator reads the **current game state** — not which command just ran — and returns any follow-up commands to enqueue. This is where game-specific chaining logic lives, not inside the pipeline.
+After the pipeline returns, the engine calls `GameRules.Evaluate`. The evaluator reads the **current game state** — not which command just ran — and returns any follow-up commands to enqueue. This is where game-specific chaining logic lives, not inside the pipeline.
 
 In this sample game the rule is: any card sitting in `PlayArea` must be executed. The evaluator does not match on `PlayCardCommand`; it just checks the zone. Any command that leaves a card in `PlayArea` (a trigger, a copy effect, etc.) produces the same follow-up automatically.
 
 ```csharp
-public sealed class SampleGameEvaluator : IEngineEvaluator
+public sealed class SampleGameEvaluator : GameRules
 {
     public IReadOnlyList<GameCommand> Evaluate(
         GameCommand justExecuted,
         CommandResult result,
-        IGameState state)
+        GameState state)
     {
         // State-based check: is there a card in PlayArea waiting to be executed?
         var playArea = state.GetZone(WellKnownZones.PlayArea);
@@ -279,7 +279,7 @@ public sealed class SampleGameEvaluator : IEngineEvaluator
         return Array.Empty<GameCommand>();
     }
 
-    public void OnQueueDrained(GameEngine engine, IGameState state)
+    public void OnQueueDrained(GameEngine engine, GameState state)
     {
         // Queue is empty and PlayArea is empty.
         // Player still has cards in hand and energy — do nothing; await input.
@@ -568,7 +568,7 @@ UI drop
       -> available action check passes
       -> commandChainId = C1
       -> engine.Dispatch(PlayCardCommand { OriginCommandId: C1, OriginIntent: MoveInstanceToZoneRequest })
-      -> return RequestResult { Accepted, RequestId: C1 }   <-- caller gets this immediately
+      -> return IntentResult { Accepted, RequestId: C1 }   <-- caller gets this immediately
 
 Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
   -> ICommandPipeline.Execute
@@ -580,7 +580,7 @@ Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
       -> Envelope 1 published { OriginCommandId: C1, OriginIntent: MoveInstanceToZone, Result: Success }
-  -> IEngineEvaluator.Evaluate(PlayCardCommand, result, state)
+  -> GameRules.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true
       -> returns [ExecuteCardCommand { Source: C17 }]
   -> Engine threads C1 onto follow-up; enqueues ExecuteCardCommand { OriginCommandId: C1 }
@@ -597,7 +597,7 @@ Engine dequeues ExecuteCardCommand { OriginCommandId: C1 }:
           -> StateMutation: RemoveFromZone(PlayArea, C17)
           -> StateMutation: InsertIntoZone(Discard, C17)
       -> Envelope 2 published { OriginCommandId: C1, OriginIntent: null, Result: Success }
-  -> IEngineEvaluator.Evaluate(ExecuteCardCommand, result, state)
+  -> GameRules.Evaluate(ExecuteCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == false
       -> returns []
 

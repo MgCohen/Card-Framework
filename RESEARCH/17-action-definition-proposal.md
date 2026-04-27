@@ -15,7 +15,7 @@ Use this core flow:
 
 ```text
 Interaction
-  -> Request
+  -> PlayerIntent
   -> GameCommand
   -> StateMutation(s)
   -> StateChange(s)
@@ -33,14 +33,14 @@ Recommended working vocabulary:
 
 | Shape                    | Proposed Name                         | Role                                                        |
 | ------------------------ | ------------------------------------- | ----------------------------------------------------------- |
-| External attempt         | `Request`                             | Structured intent submitted to the engine.                  |
+| External attempt         | `PlayerIntent`                        | Expressed player intent submitted to the engine.            |
 | Possible choice          | `AvailableAction` or `DecisionOption` | Something the engine exposes as available or selectable.    |
 | High-level rules command | `GameCommand`                         | Command that enters the game pipeline and returns a result. |
 | Low-level mutation       | `StateMutation`                       | Already-approved state change applied to canonical state.   |
 | Command outcome          | `CommandResult`                       | Structured result, even for failure or no-op.               |
 | Pre-handler hook         | `CommandPreHook`                      | Can validate, cancel, replace, redirect, or modify.         |
 | Main resolver            | `CommandHandler`                      | Resolves a game command into state mutations and result.    |
-| Post-result follow-up    | `IEngineEvaluator`                    | Reads state after command; returns follow-up commands. Replaces inline CommandReaction. |
+| Post-result follow-up    | `GameRules`                           | Reads state after command; returns follow-up commands. Replaces inline CommandReaction. |
 | Ordered fact             | `HistoryEntry`                        | One meaningful state or simulation fact.                    |
 | Batched output           | `HistoryEnvelope`                     | Group of entries with cause metadata.                       |
 | Authored card behavior   | `Effect`                              | Simple content entry point, deeper design deferred.         |
@@ -61,7 +61,7 @@ Payloads are data. They should be serializable or at least easy to inspect in lo
 
 | Payload           | Created By                      | Consumed By                | Purpose                                         |
 | ----------------- | ------------------------------- | -------------------------- | ----------------------------------------------- |
-| `Request`         | UI, AI, network, replay, script | Engine boundary            | Describes what an actor/system attempted.       |
+| `PlayerIntent`    | UI, AI, network, replay, script | Engine boundary            | Describes what an actor/system expressed intent to do. |
 | `AvailableAction` | Engine/preset rules             | UI, AI, validation layer   | Optional affordance the actor may attempt.      |
 | `DecisionOption`  | Decision system                 | UI, AI, network client     | One selectable option inside a decision window. |
 | `GameCommand`     | Engine boundary or effect logic | Game pipeline              | High-level rules command to resolve.            |
@@ -74,7 +74,7 @@ Payload rules:
 
 - Payloads should not own long-lived behavior.
 - Payloads may carry IDs, actor references, source references, target hints, and metadata.
-- `Request` is not a mutation.
+- `PlayerIntent` is not a mutation.
 - `GameCommand` is not a low-level state write.
 - `StateMutation` is not a legality check.
 - `HistoryEnvelope` is output, not an input command.
@@ -86,7 +86,7 @@ Results are returned by services after a payload has been processed.
 
 | Result               | Returned By                     | Returned To                | Purpose                                                                 |
 | -------------------- | ------------------------------- | -------------------------- | ----------------------------------------------------------------------- |
-| `RequestResult`      | Engine boundary                 | UI / caller                | Says whether the request was accepted, rejected, converted, or matched. |
+| `IntentResult`      | Engine boundary                 | UI / caller                | Says whether the request was accepted, rejected, converted, or matched. |
 | `CommandResult`      | Game pipeline / command handler | Caller, reactions, history | Structured outcome of a `GameCommand`.                                  |
 | `MutationResult`     | State scope/store, if needed    | Handler/history            | Optional low-level outcome of applying a `StateMutation`.               |
 | `OrganizationResult` | Zone organization model         | Handler/state layer        | Says where/how an approved instance was inserted or removed.            |
@@ -107,18 +107,18 @@ Services perform work. They receive payloads, return results, and may coordinate
 
 | Service                 | Input                              | Output                                   | Responsibility                                                     |
 | ----------------------- | ---------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
-| Interaction Layer       | Pointer/UI events                  | `Request`                                | Converts UI gestures into structured requests.                     |
-| Engine Boundary         | `Request`                          | `RequestResult`, `GameCommand`           | Resolves session/actor/instance, matches options, builds commands. |
+| Interaction Layer       | Pointer/UI events                  | `PlayerIntent`                           | Converts UI gestures into expressed intents.                       |
+| Engine Boundary         | `PlayerIntent`                     | `IntentResult`, `GameCommand`            | Resolves session/actor/instance, matches options, builds commands. |
 | Availability Service    | State, actor context               | `AvailableAction`s / decisions           | Computes optional affordances or choice windows.                   |
 | Game Pipeline           | `GameCommand`                      | `CommandResult`, `HistoryEnvelope`       | Runs pre-hooks, handler, reactions, and envelope boundary.         |
 | CommandPreHook          | `GameCommand`                      | Continue/replace/cancel/reject signal    | Validates or modifies command before handler.                      |
 | CommandHandler          | `GameCommand`                      | `CommandResult`, `StateMutation`s        | Resolves command into state changes.                               |
 | State Scope / Store     | `StateMutation`                    | State changes, optional `MutationResult` | Applies canonical state changes.                                   |
 | Zone Organization Model | Approved insertion/removal request | `OrganizationResult`                     | Organizes zone contents after legality is decided elsewhere.       |
-| IEngineEvaluator        | `GameCommand` + `CommandResult` + `IGameState` | Follow-up `GameCommand`s | Reads state after command; returns any follow-up commands. Replaces inline CommandReaction. |
+| GameRules               | `GameCommand` + `CommandResult` + `GameState`  | Follow-up `GameCommand`s | Reads state after command; returns any follow-up commands. Replaces inline CommandReaction. |
 | History Service         | `HistoryEntry`s + metadata         | `HistoryEnvelope`                        | Groups cause-aware history output.                                 |
 | Presentation Adapter    | State + `HistoryEnvelope`          | Visual update / animation                | Updates UI without owning gameplay truth.                          |
-| Network Adapter         | Request/envelope                   | Wire payloads                            | Optional multiplayer transport boundary.                           |
+| Network Adapter         | `PlayerIntent`/envelope            | Wire payloads                            | Optional multiplayer transport boundary.                           |
 
 
 Service rules:
@@ -133,11 +133,11 @@ Service rules:
 ```text
 Interaction Layer
   input: pointer events
-  output payload: Request
+  output payload: PlayerIntent
 
 Engine Boundary
-  input payload: Request
-  output result: RequestResult
+  input payload: PlayerIntent
+  output result: IntentResult
   output payload: GameCommand
 
 Game Pipeline
@@ -170,7 +170,7 @@ Presentation Adapter
 ```mermaid
 flowchart LR
   subgraph Payloads["Payloads"]
-    RequestP["Request"]
+    RequestP["PlayerIntent"]
     AvailP["AvailableAction / DecisionOption"]
     GameCommandP["GameCommand"]
     MutationP["StateMutation"]
@@ -179,7 +179,7 @@ flowchart LR
   end
 
   subgraph Results["Results"]
-    RequestResultR["RequestResult"]
+    IntentResultR["IntentResult"]
     CommandResultR["CommandResult"]
     MutationResultR["MutationResult?"]
     OrganizationResultR["OrganizationResult"]
@@ -201,7 +201,7 @@ flowchart LR
   AvailabilityS --> AvailP
   RequestP --> EngineS
   AvailP --> EngineS
-  EngineS --> RequestResultR
+  EngineS --> IntentResultR
   EngineS --> GameCommandP
   GameCommandP --> PipelineS
   PipelineS --> HandlerS
@@ -230,14 +230,14 @@ flowchart TD
   subgraph UI["Presentation / Interaction"]
     ViewState["Render state + optional AvailableActions"]
     Input["User drag / click / target / choose"]
-    Request["Request\n(structured attempt)"]
-    UIResult["Request feedback\nsnapback / no-op / message / animation"]
+    Intent["PlayerIntent\n(expressed intent)"]
+    UIResult["Intent feedback\nsnapback / no-op / message / animation"]
   end
 
   subgraph Engine["Engine Boundary"]
-    Entry["SubmitRequest"]
+    Entry["SubmitIntent"]
     OptionCheck{"Requires matching\nAvailableAction or\nDecisionOption?"}
-    MatchCheck{"Request matches\nactive option?"}
+    MatchCheck{"Intent matches\nactive option?"}
     BuildCommand["Build or select\nGameCommand"]
     Reject["Rejected CommandResult"]
   end
@@ -252,7 +252,7 @@ flowchart TD
   end
 
   subgraph EvalLoop["Engine Loop"]
-    Evaluator["IEngineEvaluator.Evaluate\nreads state → returns follow-up commands"]
+    Evaluator["GameRules.Evaluate\nreads state → returns follow-up commands"]
   end
 
   subgraph State["State Layer"]
@@ -271,8 +271,8 @@ flowchart TD
   end
 
   ViewState --> Input
-  Input --> Request
-  Request --> Entry
+  Input --> Intent
+  Intent --> Entry
   Entry --> OptionCheck
   OptionCheck -->|"no"| BuildCommand
   OptionCheck -->|"yes"| MatchCheck
@@ -309,7 +309,7 @@ flowchart TD
 ### What Happens
 
 1. Presentation renders current state and may render optional `AvailableAction`s.
-2. User or system input creates a `Request`.
+2. User or system input creates a `PlayerIntent`.
 3. The engine checks whether the game requires matching against active options.
 4. If matching is required and fails, the engine creates a rejected `CommandResult`.
 5. If accepted, the request becomes or selects a `GameCommand` (stamped with `OriginCommandId`).
@@ -320,7 +320,7 @@ flowchart TD
 10. Zones organize approved content changes but do not decide broad legality.
 11. State changes produce `HistoryEntry` facts.
 12. The envelope closes and is published to observers.
-13. The engine calls `IEngineEvaluator.Evaluate(command, result, state)`.
+13. The engine calls `GameRules.Evaluate(command, result, state)`.
 14. The evaluator reads current state and returns any follow-up commands; the engine enqueues them.
 15. UI updates from state/history and can animate grouped envelopes using `OriginCommandId` to correlate sequences.
 
@@ -329,7 +329,7 @@ flowchart TD
 
 | Boundary                  | Payload                          | Notes                                                   |
 | ------------------------- | -------------------------------- | ------------------------------------------------------- |
-| UI -> Engine              | `Request`                        | Structured attempt, not a mutation.                     |
+| UI -> Engine              | `PlayerIntent`                   | Expressed intent, not a mutation.                       |
 | Engine -> Pipeline        | `GameCommand` or rejected result | Game-specific approval and option matching happen here. |
 | Pipeline -> State         | `StateMutation`                  | Already-approved facts.                                 |
 | State -> Pipeline/History | `HistoryEntry`                   | Ordered facts produced by mutations.                    |
@@ -354,7 +354,7 @@ flowchart TD
 ### Payload Movement
 
 ```text
-Request
+PlayerIntent
   -> GameCommand
   -> StateMutation(s)
   -> StateChange(s)
@@ -365,7 +365,7 @@ Request
 
 Important distinction:
 
-- `Request` says what was attempted.
+- `PlayerIntent` says what was intended.
 - `GameCommand` says what the rules pipeline is resolving.
 - `StateMutation` says what approved state fact is applied.
 - `HistoryEntry` says what happened.
@@ -396,8 +396,8 @@ Player drags C17 from P1.Hand and drops it on P1.PlayArea.
 1. UI detects drop
    payload: pointer/drop data
 
-2. Interaction layer builds Request
-   Request:
+2. Interaction layer builds PlayerIntent
+   PlayerIntent:
      type: MoveInstanceToZone
      actor: P1
      sourceInstance: C17
@@ -405,7 +405,7 @@ Player drags C17 from P1.Hand and drops it on P1.PlayArea.
      toZone: P1.PlayArea
      inputContext: drag/drop metadata
 
-3. Engine receives Request
+3. Engine receives PlayerIntent
    - Finds game session.
    - Finds actor P1.
    - Finds instance C17.
@@ -421,7 +421,7 @@ Player drags C17 from P1.Hand and drops it on P1.PlayArea.
 5. Pipeline opens HistoryEnvelope
    HistoryEnvelope:
      actor: P1
-     sourceRequest: original drag request
+     sourceIntent: original drag intent
      rootGameCommand: MoveInstance or PlayCard
 
 6. CommandPreHooks run
@@ -524,10 +524,10 @@ sequenceDiagram
   participant Zone as Zone Organization
   participant State as State Scope
   participant Hist as HistoryEnvelope
-  participant Eval as IEngineEvaluator
+  participant Eval as GameRules
   participant View as Reactive UI
 
-  UI->>Engine: Request MoveInstanceToZone(C17, Hand, PlayArea)
+  UI->>Engine: PlayerIntent MoveInstanceToZone(C17, Hand, PlayArea)
   Engine->>Engine: Resolve actor, instance, zones
   Engine->>Engine: Optional AvailableAction / DecisionOption match
   Engine->>Pipe: GameCommand MoveInstance or PlayCard
@@ -582,11 +582,11 @@ The word "action" can mean too many things:
 
 DeckMech showed that this creates confusion fast. The framework should reserve "action" for user-facing language and use more precise runtime terms.
 
-## Shape 1: Request
+## Shape 1: PlayerIntent
 
 Definition:
 
-> A `Request` is a structured attempt submitted to the engine by UI, AI, network, script, replay, or another system.
+> A `PlayerIntent` is an expression of intent submitted to the engine by UI, AI, network, script, replay, or another system.
 
 Examples:
 
@@ -609,19 +609,19 @@ Important properties:
 Example shape:
 
 ```text
-Request
-  requestId
+PlayerIntent
+  intentId
   actor
   sourceInstance
-  requestType
+  intentType
   targetHints
   inputContext
 ```
 
 Notes:
 
-- `Intent` remains useful as plain English, but `Request` is the proposed structured type name.
-- A rejected request should still produce a structured result.
+- `PlayerIntent` is the structured type name for any actor-originated input.
+- A rejected intent should still produce a structured `IntentResult`.
 
 ## Shape 2: AvailableAction And DecisionOption
 
@@ -838,7 +838,7 @@ Important properties:
 
 ## Shape 8: CommandReaction
 
-> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `IEngineEvaluator.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `GameRules.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
 
 The `CommandPreHook` concept (before the handler) remains valid. A proper trigger and reaction system that sits above the pipeline — including triggered abilities, replacement effects, and post-result reactions — is a known open design area.
 
@@ -931,8 +931,8 @@ Keep `Effect` simple until action pipeline vocabulary is stable.
 ## Full Proposed Flow
 
 ```text
-1. UI / AI / system creates Request.
-2. Engine optionally matches Request to AvailableAction or DecisionOption.
+1. UI / AI / system creates PlayerIntent.
+2. Engine optionally matches PlayerIntent to AvailableAction or DecisionOption.
 3. Engine creates or selects GameCommand (stamped with OriginCommandId and OriginIntent).
 4. Pipeline opens HistoryEnvelope.
 5. CommandPreHooks run.
@@ -947,7 +947,7 @@ Keep `Effect` simple until action pipeline vocabulary is stable.
      -> State changes are recorded as HistoryEntries.
      -> Handler returns CommandResult.
 8. Envelope closes and is published to observers.
-9. Engine calls IEngineEvaluator.Evaluate(command, result, state).
+9. Engine calls GameRules.Evaluate(command, result, state).
 10. Evaluator returns follow-up commands (if any); engine enqueues them with same OriginCommandId.
 11. Loop continues until queue is empty, then OnQueueDrained fires.
 ```
@@ -959,15 +959,16 @@ Use these terms in future docs unless we revise them:
 
 | Term            | Use It For                                        | Avoid Using It For                     |
 | --------------- | ------------------------------------------------- | -------------------------------------- |
-| Request         | Structured external/system attempt.               | Low-level state mutation.              |
+| PlayerIntent    | Expressed actor/system intent entering the engine.| Low-level state mutation.              |
 | AvailableAction | Optional engine-exposed affordance.               | A required command pipeline concept.   |
 | DecisionOption  | Choice inside explicit decision.                  | Freeform drag attempts.                |
 | GameCommand     | High-level command resolved by rules.             | Direct state mutation.                 |
 | StateMutation   | Approved state change.                            | Game logic command.                    |
 | CommandResult   | Structured outcome.                               | Raw state diff.                        |
+| IntentResult    | Gateway outcome for a PlayerIntent.               | CommandResult or pipeline result.      |
 | CommandPreHook  | Before-handler command modification/cancellation. | Post-result triggers.                  |
 | CommandHandler  | Main command resolver.                            | UI event handler.                      |
-| IEngineEvaluator | Post-pipeline follow-up command dispatch.        | Inline post-result pipeline hooks.     |
+| GameRules       | Post-pipeline follow-up command dispatch.         | Inline post-result pipeline hooks.     |
 | HistoryEntry    | Ordered fact.                                     | Whole batch.                           |
 | HistoryEnvelope | Cause-aware batch.                                | Single state change.                   |
 | Effect          | Authored behavior entry point.                    | Runtime mutation primitive.            |
@@ -979,7 +980,7 @@ Do not build the framework around a type named just `Action`.
 
 Use:
 
-- `Request` for what enters from UI/network/AI.
+- `PlayerIntent` for what enters from UI/network/AI.
 - `AvailableAction` for optional affordances.
 - `GameCommand` for rules pipeline input.
 - `StateMutation` for approved state writes.

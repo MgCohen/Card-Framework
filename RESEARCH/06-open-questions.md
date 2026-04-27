@@ -29,9 +29,9 @@ Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisio
 Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md).
 
 Resolved:
-- **Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?** → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `IEngineEvaluator` interface — no separate abstraction needed from the start. (doc 20)
+- **Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?** → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `GameRules` interface — no separate abstraction needed from the start. (doc 20)
 - **Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?** → Yes. All entry points (player input, timers, triggers) call `GameEngine.Dispatch`. Phase transitions and priority grants are commands dispatched from `OnQueueDrained`. One loop, one evaluator. (doc 20)
-- **When exactly are state-based checks run?** → After every command execution, via `IEngineEvaluator.Evaluate`. (doc 20)
+- **When exactly are state-based checks run?** → After every command execution, via `GameRules.Evaluate`. (doc 20)
 - **Available actions ownership** → Engine computes and publishes `IAvailableActionsSnapshot` inside `OnQueueDrained`. Gateway reads the snapshot for fast-reject; it does not independently compute validity. Default is a no-op (all requests pass). (doc 20 section 10)
 - **Command chain correlation** → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (doc 18, doc 20)
 
