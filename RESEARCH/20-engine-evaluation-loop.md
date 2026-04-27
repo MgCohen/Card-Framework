@@ -96,7 +96,7 @@ Key points:
 - `Drain` is **not re-entered**. If a command is dispatched while the loop is already running, it is enqueued and picked up by the current drain cycle.
 - The loop evaluates **after every command**, not once at the end. This is what gives the engine per-step awareness.
 - `OnQueueDrained` is the hook for when a drain just finished: the work queue is empty, so the game can phase-advance, grant priority, publish available actions, or await input. It is not a generic "idle" or presentation concept.
-- **`OriginCommandId` threading:** the engine copies `OriginCommandId` from the just-executed command onto every evaluator follow-up. This means `PlayCardCommand` and `ExecuteCardCommand` (and any further chain members) all share the same `OriginCommandId`. The engine does this mechanically — the evaluator does not need to set it. `OriginCommandId` is the ID of the first command in the chain, not the original player request — though the first command's envelope separately records the originating request for correlation.
+- `**OriginCommandId` threading:** the engine copies `OriginCommandId` from the just-executed command onto every evaluator follow-up. This means `PlayCardCommand` and `ExecuteCardCommand` (and any further chain members) all share the same `OriginCommandId`. The engine does this mechanically — the evaluator does not need to set it. `OriginCommandId` is the ID of the first command in the chain, not the original player request — though the first command's envelope separately records the originating request for correlation.
 
 ---
 
@@ -311,12 +311,12 @@ The structure is identical. The only difference is the conditions read from `sta
 The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) does not change. The engine wraps it:
 
 
-| Concern                                           | Where it lives                                    |
-| ------------------------------------------------- | ------------------------------------------------- |
-| Execute one action (before triggers, handler, after triggers, history) | `ICommandPipeline` (existing)    |
-| Decide what command runs next                     | `GameRules` (game-specific)                |
-| Drive the loop between them                       | `GameEngine` (framework)                          |
-| Submit commands from outside                      | Entry points (IntentGateway, TimerService, etc.) |
+| Concern                                                                | Where it lives                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------ |
+| Execute one action (before triggers, handler, after triggers, history) | `ICommandPipeline` (existing)                    |
+| Decide what command runs next                                          | `GameRules` (game-specific)                      |
+| Drive the loop between them                                            | `GameEngine` (framework)                         |
+| Submit commands from outside                                           | Entry points (IntentGateway, TimerService, etc.) |
 
 
 The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute` — it handles one command and returns a result. The inline `RunReactions` call that was inside the dispatcher moves out entirely. Reactions are now the evaluator's job, not the dispatcher's.
@@ -381,11 +381,13 @@ public IntentResult Submit(MoveInstanceToZoneRequest request)
 
 ### When Each Game Uses This
 
-| Game style | Uses snapshot? | Notes |
-|---|---|---|
-| Hearthstone / MTG | Yes | Engine publishes legal plays after each queue drain; gateway rejects illegal attempts |
-| Stacklands | No | No snapshot published; gateway no-op; everything is always attemptable |
-| Slay the Spire | Partial | Could publish playable cards for UI highlights but skip gateway enforcement |
+
+| Game style        | Uses snapshot? | Notes                                                                                 |
+| ----------------- | -------------- | ------------------------------------------------------------------------------------- |
+| Hearthstone / MTG | Yes            | Engine publishes legal plays after each queue drain; gateway rejects illegal attempts |
+| Stacklands        | No             | No snapshot published; gateway no-op; everything is always attemptable                |
+| Slay the Spire    | Partial        | Could publish playable cards for UI highlights but skip gateway enforcement           |
+
 
 ---
 
@@ -404,3 +406,4 @@ public IntentResult Submit(MoveInstanceToZoneRequest request)
 - [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — what happens inside a single pipeline execution
 - [17-action-definition-proposal.md](17-action-definition-proposal.md) — payload and result shapes
 - [06-open-questions.md](06-open-questions.md) — scheduler and rules-engine open questions
+

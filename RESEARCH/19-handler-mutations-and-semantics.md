@@ -1,4 +1,5 @@
 # Handler Mutations, Sequential Apply, And Game Signals
+
 This document responds to design concerns raised about the patterns in [Action Flow Snippets](18-action-flow-snippets.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Emit` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
 
 ## 1. Is Sequential `Apply` A Problem?
@@ -260,15 +261,13 @@ public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
 
 **`ExecuteCardHandler`**:
 ```csharp
-public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scope)
+public async Task<ExecuteCardResult> Handle(ExecuteCardCommand command, ResolutionScope scope)
 {
     var card = scope.GetInstance(command.Source);
     var definition = scope.GetDefinition(card.DefinitionId);
 
-    definition.Effect.Trigger(new EffectContext(
-        actor: command.Actor,
-        sourceInstance: command.Source,
-        scope: scope));
+    var effectScope = scope.CreateEffectScope(command.Actor, command.Source);
+    await definition.Effect.Execute(effectScope);
 
     scope.Execute(new MoveCardComposite(command.FromPlayZone, command.DiscardZone, command.Source));
 
@@ -290,7 +289,7 @@ To avoid the “remove then insert twice, type four events” feel without losin
 
 - **Composite relocations** (above) and optional **policy defaults** for boring `CardMoved` semantics.
 - **Play lifecycle** may use two `Relocate` calls (to play, then to discard) or a **named** `PlayCard` helper that does both in one place—still one `PlayCard` **command** for the *placement and resolution* story, with **child commands** for effect bodies.
-- **Nested command segments** when `EffectContext.DispatchChild` runs: **separate** handler, **separate** segment, **ordered** after the parent’s mutations (see [Action Definition Proposal](17-action-definition-proposal.md) on nested envelopes).
+- **Sibling envelopes** when an Effect calls `scope.Dispatch(action)`: **separate** handler, **separate** envelope, sharing the same `OriginCommandId`. Published inline (before the calling handler’s envelope closes) in dispatch order. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
 
 **Takeaway:** The [snippet doc](18-action-flow-snippets.md) is **verbose on purpose** to show each layer. Productivity is **composites** + **child dispatches** with **shaped** envelopes—not one flat list pretending one `GameCommand` did the move and the heal as the same *kind* of action.
 
@@ -304,7 +303,7 @@ To avoid the “remove then insert twice, type four events” feel without losin
 
 - **Granularity of `StateChange` in history:** finest grain vs composite rows for replay and net sync.
 - **Whether `Emit` is always explicit for “meaningful” events** vs **inferred** from a small catalog of `NamedGameOperation` types.
-- **Child commands:** flat list in one envelope vs **tree** of segments; affects how the UI times “play animation” vs “heal number pop.”
+- ~~**Child commands:** flat list in one envelope vs **tree** of segments~~ — **Resolved:** each `scope.Dispatch(action)` call in an Effect produces its own sibling envelope sharing `OriginCommandId`. No folding, no tree. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
 
 These are tuning knobs, not a refutation of the pipeline shape.
 

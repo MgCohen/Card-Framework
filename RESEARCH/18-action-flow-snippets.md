@@ -22,12 +22,12 @@ public sealed class CardDefinition
 
 public sealed class HealFiveEffect : IEffect
 {
-    public void Trigger(EffectContext context)
+    public async Task Execute(IEffectScope scope)
     {
-        context.Dispatch(new HealActorCommand(
-            actor: context.Actor,
-            source: context.SourceInstance,
-            target: context.Actor,
+        await scope.Dispatch(new HealActorAction(
+            actor: scope.Actor,
+            source: scope.SourceInstance,
+            target: scope.Actor,
             amount: 5));
     }
 }
@@ -123,8 +123,10 @@ public sealed record IntentResult
 public sealed class CommandPipeline : ICommandPipeline
 {
     private readonly IHistoryService history;
+    private readonly ITriggerPipeline triggerPipeline;
+    private readonly GameRules gameRules;
 
-    public CommandResult Execute(GameAction action)
+    public async Task<CommandResult> Execute(GameAction action, Context context)
     {
         using var envelope = history.OpenEnvelope(new EnvelopeCause
         {
@@ -134,10 +136,11 @@ public sealed class CommandPipeline : ICommandPipeline
             OriginIntent = action.OriginIntent  // non-null only on the first command in a chain
         });
 
-        var before = triggerSystem.RunBefore(action, context);
+        var available = gameRules.FilterTriggers(triggerPipeline.Candidates, action, context);
+        var before = await triggerPipeline.RunBefore(action, available, context);
         if (before.IsCancelled)
         {
-            var rejected = CommandResult.Rejected(before.Reason);
+            var rejected = CommandResult.Rejected(before.CancelReason);
             envelope.Add(new CommandRejectedEntry(action, rejected));
             return history.CloseAndPublish(envelope, rejected);
         }
@@ -149,9 +152,9 @@ public sealed class CommandPipeline : ICommandPipeline
             return CommandResult.Replaced;
         }
 
-        var result = Handle(before.Action, envelope);
+        var result = Handle(before.FinalCommand, envelope);
 
-        triggerSystem.RunAfter(before.Action, result, context);
+        await triggerPipeline.RunAfter(before.FinalCommand, result, available, context);
 
         return history.CloseAndPublish(envelope, result);
     }
@@ -304,15 +307,13 @@ A **separate** handler for `**ExecuteCardCommand`**: runs the definition’s `Ef
 ```csharp
 public sealed class ExecuteCardHandler : ICommandHandler<ExecuteCardCommand, ExecuteCardResult>
 {
-    public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scope)
+    public async Task<ExecuteCardResult> Handle(ExecuteCardCommand command, ResolutionScope scope)
     {
         var card = scope.GetInstance(command.Source);
         var definition = scope.GetDefinition(card.DefinitionId);
 
-        definition.Effect.Trigger(new EffectContext(
-            actor: command.Actor,
-            sourceInstance: command.Source,
-            scope: scope));
+        var effectScope = scope.CreateEffectScope(command.Actor, command.Source);
+        await definition.Effect.Execute(effectScope);
 
         scope.Apply(new RemoveFromZoneMutation(command.FromPlayZone, command.Source));
         scope.Apply(new InsertIntoZoneMutation(command.DiscardZone, command.Source));
@@ -326,28 +327,16 @@ public sealed class ExecuteCardHandler : ICommandHandler<ExecuteCardCommand, Exe
 }
 ```
 
-## 7. Effect Dispatches Heal Command
+## 7. Effect Scope
 
-The effect is simple for now. `Trigger` lives under `**ExecuteCardHandler**`, not under `PlayCardHandler`. The heal path dispatches a child `GameCommand`.
+`IEffectScope` is the context passed into `IEffect.Execute`. It carries actor/source identity and a `Dispatch` method that submits a `GameAction` for immediate inline execution. Each dispatched action runs through the full pipeline and publishes its own independent envelope — entries are not folded into the calling handler's envelope.
 
 ```csharp
-public readonly struct EffectContext
+public interface IEffectScope
 {
-    public EffectContext(ActorId actor, InstanceId sourceInstance, ResolutionScope scope)
-    {
-        Actor = actor;
-        SourceInstance = sourceInstance;
-        Scope = scope;
-    }
-
-    public ActorId Actor { get; }
-    public InstanceId SourceInstance { get; }
-    public ResolutionScope Scope { get; }
-
-    public CommandResult Dispatch(GameCommand command)
-    {
-        return Scope.DispatchChild(command);
-    }
+    ActorId Actor { get; }
+    InstanceId SourceInstance { get; }
+    Task<CommandResult> Dispatch(GameAction action);
 }
 ```
 
@@ -409,7 +398,6 @@ public sealed class ResolutionScope
 {
     private readonly IStateBackend state;
     private readonly HistoryEnvelopeBuilder history;
-    private readonly IGameCommandDispatcher dispatcher;
 
     public void Apply(StateMutation mutation)
     {
@@ -422,9 +410,9 @@ public sealed class ResolutionScope
         history.Add(signal);
     }
 
-    public CommandResult DispatchChild(GameCommand command)
+    public IEffectScope CreateEffectScope(ActorId actor, InstanceId source)
     {
-        return dispatcher.DispatchChild(command, this);
+        return new EffectScope(actor, source, engine);
     }
 }
 ```
@@ -485,7 +473,7 @@ public sealed record HistoryEnvelope
 
 Each engine queue step produces its own envelope. `PlayCardCommand` and `ExecuteCardCommand` are separate pipeline executions, so they produce separate envelopes. Both carry the same `OriginCommandId` — the engine threads it from the initial command onto all evaluator follow-ups. Only the first envelope also carries `OriginIntent`, the original player request that started the chain.
 
-Child commands dispatched inline via `scope.DispatchChild` (e.g. `HealActorCommand` inside `ExecuteCardHandler`) are **not** separate queue steps. Their entries fold into the current envelope, not a new one.
+Actions dispatched by an Effect via `scope.Dispatch(action)` (e.g. `HealActorAction` inside `HealFiveEffect`) also produce their own independent envelopes — entries are not folded into the calling handler's envelope. Each such envelope shares the same `OriginCommandId`. Envelope 3 below is published inline during `ExecuteCardCommand`'s resolution, before Envelope 2 closes.
 
 ```text
 // Envelope 1: PlayCardCommand
@@ -512,11 +500,20 @@ HistoryEnvelope
     source: C17
   Result: ExecuteCardResult { Status: Success }
   Entries:
-    // HealActorCommand is a child dispatch inside ExecuteCardHandler — same envelope
-    ActorHealed(C17, P1, amount: 5)
-    VariableChanged(P1, "life", 10, 15)
     ZoneContentRemoved(P1.PlayArea, C17)
     ZoneContentInserted(P1.Discard, C17, index: 0)
+
+// Envelope 3: HealActorAction (Effect calls scope.Dispatch — own envelope, published inline before Envelope 2 closes)
+HistoryEnvelope
+  Cause:
+    originCommandId: C1
+    originIntent: null
+    actor: P1
+    source: C17
+  Result: HealResult { Status: Success, ActualAmount: 5 }
+  Entries:
+    ActorHealed(C17, P1, amount: 5)
+    VariableChanged(P1, "life", 10, 15)
 ```
 
 ## 11. UI Consumes Envelope
@@ -579,15 +576,15 @@ UI drop
       -> return IntentResult { Accepted, IntentId: C1 }   <-- caller gets this immediately
 
 Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
-  -> ICommandPipeline.Execute
-      -> triggerSystem.RunBefore(PlayCardCommand)
+  -> ICommandPipeline.Execute (async)
+      -> triggerPipeline.RunBefore(PlayCardCommand, available, ctx)
       -> PlayCardHandler
           -> Semantic: CardPlayStarted
           -> StateMutation: RemoveFromZone(Hand, C17)
           -> StateMutation: InsertIntoZone(PlayArea, C17)
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
-      -> triggerSystem.RunAfter(PlayCardCommand, result)
+      -> triggerPipeline.RunAfter(PlayCardCommand, result, available, ctx)
       -> Envelope 1 published { OriginCommandId: C1, OriginIntent: MoveInstanceToZone, Result: Success }
   -> GameRules.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true
@@ -595,14 +592,17 @@ Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
   -> Engine threads C1 onto follow-up; enqueues ExecuteCardCommand { OriginCommandId: C1 }
 
 Engine dequeues ExecuteCardCommand { OriginCommandId: C1 }:
-  -> ICommandPipeline.Execute
-      -> ExecuteCardHandler
-          -> definition.Effect.Trigger
-              -> HealActorCommand dispatched as child (scope.DispatchChild — same envelope)
-              -> HealActorHandler
-                  -> Semantic: ActorHealed
-                  -> StateMutation: SetVariable(P1, "life", 15)
-                  -> StateChange: VariableChanged(P1, "life", 10, 15)
+  -> ICommandPipeline.Execute (async)
+      -> ExecuteCardHandler (async)
+          -> effectScope = scope.CreateEffectScope(P1, C17)
+          -> await definition.Effect.Execute(effectScope)   // HealFiveEffect
+              -> await effectScope.Dispatch(HealActorAction { Target: P1, Amount: 5 })
+                  -> pipeline runs HealActorAction inline
+                  -> HealActorHandler
+                      -> Semantic: ActorHealed
+                      -> StateMutation: SetVariable(P1, "life", 15)
+                      -> StateChange: VariableChanged(P1, "life", 10, 15)
+                  -> Envelope 3 published { OriginCommandId: C1, Result: HealResult }
           -> StateMutation: RemoveFromZone(PlayArea, C17)
           -> StateMutation: InsertIntoZone(Discard, C17)
       -> Envelope 2 published { OriginCommandId: C1, OriginIntent: null, Result: Success }
@@ -614,6 +614,7 @@ Queue empty -> OnQueueDrained:
   -> player still has energy and cards in hand -> no action, await input
 
 UI receives Envelope 1 (C1): animate card placement
-UI receives Envelope 2 (C1): animate heal popup + discard move
+UI receives Envelope 3 (C1): animate heal popup + life update
+UI receives Envelope 2 (C1): animate discard move
 ```
 

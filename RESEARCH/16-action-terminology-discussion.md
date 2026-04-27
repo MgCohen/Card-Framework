@@ -223,12 +223,12 @@ Use `HistoryEntry` for ordered facts and `HistoryEnvelope` for grouped cause-awa
 ## Questions For Next Discussion
 
 1. ~~Should the external submitted object be `Request`, `Intent`, or `ActionRequest`?~~ **Settled:** `PlayerIntent`. See [Action Definition Proposal](17-action-definition-proposal.md).
-2. Should `GameCommand` be renamed before it becomes sticky?
-3. Should `StateCommand` be called `StateMutation` instead?
-4. Should `Effect` mean only authored card behavior, or any executable behavior?
-5. Should `Trigger` be a content concept while `PreHook`/`PostReaction` are pipeline concepts?
-6. Should generated choices be `Decision -> Option`, or should `PossibleAction` be a separate top-level concept?
-7. How much of this terminology should be user-facing in editor tooling?
+2. Should `GameCommand` be renamed before it becomes sticky? — Still open; `GameCommand` is now the abstract base for all pipeline-dispatchable types; `GameAction` is the executable subtype.
+3. ~~Should `StateCommand` be called `StateMutation` instead?~~ **Settled:** Use `StateMutation`. See [Core Glossary](09-core-glossary.md).
+4. Should `Effect` mean only authored card behavior, or any executable behavior? — **Settled:** `Effect` is the async orchestration layer that sequences `GameAction`s. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
+5. ~~Should `Trigger` be a content concept while `PreHook`/`PostReaction` are pipeline concepts?~~ **Settled:** `OnBefore<T>` and `OnAfter<T>` are the pipeline trigger folds; triggers register per-instance via `AbilityDefinition`. `CommandPreHook` and `CommandReaction` are removed. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md).
+6. Should generated choices be `Decision -> Option`, or should `PossibleAction` be a separate top-level concept? — Still open.
+7. How much of this terminology should be user-facing in editor tooling? — Still open.
 
 ## Temporary Working Vocabulary
 

@@ -179,12 +179,12 @@ Things not to copy blindly:
 
 Use DeckMech as the baseline for the next docs:
 
-1. Define the Card Framework action-flow vocabulary.
+1. ~~Define the Card Framework action-flow vocabulary.~~ Done. See docs 14–17.
 2. ~~Decide whether the high-level unit is called `Intent`, `Request`, `Command`, or something else.~~ **Settled:** `PlayerIntent`. See [Action Definition Proposal](17-action-definition-proposal.md).
-3. Define two lanes: game/rules command vs state mutation command.
-4. Define pre-handler hooks, handler execution, post-result reactions.
-5. Define how results become history.
-6. Define how generated choices and zone movement enter the same pipeline.
+3. ~~Define two lanes: game/rules command vs state mutation command.~~ Done. `GameAction` (executable, queued) vs `StateMutation` (already-approved state change). See docs 17, 21.
+4. ~~Define pre-handler hooks, handler execution, post-result reactions.~~ Done. `OnBefore<T>`/`OnAfter<T>` trigger folds replace `CommandTrigger`/`CommandReaction`. See docs 21, 23.
+5. ~~Define how results become history.~~ Done. `CommandResult` folds into `HistoryEnvelope` via the pipeline. See docs 18, 20.
+6. ~~Define how generated choices and zone movement enter the same pipeline.~~ Done. Decisions are `GameAction`s; zone movement is a normal `GameAction`. See docs 17, 22.
 
 The most valuable baseline from DeckMech is the shape:
 

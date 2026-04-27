@@ -36,9 +36,9 @@ Resolved:
 - ~~**Command chain correlation**~~ → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (docs 18, 20)
 
 Still open:
-- **Replacement/prevention effects** — how they hook in before an event commits. The `OnBefore<T>` fold (doc 21) provides the mechanism: a trigger can cancel, modify, or replace a `GameAction` before it executes. The pipeline wiring exists. What is undesigned is rules-level semantics: MTG-style replacement-effect ordering, simultaneous replacements, the layer system, and priority between competing replacements.
-- **Simultaneous events** — how they are represented and ordered when multiple triggers match the same command at the same fold step.
-- **Continuous effects and derived values** — how aura-style and persistent modifiers recompute deterministically when state changes. The composition handler concept exists (doc 10) but no design for recomputation triggers or ordering.
+- ~~**Replacement/prevention effects**~~ → Resolved. Three before-fold outcomes: modification, cancellation, substitution. Replacement-of-replacements handled naturally by the fold (condition evaluates against the current command after prior transforms). `ITriggerPipeline` owns collection/ordering/fold execution; `GameRules.FilterTriggers` owns availability policy. Extension point for MTG-style controller-choice: custom `ITriggerPipeline` that dispatches a `Decision`. Prevention is modification with a zero floor; stateful prevention deferred to ongoing effects. (doc 23)
+- ~~**Simultaneous events**~~ → Resolved. True simultaneity (all effects measured against a state snapshot, deltas merged and applied atomically) is explicitly off the table — it requires a scratch-pad model and introduces irreconcilable conflicts (two effects wanting to move the same card to different zones, etc.). "Simultaneous" in this framework always means sequential in a defined order. Multiple triggers matching the same command are multiple `TriggerMatch` entries in the fold list, run one by one. Ordering is game-specific via `GameRules.FilterTriggers` return order or a custom `ITriggerPipeline`.
+- ~~**Continuous effects and derived values**~~ → Resolved. Ongoing effects are attachment entities: created, associated with a host, subscribe to triggers (including turn signals), manage their own state via variables, and self-destruct when done. Cleanup on destruction automatically unsubscribes. No new pipeline concept. Future: attachments as modifier carriers for stat reads (deferred to stats redesign). (doc 24)
 - ~~**Async effects for player input**~~ → Resolved. Layer hierarchy settled: Effects are async orchestrators; `GameAction`s are synchronous and atomic. Decisions (`RequestTargetAction`, etc.) are normal `GameAction`s whose handlers wait for input and return the choice in `CommandResult`. `scope.Dispatch` executes immediately and inline — the effect awaits each result before continuing. Everything returns `Task`; most resolve synchronously. The engine pauses for the duration of an effect; whether that is acceptable is game-specific. (doc 22)
 - **Stash release mechanics** — MTG-style scheduling uses `Stash` to hold commands until priority resolves, but the release mechanism (`Release(key)`, ordering rules on release, LIFO ordering) is not designed. (doc 21 §8)
 - **Queue ordering shape** — a simple FIFO queue is shown; whether priority queues, interrupt injection, or stack semantics for MTG-like resolution order are built into the engine queue or handled entirely via `GameRules` is unresolved. (doc 20 §11)
@@ -98,6 +98,10 @@ Still open:
 - How do we snapshot a scenario in a human-readable way?
 - What debug tools are required before complex effect work begins?
 - How do we trace "why was this action legal/illegal?"
+
+## Explicit Non-Goals
+
+- **True simultaneous resolution** — measuring all competing effects against a state snapshot and applying merged deltas atomically is off the table. It requires a scratch-pad model and introduces irreconcilable conflicts. "Simultaneous" always means sequential in a game-defined order.
 
 ## Research Biases To Watch
 
