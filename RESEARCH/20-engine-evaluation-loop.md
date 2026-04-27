@@ -95,7 +95,7 @@ Everything that wants the engine to act submits a `GameCommand`. The engine does
 
 ```csharp
 // Player drags a card
-public sealed class RequestGateway
+public sealed class IntentGateway
 {
     private readonly GameEngine engine;
 
@@ -203,7 +203,7 @@ public sealed class SampleGameEvaluator : GameRules
 
 ```text
 Player drags card C17 from Hand to PlayArea
-  → RequestGateway.Submit(MoveInstanceToZoneRequest)
+  → IntentGateway.Submit(MoveInstanceToZoneRequest)
   → engine.Dispatch(PlayCardCommand { Source: C17, FromZone: Hand, ToZone: PlayArea })
 
 Engine dequeues PlayCardCommand:
@@ -291,7 +291,7 @@ The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) doe
 | Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing)                     |
 | Decide what command runs next                     | `GameRules` (game-specific)                |
 | Drive the loop between them                       | `GameEngine` (framework)                          |
-| Submit commands from outside                      | Entry points (RequestGateway, TimerService, etc.) |
+| Submit commands from outside                      | Entry points (IntentGateway, TimerService, etc.) |
 
 
 The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute` — it handles one command and returns a result. The inline `RunReactions` call that was inside the dispatcher moves out entirely. Reactions are now the evaluator's job, not the dispatcher's.
@@ -339,14 +339,14 @@ Games that do not use this system leave `OnQueueDrained` empty or call a no-op p
 
 ### Gateway Fast-Reject
 
-`RequestGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
+`IntentGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
 
 ```csharp
 public IntentResult Submit(MoveInstanceToZoneRequest request)
 {
     var match = actionMatcher.TryMatch(request); // reads current snapshot; no-op if none published
     if (match.RequiresMatch && !match.Success)
-        return new IntentResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+        return new IntentResult { Status = IntentStatus.Rejected, Reason = RejectReason.NotAvailableAction };
 
     // ... dispatch as normal
 }
