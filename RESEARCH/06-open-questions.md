@@ -6,40 +6,45 @@ These are unresolved design questions worth answering before implementation or d
 
 Status: initial answers captured in [Core Model Decisions](08-core-model-decisions.md), then incorporated into [Core Glossary](09-core-glossary.md) and [Entity, Definition, And Instance Model](10-entity-definition-instance-model.md).
 
-- Should the pure simulation core depend directly on Scaffold packages, or should Scaffold be used only in Unity-facing adapters?
-- Should card/entity values be stored primarily as flexible variables/tags, typed state records, or a hybrid?
-- What is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?
-- How should instances behave when a card changes zones?
-- Do all entities have definitions, or can runtime-only entities exist without definitions?
-- How do attachments, equipment, stacked cards, tokens, and transformed cards relate to a base card instance?
+- ~~Should the pure simulation core depend directly on Scaffold packages, or should Scaffold be used only in Unity-facing adapters?~~ → No enforced boundary yet; allow Scaffold wherever it fits. (doc 08)
+- ~~Should card/entity values be stored primarily as flexible variables/tags, typed state records, or a hybrid?~~ → Start with key-value variables. (doc 08)
+- **What is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?** → Still open. Doc 08 decision: "unresolved, keep Entities and Store both on the table." Low confidence. See doc 10 for options. Revisit when a small scenario can be modeled both ways.
+- ~~How should instances behave when a card changes zones?~~ → Same instance preserved by default; game-specific rules may explicitly replace it. (doc 08)
+- ~~Do all entities have definitions, or can runtime-only entities exist without definitions?~~ → All entities must have a base definition, including generated tokens. (doc 08)
+- ~~How do attachments, equipment, stacked cards, tokens, and transformed cards relate to a base card instance?~~ → Instance = definition + modifiers. Attachments are separate instances connected through relationships. (doc 08)
 
 ## Zones
 
 Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisions.md), then incorporated into [Zone Model](12-zone-model.md).
 
-- What zone traits are mandatory in core?
-- How should spatial board positions relate to zone membership?
-- Are stacks zones, relationships, or both?
-- How should hidden, partially visible, and viewer-specific state be modeled?
-- Should zone movement be a generic event, a task, or a specialized rules primitive?
-- How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?
+- ~~What zone traits are mandatory in core?~~ → Zones are responsibility-based models (contents, arrangement, capacity, insertion/removal behavior, visibility, change bookkeeping), not a fixed trait checklist. (docs 11, 12)
+- ~~How should spatial board positions relate to zone membership?~~ → Spatial placement is outside the core zone model; it is view-defined or game-specific. (docs 11, 12)
+- ~~Are stacks zones, relationships, or both?~~ → Stacks are zones with custom organization. (docs 11, 12)
+- ~~How should hidden, partially visible, and viewer-specific state be modeled?~~ → Two visibility channels: membership visibility and detail visibility. Actor/player/ownership semantics are not yet designed; per-actor visibility query API is deferred. (docs 11, 12)
+- ~~Should zone movement be a generic event, a task, or a specialized rules primitive?~~ → Zone movement is a normal simulation-driven game action flowing through the standard pipeline. (docs 11, 12)
+- ~~How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?~~ → Deferred to the action/decision model; may or may not be zones depending on game. (docs 11, 12)
 
 ## Rules And Scheduling
 
-Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md).
+Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md). Trigger and reaction system captured in [Trigger And Reaction System](21-trigger-reaction-system.md).
 
 Resolved:
-- **Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?** → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `GameRules` interface — no separate abstraction needed from the start. (doc 20)
-- **Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?** → Yes. All entry points (player input, timers, triggers) call `GameEngine.Dispatch`. Phase transitions and priority grants are commands dispatched from `OnQueueDrained`. One loop, one evaluator. (doc 20)
-- **When exactly are state-based checks run?** → After every command execution, via `GameRules.Evaluate`. (doc 20)
-- **Available actions ownership** → Engine computes and publishes `IAvailableActionsSnapshot` inside `OnQueueDrained`. Gateway reads the snapshot for fast-reject; it does not independently compute validity. Default is a no-op (all requests pass). (doc 20 section 10)
-- **Command chain correlation** → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (doc 18, doc 20)
+- ~~**Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?**~~ → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `GameRules` interface — no separate abstraction needed from the start. (doc 20)
+- ~~**Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?**~~ → Yes. All entry points (player input, timers, triggers) call `GameEngine.Dispatch`. Phase transitions and priority grants are commands dispatched from `OnQueueDrained`. One loop, one evaluator. (doc 20)
+- ~~**When exactly are state-based checks run?**~~ → After every command execution, via `GameRules.Evaluate`. (doc 20)
+- ~~**Available actions ownership**~~ → Engine computes and publishes `AvailableActionsSnapshot` inside `OnQueueDrained`. Gateway reads the snapshot for fast-reject; it does not independently compute validity. Default is a no-op (all requests pass). (doc 20 section 10)
+- ~~**Command chain correlation**~~ → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (docs 18, 20)
 
 Still open:
-- How do replacement/prevention effects hook in before an event commits?
-- How are simultaneous events represented?
-- How do continuous effects and derived values recompute deterministically?
-- **Async effects for player input** — effects that require player input mid-execution (targeting, choices, mulligan) need to suspend and resume. The current pipeline and engine loop are synchronous; how suspension is modelled is unresolved.
+- **Replacement/prevention effects** — how they hook in before an event commits. The `OnBefore<T>` fold (doc 21) provides the mechanism: a trigger can cancel, modify, or replace a `GameAction` before it executes. The pipeline wiring exists. What is undesigned is rules-level semantics: MTG-style replacement-effect ordering, simultaneous replacements, the layer system, and priority between competing replacements.
+- **Simultaneous events** — how they are represented and ordered when multiple triggers match the same command at the same fold step.
+- **Continuous effects and derived values** — how aura-style and persistent modifiers recompute deterministically when state changes. The composition handler concept exists (doc 10) but no design for recomputation triggers or ordering.
+- **Async effects for player input** — effects that require player input mid-execution (targeting, choices, mulligan) need to suspend and resume. The current pipeline and engine loop are synchronous; how suspension is modelled is unresolved. (docs 20 §11, 21 §8)
+- **Stash release mechanics** — MTG-style scheduling uses `Stash` to hold commands until priority resolves, but the release mechanism (`Release(key)`, ordering rules on release, LIFO ordering) is not designed. (doc 21 §8)
+- **Queue ordering shape** — a simple FIFO queue is shown; whether priority queues, interrupt injection, or stack semantics for MTG-like resolution order are built into the engine queue or handled entirely via `GameRules` is unresolved. (doc 20 §11)
+- **`GameRules` composition** — a single `GameRules` implementation is shown; in practice it may be composed of smaller rule modules (state-based checks, trigger evaluation, phase rules). The boundary and composition contract are not designed. (doc 20 §11)
+- **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the `GameState` contract. (doc 21 §3, §8)
+- **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else. (doc 21 §8)
 
 ## Authoring
 
@@ -106,11 +111,10 @@ Still open:
 
 The first practical decisions should probably be:
 
-1. Pure core dependency boundary.
-2. Canonical state model.
-3. Entity/definition/instance and instance ID rules.
-4. Zone taxonomy.
-5. Command/task/event/history terminology.
-6. ~~First scheduler model.~~ — resolved: FIFO queue + evaluator pattern (doc 20)
-7. First game preset target for a vertical slice.
-
+1. ~~Pure core dependency boundary.~~ → No enforced boundary yet. (doc 08)
+2. **Canonical state model.** → Still open; Entities vs. Store vs. custom unresolved. (doc 08)
+3. ~~Entity/definition/instance and instance ID rules.~~ → Resolved. (docs 08, 09, 10)
+4. ~~Zone taxonomy.~~ → Resolved. (docs 11, 12)
+5. ~~Command/task/event/history terminology.~~ → Resolved. (docs 09, 14, 15, 16, 17, 18)
+6. ~~First scheduler model.~~ → Resolved: FIFO queue + evaluator pattern. (doc 20)
+7. **First game preset target for a vertical slice.** → Still open.
