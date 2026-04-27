@@ -33,7 +33,7 @@ Resolved:
 - **Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?** → Yes. All entry points (player input, timers, triggers) call `GameEngine.Dispatch`. Phase transitions and priority grants are commands dispatched from `OnQueueDrained`. One loop, one evaluator. (doc 20)
 - **When exactly are state-based checks run?** → After every command execution, via `IEngineEvaluator.Evaluate`. (doc 20)
 - **Available actions ownership** → Engine computes and publishes `IAvailableActionsSnapshot` inside `OnQueueDrained`. Gateway reads the snapshot for fast-reject; it does not independently compute validity. Default is a no-op (all requests pass). (doc 20 section 10)
-- **Command chain correlation** → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginRequest` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (doc 18, doc 20)
+- **Command chain correlation** → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (doc 18, doc 20)
 
 Still open:
 - How do replacement/prevention effects hook in before an event commits?

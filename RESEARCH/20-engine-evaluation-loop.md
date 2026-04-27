@@ -99,7 +99,7 @@ public sealed class RequestGateway
 {
     private readonly GameEngine engine;
 
-    public void Submit(PlayerRequest request)
+    public void Submit(PlayerIntent request)
     {
         var command = Convert(request); // resolve actor, zone, intent
         engine.Dispatch(command);
@@ -317,7 +317,7 @@ public interface IAvailableActionsSnapshot
 public sealed record AvailableAction
 {
     public required ActionId Action { get; init; }
-    public PlayerRequest? TriggeringRequest { get; init; } // null = UI determines how to trigger
+    public PlayerIntent? TriggeringRequest { get; init; } // null = UI determines how to trigger
 }
 ```
 

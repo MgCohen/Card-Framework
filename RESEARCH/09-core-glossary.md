@@ -77,7 +77,7 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | GameRules | Game-specific rules brain plugged into the engine. Called after each command and when the queue empties; returns follow-up commands based on current `GameState`. | Replaces `IEngineEvaluator`. The engine is the framework loop; `GameRules` is the game-specific plugin. |
 | GameState | Read-only view of simulation state passed to `GameRules`. | Zone contents, actor variables, phase info. Exact contract is a named open design task. Replaces `IGameState`. |
 | ResolutionScope | Handler-facing context object for one command execution. Provides `Apply`, `Semantic`, and `DispatchChild`. | Handlers never touch global state directly; all mutations go through the scope. |
-| EnvelopeCause | Metadata attached to a `HistoryEnvelope` describing why it was produced. | Actor, source instance, chain ID, and (first envelope only) the originating `PlayerIntent`. |
+| EnvelopeCause | Metadata attached to a `HistoryEnvelope` describing why it was produced. | Actor, source instance, chain ID, and (first envelope only) `OriginIntent` — the originating `PlayerIntent`. |
 | Trigger | Rule that reacts to an event, state change, or command result. Runtime shape is undesigned — part of the deferred trigger/reaction exploration. | Whenever a card is drawn, when this enters play, at end of turn, after damage. |
 | Scheduler | System that decides when tasks, effects, triggers, decisions, and checks execute. | Queue drain, stack and priority, turn/phase machine, real-time tick. |
 | History | Ordered record of meaningful simulation events. | Supports presentation, animation, replay, debugging, tests, and networking later. |

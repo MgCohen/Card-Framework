@@ -377,7 +377,7 @@ The zone does not decide broad legality. It organizes approved content changes.
 - ~~Are post-reactions allowed to dispatch immediately or queued?~~ — resolved: there are no inline post-reactions; follow-up commands are returned by the evaluator and enqueued by the engine (doc 20)
 - How do scheduler models affect action flow? — still open; see [06-open-questions.md](06-open-questions.md)
 - How does rollback/rejection communicate to presentation? — still open
-- What metadata must be mandatory in an envelope? — partially settled: `OriginCommandId`, `OriginRequest` (first command only), `actor`, `sourceInstance`, `result`, `entries` (doc 18)
+- What metadata must be mandatory in an envelope? — partially settled: `OriginCommandId`, `OriginIntent` (first command only), `actor`, `sourceInstance`, `result`, `entries` (doc 18)
 
 ## Useful Invariants
 

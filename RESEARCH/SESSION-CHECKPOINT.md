@@ -11,14 +11,14 @@
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
 - **Docs 14–20 are now aligned.** The `CommandReaction` inline pipeline step has been removed from docs 15 and 17 and replaced with the evaluator pattern from doc 20. `childEnvelopes` removed from envelope shapes.
 - **`RequestAcknowledgement` renamed back to `RequestResult`** in doc 18 — simpler shape, no static factory methods.
-- **`OriginRequestId` renamed to `OriginCommandId`** throughout docs 18 and 20. `OriginRequest` added to `GameCommand` and `EnvelopeCause` (non-null only on the first command in a chain).
+- **`OriginIntentId` renamed to `OriginCommandId`** throughout docs 18 and 20. `OriginIntent` added to `GameCommand` and `EnvelopeCause` (non-null only on the first command in a chain).
 - **Available actions system documented** in doc 20 section 10 — optional, no-op by default, published via `OnQueueDrained`, read by gateway for fast-reject.
 - **Doc 06 triaged** — scheduler questions closed, new open items added (async input suspension, available actions shape, IGameState contract).
 
 ### Key decisions settled this session
 
 - `OriginCommandId` is the chain ID, not the request ID. Engine threads it onto all evaluator follow-ups mechanically.
-- `OriginRequest` is carried by the first envelope only, for UI/debug correlation.
+- `OriginIntent` is carried by the first envelope only, for UI/debug correlation.
 - `IAvailableActionsSnapshot` is optional — Stacklands-style games don't publish one; all requests pass.
 - `CommandReaction` as a pipeline step is gone. Follow-ups come from `IEngineEvaluator.Evaluate`.
 
