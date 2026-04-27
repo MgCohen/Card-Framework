@@ -9,6 +9,7 @@ Use these alongside the framework design docs — not as standalone references.
 | File | Package | Date | Summary |
 |---|---|---|---|
 | [scaffold-states-deep-dive.md](scaffold-states-deep-dive.md) | `com.scaffold.states` | 2026-04-27 | Store, slices, mutators, staged-commit pipeline, snapshot. Alignment with StateMutation / ResolutionScope / GameState. |
+| [scaffold-entities-deep-dive.md](scaffold-entities-deep-dive.md) | `com.scaffold.entities` | 2026-04-27 | Definition/instance model, three-bag variable chain, modifier system, Unity coupling analysis, overlap with States. |
 
 ## Convention for new entries
 
