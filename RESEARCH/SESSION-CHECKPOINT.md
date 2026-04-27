@@ -2,40 +2,44 @@
 
 **Purpose:** One short, **replaceable** handoff for the *next* session. Full reasoning stays in the numbered research files; this file is **only** "where we are, what to read, what to do next." Update or overwrite it when a research milestone ends. Do not duplicate the whole glossary here.
 
-**Last updated:** 2026-04-26 (session end; refresh when you read this in a new session)
+**Last updated:** 2026-04-27 (session end; refresh when you read this in a new session)
 
 ---
 
 ## Where we stopped
 
-- **No implementation** in this repo yet: research and outlines under `RESEARCH/` only (see root `AGENTS.md`).
-- **Core model, zones, and action vocabulary** are largely written up.
-- **Action flow** is described: request → `GameCommand` → pipeline → mutations / semantics → `HistoryEnvelope` → UI.
-- **Engine model** is in [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md): `GameEngine` drain loop, `ICommandPipeline` (one command), `IEngineEvaluator` (state-based follow-ups and **queue-drained** hook).
-- **Naming (done this session in doc 20):** the lifecycle hook is **`OnQueueDrained`**, not `OnIdle` — it runs when a `Drain` pass finishes and the work queue is empty, not as a generic "application idle" concept.
+- **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
+- **Doc 18 is now aligned with doc 20** — the old reaction-based model (`RunReactions`, `SamplePlayThenExecuteEngine`, `ICommandReaction`) is gone. Doc 18 now reflects the engine/evaluator/pipeline split.
 
-### Design notes captured in conversation (not all in 20 yet)
+### What doc 18 now shows
 
-- **Wiring direction:** entry points (RequestGateway, timer, triggers) should **hold and call** the engine (e.g. `Dispatch`); the engine should **not** own concrete services. A **composition root** (or game preset factory) can still create engine + services and wire them in one place.
-- **Output from engine:** the engine may need to push **available actions, phase/lock, envelopes** to UI through narrow abstractions (e.g. publishers), separate from the command input path. Worth a short subsection when 20 is expanded.
+- `RequestGateway` holds `GameEngine`, calls `engine.Dispatch()`, returns `RequestAcknowledgement` (Rejected or Accepted with `RequestId`).
+- `GameCommand` base carries `OriginRequestId` (optional). Gateway stamps it; engine threads it onto evaluator follow-ups.
+- `ICommandPipeline` handles exactly one command — no reaction step.
+- Section 6b: `SampleGameEvaluator : IEngineEvaluator` with zone-check pattern (state-based, not command-type matching).
+- **One envelope per pipeline execution.** Child commands via `scope.DispatchChild` fold into the current envelope; evaluator follow-ups each get their own. Both envelopes in the play→execute chain carry the same `OriginRequestId`.
+
+### Open design note captured in conversation (not in any doc yet)
+
+- **Available actions ownership:** the engine (via `OnQueueDrained`) should compute and publish available player actions as a state artifact. The gateway reads that snapshot for its fast-reject check. The gateway does *not* independently reason about validity — it just checks against what the engine published. This changes `IAvailableActionMatcher` from a game-logic component to a simple reader. **Not written into doc 20 yet.**
 
 ### Artifacts to read on resume
 
 | File | Why |
 |------|-----|
-| [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) | Current engine + evaluator + `OnQueueDrained` |
-| [18-action-flow-snippets.md](18-action-flow-snippets.md) | **Still** uses old `RunReactions` + `SamplePlayThenExecuteEngine` — needs alignment to 20 |
+| [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) | Engine loop, evaluator, `OnQueueDrained` — needs available-actions output section |
+| [18-action-flow-snippets.md](18-action-flow-snippets.md) | Now up to date; good as reference |
 | [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) | Composites, segments; still good |
-| [06-open-questions.md](06-open-questions.md) | Triage after 20 |
+| [06-open-questions.md](06-open-questions.md) | Needs triage |
 
 ---
 
 ## Suggested next steps (next session)
 
-1. **Align [18-action-flow-snippets.md](18-action-flow-snippets.md)** with [20](20-engine-evaluation-loop.md) — remove inline `RunReactions` from the dispatcher, replace section 6b with engine + `IEngineEvaluator` + `OnQueueDrained`. Largest doc continuity gap.
-2. **Optionally add to doc 20** — composition root sketch; output channel (`IAvailableActionsPublisher` / history); one more evaluator example (deeper priority).
-3. **Triage [06-open-questions.md](06-open-questions.md)** — close or promote what 08–20 cover; add items (command naming, evaluator modules, queue ordering, engine output abstractions).
-4. **Code milestone** — when ready, add `PLANS/` for "minimal `GameEngine` + pipeline + one evaluator" and link from `AGENTS.md` if it becomes policy.
+1. **Add available-actions output to doc 20** — `OnQueueDrained` publishes an `IAvailableActionsSnapshot`; `RequestGateway` reads it. Captures the design decision made this session.
+2. **Add `OriginRequestId` threading to doc 20's engine loop** — one line in `Drain` to show the engine copying it onto evaluator follow-ups.
+3. **Triage [06-open-questions.md](06-open-questions.md)** — close what 18–20 now cover; add new items (available-actions ownership, envelope correlation, `OriginRequestId` threading).
+4. **Code milestone** — when ready, add `PLANS/` for "minimal `GameEngine` + pipeline + one evaluator" and link from `AGENTS.md`.
 
 ---
 
