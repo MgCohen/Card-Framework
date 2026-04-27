@@ -42,7 +42,7 @@ The layers were often good, but the naming made it easy to send work through the
 | -------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Action         | Could mean player action, authored card action, possible action, or engine action. | Too overloaded.                                              |
 | Intent         | Informal player/system attempt.                                                    | May be too vague for concrete APIs.                          |
-| Request        | Structured thing submitted to the engine.                                          | Good candidate for UI/network boundary.                      |
+| PlayerIntent   | Structured thing submitted to the engine.                                          | **Settled name** for UI/network boundary. Covers all actor-originated inputs. |
 | Command        | Could mean high-level game command or low-level state mutation.                    | Needs qualifiers.                                            |
 | Game Command   | High-level command requiring rules logic and result.                               | Clear but possibly too implementation-flavored.              |
 | State Command  | Low-level already-approved mutation.                                               | Clear if Store/mutator model remains.                        |
@@ -74,9 +74,7 @@ Candidate names:
 - `InteractionRequest`.
 - `PlayerIntent`.
 
-Likely direction:
-
-Use `Request` for the structured object. Use `intent` informally in docs.
+**Settled:** Use `PlayerIntent` as the structured type name. Use `intent` informally in docs.
 
 ### 2. Available Or Possible Choice
 
@@ -214,7 +212,7 @@ Use `HistoryEntry` for ordered facts and `HistoryEnvelope` for grouped cause-awa
 ## Strong Current Preferences
 
 - Avoid using `Action` alone as a core type name.
-- Use `Request` for structured external attempts.
+- Use `PlayerIntent` for structured external attempts.
 - Keep `Option` connected to `Decision`.
 - Use `GameCommand` as a provisional term.
 - Prefer `StateMutation` over `StateCommand` in framework docs.
@@ -224,7 +222,7 @@ Use `HistoryEntry` for ordered facts and `HistoryEnvelope` for grouped cause-awa
 
 ## Questions For Next Discussion
 
-1. Should the external submitted object be `Request`, `Intent`, or `ActionRequest`?
+1. ~~Should the external submitted object be `Request`, `Intent`, or `ActionRequest`?~~ **Settled:** `PlayerIntent`. See [Action Definition Proposal](17-action-definition-proposal.md).
 2. Should `GameCommand` be renamed before it becomes sticky?
 3. Should `StateCommand` be called `StateMutation` instead?
 4. Should `Effect` mean only authored card behavior, or any executable behavior?
@@ -240,7 +238,7 @@ Until this is settled, research docs can use:
 | Working Term     | Meaning                                    |
 | ---------------- | ------------------------------------------ |
 | Intent           | Informal attempt.                          |
-| Request          | Structured attempt submitted to engine.    |
+| PlayerIntent     | Structured attempt submitted to engine.    |
 | Decision         | Engine-created choice window.              |
 | Option           | Choice inside a decision.                  |
 | Game Command     | High-level command resolved by game rules. |

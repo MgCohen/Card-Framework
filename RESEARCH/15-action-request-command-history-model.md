@@ -14,7 +14,7 @@ The working model is:
 
 ```text
 Interaction/System
-  -> Intent / Request
+  -> PlayerIntent
   -> Pipeline approval
   -> Game command resolution
   -> State mutation commands
@@ -31,7 +31,7 @@ The framework should provide the shape. Games and presets provide the rules.
 | Term             | Meaning                                                          | Example                                                           |
 | ---------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Intent           | Something an actor or system is trying to do.                    | "Drag this card onto that zone."                                  |
-| Request          | A structured intent submitted to the engine.                     | `MoveInstanceRequest(card, fromZone, toZone)`.                    |
+| PlayerIntent     | A structured intent submitted to the engine.                     | `MoveInstanceToZoneRequest(card, fromZone, toZone)`.              |
 | AvailableAction  | A precomputed legal or suggested action the engine exposes.      | "Play this card targeting that enemy."                            |
 | Game Command     | Approved or approvable high-level command that needs game logic. | Play card, draw card, deal damage, move instance.                 |
 | StateMutation    | Low-level already-approved state mutation.                       | Set variable, insert into zone, remove from zone, apply modifier. |
@@ -75,7 +75,7 @@ sequenceDiagram
 
 
 
-## Intent And Request
+## Intent And PlayerIntent
 
 An intent begins outside the rules engine.
 
@@ -242,7 +242,7 @@ Handle DealDamageCommand
 
 ## CommandReactions
 
-> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline — they are returned by `IEngineEvaluator.Evaluate` after the pipeline finishes and the envelope is published. The pre-hook concept (`CommandPreHook`) remains valid.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline — they are returned by `GameRules.Evaluate` after the pipeline finishes and the envelope is published. The pre-hook concept (`CommandPreHook`) remains valid.
 
 The evaluator reads current game state after each command and returns any follow-up commands. This replaces the need for a post-reaction pipeline step. The pre-hook layer still handles cancellation, replacement, and redirection before the handler runs.
 
@@ -351,7 +351,7 @@ Zone movement fits the model:
 
 ```text
 Interaction: drag card to zone
-  -> Request: move/use/drop/play this instance at this destination
+  -> PlayerIntent: move/use/drop/play this instance at this destination
   -> Pipeline: validate or auto-approve
   -> Handler: resolve exact meaning
   -> State commands:
@@ -368,7 +368,7 @@ The zone does not decide broad legality. It organizes approved content changes.
 
 ## Open Questions
 
-- Final names: Intent, Request, Action, Command, GameCommand? — still unsettled; see [Action Terminology Discussion](16-action-terminology-discussion.md)
+- ~~Final names: Intent, Request, Action, Command, GameCommand?~~ **Settled:** `PlayerIntent` for external attempts, `GameCommand` for pipeline commands. See [Action Definition Proposal](17-action-definition-proposal.md).
 - Should possible actions be called `Option`, `ActionOption`, or `AvailableAction`? — still open
 - How are active option lists represented and matched? — partially answered: `IAvailableActionsSnapshot` (doc 20 section 10); shape detail still open
 - ~~How do nested commands produce nested envelopes?~~ — resolved: child commands via `scope.DispatchChild` fold into the current envelope; evaluator follow-ups each get their own envelope sharing `OriginCommandId` (doc 18)

@@ -179,7 +179,7 @@ sequenceDiagram
   participant Zone as Zone Model
   participant Hist as History
 
-  View->>Sim: Request move instance to zone
+  View->>Sim: PlayerIntent move instance to zone
   Sim->>Rules: Validate movement intent
   Rules-->>Sim: Approved or rejected
   Sim->>Zone: Apply approved removal/insertion
