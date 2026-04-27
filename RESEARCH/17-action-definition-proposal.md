@@ -40,7 +40,7 @@ Recommended working vocabulary:
 | Command outcome          | `CommandResult`                       | Structured result, even for failure or no-op.               |
 | Pre-handler hook         | `CommandPreHook`                      | Can validate, cancel, replace, redirect, or modify.         |
 | Main resolver            | `CommandHandler`                      | Resolves a game command into state mutations and result.    |
-| Post-result hook         | `CommandReaction`                     | Observes result and can dispatch follow-up work.            |
+| Post-result follow-up    | `IEngineEvaluator`                    | Reads state after command; returns follow-up commands. Replaces inline CommandReaction. |
 | Ordered fact             | `HistoryEntry`                        | One meaningful state or simulation fact.                    |
 | Batched output           | `HistoryEnvelope`                     | Group of entries with cause metadata.                       |
 | Authored card behavior   | `Effect`                              | Simple content entry point, deeper design deferred.         |
@@ -115,7 +115,7 @@ Services perform work. They receive payloads, return results, and may coordinate
 | CommandHandler          | `GameCommand`                      | `CommandResult`, `StateMutation`s        | Resolves command into state changes.                               |
 | State Scope / Store     | `StateMutation`                    | State changes, optional `MutationResult` | Applies canonical state changes.                                   |
 | Zone Organization Model | Approved insertion/removal request | `OrganizationResult`                     | Organizes zone contents after legality is decided elsewhere.       |
-| CommandReaction         | `GameCommand` + `CommandResult`    | Optional child `GameCommand`s / history  | Reacts after command resolution.                                   |
+| IEngineEvaluator        | `GameCommand` + `CommandResult` + `IGameState` | Follow-up `GameCommand`s | Reads state after command; returns any follow-up commands. Replaces inline CommandReaction. |
 | History Service         | `HistoryEntry`s + metadata         | `HistoryEnvelope`                        | Groups cause-aware history output.                                 |
 | Presentation Adapter    | State + `HistoryEnvelope`          | Visual update / animation                | Updates UI without owning gameplay truth.                          |
 | Network Adapter         | Request/envelope                   | Wire payloads                            | Optional multiplayer transport boundary.                           |
@@ -247,9 +247,12 @@ flowchart TD
     PreHooks["CommandPreHooks\nvalidate / cancel / replace / redirect"]
     PreDecision{"Cancelled or\nrejected?"}
     Handler["CommandHandler\nmain resolver"]
-    Reactions["CommandReactions\ntriggers / observers / follow-up commands"]
     Result["CommandResult"]
     CloseEnvelope["Close HistoryEnvelope"]
+  end
+
+  subgraph EvalLoop["Engine Loop"]
+    Evaluator["IEngineEvaluator.Evaluate\nreads state → returns follow-up commands"]
   end
 
   subgraph State["State Layer"]
@@ -288,10 +291,10 @@ flowchart TD
   Mutations --> Entries
   Entries --> CloseEnvelope
   Handler --> Result
-  Result --> Reactions
-  Reactions --> CloseEnvelope
-  Reactions -. "optional child GameCommand" .-> OpenEnvelope
+  Result --> CloseEnvelope
   CloseEnvelope --> HistoryOut
+  HistoryOut --> Evaluator
+  Evaluator -. "follow-up GameCommand" .-> OpenEnvelope
   HistoryOut --> UIConsume
   HistoryOut --> Network
   HistoryOut --> Debug
@@ -309,16 +312,17 @@ flowchart TD
 2. User or system input creates a `Request`.
 3. The engine checks whether the game requires matching against active options.
 4. If matching is required and fails, the engine creates a rejected `CommandResult`.
-5. If accepted, the request becomes or selects a `GameCommand`.
+5. If accepted, the request becomes or selects a `GameCommand` (stamped with `OriginCommandId`).
 6. The pipeline opens a `HistoryEnvelope`.
 7. `CommandPreHook`s may validate, reject, cancel, replace, or redirect the command.
 8. The `CommandHandler` resolves the command.
 9. The handler applies `StateMutation`s through a state scope.
 10. Zones organize approved content changes but do not decide broad legality.
 11. State changes produce `HistoryEntry` facts.
-12. `CommandReaction`s observe the result and may dispatch follow-up commands.
-13. The envelope closes and is published to observers.
-14. UI updates from state/history and can animate the grouped envelope.
+12. The envelope closes and is published to observers.
+13. The engine calls `IEngineEvaluator.Evaluate(command, result, state)`.
+14. The evaluator reads current state and returns any follow-up commands; the engine enqueues them.
+15. UI updates from state/history and can animate grouped envelopes using `OriginCommandId` to correlate sequences.
 
 ### Where Systems Communicate
 
@@ -520,6 +524,7 @@ sequenceDiagram
   participant Zone as Zone Organization
   participant State as State Scope
   participant Hist as HistoryEnvelope
+  participant Eval as IEngineEvaluator
   participant View as Reactive UI
 
   UI->>Engine: Request MoveInstanceToZone(C17, Hand, PlayArea)
@@ -541,10 +546,12 @@ sequenceDiagram
     Handler->>State: StateMutation InsertIntoZone
     State->>Hist: Zone and variable HistoryEntries
     Handler-->>Pipe: CommandResult Success
-    Pipe->>Pipe: CommandReactions
     Pipe->>Hist: Close envelope
     Hist->>View: Publish grouped envelope
     View->>View: Refresh state and animate transition
+    Pipe-->>Engine: CommandResult
+    Engine->>Eval: Evaluate(command, result, state)
+    Eval-->>Engine: Follow-up commands (if any)
   end
 ```
 
@@ -831,29 +838,9 @@ Important properties:
 
 ## Shape 8: CommandReaction
 
-Definition:
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `IEngineEvaluator.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
 
-> A `CommandReaction` runs after a command handler returns a result.
-
-Examples:
-
-- After damage, heal source.
-- After card enters zone, trigger an ability.
-- After move collision, deal collision damage.
-- Animation/audio observers.
-- Debug/log observers.
-
-Important properties:
-
-- Observes final command and result.
-- Should not change the result that already happened.
-- May dispatch follow-up game commands.
-- Can contribute child history envelopes or entries.
-- Can be used for both game logic and presentation-adjacent observers, though UI should usually consume history rather than mutate game flow.
-
-Open question:
-
-Should reactions run immediately, queue until current envelope closes, or depend on scheduler? This belongs in scheduler/trigger design.
+The `CommandPreHook` concept (before the handler) remains valid. A proper trigger and reaction system that sits above the pipeline — including triggered abilities, replacement effects, and post-result reactions — is a known open design area.
 
 ## Shape 9: HistoryEntry
 
@@ -890,14 +877,16 @@ Conceptual shape:
 ```text
 HistoryEnvelope
   envelopeId
-  parentEnvelopeId optional
-  request optional
+  originCommandId       // shared across all commands in a chain
+  originRequest         // non-null only on the first command in a chain
   actor
   sourceInstance optional
   rootGameCommand
   commandResult
   entries
-  childEnvelopes
+  // No childEnvelopes — child commands via scope.DispatchChild fold their
+  // entries into the current envelope. Evaluator follow-ups each produce
+  // their own separate envelope sharing originCommandId.
 ```
 
 Important properties:
@@ -906,15 +895,7 @@ Important properties:
 - Lets UI know cause and sequence.
 - Lets network send coherent updates.
 - Lets debug tools explain "why did this happen?"
-- Can contain nested/child envelopes later.
-
-Open question:
-
-Nested envelope rules are not settled. My proposal is:
-
-- Root request opens a root envelope.
-- Child game commands can either append entries to the same envelope or open child envelopes depending on scheduler/trigger semantics.
-- We should defer final nesting rules until trigger and scheduler design.
+- `originCommandId` links all envelopes in a chain so UI can correlate a sequence of envelopes back to one player action.
 
 ## Shape 11: Effect
 
@@ -952,22 +933,23 @@ Keep `Effect` simple until action pipeline vocabulary is stable.
 ```text
 1. UI / AI / system creates Request.
 2. Engine optionally matches Request to AvailableAction or DecisionOption.
-3. Engine creates or selects GameCommand.
+3. Engine creates or selects GameCommand (stamped with OriginCommandId and OriginRequest).
 4. Pipeline opens HistoryEnvelope.
 5. CommandPreHooks run.
 6. If rejected/cancelled:
      -> create CommandResult
      -> write rejection entry
-     -> close envelope
+     -> close and publish envelope
      -> notify observers
 7. If approved:
      -> CommandHandler resolves.
      -> Handler applies StateMutations.
      -> State changes are recorded as HistoryEntries.
      -> Handler returns CommandResult.
-8. CommandReactions run.
-9. Envelope closes.
-10. State notification/history envelope reaches UI/network/debug observers.
+8. Envelope closes and is published to observers.
+9. Engine calls IEngineEvaluator.Evaluate(command, result, state).
+10. Evaluator returns follow-up commands (if any); engine enqueues them with same OriginCommandId.
+11. Loop continues until queue is empty, then OnQueueDrained fires.
 ```
 
 ## Proposal For Core Terms
@@ -985,7 +967,7 @@ Use these terms in future docs unless we revise them:
 | CommandResult   | Structured outcome.                               | Raw state diff.                        |
 | CommandPreHook  | Before-handler command modification/cancellation. | Post-result triggers.                  |
 | CommandHandler  | Main command resolver.                            | UI event handler.                      |
-| CommandReaction | After-result reaction/observer.                   | Replacement/prevention before handler. |
+| IEngineEvaluator | Post-pipeline follow-up command dispatch.        | Inline post-result pipeline hooks.     |
 | HistoryEntry    | Ordered fact.                                     | Whole batch.                           |
 | HistoryEnvelope | Cause-aware batch.                                | Single state change.                   |
 | Effect          | Authored behavior entry point.                    | Runtime mutation primitive.            |

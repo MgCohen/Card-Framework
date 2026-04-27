@@ -56,6 +56,7 @@ sequenceDiagram
   participant Handler as Handler
   participant State as State Scope
   participant Hist as History
+  participant Eval as Evaluator
   participant Obs as Observers
 
   UI->>Engine: Submit intent/request
@@ -65,9 +66,11 @@ sequenceDiagram
   Handler->>State: Apply state commands
   State-->>Hist: Record state changes
   Handler-->>Pipe: Return result
-  Pipe->>Pipe: Post-reactions
   Pipe->>Hist: Close history envelope
   Hist->>Obs: Publish grouped envelope
+  Pipe-->>Engine: CommandResult
+  Engine->>Eval: Evaluate(command, result, state)
+  Eval-->>Engine: Follow-up commands (if any)
 ```
 
 
@@ -239,24 +242,9 @@ Handle DealDamageCommand
 
 ## CommandReactions
 
-Command reactions run after the handler result exists.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline — they are returned by `IEngineEvaluator.Evaluate` after the pipeline finishes and the envelope is published. The pre-hook concept (`CommandPreHook`) remains valid.
 
-They may:
-
-- Observe for animation/audio/debug.
-- Dispatch follow-up game commands.
-- Emit history.
-- Trigger abilities.
-- Notify systems.
-
-Examples:
-
-- "After you deal damage, heal 1."
-- "Whenever a card enters this zone, draw a card."
-- "If this movement collided, deal collision damage."
-- "Show shield break animation."
-
-Command reactions should not change the result that already happened, but they can cause new commands.
+The evaluator reads current game state after each command and returns any follow-up commands. This replaces the need for a post-reaction pipeline step. The pre-hook layer still handles cancellation, replacement, and redirection before the handler runs.
 
 ## CommandResult
 
@@ -290,13 +278,16 @@ Conceptual shape:
 ```text
 HistoryEnvelope
   envelopeId
-  sourceRequest
+  originCommandId       // shared across all commands in a chain
+  originRequest         // non-null only on the first command in a chain
   actor
   sourceInstance
   rootCommand
   result
   entries[]
-  childEnvelopes[]
+  // Note: child commands dispatched inline via scope.DispatchChild fold their
+  // entries into this envelope. Evaluator follow-ups each produce their own
+  // separate envelope sharing the same originCommandId.
 ```
 
 Entries might include:
@@ -377,16 +368,16 @@ The zone does not decide broad legality. It organizes approved content changes.
 
 ## Open Questions
 
-- Final names: Intent, Request, Action, Command, GameCommand?
-- Should possible actions be called `Option`, `ActionOption`, or `AvailableAction`?
-- How are active option lists represented and matched?
-- How do nested commands produce nested envelopes?
-- When does an envelope close?
-- Can pre-hooks mutate state, or only replace/cancel commands?
-- Are post-reactions allowed to dispatch immediately or queued?
-- How do scheduler models affect action flow?
-- How does rollback/rejection communicate to presentation?
-- What metadata must be mandatory in an envelope?
+- Final names: Intent, Request, Action, Command, GameCommand? — still unsettled; see [Action Terminology Discussion](16-action-terminology-discussion.md)
+- Should possible actions be called `Option`, `ActionOption`, or `AvailableAction`? — still open
+- How are active option lists represented and matched? — partially answered: `IAvailableActionsSnapshot` (doc 20 section 10); shape detail still open
+- ~~How do nested commands produce nested envelopes?~~ — resolved: child commands via `scope.DispatchChild` fold into the current envelope; evaluator follow-ups each get their own envelope sharing `OriginCommandId` (doc 18)
+- ~~When does an envelope close?~~ — resolved: after the handler returns and history is published, before the evaluator is called (doc 18, doc 20)
+- Can pre-hooks mutate state, or only replace/cancel commands? — still open
+- ~~Are post-reactions allowed to dispatch immediately or queued?~~ — resolved: there are no inline post-reactions; follow-up commands are returned by the evaluator and enqueued by the engine (doc 20)
+- How do scheduler models affect action flow? — still open; see [06-open-questions.md](06-open-questions.md)
+- How does rollback/rejection communicate to presentation? — still open
+- What metadata must be mandatory in an envelope? — partially settled: `OriginCommandId`, `OriginRequest` (first command only), `actor`, `sourceInstance`, `result`, `entries` (doc 18)
 
 ## Useful Invariants
 

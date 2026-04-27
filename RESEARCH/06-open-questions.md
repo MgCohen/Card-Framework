@@ -26,15 +26,20 @@ Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisio
 
 ## Rules And Scheduling
 
-Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Scheduler-specific questions remain open.
+Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md).
 
-- Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?
-- Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?
+Resolved:
+- **Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?** → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `IEngineEvaluator` interface — no separate abstraction needed from the start. (doc 20)
+- **Can queue, stack, turn-phase, and real-time tick scheduling share one abstraction?** → Yes. All entry points (player input, timers, triggers) call `GameEngine.Dispatch`. Phase transitions and priority grants are commands dispatched from `OnQueueDrained`. One loop, one evaluator. (doc 20)
+- **When exactly are state-based checks run?** → After every command execution, via `IEngineEvaluator.Evaluate`. (doc 20)
+- **Available actions ownership** → Engine computes and publishes `IAvailableActionsSnapshot` inside `OnQueueDrained`. Gateway reads the snapshot for fast-reject; it does not independently compute validity. Default is a no-op (all requests pass). (doc 20 section 10)
+- **Command chain correlation** → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginRequest` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (doc 18, doc 20)
+
+Still open:
 - How do replacement/prevention effects hook in before an event commits?
 - How are simultaneous events represented?
-- When exactly are state-based checks run?
 - How do continuous effects and derived values recompute deterministically?
-- Should effects be async, synchronous, or simulation-step based?
+- **Async effects for player input** — effects that require player input mid-execution (targeting, choices, mulligan) need to suspend and resume. The current pipeline and engine loop are synchronous; how suspension is modelled is unresolved.
 
 ## Authoring
 
@@ -106,6 +111,6 @@ The first practical decisions should probably be:
 3. Entity/definition/instance and instance ID rules.
 4. Zone taxonomy.
 5. Command/task/event/history terminology.
-6. First scheduler model.
+6. ~~First scheduler model.~~ — resolved: FIFO queue + evaluator pattern (doc 20)
 7. First game preset target for a vertical slice.
 

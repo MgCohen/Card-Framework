@@ -70,7 +70,7 @@ public sealed class GameEngine
             // what commands should run next?
             var followUps = evaluator.Evaluate(command, result, state);
             foreach (var next in followUps)
-                pending.Enqueue(next);
+                pending.Enqueue(next with { OriginCommandId = command.OriginCommandId });
         }
 
         // Queue is empty. Game decides what now.
@@ -85,6 +85,7 @@ Key points:
 - `Drain` is **not re-entered**. If a command is dispatched while the loop is already running, it is enqueued and picked up by the current drain cycle.
 - The loop evaluates **after every command**, not once at the end. This is what gives the engine per-step awareness.
 - `OnQueueDrained` is the hook for when a drain just finished: the work queue is empty, so the game can phase-advance, grant priority, publish available actions, or await input. It is not a generic "idle" or presentation concept.
+- **`OriginCommandId` threading:** the engine copies `OriginCommandId` from the just-executed command onto every evaluator follow-up. This means `PlayCardCommand` and `ExecuteCardCommand` (and any further chain members) all share the same `OriginCommandId`. The engine does this mechanically — the evaluator does not need to set it. `OriginCommandId` is the ID of the first command in the chain, not the original player request — though the first command's envelope separately records the originating request for correlation.
 
 ---
 
@@ -234,12 +235,14 @@ The evaluator ran twice: once with a card in the zone (produced `ExecuteCardComm
 
 `OnQueueDrained` is where game-specific phase logic lives after the loop has no more work for this pass. Examples:
 
-| Game situation | `OnQueueDrained` behaviour |
-|---|---|
-| Slay the Spire, mid-player-turn | Do nothing — player still has available actions |
-| Slay the Spire, player clicked end turn | `engine.Dispatch(new StartEnemyTurnCommand())` |
-| MTG-like, stack empty, no priority granted | `engine.Dispatch(new GrantPriorityCommand(activePlayer))` |
-| Any game, all players have no legal actions | `engine.Dispatch(new AdvancePhaseCommand())` |
+
+| Game situation                              | `OnQueueDrained` behaviour                                |
+| ------------------------------------------- | --------------------------------------------------------- |
+| Slay the Spire, mid-player-turn             | Do nothing — player still has available actions           |
+| Slay the Spire, player clicked end turn     | `engine.Dispatch(new StartEnemyTurnCommand())`            |
+| MTG-like, stack empty, no priority granted  | `engine.Dispatch(new GrantPriorityCommand(activePlayer))` |
+| Any game, all players have no legal actions | `engine.Dispatch(new AdvancePhaseCommand())`              |
+
 
 `OnQueueDrained` can dispatch back into the engine — the queue re-fills and `Drain` continues. It is not a special exit path; it is just another way commands enter.
 
@@ -282,18 +285,86 @@ The structure is identical. The only difference is the conditions read from `sta
 
 The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) does not change. The engine wraps it:
 
-| Concern | Where it lives |
-|---|---|
-| Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing) |
-| Decide what command runs next | `IEngineEvaluator` (game-specific) |
-| Drive the loop between them | `GameEngine` (framework) |
-| Submit commands from outside | Entry points (RequestGateway, TimerService, etc.) |
+
+| Concern                                           | Where it lives                                    |
+| ------------------------------------------------- | ------------------------------------------------- |
+| Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing)                     |
+| Decide what command runs next                     | `IEngineEvaluator` (game-specific)                |
+| Drive the loop between them                       | `GameEngine` (framework)                          |
+| Submit commands from outside                      | Entry points (RequestGateway, TimerService, etc.) |
+
 
 The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute` — it handles one command and returns a result. The inline `RunReactions` call that was inside the dispatcher moves out entirely. Reactions are now the evaluator's job, not the dispatcher's.
 
 ---
 
-## 10. Open Choices
+## 10. Available Actions Snapshot (Optional System)
+
+Some games tell the player which actions are currently legal before they attempt anything — Hearthstone highlights playable cards, MTG shows what can be cast or activated. Other games place no restrictions on what a player can attempt — in a Stacklands-style game everything is always possible and the simulation just responds.
+
+The framework supports both through an **optional** available-actions system. By default it is a no-op: all requests pass through the gateway unchecked. Games that need it opt in.
+
+### The Snapshot
+
+`IAvailableActionsSnapshot` is a read-only artifact the game publishes at the end of a drain cycle. It lists the actions currently available to each actor, each optionally bound to the request that would trigger it:
+
+```csharp
+public interface IAvailableActionsSnapshot
+{
+    IReadOnlyList<AvailableAction> GetActionsFor(ActorId actor);
+}
+
+public sealed record AvailableAction
+{
+    public required ActionId Action { get; init; }
+    public PlayerRequest? TriggeringRequest { get; init; } // null = UI determines how to trigger
+}
+```
+
+The binding between an action and its triggering request can be defined at the **UI level** (the UI knows how to express the action as a drag, click, or button press) or at the **system level** (the snapshot carries the exact request). Both are valid depending on the game.
+
+### Publishing
+
+The evaluator publishes the snapshot inside `OnQueueDrained`, after the queue empties:
+
+```csharp
+public void OnQueueDrained(GameEngine engine, IGameState state)
+{
+    var snapshot = ComputeAvailableActions(state);
+    state.PublishAvailableActions(snapshot); // stored as a state artifact; UI and gateway can read it
+}
+```
+
+Games that do not use this system leave `OnQueueDrained` empty or call a no-op publisher.
+
+### Gateway Fast-Reject
+
+`RequestGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
+
+```csharp
+public RequestResult Submit(MoveInstanceToZoneRequest request)
+{
+    var match = actionMatcher.TryMatch(request); // reads current snapshot; no-op if none published
+    if (match.RequiresMatch && !match.Success)
+        return new RequestResult { Status = RequestStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+
+    // ... dispatch as normal
+}
+```
+
+`IAvailableActionMatcher` is a simple reader — it does not compute game logic itself. The game logic that decided what is legal already ran inside `OnQueueDrained`.
+
+### When Each Game Uses This
+
+| Game style | Uses snapshot? | Notes |
+|---|---|---|
+| Hearthstone / MTG | Yes | Engine publishes legal plays after each queue drain; gateway rejects illegal attempts |
+| Stacklands | No | No snapshot published; gateway no-op; everything is always attemptable |
+| Slay the Spire | Partial | Could publish playable cards for UI highlights but skip gateway enforcement |
+
+---
+
+## 11. Open Choices
 
 - **Command naming:** "GameCommand" covers both player-initiated and automatic commands. A finer split (e.g. `PlayerCommand` vs `SystemCommand`) may be warranted once more command types exist.
 - **Queue ordering:** A simple FIFO queue is shown. Priority queues, interrupt injection, or stack semantics (for MTG-like resolution order) are variations the engine queue shape would need to support.
@@ -302,7 +373,7 @@ The `GameCommandDispatcher` from the snippets becomes `ICommandPipeline.Execute`
 
 ---
 
-## Related
+## 12. Related
 
 - [18-action-flow-snippets.md](18-action-flow-snippets.md) — the existing end-to-end flow that this engine wraps
 - [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — what happens inside a single pipeline execution
