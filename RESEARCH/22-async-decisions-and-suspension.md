@@ -32,21 +32,30 @@ This hierarchy is the key constraint. Only effects sequence commands. A `GameAct
 
 ---
 
-## 2. Where Async Lives
+## 2. Two Dispatch Paths
 
-Async lives **only at the effect layer**. An effect awaits each command's `CommandResult` before dispatching the next. Commands and composites remain synchronous throughout.
+There are two ways a `GameAction` can be executed, and they are not interchangeable:
+
+| Path | How | When it runs | Envelope | Used by |
+|---|---|---|---|---|
+| **`engine.Dispatch(action)`** | Queued, processed after current drain step | Later | Own envelope, independent | `GameRules.Evaluate`, trigger reactions, player input |
+| **`scope.Dispatch(action)`** | Executed **immediately**, inline | Right now | Own envelope, published before next line runs | Effects |
+
+`scope.Dispatch` is not deferred. The call executes the action's full lifecycle (before fold → handler → after fold → envelope published) synchronously in the calling task. The effect `await`s it and cannot advance to the next line until the action finishes — including if that action is waiting for player input.
 
 ```csharp
-// Effect — async orchestration only
+// Effect — each line executes and completes before the next begins
 public async Task Execute(IEffectScope scope)
 {
-    var targetResult  = await scope.Dispatch(new RequestTargetAction { Filter = EnemyFilter });
-    var damageResult  = await scope.Dispatch(new DealDamageAction   { Target = targetResult.Target, Amount = 6 });
+    var targetResult = await scope.Dispatch(new RequestTargetAction { Filter = EnemyFilter });
+    // execution cannot reach here until the player has chosen a target
+    await scope.Dispatch(new DealDamageAction { Target = targetResult.Target, Amount = 6 });
+    // execution cannot reach here until damage is applied
     await scope.Dispatch(new MoveToDiscardAction { Source = source });
 }
 ```
 
-Each `scope.Dispatch` call submits a `GameAction` to the engine, awaits its completion, and returns the `CommandResult`. The effect resumes when the command finishes — including when that command required player input.
+The engine is effectively paused on `await pipeline.Execute(ExecuteCardAction)` for the entire duration of the effect chain. It will not dequeue the next engine-queued action until the effect — including any player input it waits for — has fully completed. Whether this is acceptable is game-specific.
 
 ---
 
@@ -162,7 +171,7 @@ HistoryEnvelope
 
 ## 7. Effect Scope
 
-The effect interacts with the engine through an `IEffectScope`:
+The effect interacts with the pipeline through an `IEffectScope`:
 
 ```csharp
 public interface IEffectScope
@@ -171,7 +180,9 @@ public interface IEffectScope
 }
 ```
 
-The effect never touches the engine queue directly. `IEffectScope.Dispatch` submits the command, drives the engine through that command's full lifecycle (before fold → handler → after fold → envelope published), and returns the result.
+`IEffectScope.Dispatch` runs the action **immediately and inline** — before fold → handler → after fold → envelope published — and returns the `CommandResult`. The effect is suspended at the `await` until the action completes. The engine queue is not involved; the action never enters it.
+
+`engine.Dispatch` and `scope.Dispatch` are not the same thing. An effect always uses the scope. Trigger reactions and evaluator follow-ups always use the engine. Mixing them would break the execution model.
 
 ---
 
