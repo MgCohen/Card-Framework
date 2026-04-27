@@ -40,7 +40,7 @@ Recommended working vocabulary:
 | High-level rules command | `GameCommand`                         | Command that enters the game pipeline and returns a result. |
 | Low-level mutation       | `StateMutation`                       | Already-approved state change applied to canonical state.   |
 | Command outcome          | `CommandResult`                       | Structured result, even for failure or no-op.               |
-| Pre-handler hook         | `CommandPreHook`                      | Can validate, cancel, replace, redirect, or modify.         |
+| ~~Pre-handler hook~~     | ~~`CommandPreHook`~~                  | ~~Can validate, cancel, replace, redirect, or modify.~~ Superseded by `OnBefore<T>` trigger fold. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md). |
 | Main resolver            | `CommandHandler`                      | Resolves a game command into state mutations and result.    |
 | Post-result follow-up    | `GameRules`                           | Reads state after command; returns follow-up commands. Replaces inline CommandReaction. |
 | Ordered fact             | `HistoryEntry`                        | One meaningful state or simulation fact.                    |
@@ -903,34 +903,29 @@ Important properties:
 
 ## Shape 11: Effect
 
+> **Status:** The placeholder `Effect.Trigger(context)` described below is superseded. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) for the current design.
+
 Definition:
 
-> An `Effect` is authored behavior attached to a card, ability, relic, rule, or other definition.
+> An `Effect` is an async orchestration layer that sequences multiple `GameAction`s and threads their `CommandResult`s. It is the only layer that can dispatch a series of commands. Defined on or referenced from a card or ability definition.
 
-For now:
+Current shape:
 
-```text
-Effect.Trigger(context)
+```csharp
+public interface IEffect
+{
+    Task Execute(IEffectScope scope);
+}
 ```
 
-or:
-
-```text
-Effect.Execute(context)
-```
-
-It can simply log or dispatch a placeholder command in early simulations.
+Effects call `scope.Dispatch(action)` to execute `GameAction`s inline and in sequence, awaiting each result before continuing. Each dispatched action gets its own envelope. Most effects will be authored as concrete classes or data-driven definitions implementing this interface.
 
 Important properties:
 
-- Authoring/content concept.
-- Not the same as `GameCommand`.
+- Async orchestration — the only layer that sequences commands.
+- Not a `GameAction` — not queued through the engine; invoked by `ExecuteCardCommand` or equivalent.
 - Not the same as `StateMutation`.
-- Deeper design deferred.
-
-Recommendation:
-
-Keep `Effect` simple until action pipeline vocabulary is stable.
+- Sits above `GameAction` handlers in the layer hierarchy.
 
 ## Full Proposed Flow
 
@@ -939,7 +934,7 @@ Keep `Effect` simple until action pipeline vocabulary is stable.
 2. Engine optionally matches PlayerIntent to AvailableAction or DecisionOption.
 3. Engine creates or selects GameCommand (stamped with OriginCommandId and OriginIntent).
 4. Pipeline opens HistoryEnvelope.
-5. CommandPreHooks run.
+5. OnBefore<T> trigger fold runs (replaces CommandPreHooks — see doc 21).
 6. If rejected/cancelled:
      -> create CommandResult
      -> write rejection entry

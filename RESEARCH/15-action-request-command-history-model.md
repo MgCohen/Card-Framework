@@ -281,9 +281,10 @@ HistoryEnvelope
   rootCommand
   result
   entries[]
-  // Note: child commands dispatched inline via scope.DispatchChild fold their
-  // entries into this envelope. Evaluator follow-ups each produce their own
-  // separate envelope sharing the same originCommandId.
+  // Note: the scope.DispatchChild/child-folds-into-envelope model is superseded.
+  // Effects call scope.Dispatch(action); each action gets its own independent envelope.
+  // Evaluator follow-ups each produce their own separate envelope sharing originCommandId.
+  // See 22-async-decisions-and-suspension.md.
 ```
 
 Entries might include:
@@ -367,9 +368,9 @@ The zone does not decide broad legality. It organizes approved content changes.
 - ~~Final names: Intent, Request, Action, Command, GameCommand?~~ **Settled:** `PlayerIntent` for external attempts, `GameCommand` for pipeline commands. See [Action Definition Proposal](17-action-definition-proposal.md).
 - Should possible actions be called `Option`, `ActionOption`, or `AvailableAction`? — still open
 - How are active option lists represented and matched? — partially answered: `IAvailableActionsSnapshot` (doc 20 section 10); shape detail still open
-- ~~How do nested commands produce nested envelopes?~~ — resolved: child commands via `scope.DispatchChild` fold into the current envelope; evaluator follow-ups each get their own envelope sharing `OriginCommandId` (doc 18)
+- ~~How do nested commands produce nested envelopes?~~ — superseded: the `scope.DispatchChild`/child-folds-into-envelope model has been replaced. Effects (the async orchestration layer above handlers) call `scope.Dispatch(action)`; each action gets its own independent envelope. Evaluator follow-ups also each get their own envelope sharing `OriginCommandId`. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
 - ~~When does an envelope close?~~ — resolved: after the handler returns and history is published, before the evaluator is called (doc 18, doc 20)
-- Can pre-hooks mutate state, or only replace/cancel commands? — still open
+- ~~Can pre-hooks mutate state, or only replace/cancel commands?~~ — resolved: the `OnBefore<T>` fold react function returns `FoldResult` (Keep/Cancel/Replace) — no direct state mutation from triggers. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md).
 - ~~Are post-reactions allowed to dispatch immediately or queued?~~ — resolved: there are no inline post-reactions; follow-up commands are returned by the evaluator and enqueued by the engine (doc 20)
 - How do scheduler models affect action flow? — still open; see [06-open-questions.md](06-open-questions.md)
 - How does rollback/rejection communicate to presentation? — still open
