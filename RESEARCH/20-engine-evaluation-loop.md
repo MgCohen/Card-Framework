@@ -29,7 +29,7 @@ The engine does not know what any particular command means or what game is being
 
 The framework's executor. Receives one command, runs pre-hooks, invokes the handler, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](18-action-flow-snippets.md).
 
-### IEngineEvaluator
+### GameRules
 
 The game's rules brain. Called after each command resolves. Reads the current game state (zones, variables, phase) and returns the commands that should run next — if any. Also called when the queue empties.
 
@@ -44,16 +44,28 @@ The loop itself. Holds the queue, calls the pipeline, calls the evaluator, and m
 ```csharp
 public sealed class GameEngine
 {
-    private readonly Queue<GameCommand> pending = new();
+    private readonly Queue<GameAction> pending = new();
     private readonly ICommandPipeline pipeline;
-    private readonly IEngineEvaluator evaluator;
-    private readonly IGameState state;
+    private readonly IGameRules rules;
+    private readonly GameState state;
     private bool running;
 
-    // Single entry point for all sources.
+    // Single entry point for all sources — player input, timers, trigger reactions.
+    // GameRules.OnIncomingCommand decides scheduling before the command is enqueued.
     public void Dispatch(GameCommand command)
     {
-        pending.Enqueue(command);
+        var decision = rules.OnIncomingCommand(command, new SchedulingContext(state));
+        switch (decision)
+        {
+            case SchedulingDecision.RunNext when command is GameAction a:
+                pending.Prepend(a); break;
+            case SchedulingDecision.Enqueue when command is GameAction a:
+                pending.Enqueue(a); break;
+            case SchedulingDecision.Stash:
+                stash.Add(command); break;
+            case SchedulingDecision.Discard:
+                break;
+        }
         if (!running) Drain();
     }
 
@@ -63,18 +75,17 @@ public sealed class GameEngine
 
         while (pending.Count > 0)
         {
-            var command = pending.Dequeue();
-            var result = pipeline.Execute(command);
+            var action = pending.Dequeue();
+            var result = pipeline.Execute(action);
 
-            // Game-specific: given the state after this command,
-            // what commands should run next?
-            var followUps = evaluator.Evaluate(command, result, state);
+            // Game-specific: given the state after this action, what actions run next?
+            var followUps = rules.Evaluate(action, result, state);
             foreach (var next in followUps)
-                pending.Enqueue(next with { OriginCommandId = command.OriginCommandId });
+                pending.Enqueue(next with { OriginCommandId = action.OriginCommandId });
         }
 
         // Queue is empty. Game decides what now.
-        evaluator.OnQueueDrained(this, state);
+        rules.OnQueueDrained(this, state);
         running = false;
     }
 }
@@ -117,14 +128,16 @@ public sealed class TurnTimerService
     }
 }
 
-// A trigger fires (e.g. "at the start of your turn, draw a card")
-public sealed class TriggerSystem
+// A trigger reaction fires — dispatches through the same channel as everything else.
+// GameRules.OnIncomingCommand decides scheduling (RunNext, Enqueue, Stash, Discard).
+// See 21-trigger-reaction-system.md for the full trigger model.
+public sealed class TriggerContext
 {
     private readonly GameEngine engine;
 
-    public void Fire(ITriggeredEffect trigger, ActorId actor)
+    public void Dispatch(GameCommand command)
     {
-        engine.Dispatch(trigger.CreateCommand(actor));
+        engine.Dispatch(command);
     }
 }
 ```
@@ -138,22 +151,28 @@ The evaluator's primary lens is the **current game state**, not which specific c
 If the evaluator matched on command types ("after `PlayCardCommand` → run execute"), it would miss any other way a card could end up in the same zone (an opponent's trigger, a copy effect, a token). State-based evaluation handles all sources the same way.
 
 ```csharp
-public interface IEngineEvaluator
+public interface IGameRules
 {
-    // Called after each command resolves.
-    // Reads current state, returns 0..N commands to enqueue next.
-    IReadOnlyList<GameCommand> Evaluate(
-        GameCommand justExecuted,
+    // Called when any command enters the dispatch channel.
+    // Game decides scheduling: interrupt, queue, stash, or discard.
+    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
+
+    // Called after each GameAction resolves.
+    // Reads current state, returns 0..N actions to enqueue next.
+    IReadOnlyList<GameAction> Evaluate(
+        GameAction justExecuted,
         CommandResult result,
-        IGameState state);
+        GameState state);
 
     // Called when a drain has finished: the work queue is empty.
     // Game decides: wait for input, advance phase, end game, etc.
-    void OnQueueDrained(GameEngine engine, IGameState state);
+    void OnQueueDrained(GameEngine engine, GameState state);
 }
+
+public enum SchedulingDecision { RunNext, Enqueue, Stash, Discard }
 ```
 
-`IGameState` here is the simulation state — zone contents, actor variables, phase info. It is read-only from the evaluator's perspective. The evaluator observes and returns commands; it never mutates state directly.
+`GameState` here is the simulation state — zone contents, actor variables, phase info. It is read-only from the evaluator's perspective. The evaluator observes and returns commands; it never mutates state directly.
 
 ---
 
@@ -162,19 +181,25 @@ public interface IEngineEvaluator
 In this sample game, when a card is played it is moved into a **PlayArea** zone. The rule is: any card sitting in `PlayArea` must be executed. The evaluator does not care that a `PlayCardCommand` just ran — it just checks the zone.
 
 ```csharp
-public sealed class SampleGameEvaluator : IEngineEvaluator
+public sealed class SampleGameRules : IGameRules
 {
-    public IReadOnlyList<GameCommand> Evaluate(
-        GameCommand justExecuted,
+    public SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context)
+    {
+        // Slay the Spire style: triggered reactions run immediately.
+        return SchedulingDecision.Enqueue;
+    }
+
+    public IReadOnlyList<GameAction> Evaluate(
+        GameAction justExecuted,
         CommandResult result,
-        IGameState state)
+        GameState state)
     {
         // State-based check: is there a card in PlayArea waiting to be executed?
         var playArea = state.GetZone(WellKnownZones.PlayArea);
         if (playArea.HasCards)
         {
             var card = playArea.TopCard;
-            return new GameCommand[]
+            return new GameAction[]
             {
                 new ExecuteCardCommand
                 {
@@ -186,10 +211,10 @@ public sealed class SampleGameEvaluator : IEngineEvaluator
             };
         }
 
-        return Array.Empty<GameCommand>();
+        return Array.Empty<GameAction>();
     }
 
-    public void OnQueueDrained(GameEngine engine, IGameState state)
+    public void OnQueueDrained(GameEngine engine, GameState state)
     {
         // Queue is empty and PlayArea is empty.
         // Player still has cards in hand and energy — do nothing; await input.
@@ -253,15 +278,15 @@ The evaluator ran twice: once with a card in the zone (produced `ExecuteCardComm
 The same interface handles priority-based games by adding a state condition before auto-executing:
 
 ```csharp
-public IReadOnlyList<GameCommand> Evaluate(
-    GameCommand justExecuted,
+public IReadOnlyList<GameAction> Evaluate(
+    GameAction justExecuted,
     CommandResult result,
-    IGameState state)
+    GameState state)
 {
     var stack = state.GetZone(WellKnownZones.Stack);
 
     if (!stack.HasCards)
-        return Array.Empty<GameCommand>();
+        return Array.Empty<GameAction>();
 
     // Card is on the stack. Has priority been resolved?
     if (state.PriorityState.BothPlayersPassed)
@@ -273,7 +298,7 @@ public IReadOnlyList<GameCommand> Evaluate(
         return new[] { new GrantPriorityCommand(state.PriorityState.NextToAct) };
 
     // Priority is granted and outstanding. Do nothing — wait for player input.
-    return Array.Empty<GameCommand>();
+    return Array.Empty<GameAction>();
 }
 ```
 
@@ -289,7 +314,7 @@ The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) doe
 | Concern                                           | Where it lives                                    |
 | ------------------------------------------------- | ------------------------------------------------- |
 | Execute one command (pre-hooks, handler, history) | `ICommandPipeline` (existing)                     |
-| Decide what command runs next                     | `IEngineEvaluator` (game-specific)                |
+| Decide what command runs next                     | `GameRules` (game-specific)                |
 | Drive the loop between them                       | `GameEngine` (framework)                          |
 | Submit commands from outside                      | Entry points (RequestGateway, TimerService, etc.) |
 
@@ -328,7 +353,7 @@ The binding between an action and its triggering request can be defined at the *
 The evaluator publishes the snapshot inside `OnQueueDrained`, after the queue empties:
 
 ```csharp
-public void OnQueueDrained(GameEngine engine, IGameState state)
+public void OnQueueDrained(GameEngine engine, GameState state)
 {
     var snapshot = ComputeAvailableActions(state);
     state.PublishAvailableActions(snapshot); // stored as a state artifact; UI and gateway can read it
@@ -368,7 +393,7 @@ public RequestResult Submit(MoveInstanceToZoneRequest request)
 
 - **Command naming:** "GameCommand" covers both player-initiated and automatic commands. A finer split (e.g. `PlayerCommand` vs `SystemCommand`) may be warranted once more command types exist.
 - **Queue ordering:** A simple FIFO queue is shown. Priority queues, interrupt injection, or stack semantics (for MTG-like resolution order) are variations the engine queue shape would need to support.
-- **Evaluator composition:** A single `IEngineEvaluator` implementation is shown. In practice, it may be composed of smaller rule modules (state-based action checks, trigger evaluation, phase rules) rather than one monolithic class.
+- **Evaluator composition:** A single `GameRules` implementation is shown. In practice, it may be composed of smaller rule modules (state-based action checks, trigger evaluation, phase rules) rather than one monolithic class.
 - **Concurrency and re-entry:** The `running` guard serializes dispatch. Networking and async input will require a more explicit contract here.
 
 ---

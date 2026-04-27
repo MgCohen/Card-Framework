@@ -134,15 +134,24 @@ public sealed class CommandPipeline : ICommandPipeline
             OriginIntent = command.OriginIntent  // non-null only on the first command in a chain
         });
 
-        var pre = RunPreHooks(command, envelope);
-        if (pre.Status != PreHookStatus.Continue)
+        var before = triggerSystem.RunBefore(command, context);
+        if (before.IsCancelled)
         {
-            var rejected = CommandResult.Rejected(pre.Reason);
+            var rejected = CommandResult.Rejected(before.Reason);
             envelope.Add(new CommandRejectedEntry(command, rejected));
             return history.CloseAndPublish(envelope, rejected);
         }
 
-        var result = Handle(pre.Command, envelope);
+        if (before.IsReplaced)
+        {
+            history.CloseAndPublish(envelope, CommandResult.Replaced);
+            engine.Dispatch(before.Replacement);
+            return CommandResult.Replaced;
+        }
+
+        var result = Handle(before.Command, envelope);
+
+        triggerSystem.RunAfter(before.Command, result, context);
 
         return history.CloseAndPublish(envelope, result);
     }
@@ -152,9 +161,13 @@ public sealed class CommandPipeline : ICommandPipeline
 Payload:
 
 ```csharp
-public readonly record struct GameCommandId;
+public readonly record struct GameActionId;
 
-public abstract record GameCommand
+// Base for all pipeline-dispatchable types (GameAction, CompositeAction, GameSignal).
+public abstract record GameCommand;
+
+// Executable, modifiable, queued through the engine.
+public abstract record GameAction : GameCommand
 {
     public required ActorId Actor { get; init; }
     public required InstanceId Source { get; init; }
@@ -162,7 +175,7 @@ public abstract record GameCommand
     public PlayerIntent? OriginIntent { get; init; }  // set only on gateway-originated commands; carried by the first envelope for correlation
 }
 
-public sealed record PlayCardCommand : GameCommand
+public sealed record PlayCardCommand : GameAction
 {
     public required ZoneId FromZone { get; init; }
     public required ZoneId PlayZone { get; init; }
@@ -178,36 +191,31 @@ public sealed record PlayCardCommand : GameCommand
 
 // Second step: run definition effect and this game’s post-play moves (e.g. to discard).
 // Created by the evaluator after it sees a card in PlayArea — not by PlayCardHandler or the pipeline.
-public sealed record ExecuteCardCommand : GameCommand
+public sealed record ExecuteCardCommand : GameAction
 {
     public required ZoneId FromPlayZone { get; init; }
     public required ZoneId DiscardZone { get; init; }
 }
 ```
 
-## 5. Pre-Hooks Validate Or Modify
+## 5. Before Triggers Validate Or Modify
 
-Pre-hooks can reject, cancel, replace, or modify the command before state changes.
+`OnBefore<T>` triggers run in sequence before the handler. Each receives the current command and returns the (potentially modified) command. Returning a cancelled marker or a different `GameAction` type stops the fold — the original action does not execute.
+
+Game-rule validation (turn order, legality) registers as before triggers rather than as hardcoded pre-hook classes:
 
 ```csharp
-public sealed class CanPlayCardPreHook : ICommandPreHook<PlayCardCommand>
-{
-    public PreHookResult<PlayCardCommand> Evaluate(PlayCardCommand command, ResolutionScope scope)
-    {
-        if (!scope.Rules.ActorCanAct(command.Actor))
-        {
-            return PreHookResult<PlayCardCommand>.Reject(RejectReason.NotYourTurn);
-        }
+// Registered by the game rules component at startup, not per-instance.
+triggerSystem.OnBefore<PlayCardCommand>(
+    condition: (cmd, ctx) => !ctx.Rules.ActorCanAct(cmd.Actor),
+    react:     (cmd, ctx) => TriggerResult<PlayCardCommand>.Cancel(RejectReason.NotYourTurn));
 
-        if (!scope.Rules.CardCanBePlayed(command.Actor, command.Source))
-        {
-            return PreHookResult<PlayCardCommand>.Reject(RejectReason.CardCannotBePlayed);
-        }
-
-        return PreHookResult<PlayCardCommand>.Continue(command);
-    }
-}
+triggerSystem.OnBefore<PlayCardCommand>(
+    condition: (cmd, ctx) => !ctx.Rules.CardCanBePlayed(cmd.Actor, cmd.Source),
+    react:     (cmd, ctx) => TriggerResult<PlayCardCommand>.Cancel(RejectReason.CardCannotBePlayed));
 ```
+
+Per-instance effects (card abilities that modify or prevent actions) register the same way but with instance-scoped conditions and are unregistered when the instance leaves play. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full trigger model.
 
 ## 6. Play Card Handler (Placement Only)
 
@@ -218,7 +226,7 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 {
     public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
     {
-        scope.Semantic(new CardPlayStartedEvent(
+        scope.Emit(new CardPlayStartedSignal(
             actor: command.Actor,
             card: command.Source,
             fromZone: command.FromZone,
@@ -227,12 +235,12 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
         scope.Apply(new RemoveFromZoneMutation(command.FromZone, command.Source));
         scope.Apply(new InsertIntoZoneMutation(command.PlayZone, command.Source));
 
-        scope.Semantic(new CardMovedEvent(
+        scope.Emit(new CardMovedSignal(
             card: command.Source,
             fromZone: command.FromZone,
             toZone: command.PlayZone));
 
-        scope.Semantic(new PlayCardResolvedEvent(command.Actor, command.Source, command.PlayZone));
+        scope.Emit(new PlayCardResolvedSignal(command.Actor, command.Source, command.PlayZone));
 
         return new PlayCardResult
         {
@@ -247,17 +255,17 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 
 ## 6b. Evaluator: “PlayArea Has A Card” → `ExecuteCardCommand`
 
-After the pipeline returns, the engine calls `IEngineEvaluator.Evaluate`. The evaluator reads the **current game state** — not which command just ran — and returns any follow-up commands to enqueue. This is where game-specific chaining logic lives, not inside the pipeline.
+After the pipeline returns, the engine calls `GameRules.Evaluate`. The evaluator reads the **current game state** — not which command just ran — and returns any follow-up commands to enqueue. This is where game-specific chaining logic lives, not inside the pipeline.
 
 In this sample game the rule is: any card sitting in `PlayArea` must be executed. The evaluator does not match on `PlayCardCommand`; it just checks the zone. Any command that leaves a card in `PlayArea` (a trigger, a copy effect, etc.) produces the same follow-up automatically.
 
 ```csharp
-public sealed class SampleGameEvaluator : IEngineEvaluator
+public sealed class SampleGameEvaluator : GameRules
 {
     public IReadOnlyList<GameCommand> Evaluate(
         GameCommand justExecuted,
         CommandResult result,
-        IGameState state)
+        GameState state)
     {
         // State-based check: is there a card in PlayArea waiting to be executed?
         var playArea = state.GetZone(WellKnownZones.PlayArea);
@@ -279,7 +287,7 @@ public sealed class SampleGameEvaluator : IEngineEvaluator
         return Array.Empty<GameCommand>();
     }
 
-    public void OnQueueDrained(GameEngine engine, IGameState state)
+    public void OnQueueDrained(GameEngine engine, GameState state)
     {
         // Queue is empty and PlayArea is empty.
         // Player still has cards in hand and energy — do nothing; await input.
@@ -348,7 +356,7 @@ public readonly struct EffectContext
 The heal command is rules-level because prevention, modifiers, caps, or triggers may exist later.
 
 ```csharp
-public sealed record HealActorCommand : GameCommand
+public sealed record HealActorCommand : GameAction
 {
     public required ActorId Target { get; init; }
     public required int Amount { get; init; }
@@ -371,7 +379,7 @@ public sealed class HealActorHandler : ICommandHandler<HealActorCommand, HealRes
         var next = Math.Min(current + command.Amount, max);
         var actual = next - current;
 
-        scope.Semantic(new ActorHealedEvent(
+        scope.Emit(new ActorHealedSignal(
             source: command.Source,
             target: command.Target,
             amount: actual));
@@ -527,19 +535,19 @@ public sealed class CardAnimationEnvelopePlayer
         {
             switch (entry)
             {
-                case CardPlayStartedEvent e:
+                case CardPlayStartedSignal e:
                     await visuals.Card(e.Card).Play("play_start");
                     break;
 
-                case CardMovedEvent e:
+                case CardMovedSignal e:
                     await visuals.Card(e.Card).MoveFromTo(e.FromZone, e.ToZone);
                     break;
 
-                case PlayCardResolvedEvent e:
+                case PlayCardResolvedSignal e:
                     await visuals.Card(e.Card).MarkPlacedInPlay();
                     break;
 
-                case ActorHealedEvent e:
+                case ActorHealedSignal e:
                     await visuals.Actor(e.Target).PlayNumberPopup($"+{e.Amount}");
                     break;
 
@@ -580,7 +588,7 @@ Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
       -> Envelope 1 published { OriginCommandId: C1, OriginIntent: MoveInstanceToZone, Result: Success }
-  -> IEngineEvaluator.Evaluate(PlayCardCommand, result, state)
+  -> GameRules.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true
       -> returns [ExecuteCardCommand { Source: C17 }]
   -> Engine threads C1 onto follow-up; enqueues ExecuteCardCommand { OriginCommandId: C1 }
@@ -597,7 +605,7 @@ Engine dequeues ExecuteCardCommand { OriginCommandId: C1 }:
           -> StateMutation: RemoveFromZone(PlayArea, C17)
           -> StateMutation: InsertIntoZone(Discard, C17)
       -> Envelope 2 published { OriginCommandId: C1, OriginIntent: null, Result: Success }
-  -> IEngineEvaluator.Evaluate(ExecuteCardCommand, result, state)
+  -> GameRules.Evaluate(ExecuteCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == false
       -> returns []
 
