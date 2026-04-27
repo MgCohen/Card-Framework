@@ -44,16 +44,28 @@ The loop itself. Holds the queue, calls the pipeline, calls the evaluator, and m
 ```csharp
 public sealed class GameEngine
 {
-    private readonly Queue<GameCommand> pending = new();
+    private readonly Queue<GameAction> pending = new();
     private readonly ICommandPipeline pipeline;
-    private readonly GameRules evaluator;
+    private readonly GameRules rules;
     private readonly GameState state;
     private bool running;
 
-    // Single entry point for all sources.
+    // Single entry point for all sources — player input, timers, trigger reactions.
+    // GameRules.OnIncomingCommand decides scheduling before the command is enqueued.
     public void Dispatch(GameCommand command)
     {
-        pending.Enqueue(command);
+        var decision = rules.OnIncomingCommand(command, new SchedulingContext(state));
+        switch (decision)
+        {
+            case SchedulingDecision.RunNext when command is GameAction a:
+                pending.Prepend(a); break;
+            case SchedulingDecision.Enqueue when command is GameAction a:
+                pending.Enqueue(a); break;
+            case SchedulingDecision.Stash:
+                stash.Add(command); break;
+            case SchedulingDecision.Discard:
+                break;
+        }
         if (!running) Drain();
     }
 
@@ -63,18 +75,17 @@ public sealed class GameEngine
 
         while (pending.Count > 0)
         {
-            var command = pending.Dequeue();
-            var result = pipeline.Execute(command);
+            var action = pending.Dequeue();
+            var result = pipeline.Execute(action);
 
-            // Game-specific: given the state after this command,
-            // what commands should run next?
-            var followUps = evaluator.Evaluate(command, result, state);
+            // Game-specific: given the state after this action, what actions run next?
+            var followUps = rules.Evaluate(action, result, state);
             foreach (var next in followUps)
-                pending.Enqueue(next with { OriginCommandId = command.OriginCommandId });
+                pending.Enqueue(next with { OriginCommandId = action.OriginCommandId });
         }
 
         // Queue is empty. Game decides what now.
-        evaluator.OnQueueDrained(this, state);
+        rules.OnQueueDrained(this, state);
         running = false;
     }
 }
@@ -117,14 +128,16 @@ public sealed class TurnTimerService
     }
 }
 
-// A trigger fires (e.g. "at the start of your turn, draw a card")
-public sealed class TriggerSystem
+// A trigger reaction fires — dispatches through the same channel as everything else.
+// GameRules.OnIncomingCommand decides scheduling (RunNext, Enqueue, Stash, Discard).
+// See 21-trigger-reaction-system.md for the full trigger model.
+public sealed class TriggerContext
 {
     private readonly GameEngine engine;
 
-    public void Fire(ITriggeredEffect trigger, ActorId actor)
+    public void Dispatch(GameCommand command)
     {
-        engine.Dispatch(trigger.CreateCommand(actor));
+        engine.Dispatch(command);
     }
 }
 ```
@@ -140,10 +153,14 @@ If the evaluator matched on command types ("after `PlayCardCommand` → run exec
 ```csharp
 public interface GameRules
 {
-    // Called after each command resolves.
-    // Reads current state, returns 0..N commands to enqueue next.
-    IReadOnlyList<GameCommand> Evaluate(
-        GameCommand justExecuted,
+    // Called when any command enters the dispatch channel.
+    // Game decides scheduling: interrupt, queue, stash, or discard.
+    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
+
+    // Called after each GameAction resolves.
+    // Reads current state, returns 0..N actions to enqueue next.
+    IReadOnlyList<GameAction> Evaluate(
+        GameAction justExecuted,
         CommandResult result,
         GameState state);
 
@@ -151,6 +168,8 @@ public interface GameRules
     // Game decides: wait for input, advance phase, end game, etc.
     void OnQueueDrained(GameEngine engine, GameState state);
 }
+
+public enum SchedulingDecision { RunNext, Enqueue, Stash, Discard }
 ```
 
 `GameState` here is the simulation state — zone contents, actor variables, phase info. It is read-only from the evaluator's perspective. The evaluator observes and returns commands; it never mutates state directly.
@@ -162,10 +181,16 @@ public interface GameRules
 In this sample game, when a card is played it is moved into a **PlayArea** zone. The rule is: any card sitting in `PlayArea` must be executed. The evaluator does not care that a `PlayCardCommand` just ran — it just checks the zone.
 
 ```csharp
-public sealed class SampleGameEvaluator : GameRules
+public sealed class SampleGameRules : GameRules
 {
-    public IReadOnlyList<GameCommand> Evaluate(
-        GameCommand justExecuted,
+    public SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context)
+    {
+        // Slay the Spire style: triggered reactions run immediately.
+        return SchedulingDecision.Enqueue;
+    }
+
+    public IReadOnlyList<GameAction> Evaluate(
+        GameAction justExecuted,
         CommandResult result,
         GameState state)
     {
@@ -174,7 +199,7 @@ public sealed class SampleGameEvaluator : GameRules
         if (playArea.HasCards)
         {
             var card = playArea.TopCard;
-            return new GameCommand[]
+            return new GameAction[]
             {
                 new ExecuteCardCommand
                 {
@@ -186,7 +211,7 @@ public sealed class SampleGameEvaluator : GameRules
             };
         }
 
-        return Array.Empty<GameCommand>();
+        return Array.Empty<GameAction>();
     }
 
     public void OnQueueDrained(GameEngine engine, GameState state)
@@ -253,15 +278,15 @@ The evaluator ran twice: once with a card in the zone (produced `ExecuteCardComm
 The same interface handles priority-based games by adding a state condition before auto-executing:
 
 ```csharp
-public IReadOnlyList<GameCommand> Evaluate(
-    GameCommand justExecuted,
+public IReadOnlyList<GameAction> Evaluate(
+    GameAction justExecuted,
     CommandResult result,
     GameState state)
 {
     var stack = state.GetZone(WellKnownZones.Stack);
 
     if (!stack.HasCards)
-        return Array.Empty<GameCommand>();
+        return Array.Empty<GameAction>();
 
     // Card is on the stack. Has priority been resolved?
     if (state.PriorityState.BothPlayersPassed)
@@ -273,7 +298,7 @@ public IReadOnlyList<GameCommand> Evaluate(
         return new[] { new GrantPriorityCommand(state.PriorityState.NextToAct) };
 
     // Priority is granted and outstanding. Do nothing — wait for player input.
-    return Array.Empty<GameCommand>();
+    return Array.Empty<GameAction>();
 }
 ```
 

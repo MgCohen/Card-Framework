@@ -1,4 +1,4 @@
-# Handler Mutations, Sequential Apply, And Semantic Events
+# Handler Mutations, Sequential Apply, And Game Signals
 
 This document responds to design concerns raised about the patterns in [Action Flow Snippets](18-action-flow-snippets.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Semantic` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
 
@@ -23,10 +23,10 @@ A full “play this card” moment in the *simulation* is often **several game-l
 **What to separate in meaning (not necessarily in thread/syntax):**
 
 
-| Step | Typical `GameCommand` (example names)                          | What it is                                                                                                                                                                                                                                          |
+| Step | Typical `GameAction` (example names)                           | What it is                                                                                                                                                                                                                                          |
 | ---- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1    | `PlayCardCommand` / `MoveInstanceCommand` (game-specific)      | **Placement / rules step**: remove from hand, insert into play area (or whatever this game thinks “played” is). This is the **move** or **play placement** in terms of state.                                                                       |
-| 2+   | `HealActorCommand`, `DealDamageCommand`, `DrawCardsCommand`, … | **Follow-up resolution**: effect execution, stack resolution, or nested “do this because the card said so.” These are **another command** (or a short chain of commands), **triggered** by the first step, not “the same” command doing everything. |
+| 2+   | `HealActorCommand`, `DealDamageCommand`, `DrawCardsAction`, …  | **Follow-up resolution**: effect execution, stack resolution, or nested “do this because the card said so.” These are **another action** (or a short chain), **triggered** by the first step, not “the same” command doing everything.              |
 
 
 **Why that matters for the history model:**
@@ -60,7 +60,7 @@ So:
 
 - **Automatic everything from `InsertIntoZoneMutation` is risky** if the framework guesses the wrong *meaning*.
 - **Automatic `StateChange` from every mutation** is a good default: one implementation path, one place to record `VariableChanged`, `ZoneContentRemoved`, and so on.
-- **Semantic events** can still be *partially* **policy-driven** (for example, “when this zone’s insertion is triggered by a `PlayCard` command, emit `CardMoved` with cause play”)—but that drifts into **command-aware** or **context-aware** code, not pure mutation.
+- **Game signals** can still be *partially* **policy-driven** (for example, “when this zone’s insertion is triggered by a `PlayCard` command, emit `CardMoved` with cause play”)—but that drifts into **command-aware** or **context-aware** code, not pure mutation.
 
 **Takeaway:** Repeating `Semantic` at every `Apply` is not a law of nature; it is a **teaching** snippet. The long-term goal is: **low-level diffs** largely automatic from mutations; **high-level meaning** from **where you still need human intent** (handler, command kind, or a small set of **named operations**).
 
@@ -140,7 +140,7 @@ This is *still* the **same** `GameCommand` and **same** segment; it is *not* a c
 
 ## 5. Composite In Practice: Card Movement In `PlayCardHandler` And `ExecuteCardHandler`
 
-The two prime candidates from the snippet doc share an identical low-level pattern: remove a card from one zone, insert it into another. `PlayCardHandler` also emits a `CardMovedEvent` semantic; `ExecuteCardHandler` silently omits it. Neither is wrong for a teaching snippet, but together they show the cost of not having a named operation: duplicated mutations and inconsistent semantics.
+The two prime candidates from the snippet doc share an identical low-level pattern: remove a card from one zone, insert it into another. `PlayCardHandler` also emits a `CardMovedSignal` semantic; `ExecuteCardHandler` silently omits it. Neither is wrong for a teaching snippet, but together they show the cost of not having a named operation: duplicated mutations and inconsistent semantics.
 
 ### Before — verbose, inconsistent
 
@@ -149,7 +149,7 @@ The two prime candidates from the snippet doc share an identical low-level patte
 // three lines for one logical move, semantic emitted manually
 scope.Apply(new RemoveFromZoneMutation(command.FromZone, command.Source));
 scope.Apply(new InsertIntoZoneMutation(command.PlayZone, command.Source));
-scope.Semantic(new CardMovedEvent(
+scope.Emit(new CardMovedSignal(
     card: command.Source,
     fromZone: command.FromZone,
     toZone: command.PlayZone));
@@ -157,7 +157,7 @@ scope.Semantic(new CardMovedEvent(
 
 **`ExecuteCardHandler`** (move to discard after resolution):
 ```csharp
-// same two mutations, but CardMovedEvent is missing — silent inconsistency
+// same two mutations, but CardMovedSignal is missing — silent inconsistency
 scope.Apply(new RemoveFromZoneMutation(command.FromPlayZone, command.Source));
 scope.Apply(new InsertIntoZoneMutation(command.DiscardZone, command.Source));
 ```
@@ -171,74 +171,72 @@ A scope extension method (`scope.MoveCard(from, to, card)`) would collapse the b
 A `CompositeOperation` is not a `GameCommand` and not a raw mutation. It is a named, self-contained unit of scope-level work: it owns its internal primitives, emits its own semantics, and is routed through the scope so it can be intercepted at both levels — before its primitives run and via the events it emits.
 
 ```csharp
-// Not a GameCommand — no command type, not enqueued by the engine.
-// A named scope-level operation that owns its own primitives and semantics.
-public interface ICompositeOperation
+// Not a GameAction — not enqueued by the engine.
+// A named scope-level unit of work: owns its primitives, emits its own signals,
+// and goes through OnBefore/OnAfter trigger folds via scope.Execute.
+public abstract record CompositeAction : GameCommand
 {
-    void Execute(ResolutionScope scope);
+    public abstract void Execute(ResolutionScope scope);
 }
 ```
 
 ```csharp
-public sealed record MoveCardOperation(
+public sealed record MoveCardComposite(
     ZoneId From,
     ZoneId To,
-    InstanceId Card) : ICompositeOperation
+    InstanceId Card) : CompositeAction
 {
-    public void Execute(ResolutionScope scope)
+    public override void Execute(ResolutionScope scope)
     {
         // Primitives survive as the implementation atoms — full control retained.
         scope.Apply(new RemoveFromZoneMutation(From, Card));
         scope.Apply(new InsertIntoZoneMutation(To, Card));
 
-        // Semantic emitted unconditionally from one place.
-        scope.Semantic(new CardMovedEvent(Card, From, To));
+        // Signal emitted unconditionally from one place.
+        scope.Emit(new CardMovedSignal(Card, From, To));
     }
 }
 ```
 
-The scope routes composite operations rather than calling them directly, which provides the interception seam:
+The scope routes composite actions rather than calling them directly, which provides the trigger seam:
 
 ```csharp
 // ResolutionScope
-public void Execute(ICompositeOperation operation)
+public void Execute(CompositeAction composite)
 {
-    // Pre-hooks run here — before any primitive inside the operation fires.
-    RunCompositePreHooks(operation);
+    // OnBefore triggers run here — before any primitive inside fires.
+    triggerSystem.RunBefore(composite, context);
 
-    operation.Execute(this);
+    composite.Execute(this);
 
-    // Post-hooks or scope-level recording run here if needed.
+    // OnAfter triggers run here — reactions dispatched after primitives complete.
+    triggerSystem.RunAfter(composite, context);
 }
 ```
 
 ### Two levels of reactability
 
-**Event level** — anything that listens for `CardMovedEvent` reacts to the *result* of the operation. This is the right place for trigger effects ("whenever a card moves to the graveyard, draw a card"). Because the event now comes from one place unconditionally, the trigger is reliable regardless of which handler initiated the move.
+**Event level** — anything that listens for `CardMovedSignal` reacts to the *result* of the operation. This is the right place for trigger effects ("whenever a card moves to the graveyard, draw a card"). Because the event now comes from one place unconditionally, the trigger is reliable regardless of which handler initiated the move.
 
 ```csharp
-// A trigger registered on the scope or engine — reacts to what the operation emitted.
+// OnAfter trigger — reacts to the signal emitted by MoveCardComposite.
 // Fires for both PlayCard and ExecuteCard moves without either handler doing anything extra.
-case CardMovedEvent e when e.ToZone == WellKnownZones.Graveyard:
-    scope.DispatchChild(new DrawCardsCommand(actor: e.MovingActor, amount: 1));
-    break;
+triggerSystem.OnAfter<CardMovedSignal>(
+    condition: (sig, ctx) => sig.ToZone == WellKnownZones.Graveyard,
+    react: (sig, ctx) =>
+    {
+        ctx.Dispatch(new DrawCardsAction(actor: sig.MovingActor, amount: 1));
+        return sig;
+    });
 ```
 
-**Operation level** — a pre-hook on the composite itself runs *before* `RemoveFromZone` or `InsertIntoZone` fire. This is the right place for prevention effects ("if a card would move to the graveyard, exile it instead") — the operation can be cancelled or replaced before any state changes.
+**Operation level** — an `OnBefore<MoveCardComposite>` trigger runs *before* `RemoveFromZone` or `InsertIntoZone` fire. This is the right place for prevention effects ("if a card would move to the graveyard, exile it instead") — the composite can be replaced before any state changes.
 
 ```csharp
-// A composite pre-hook — intercepts the operation before its primitives run.
-public sealed class GraveyardReplacementHook : ICompositePreHook<MoveCardOperation>
-{
-    public CompositePreHookResult<MoveCardOperation> Evaluate(MoveCardOperation op, ResolutionScope scope)
-    {
-        if (op.To == WellKnownZones.Graveyard && scope.HasReplacementEffect(op.Card))
-            return CompositePreHookResult<MoveCardOperation>.Replace(
-                op with { To = WellKnownZones.Exile });
-
-        return CompositePreHookResult<MoveCardOperation>.Continue(op);
-    }
-}
+// Registered per-instance by a card ability — intercepts the composite before its primitives run.
+triggerSystem.OnBefore<MoveCardComposite>(
+    condition: (op, ctx) => op.To == WellKnownZones.Graveyard && ctx.HasReplacementEffect(op.Card),
+    react:     (op, ctx) => op with { To = WellKnownZones.Exile });
 ```
 
 ### After — one `Execute` call per move, both handlers consistent
@@ -247,15 +245,15 @@ public sealed class GraveyardReplacementHook : ICompositePreHook<MoveCardOperati
 ```csharp
 public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
 {
-    scope.Semantic(new CardPlayStartedEvent(
+    scope.Emit(new CardPlayStartedSignal(
         actor: command.Actor,
         card: command.Source,
         fromZone: command.FromZone,
         playZone: command.PlayZone));
 
-    scope.Execute(new MoveCardOperation(command.FromZone, command.PlayZone, command.Source));
+    scope.Execute(new MoveCardComposite(command.FromZone, command.PlayZone, command.Source));
 
-    scope.Semantic(new PlayCardResolvedEvent(command.Actor, command.Source, command.PlayZone));
+    scope.Emit(new PlayCardResolvedSignal(command.Actor, command.Source, command.PlayZone));
 
     return new PlayCardResult { Status = CommandStatus.Success, PlayedCard = command.Source };
 }
@@ -273,7 +271,7 @@ public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scop
         sourceInstance: command.Source,
         scope: scope));
 
-    scope.Execute(new MoveCardOperation(command.FromPlayZone, command.DiscardZone, command.Source));
+    scope.Execute(new MoveCardComposite(command.FromPlayZone, command.DiscardZone, command.Source));
 
     return new ExecuteCardResult { Status = CommandStatus.Success, ExecutedInstance = command.Source };
 }
@@ -281,11 +279,11 @@ public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scop
 
 ### What this illustrates
 
-- **Primitives survive.** `RemoveFromZoneMutation` and `InsertIntoZoneMutation` remain the atoms inside `MoveCardOperation.Execute`. The composite is an abstraction over the *pattern*, not over the *mechanism* — you still control every step.
-- **Named, not anonymous.** `MoveCardOperation` has an identity. It appears as a named entry in history, shows up in debug tooling, and can carry metadata (initiating actor, reason) without the call site having to supply it on every `Apply`.
+- **Primitives survive.** `RemoveFromZoneMutation` and `InsertIntoZoneMutation` remain the atoms inside `MoveCardComposite.Execute`. The composite is an abstraction over the *pattern*, not over the *mechanism* — you still control every step.
+- **Named, not anonymous.** `MoveCardComposite` has an identity. It appears as a named entry in history, shows up in debug tooling, and can carry metadata (initiating actor, reason) without the call site having to supply it on every `Apply`.
 - **Two hook levels for two rule types.** Replacement effects (prevent, redirect) hook at the operation level before primitives run. Trigger effects (react to what happened) hook at the event level after. Both are the right model for their respective rule types.
-- **Reusable from anywhere.** Any handler, effect, or child dispatch can `scope.Execute(new MoveCardOperation(...))` and get consistent primitives, consistent semantics, and consistent hook coverage — without knowing or caring how the move is implemented.
-- **Changeable internals, stable call sites.** If a game adds "cards leaving hand trigger loyalty loss" or "zone insertion order matters," that logic goes inside `MoveCardOperation.Execute` or its hooks. Every call site gets the change for free.
+- **Reusable from anywhere.** Any handler, effect, or child dispatch can `scope.Execute(new MoveCardComposite(...))` and get consistent primitives, consistent semantics, and consistent hook coverage — without knowing or caring how the move is implemented.
+- **Changeable internals, stable call sites.** If a game adds "cards leaving hand trigger loyalty loss" or "zone insertion order matters," that logic goes inside `MoveCardComposite.Execute` or its hooks. Every call site gets the change for free.
 
 ## 6. Reducing Fumbling: Scope Helpers, Defaults, And Child Segments (Recap)
 
