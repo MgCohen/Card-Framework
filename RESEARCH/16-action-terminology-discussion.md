@@ -72,7 +72,7 @@ Candidate names:
 - `Request`.
 - `ActionRequest`.
 - `InteractionRequest`.
-- `PlayerRequest`.
+- `PlayerIntent`.
 
 Likely direction:
 

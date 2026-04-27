@@ -96,7 +96,7 @@ public sealed class RequestGateway : IRequestGateway
                 source: request.SourceInstance,
                 fromZone: request.FromZone,
                 playZone: request.ToZone))
-            with { OriginCommandId = commandChainId, OriginRequest = request };
+            with { OriginCommandId = commandChainId, OriginIntent = request };
 
         engine.Dispatch(command);
         return new RequestResult { Status = RequestStatus.Accepted, RequestId = commandChainId };
@@ -131,7 +131,7 @@ public sealed class CommandPipeline : ICommandPipeline
             Actor = command.Actor,
             SourceInstance = command.Source,
             OriginCommandId = command.OriginCommandId,
-            OriginRequest = command.OriginRequest  // non-null only on the first command in a chain
+            OriginIntent = command.OriginIntent  // non-null only on the first command in a chain
         });
 
         var pre = RunPreHooks(command, envelope);
@@ -159,7 +159,7 @@ public abstract record GameCommand
     public required ActorId Actor { get; init; }
     public required InstanceId Source { get; init; }
     public CommandChainId? OriginCommandId { get; init; }
-    public PlayerRequest? OriginRequest { get; init; }  // set only on gateway-originated commands; carried by the first envelope for correlation
+    public PlayerIntent? OriginIntent { get; init; }  // set only on gateway-originated commands; carried by the first envelope for correlation
 }
 
 public sealed record PlayCardCommand : GameCommand
@@ -475,7 +475,7 @@ public sealed record HistoryEnvelope
 }
 ```
 
-Each engine queue step produces its own envelope. `PlayCardCommand` and `ExecuteCardCommand` are separate pipeline executions, so they produce separate envelopes. Both carry the same `OriginCommandId` — the engine threads it from the initial command onto all evaluator follow-ups. Only the first envelope also carries `OriginRequest`, the original player request that started the chain.
+Each engine queue step produces its own envelope. `PlayCardCommand` and `ExecuteCardCommand` are separate pipeline executions, so they produce separate envelopes. Both carry the same `OriginCommandId` — the engine threads it from the initial command onto all evaluator follow-ups. Only the first envelope also carries `OriginIntent`, the original player request that started the chain.
 
 Child commands dispatched inline via `scope.DispatchChild` (e.g. `HealActorCommand` inside `ExecuteCardHandler`) are **not** separate queue steps. Their entries fold into the current envelope, not a new one.
 
@@ -567,7 +567,7 @@ UI drop
   -> RequestGateway.Submit
       -> available action check passes
       -> commandChainId = C1
-      -> engine.Dispatch(PlayCardCommand { OriginCommandId: C1, OriginRequest: MoveInstanceToZoneRequest })
+      -> engine.Dispatch(PlayCardCommand { OriginCommandId: C1, OriginIntent: MoveInstanceToZoneRequest })
       -> return RequestResult { Accepted, RequestId: C1 }   <-- caller gets this immediately
 
 Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
@@ -579,7 +579,7 @@ Engine dequeues PlayCardCommand { OriginCommandId: C1 }:
           -> StateMutation: InsertIntoZone(PlayArea, C17)
           -> Semantic: CardMoved
           -> Semantic: PlayCardResolved
-      -> Envelope 1 published { OriginCommandId: C1, OriginRequest: MoveInstanceToZone, Result: Success }
+      -> Envelope 1 published { OriginCommandId: C1, OriginIntent: MoveInstanceToZone, Result: Success }
   -> IEngineEvaluator.Evaluate(PlayCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == true
       -> returns [ExecuteCardCommand { Source: C17 }]
@@ -596,7 +596,7 @@ Engine dequeues ExecuteCardCommand { OriginCommandId: C1 }:
                   -> StateChange: VariableChanged(P1, "life", 10, 15)
           -> StateMutation: RemoveFromZone(PlayArea, C17)
           -> StateMutation: InsertIntoZone(Discard, C17)
-      -> Envelope 2 published { OriginCommandId: C1, OriginRequest: null, Result: Success }
+      -> Envelope 2 published { OriginCommandId: C1, OriginIntent: null, Result: Success }
   -> IEngineEvaluator.Evaluate(ExecuteCardCommand, result, state)
       -> state.GetZone(PlayArea).HasCards == false
       -> returns []

@@ -933,7 +933,7 @@ Keep `Effect` simple until action pipeline vocabulary is stable.
 ```text
 1. UI / AI / system creates Request.
 2. Engine optionally matches Request to AvailableAction or DecisionOption.
-3. Engine creates or selects GameCommand (stamped with OriginCommandId and OriginRequest).
+3. Engine creates or selects GameCommand (stamped with OriginCommandId and OriginIntent).
 4. Pipeline opens HistoryEnvelope.
 5. CommandPreHooks run.
 6. If rejected/cancelled:
