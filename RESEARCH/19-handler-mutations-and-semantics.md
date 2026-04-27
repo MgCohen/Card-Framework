@@ -138,7 +138,104 @@ This is *still* the **same** `GameCommand` and **same** segment; it is *not* a c
 
 **Takeaway (composite):** The scope **triggers** the composite by `Apply(single move mutation)` or `RelocateInstance(...)`. The **envelope** still gains **separate** segments when you **DispatchChild** for effects, not when you use a compositional *mutation* to tidy up a zone move.
 
-## 5. Reducing Fumbling: Scope Helpers, Defaults, And Child Segments (Recap)
+## 5. Composite In Practice: Card Movement In `PlayCardHandler` And `ExecuteCardHandler`
+
+The two prime candidates from the snippet doc share an identical low-level pattern: remove a card from one zone, insert it into another. `PlayCardHandler` also emits a `CardMovedEvent` semantic; `ExecuteCardHandler` silently omits it. Neither is wrong for a teaching snippet, but together they show the cost of not having a named operation: duplicated mutations and inconsistent semantics.
+
+### Before — verbose, inconsistent
+
+**`PlayCardHandler`** (placement step):
+```csharp
+// three lines for one logical move, semantic emitted manually
+scope.Apply(new RemoveFromZoneMutation(command.FromZone, command.Source));
+scope.Apply(new InsertIntoZoneMutation(command.PlayZone, command.Source));
+scope.Semantic(new CardMovedEvent(
+    card: command.Source,
+    fromZone: command.FromZone,
+    toZone: command.PlayZone));
+```
+
+**`ExecuteCardHandler`** (move to discard after resolution):
+```csharp
+// same two mutations, but CardMovedEvent is missing — silent inconsistency
+scope.Apply(new RemoveFromZoneMutation(command.FromPlayZone, command.Source));
+scope.Apply(new InsertIntoZoneMutation(command.DiscardZone, command.Source));
+```
+
+In both cases the English sentence is the same — "move this card from zone A to zone B" — but the code says it differently every time and forgets the semantic in one of the two places.
+
+### The composite
+
+Building on the `RelocateInstanceMutation` shape from section 4, the scope exposes one named helper. The helper applies the mutation (which the state backend unpacks into remove + insert) and emits one `CardMovedEvent` unconditionally. Any handler that calls it gets consistent semantics for free.
+
+```csharp
+// Scope helper — one method, one Apply, one guaranteed semantic
+public void MoveCard(ZoneId from, ZoneId to, InstanceId card, RelocateOptions? options = null)
+{
+    Apply(new RelocateInstanceMutation(from, to, card, options));
+    Semantic(new CardMovedEvent(card: card, fromZone: from, toZone: to));
+}
+```
+
+`RelocateInstanceMutation` (from section 4, repeated here for reference):
+```csharp
+public sealed record RelocateInstanceMutation(
+    ZoneId From,
+    ZoneId To,
+    InstanceId Instance,
+    RelocateOptions? Options = null) : StateMutation;
+```
+
+The state backend handles the paired remove + insert. The handler never sees an intermediate state where the card exists in neither zone.
+
+### After — one line per move, both handlers consistent
+
+**`PlayCardHandler`**:
+```csharp
+public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
+{
+    scope.Semantic(new CardPlayStartedEvent(
+        actor: command.Actor,
+        card: command.Source,
+        fromZone: command.FromZone,
+        playZone: command.PlayZone));
+
+    scope.MoveCard(command.FromZone, command.PlayZone, command.Source);  // was 3 lines
+
+    scope.Semantic(new PlayCardResolvedEvent(command.Actor, command.Source, command.PlayZone));
+
+    return new PlayCardResult { Status = CommandStatus.Success, PlayedCard = command.Source };
+}
+```
+
+**`ExecuteCardHandler`**:
+```csharp
+public ExecuteCardResult Handle(ExecuteCardCommand command, ResolutionScope scope)
+{
+    var card = scope.GetInstance(command.Source);
+    var definition = scope.GetDefinition(card.DefinitionId);
+
+    definition.Effect.Trigger(new EffectContext(
+        actor: command.Actor,
+        sourceInstance: command.Source,
+        scope: scope));
+
+    scope.MoveCard(command.FromPlayZone, command.DiscardZone, command.Source);  // was 2 lines, now also emits CardMovedEvent
+
+    return new ExecuteCardResult { Status = CommandStatus.Success, ExecutedInstance = command.Source };
+}
+```
+
+### What this illustrates
+
+- **Same mutation path, different zones.** `PlayCard` moves hand → play; `ExecuteCard` moves play → discard. One composite name covers both because the logical intent is identical.
+- **Semantic consistency closes silently.** The `CardMovedEvent` that `ExecuteCardHandler` was missing is now emitted automatically. The UI animation subscriber that listens for `CardMovedEvent` will correctly see both movements without any handler remembering to emit it.
+- **Handler reads like rules.** Both handlers now read as a sequence of meaningful steps (`CardPlayStarted → MoveCard → PlayCardResolved`) rather than four lines of mutation bookkeeping.
+- **Options escape hatch.** If a specific move needs non-default zone placement (e.g. insert at a specific index for a game that cares about stack order), `RelocateOptions` carries that without changing the call site shape.
+
+This is the pattern from section 4 made concrete. The composite does not add engine complexity; it is a named wrapper on an `Apply` that the handler would have called anyway.
+
+## 6. Reducing Fumbling: Scope Helpers, Defaults, And Child Segments (Recap)
 
 To avoid the “remove then insert twice, type four events” feel without losing clarity:
 
@@ -148,13 +245,13 @@ To avoid the “remove then insert twice, type four events” feel without losin
 
 **Takeaway:** The [snippet doc](18-action-flow-snippets.md) is **verbose on purpose** to show each layer. Productivity is **composites** + **child dispatches** with **shaped** envelopes—not one flat list pretending one `GameCommand` did the move and the heal as the same *kind* of action.
 
-## 6. How This Stays Aligned With Earlier Decisions
+## 7. How This Stays Aligned With Earlier Decisions
 
 - **Determinism and multiplayer:** The boundary remains **game commands** (and, if needed, **aggregated** history for clients). Composites and helpers do not change the boundary; they **package** the same state transitions with less boilerplate.
 - **Zones and legality:** Zone **organization** still applies *after* the command is allowed; compositing moves does not move “who validates legality” into the zone; it is still **game/action rules** before `Apply` (see [Zone Model](12-zone-model.md)).
 - **Batched history for UI:** Whether you record **one** `Relocate` fact or **two** `ZoneContent` facts is an **envelope design** choice; animation can subscribe to **semantics** and/or **deltas** (see [Action Flow Decisions](14-action-flow-decisions.md)).
 
-## 7. Open Choices (To Decide In Implementation, Not In Research)
+## 8. Open Choices (To Decide In Implementation, Not In Research)
 
 - **Granularity of `StateChange` in history:** finest grain vs composite rows for replay and net sync.
 - **Whether `Semantic` is always explicit for “meaningful” events** vs **inferred** from a small catalog of `NamedGameOperation` types.
@@ -162,7 +259,7 @@ To avoid the “remove then insert twice, type four events” feel without losin
 
 These are tuning knobs, not a refutation of the pipeline shape.
 
-## 8. Short Answers To The Original Worries
+## 9. Short Answers To The Original Worries
 
 1. **“We remove then insert hoping the first worked.”** — In a single `Handle` on a `ResolutionScope`, ordered `Apply` is normal. Make failures **loud** or **transactional**; use **composites** if intermediate states are invalid for your game.
 2. **“We have to `Semantic` everywhere we `Apply` for zones.”** — No long-term. Prefer **auto `StateChange*`*, and **composites or defaults** for common `CardMoved` semantics; reserve manual `Semantic` for **meanings the engine cannot infer** from raw data alone.

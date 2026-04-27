@@ -50,7 +50,7 @@
 | 2 | **`GameState` contract** | Write what `GameRules` can and cannot see; read-only boundary |
 | 3 | **Redesign pre-hook → trigger/reaction system** | Replace `CommandPreHook` placeholder with a proper model |
 | 4 | **Refine `GameRules` / engine shape** | Identify missing hooks beyond `Evaluate` and `OnQueueDrained` |
-| 5 | **Leverage doc 19 composite actions** | Show scope utilities in at least one handler |
+| ~~5~~ | ~~**Leverage doc 19 composite actions**~~ | Done. New section 5 in doc 19: `MoveCard` composite with before/after for `PlayCardHandler` and `ExecuteCardHandler`. |
 | 6 | **Rules and scheduling research** | Replacement/prevention effects, simultaneous events, continuous effects, async input suspension |
 | 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type |
 | 8 | **Expand available actions system** | Flesh out shape, lifecycle, and interaction with `IntentMapper`; cover non-trivial filtering cases |
