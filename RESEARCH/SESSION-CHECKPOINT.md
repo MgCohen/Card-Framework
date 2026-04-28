@@ -79,7 +79,7 @@
 |------|-----|
 | [27-presentation-loop.md](27-presentation-loop.md) | UI loop end-to-end; snapshot-in-state; `AffordanceMap`; four validation layers; `DrainResult` — **most recent** |
 | [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) | Pile Counter sample game spec — used as the working reference |
-| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface — needs amendment per doc 27 (handler.Validate, DrainResult, four rejection paths) |
+| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface — aligned with docs 26/27: `IntakeContext` with live queue, `OnIncomingCommand` flow-only, `OnQueueDrained` returns `DrainResult`, four rejection paths, "zero game-affecting state" locked |
 | [24-continuous-ongoing-effects.md](24-continuous-ongoing-effects.md) | Attachment entity model, turn signals, cleanup |
 | [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) | `ITriggerPipeline`, `FilterTriggers`, replacement/prevention, priority, async |
 | [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) | Layer hierarchy, two dispatch paths, async model |
