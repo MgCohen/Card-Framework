@@ -2,33 +2,36 @@
 
 **Purpose:** One short, **replaceable** handoff for the *next* session. Full reasoning stays in the numbered research files; this file is **only** "where we are, what to read, what to do next." Update or overwrite it when a research milestone ends. Do not duplicate the whole glossary here.
 
-**Last updated:** 2026-04-27 (session 5)
+**Last updated:** 2026-04-28 (session 6)
 
 ---
 
 ## Where We Stopped
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
-- **Doc 23 written and amended** — replacement and prevention effects. `ITriggerPipeline` interface introduced (async). `GameRules.FilterTriggers` defined. Priority (`int priority`, lower first). Simultaneous events: sequential only; true simultaneity is explicitly off the table.
+- **Doc 25 written** — `GameRules` interface locked: four sync observer methods (`OnIncomingCommand`, `FilterTriggers`, `Evaluate`, `OnQueueDrained`). Three rejection paths canonicalized (AvailableActions / Intake Discard / Before-fold Cancel). Anti-scope and composition pattern explicit. Closes checkpoint item #4.
 - **Doc 24 written** — continuous and ongoing effects. Attachment entity model: create, subscribe to turn/game signals, tick via variables, self-destruct, framework Cleanup on destruction auto-unsubscribes.
+- **Doc 23 written and amended** — replacement and prevention effects. `ITriggerPipeline` interface introduced (async). `GameRules.FilterTriggers` defined. Priority (`int priority`, lower first). Simultaneous events: sequential only; true simultaneity is explicitly off the table.
 - **Full cross-document audit completed** — inconsistencies and stale content identified and fixed across docs 09, 13, 15, 16, 17.
 - **Docs 18 and 19 snippet-fixed** — all stale code in both documents updated to match current design: async `IEffect.Execute(IEffectScope)`, async `CommandPipeline.Execute`, `ITriggerPipeline.RunBefore/RunAfter` with `FilterTriggers` + `available` list, `IEffectScope` replacing `EffectContext`, `scope.Dispatch` producing sibling envelopes replacing `scope.DispatchChild`, `ResolutionScope` no longer has `DispatchChild`. Status notes removed from both docs.
 
 ### Key decisions settled this session
 
-- **Three before-fold outcomes:** modification, cancellation, substitution — all via `FoldResult` discriminated union (`Keep`, `Cancel`, `Replace`).
-- **`ITriggerPipeline` async:** `RunBefore`/`RunAfter` return `Task`; `CommandPipeline.Execute` is `async Task<CommandResult>`. Default impl completes synchronously.
-- **Priority on registration:** `int priority = 0`; lower runs first; stable sort. Swappable via custom `ITriggerPipeline`.
-- **`IEffectScope` is the Effect's dispatch handle:** `Task<CommandResult> Dispatch(GameAction action)` — immediate inline execution, own sibling envelope, not folded into calling handler's envelope.
-- **`scope.DispatchChild` removed.** Effects call `scope.Dispatch`; sibling envelopes share `OriginCommandId`.
-- **Replacement-of-replacements is free.** Fold evaluates each trigger's condition against the *current* command after prior transforms. No loop detection needed.
-- **Attachments are entities.** Anything with variables is an entity; ongoing effects = attachment entities subscribing to `GameSignal`s.
+- **`GameRules` is a sync, observer-only decision layer.** Four methods, no `Task`, no state mutation. The only state-change path is returning/dispatching a `GameAction`.
+- **Three rejection paths canonical:** AvailableActions (gateway, pre-dispatch, `PlayerIntent` only) / Intake `Discard` (`OnIncomingCommand`, any `GameCommand`) / Before-fold `Cancel` (`OnBefore<T>` trigger). Earliest path with enough info wins.
+- **`OnIncomingCommand` is universal intake.** Every dispatched command — player, timer, trigger reaction, internal — passes through it. `SchedulingKind`: `RunNext` | `Enqueue` | `Stash` | `Discard`.
+- **`Evaluate` is state-based, not type-switched.** Reading from `GameState`; `justExecuted`/`result` are for logging/tie-breaking only. Switch-on-action-type is a smell.
+- **`OnQueueDrained` is the only method that holds `GameEngine`.** Other three take state + arguments only. Drain re-enters if the hook dispatches.
+- **MTG-strict SBA ordering is a known semantic difference.** Framework runs after-triggers before `Evaluate`; MTG-strict games encode SBAs inside `Evaluate` or accept the timing.
 
 ### Still open
 
 - **`GameState` contract** — read-only boundary for `GameRules` and trigger `Context`. Blocked on canonical state decision.
-- **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions.
-- **`GameRules` hook completeness** — verify no missing engine seams before implementation.
+- **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions. Depends on game lifecycle (#12).
+- **`SchedulingContext.Pending` shape** — snapshot vs. live view vs. count. Resolve at engine implementation.
+- **`SchedulingDecision.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
+- **`AvailableActionsSnapshot` ownership** — `GameRules` publishing method vs. state artifact written in `OnQueueDrained`. Pin during #8.
+- **`CompositeGameRules` helper** — design when first composed-rules game needs it.
 
 ---
 
@@ -39,19 +42,20 @@
 | ~~1~~ | ~~**Terminology review**~~ | Done. |
 | 2 | **`GameState` contract** | Blocked on canonical state (being resolved elsewhere). |
 | ~~3~~ | ~~**Redesign pre-hook → trigger/reaction system**~~ | Done. Doc 21. |
-| 4 | **Refine `GameRules` / engine shape** | Verify no missing hooks; evaluator composition. |
+| ~~4~~ | ~~**Refine `GameRules` / engine shape**~~ | Done. Doc 25. Interface locked; rejection paths canonical; anti-scope explicit. |
 | ~~5~~ | ~~**Leverage doc 19 composite actions**~~ | Done. |
 | ~~6a~~ | ~~**Replacement/prevention effects**~~ | Done. Doc 23. |
 | ~~6b~~ | ~~**Simultaneous events**~~ | Done. Sequential in defined order; true simultaneity off the table. |
 | ~~6c~~ | ~~**Continuous / ongoing effects**~~ | Done. Doc 24. |
-| 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type |
-| 8 | **Expand available actions system** | Shape, lifecycle, interaction with `IntentMapper` |
+| 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type. Pull after #12 / #8 land. |
+| 8 | **Expand available actions system** | Shape, lifecycle, interaction with `IntentMapper`. Also pins `AvailableActionsSnapshot` ownership (open from doc 25). |
 | 9 | **Revisit `StateChange` and state overall** | Blocked on canonical state. |
 | ~~10~~ | ~~**Revisit `SemanticEvent` and scope actions**~~ | Done. |
 | ~~11~~ | ~~**Align docs 18–20 with new naming + fix stale snippets**~~ | Done. Audit + snippet fixes in docs 18, 19. |
-| 12 | **Game lifecycle design** | Session start, turn structure, phase transitions, end conditions — prerequisite for subscription lifecycle |
+| 12 | **Game lifecycle design** | Session start, turn structure, phase transitions, end conditions — prerequisite for trigger subscription lifecycle. Best unblocked task next; feeds `OnQueueDrained` use cases and the `PLANS/` slice. |
 | ~~13~~ | ~~**Trigger ordering / priority weight on registration**~~ | Done. `int priority = 0`; lower first; stable sort. (doc 23) |
 | ~~14~~ | ~~**`ITriggerPipeline` async**~~ | Done. `RunBefore`/`RunAfter` return `Task`. (doc 23) |
+| 15 | **MTG-strict SBA ordering** | Decide whether to add a pre-after-fold evaluator hook or document the workaround. Defer until a game needs it. (doc 25 §5) |
 
 ---
 
@@ -59,7 +63,8 @@
 
 | File | Why |
 |------|-----|
-| [24-continuous-ongoing-effects.md](24-continuous-ongoing-effects.md) | Attachment entity model, turn signals, cleanup — most recent doc |
+| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface, four methods, three rejection paths, anti-scope — most recent doc |
+| [24-continuous-ongoing-effects.md](24-continuous-ongoing-effects.md) | Attachment entity model, turn signals, cleanup |
 | [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) | `ITriggerPipeline`, `FilterTriggers`, replacement/prevention, priority, async |
 | [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) | Layer hierarchy, two dispatch paths, async model |
 | [21-trigger-reaction-system.md](21-trigger-reaction-system.md) | Trigger fold, subscription, OnBefore/OnAfter |
