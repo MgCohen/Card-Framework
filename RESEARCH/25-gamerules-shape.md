@@ -41,8 +41,12 @@ It is **not** a place for action handlers, ability logic, state mutation, or asy
 ```csharp
 public interface GameRules
 {
-    // 1. Intake. Decides scheduling for every dispatched command, regardless of source.
-    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
+    // 1. Intake. Rule decides what to do with the command via the scheduler.
+    //    Returns a minimal result so the engine knows accept vs. reject.
+    IntakeResult OnIncomingCommand(
+        GameCommand        command,
+        SchedulingContext  context,
+        ICommandScheduler  scheduler);
 
     // 2. Trigger availability. Filters registered candidates for a given command and phase.
     IReadOnlyList<TriggerMatch> FilterTriggers(
@@ -65,22 +69,30 @@ public interface GameRules
 ### Contract guarantees
 
 - **All four methods are synchronous.** No `Task`, no awaits. `GameRules` is a pure decision layer; async work belongs to handlers, effects, and `ITriggerPipeline`.
-- **All four methods are observers.** They read `GameState` and return decisions. They never mutate state directly. The only way `GameRules` causes a state change is by returning a `GameAction` (from `Evaluate`) or dispatching one (from `OnQueueDrained`).
-- **No method holds onto its arguments.** `GameState`, `Context`, and `TriggerMatch` lists are valid only for the call. Caching them across calls is undefined.
+- **Three of the four methods are observers; intake is a controller.** `FilterTriggers`, `Evaluate`, and `OnQueueDrained` only read `GameState`. `OnIncomingCommand` is given an `ICommandScheduler` because scheduling is its primary action — see §3.
+- **`GameRules` never mutates `GameState` directly.** The only state-change paths are dispatching a `GameAction` (from `Evaluate` or `OnQueueDrained`) or routing one (via `ICommandScheduler` in `OnIncomingCommand`).
+- **`GameRules` may hold its own internal state** — rule modules, cached evaluators, lookup tables, stash buffers (see §3). Just not *game* state.
+- **No method holds onto its arguments.** `GameState`, `Context`, `TriggerMatch` lists, and the `ICommandScheduler` handle are valid only for the call. Caching them across calls is undefined.
 - **Methods may be called concurrently from different drain cycles only if the engine guarantees it.** Today the engine serializes drain cycles, so `GameRules` does not need to be thread-safe.
 
 ---
 
-## 3. `OnIncomingCommand` — Intake Scheduling
+## 3. `OnIncomingCommand` — Intake
 
-Called once for every command entering the dispatch channel, from any source: player input, timer, trigger reaction, internal follow-up, network. It runs *before* the command is enqueued.
+Called once for every command entering the dispatch channel, from any source: player input, timer, trigger reaction, internal follow-up, network. It runs *before* the command is on the queue. The rule does whatever it wants via `ICommandScheduler` (or its own internal state) and returns a minimal `IntakeResult` so the engine knows whether the command was accepted.
 
 ```csharp
-public sealed record SchedulingDecision(
-    SchedulingKind Kind,
-    string?        Reason);   // populated only for Discard
+public sealed record IntakeResult(bool Accepted, string? Reason = null)
+{
+    public static readonly IntakeResult Ok = new(true);
+    public static IntakeResult Reject(string reason) => new(false, reason);
+}
 
-public enum SchedulingKind { RunNext, Enqueue, Stash, Discard }
+public interface ICommandScheduler
+{
+    void Enqueue(GameCommand command);    // append to back of queue
+    void PushFront(GameCommand command);  // place at front; runs before anything pending
+}
 
 public sealed record SchedulingContext(
     GameState                       State,
@@ -91,29 +103,36 @@ public sealed record SchedulingContext(
 public enum DispatchOrigin { PlayerIntent, TriggerReaction, Timer, Internal }
 ```
 
-### When to use which kind
+### Why a handle instead of an enum return
 
-| Kind | Meaning | Typical use |
-|---|---|---|
-| `RunNext` | Push to front of queue; runs before anything else pending | MTG instant-speed reactions, "quickdraw" mechanics |
-| `Enqueue` | Append to queue (default) | Slay the Spire reactions, timers |
-| `Stash` | Hold outside the queue; release later via game-specific mechanism | MTG triggers waiting for priority resolution |
-| `Discard` | Drop the command; populate `Reason` for UI surfacing | Phase-violation, illegal-from-source, stale intent |
+An earlier draft had the rule return a `SchedulingDecision` with kinds `RunNext | Enqueue | Stash | Discard`. That locked games to four behaviors and forced the framework to own a stash collection it didn't know how to release. Passing `ICommandScheduler` and letting the rule call whatever it needs is more flexible, and makes "stash" a non-feature: a rule that wants stashing just keeps an internal list and re-`Enqueue`s on whatever signal it cares about. The framework provides no stash primitive.
+
+### How to express common behaviors
+
+| Behavior | How the rule implements it |
+|---|---|
+| Append to queue (default) | `scheduler.Enqueue(command); return IntakeResult.Ok;` |
+| Run before pending (instant-speed) | `scheduler.PushFront(command); return IntakeResult.Ok;` |
+| Stash for later | Rule keeps `command` in its own collection; subscribes to whatever `GameSignal` should release it; calls `scheduler.Enqueue(...)` from that handler. Returns `IntakeResult.Ok` from intake. |
+| Reject | Don't touch the scheduler. Return `IntakeResult.Reject("phase locked")`. |
+| Custom routing (priority queue, per-actor queue, group-by-source, etc.) | Rule maintains its own data structure and pushes to `scheduler.Enqueue` / `PushFront` whenever the rule decides the next item is ready. |
+
+The engine treats `Accepted = true` as "the rule took ownership" — whether the command is now on the queue, in the rule's stash, or routed somewhere else is opaque. `Accepted = false` means "drop this command and surface `Reason` to the gateway/UI."
 
 ### `Reason` payload
 
-`Reason` is a free-form string, populated only when `Kind == Discard`. The gateway / UI layer is responsible for formatting it for the player. The engine itself does not inspect or display it.
+`Reason` is a free-form string, populated only when `Accepted == false`. The gateway / UI layer is responsible for formatting it for the player. The engine itself does not inspect or display it.
 
 > **Open:** Whether `Reason` should be a structured enum (`PhaseLocked`, `NotYourTurn`, `IllegalAfterReplacement`, …) versus free-form text. Free-form is simpler and less coupling; structured allows localization. Defer until a real game forces the choice.
 
-### Discard vs. before-fold Cancel vs. AvailableActions reject
+### Reject vs. before-fold Cancel vs. AvailableActions reject
 
 Three rejection paths exist. They are not redundant — they fire at different points:
 
 | Path | Where it runs | Sees | Use it for |
 |---|---|---|---|
 | **AvailableActions** (gateway) | Before any dispatch | `PlayerIntent` only | Player-facing legality the UI also surfaces |
-| **`OnIncomingCommand` Discard** | At intake, before enqueue | Any `GameCommand` from any source | Phase violations, source-agnostic rejection, stale follow-ups |
+| **`OnIncomingCommand` Reject** | At intake, before queue | Any `GameCommand` from any source | Phase violations, source-agnostic rejection, stale follow-ups |
 | **Before-fold `Cancel`** | Inside the pipeline | The fully constructed `GameAction` mid-execution | Damage-prevention shields, ability-counter effects |
 
 Rule of thumb: prefer the earliest path that has the information needed. If the gateway can know, reject there; if the rule requires post-dispatch state, use intake; if the rule is itself a card effect, use the before-fold.
@@ -213,7 +232,7 @@ This table is the canonical reference for command rejection across the framework
 | Need | Path | Method | Sees |
 |---|---|---|---|
 | "Don't let the player attempt this in UI" | AvailableActions | `OnQueueDrained` publishes snapshot; gateway reads it | `PlayerIntent`, `GameState` |
-| "Reject this regardless of source" | Intake | `OnIncomingCommand` returns `Discard` | Any `GameCommand`, `SchedulingContext` |
+| "Reject this regardless of source" | Intake | `OnIncomingCommand` returns `IntakeResult.Reject(reason)` | Any `GameCommand`, `SchedulingContext` |
 | "Cancel this mid-execution based on a card effect" | Before-fold | `OnBefore<T>` trigger returns `FoldResult.Cancel` | The constructed `GameAction`, ability `Context` |
 
 Rule of thumb: **the earliest path with enough information wins.** Pushing a check upstream means more legibility, fewer wasted dispatches, and clearer UI.
@@ -254,7 +273,7 @@ public sealed class CompositeGameRules : GameRules
         => modules.SelectMany(m => m.Evaluate(action, result, state)).ToList();
 
     // FilterTriggers chains each module's filter
-    // OnIncomingCommand returns the first non-default decision
+    // OnIncomingCommand walks modules; first one that calls the scheduler or rejects wins
     // OnQueueDrained calls each module in order
 }
 ```
@@ -267,7 +286,8 @@ This is a future authoring helper; the framework ships only the single `GameRule
 
 - **`GameState` contract** — read-only boundary `GameRules` operates against. Blocked on canonical state decision (doc 06).
 - **`SchedulingContext.Pending` shape** — whether it's a snapshot, a live view, or just a count. Depends on engine-internal queue type. Resolve when implementing.
-- **`SchedulingDecision.Reason`** — free-form string vs. structured enum. Defer until a real game forces the choice.
+- **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces the choice.
+- **Intake telemetry** — engine sees only `Accepted`/`Rejected`; "the rule stashed" vs. "the rule enqueued" vs. "the rule routed to its own queue" is opaque. Whether the engine should be able to observe scheduler calls (for replay/logging) is open. Resolve when implementing.
 - **`AvailableActionsSnapshot`** — currently described in [doc 20 §10](20-engine-evaluation-loop.md). Whether it formally lives on `GameRules` (publishing method) or stays a state artifact written in `OnQueueDrained` is a presentation choice; current convention is the latter.
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing).
 - **`CompositeGameRules` helper** — design when the first composed-rules game needs it.

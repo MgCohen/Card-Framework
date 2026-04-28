@@ -9,7 +9,7 @@
 ## Where We Stopped
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
-- **Doc 25 written** — `GameRules` interface locked: four sync observer methods (`OnIncomingCommand`, `FilterTriggers`, `Evaluate`, `OnQueueDrained`). Three rejection paths canonicalized (AvailableActions / Intake Discard / Before-fold Cancel). Anti-scope and composition pattern explicit. Closes checkpoint item #4.
+- **Doc 25 written + revised** — `GameRules` interface locked: four sync methods (`OnIncomingCommand`, `FilterTriggers`, `Evaluate`, `OnQueueDrained`). §3 reworked: dropped `SchedulingDecision`/`SchedulingKind` enum in favor of an `ICommandScheduler` handle + minimal `IntakeResult(Accepted, Reason?)`. Three rejection paths canonicalized (AvailableActions / Intake Reject / Before-fold Cancel). Anti-scope and composition pattern explicit. Closes checkpoint item #4.
 - **Doc 24 written** — continuous and ongoing effects. Attachment entity model: create, subscribe to turn/game signals, tick via variables, self-destruct, framework Cleanup on destruction auto-unsubscribes.
 - **Doc 23 written and amended** — replacement and prevention effects. `ITriggerPipeline` interface introduced (async). `GameRules.FilterTriggers` defined. Priority (`int priority`, lower first). Simultaneous events: sequential only; true simultaneity is explicitly off the table.
 - **Full cross-document audit completed** — inconsistencies and stale content identified and fixed across docs 09, 13, 15, 16, 17.
@@ -17,9 +17,10 @@
 
 ### Key decisions settled this session
 
-- **`GameRules` is a sync, observer-only decision layer.** Four methods, no `Task`, no state mutation. The only state-change path is returning/dispatching a `GameAction`.
-- **Three rejection paths canonical:** AvailableActions (gateway, pre-dispatch, `PlayerIntent` only) / Intake `Discard` (`OnIncomingCommand`, any `GameCommand`) / Before-fold `Cancel` (`OnBefore<T>` trigger). Earliest path with enough info wins.
-- **`OnIncomingCommand` is universal intake.** Every dispatched command — player, timer, trigger reaction, internal — passes through it. `SchedulingKind`: `RunNext` | `Enqueue` | `Stash` | `Discard`.
+- **`GameRules` is a sync decision layer; only intake is a controller.** `FilterTriggers`/`Evaluate`/`OnQueueDrained` are observers. `OnIncomingCommand` is given an `ICommandScheduler` because scheduling is its primary action. None of the methods mutate `GameState`.
+- **`GameRules` may hold internal state** — rule modules, caches, stash buffers. Just not *game* state.
+- **Three rejection paths canonical:** AvailableActions (gateway, pre-dispatch, `PlayerIntent` only) / Intake `Reject` (`OnIncomingCommand` returns `IntakeResult.Reject(reason)`) / Before-fold `Cancel` (`OnBefore<T>` trigger). Earliest path with enough info wins.
+- **`OnIncomingCommand` is universal intake.** Every dispatched command — player, timer, trigger reaction, internal — passes through it. Rule calls `scheduler.Enqueue` / `scheduler.PushFront`, stashes internally, or rejects. No fixed enum of behaviors; framework provides no stash primitive.
 - **`Evaluate` is state-based, not type-switched.** Reading from `GameState`; `justExecuted`/`result` are for logging/tie-breaking only. Switch-on-action-type is a smell.
 - **`OnQueueDrained` is the only method that holds `GameEngine`.** Other three take state + arguments only. Drain re-enters if the hook dispatches.
 - **MTG-strict SBA ordering is a known semantic difference.** Framework runs after-triggers before `Evaluate`; MTG-strict games encode SBAs inside `Evaluate` or accept the timing.
@@ -29,7 +30,8 @@
 - **`GameState` contract** — read-only boundary for `GameRules` and trigger `Context`. Blocked on canonical state decision.
 - **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions. Depends on game lifecycle (#12).
 - **`SchedulingContext.Pending` shape** — snapshot vs. live view vs. count. Resolve at engine implementation.
-- **`SchedulingDecision.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
+- **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
+- **Intake telemetry** — engine sees only `Accepted`/`Rejected`; whether it should observe scheduler calls (for replay/logging) is open.
 - **`AvailableActionsSnapshot` ownership** — `GameRules` publishing method vs. state artifact written in `OnQueueDrained`. Pin during #8.
 - **`CompositeGameRules` helper** — design when first composed-rules game needs it.
 
