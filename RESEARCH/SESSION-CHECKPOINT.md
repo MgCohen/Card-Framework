@@ -9,6 +9,8 @@
 ## Where We Stopped
 
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
+- **Doc 27 written** — presentation/UI loop end-to-end. Resolved `AvailableActionsSnapshot` ownership: lives in `GameState.AvailableActions: IReadOnlyList<GameCommand>`. `AffordanceMap` is the game-specific UI projection (built from the snapshot). Validation has four layers: AffordanceMap (prophylactic) / IntentMapper (well-formedness) / `handler.Validate` (authoritative) / `rule.OnIncomingCommand` (engine flow). `OnQueueDrained` returns a `DrainResult { Snapshot, Dispatch }` rather than dispatching directly — supersedes doc 25 §6.
+- **Doc 26 written** — Pile Counter reference sample game. Deliberately the floor: 12 cards, 4 piles, one move action, no triggers, no async, state-based win check. Used as the working reference for sketching framework pieces.
 - **Doc 25 written + revised** — `GameRules` interface locked: four sync methods (`OnIncomingCommand`, `FilterTriggers`, `Evaluate`, `OnQueueDrained`). §3 reworked: dropped `SchedulingDecision`/`SchedulingKind` enum in favor of an `ICommandScheduler` handle + minimal `IntakeResult(Accepted, Reason?)`. Three rejection paths canonicalized (AvailableActions / Intake Reject / Before-fold Cancel). Anti-scope and composition pattern explicit. Closes checkpoint item #4.
 - **Doc 24 written** — continuous and ongoing effects. Attachment entity model: create, subscribe to turn/game signals, tick via variables, self-destruct, framework Cleanup on destruction auto-unsubscribes.
 - **Doc 23 written and amended** — replacement and prevention effects. `ITriggerPipeline` interface introduced (async). `GameRules.FilterTriggers` defined. Priority (`int priority`, lower first). Simultaneous events: sequential only; true simultaneity is explicitly off the table.
@@ -17,22 +19,30 @@
 
 ### Key decisions settled this session
 
-- **`GameRules` is a sync decision layer; only intake is a controller.** `FilterTriggers`/`Evaluate`/`OnQueueDrained` are observers. `OnIncomingCommand` is given an `ICommandScheduler` because scheduling is its primary action. None of the methods mutate `GameState`.
-- **`GameRules` may hold internal state** — rule modules, caches, stash buffers. Just not *game* state.
-- **Three rejection paths canonical:** AvailableActions (gateway, pre-dispatch, `PlayerIntent` only) / Intake `Reject` (`OnIncomingCommand` returns `IntakeResult.Reject(reason)`) / Before-fold `Cancel` (`OnBefore<T>` trigger). Earliest path with enough info wins.
-- **`OnIncomingCommand` is universal intake.** Every dispatched command — player, timer, trigger reaction, internal — passes through it. Rule calls `scheduler.Enqueue` / `scheduler.PushFront`, stashes internally, or rejects. No fixed enum of behaviors; framework provides no stash primitive.
-- **`Evaluate` is state-based, not type-switched.** Reading from `GameState`; `justExecuted`/`result` are for logging/tie-breaking only. Switch-on-action-type is a smell.
-- **`OnQueueDrained` is the only method that holds `GameEngine`.** Other three take state + arguments only. Drain re-enters if the hook dispatches.
+- **`GameRules` is a sync decision layer.** None of the methods mutate `GameState` directly. Three are pure observers; intake (`OnIncomingCommand`) is the only one with side-effecting authority (queue/stash routing).
+- **`GameRules` holds zero game-affecting state.** Locked as contract: rule may hold *config* (modules, caches, lookup tables), never gameplay memory. Anything game-affecting (e.g., Pile Counter's `LastMove`) lives in `GameState`.
+- **`OnIncomingCommand` is purely flow.** Pause/ended gating + scheduling routing only. Never reads command body. Command-specific legality lives in `handler.Validate`.
+- **Validation moved from rule to handler.** `ICommandHandler<T,R>.Validate(cmd, state, out reason) → bool`. Pipeline runs validate before intake routing; `OnQueueDrained` snapshot builder calls validate per candidate.
+- **Generic primitive + rule-enforced constraint pattern.** Framework ships generic verbs (`MoveCardCommand` not `MoveTopCardCommand`); games layer constraints in `Validate`.
+- **Player input layer:** `PlayerIntent` (UI) → `IIntentMapper` (game-specific) → `GameCommand` (engine). Three layers explicit.
+- **Snapshot lives in state.** `GameState.AvailableActions: IReadOnlyList<GameCommand>` — canonical, generic, framework-defined. Game-specific `AffordanceMap` is a UI-side projection.
+- **`OnQueueDrained` returns `DrainResult { Snapshot, Dispatch }`** rather than dispatching directly. Keeps the rule purely observer-shaped (returns data, never side-effects). Supersedes doc 25 §6.
+- **Four rejection paths now:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect cancellation).
+- **State pattern:** GameState is immutable, redux-like, likely Scaffold State package. State mutators react to commands (e.g., `LastMoveMutator` updates `state.LastMove` whenever `MoveCardCommand` resolves).
 - **MTG-strict SBA ordering is a known semantic difference.** Framework runs after-triggers before `Evaluate`; MTG-strict games encode SBAs inside `Evaluate` or accept the timing.
 
 ### Still open
 
-- **`GameState` contract** — read-only boundary for `GameRules` and trigger `Context`. Blocked on canonical state decision.
+- **`GameState` contract** — read-only boundary for `GameRules` and trigger `Context`. Blocked on canonical state decision (likely Scaffold State).
+- **Stateless vs stateful rule.** Even with "no game state" locked, the question of whether the rule receives `GameState` as a parameter on every method (including `OnIncomingCommand`) or holds a reference is open. Drives `IntakeContext` shape. Deferred.
+- **Action pipeline cleanup.** Need a dedicated doc explicit about: handler lookup, validate, execute, trigger folds. Currently scattered across docs 18/19/22/25. Deferred.
+- **`EndGameCommand` semantics.** What does the engine do when it resolves? Bleeds into session lifecycle (#12). Deferred.
+- **`AvailableActions` mutator** — likely framework-shipped since the snapshot type is canonical. Pin during implementation.
 - **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions. Depends on game lifecycle (#12).
-- **`SchedulingContext.Pending` shape** — snapshot vs. live view vs. count. Resolve at engine implementation.
+- **`IntakeContext.Pending` shape** — currently sketched as `LinkedList<GameCommand>` (live, manipulable). Confirm at engine implementation.
 - **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
-- **Intake telemetry** — engine sees only `Accepted`/`Rejected`; whether it should observe scheduler calls (for replay/logging) is open.
-- **`AvailableActionsSnapshot` ownership** — `GameRules` publishing method vs. state artifact written in `OnQueueDrained`. Pin during #8.
+- **Re-validation at dequeue** — validate at intake plus a second time before handler runs (state may have changed). Implementation detail; OK as double-validate for now.
+- **`FilterTriggers` default impl** — identity for trigger-less games. Likely abstract base class with virtuals rather than pure interface. Will revisit at final rule shape.
 - **`CompositeGameRules` helper** — design when first composed-rules game needs it.
 
 ---
@@ -50,7 +60,9 @@
 | ~~6b~~ | ~~**Simultaneous events**~~ | Done. Sequential in defined order; true simultaneity off the table. |
 | ~~6c~~ | ~~**Continuous / ongoing effects**~~ | Done. Doc 24. |
 | 7 | **Write `PLANS/` doc** | Minimal implementation slice: engine + pipeline + `GameRules` + one card type. Pull after #12 / #8 land. |
-| 8 | **Expand available actions system** | Shape, lifecycle, interaction with `IntentMapper`. Also pins `AvailableActionsSnapshot` ownership (open from doc 25). |
+| ~~8~~ | ~~**Expand available actions system**~~ | Done. Doc 27. Snapshot in state; `AffordanceMap` UI projection; four-layer validation; `OnQueueDrained` returns `DrainResult`. |
+| 16 | **Action pipeline cleanup** | Dedicated doc: explicit handler lookup, validate, execute, trigger folds. Currently scattered across docs 18/19/22/25. |
+| 17 | **State pattern decision** | Stateless vs stateful rule re: how `OnIncomingCommand` receives `GameState`. Drives `IntakeContext` shape. |
 | 9 | **Revisit `StateChange` and state overall** | Blocked on canonical state. |
 | ~~10~~ | ~~**Revisit `SemanticEvent` and scope actions**~~ | Done. |
 | ~~11~~ | ~~**Align docs 18–20 with new naming + fix stale snippets**~~ | Done. Audit + snippet fixes in docs 18, 19. |
@@ -65,7 +77,9 @@
 
 | File | Why |
 |------|-----|
-| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface, four methods, three rejection paths, anti-scope — most recent doc |
+| [27-presentation-loop.md](27-presentation-loop.md) | UI loop end-to-end; snapshot-in-state; `AffordanceMap`; four validation layers; `DrainResult` — **most recent** |
+| [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) | Pile Counter sample game spec — used as the working reference |
+| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface — needs amendment per doc 27 (handler.Validate, DrainResult, four rejection paths) |
 | [24-continuous-ongoing-effects.md](24-continuous-ongoing-effects.md) | Attachment entity model, turn signals, cleanup |
 | [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) | `ITriggerPipeline`, `FilterTriggers`, replacement/prevention, priority, async |
 | [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) | Layer hierarchy, two dispatch paths, async model |
