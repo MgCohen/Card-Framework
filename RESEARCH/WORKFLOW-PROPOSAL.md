@@ -16,22 +16,23 @@ tags: [#workflow, #meta]
 
 ## 1. Folder layout
 
-Three tiers:
+Four tiers at the root:
 
-- **Root** — operational, live, "what's happening right now." Minimal.
+- **Operational** — live "what's happening right now" files (`README.md`, `SESSION-CHECKPOINT.md`). Minimal.
 - **`general/`** — cross-cutting, durable reference and conventions. The shared vocabulary the topics depend on.
-- **Topic folders** — one per system, each self-contained with its own notes, decisions, and local numbering.
+- **`topics/`** — one folder per system/feature, each self-contained with its own notes, decisions, and local numbering.
+- **Supporting** — `samples/`, `prior-art/`, `sessions/`.
 
 ```
 RESEARCH/
-  README.md                # index — points to general/ and topics
-  SESSION-CHECKPOINT.md    # replaceable spine — live operational state
+  README.md                  # index — points to general/ and topics/
+  SESSION-CHECKPOINT.md      # replaceable spine — live operational state
 
-  general/                 # cross-cutting / general-purpose
-    WORKFLOW.md            # this doc, once accepted
-    GLOSSARY.md            # canonical vocabulary (was 09)
-    OPEN-QUESTIONS.md      # canonical ledger (was 06)
-    ALIGNMENT-DEBT.md      # open §7 implications across all topics
+  general/                   # cross-cutting / general-purpose
+    WORKFLOW.md              # this doc, once accepted
+    GLOSSARY.md              # canonical vocabulary (was 09)
+    OPEN-QUESTIONS.md        # canonical ledger (was 06)
+    ALIGNMENT-DEBT.md        # open §7 implications across all topics
     _templates/
       discussion.md
       proposal.md
@@ -40,55 +41,56 @@ RESEARCH/
       adr.md
       session.md
 
-  foundations/             # 00, 01, 02, 03, 05, 07
-    notes/
-    decisions/
-  entities/                # 08, 10
-    notes/
-    decisions/
-  zones/                   # 11, 12
-    notes/
-    decisions/
-  actions/                 # 13, 14, 15, 16, 17, 18, 19, 20
-    notes/
-    decisions/
-  triggers/                # trigger system (subfeature of effects, but big enough to own a topic)
-    notes/
-    decisions/
-  effects/                 # effects, async orchestration, ongoing/continuous effects
-    notes/
-    decisions/
-  engine/                  # 25
-    notes/
-    decisions/
-  presentation/            # 27, 28
-    notes/
-    decisions/
+  topics/                    # all per-feature research
+    foundations/             # 00, 01, 02, 03, 05, 07
+      notes/
+      decisions/
+    entities/                # 08, 10
+      notes/
+      decisions/
+    zones/                   # 11, 12
+      notes/
+      decisions/
+    actions/                 # 13, 14, 15, 16, 17, 18, 19, 20
+      notes/
+      decisions/
+    triggers/                # trigger system (subfeature of effects, but big enough to own a topic)
+      notes/
+      decisions/
+    effects/                 # effects, async orchestration, ongoing/continuous effects
+      notes/
+      decisions/
+    engine/                  # 25
+      notes/
+      decisions/
+    presentation/            # 27, 28
+      notes/
+      decisions/
 
-  samples/                 # whole-system stress tests (was 26)
-  prior-art/               # frozen reference (was Old Docs/)
-  sessions/                # one short file per session
+  samples/                   # whole-system stress tests (was 26)
+  prior-art/                 # frozen reference (was Old Docs/)
+  sessions/                  # one short file per session
 
-DOCS/                      # durable, implementation-ready docs (gated)
-PLANS/                     # implementation slices (gated)
+DOCS/                        # durable, implementation-ready docs (gated)
+PLANS/                       # implementation slices (gated)
   _TEMPLATE.md
 ```
 
 ### Numbering
 
-**Per-topic counters.** Each topic's `notes/` and `decisions/` restart at `01`. Filenames look like `actions/notes/03-action-definition-proposal.md` and `actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
+**Per-topic counters.** Each topic's `notes/` and `decisions/` restart at `01`. Filenames look like `topics/actions/notes/03-action-definition-proposal.md` and `topics/actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
 
 **Sessions** stay globally monotonic (`sessions/session-01.md`, `session-02.md`, …). Sessions are the chronological spine — they cross topics by nature.
 
-**Cross-references.** Use the path: `actions/notes/03` or just `actions/03` as shorthand. Old "doc N" references get rewritten in the migration.
+**Cross-references.** Use the path: `topics/actions/notes/03` or just `topics/actions/03` as shorthand. The `topics/` prefix is non-negotiable in references — keeps grep precise and globs clean.
 
 ### Where cross-cutting docs live
 
-When a doc spans multiple systems (e.g., `16-action-terminology-discussion` touches naming hygiene broadly): it lives in the topic that triggered it (here, `actions/`) and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references (glossary, open questions, alignment debt, workflow) live in `general/`.
+When a doc spans multiple systems (e.g., a terminology discussion touching naming hygiene broadly): it lives in the topic that triggered it and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references (glossary, open questions, alignment debt, workflow) live in `general/`.
 
 ### Topic names are project-specific
 
-The folder names shown above (`foundations/`, `entities/`, `zones/`, `actions/`, `triggers/`, `effects/`, `engine/`, `presentation/`) are *this* project's topics. Another project applying this workflow picks its own topics — one folder per major feature/system, sized so a topic can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates topic-first organization, not these specific names.
+The folder names shown above (`foundations/`, `entities/`, `zones/`, `actions/`, `triggers/`, `effects/`, `engine/`, `presentation/`) are *this* project's topics. Another project applying this workflow picks its own topics — one folder per major feature/system, sized so a topic can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`topics/<name>/notes/`, `topics/<name>/decisions/`), not these specific names.
 
 A rule of thumb: if a topic folder has fewer than ~3 docs after several sessions, it might belong as a tag inside a sibling. If it grows past ~15 docs without natural sub-clusters, consider splitting.
 
@@ -98,11 +100,11 @@ A rule of thumb: if a topic folder has fewer than ~3 docs after several sessions
 
 | Type | Purpose | Lives in | Status values |
 |------|---------|----------|---------------|
-| **Discussion** | Frame a contested problem; list candidates; **do not decide** | `<topic>/notes/` | `discussion`, `closed` |
-| **Proposal / Decision** | Commit a position with rationale and implications | `<topic>/notes/` | `proposed`, `settled`, `superseded` |
-| **Model** | Durable description of a system | `<topic>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
-| **Sample Game** | Concrete game projected onto framework — floor or ceiling | `samples/` | `draft`, `locked` |
-| **ADR** | One atomic decision per file | `<topic>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
+| **Discussion** | Frame a contested problem; list candidates; **do not decide** | `topics/<topic>/notes/` | `discussion`, `closed` |
+| **Proposal / Decision** | Commit a position with rationale and implications | `topics/<topic>/notes/` | `proposed`, `settled`, `superseded` |
+| **Model** | Durable description of a system | `topics/<topic>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
+| **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `samples/` | `draft`, `locked` |
+| **ADR** | One atomic decision per file | `topics/<topic>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
 | **Checkpoint** | Replaceable handoff for next session | `RESEARCH/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
@@ -293,7 +295,7 @@ Two parts, each capped at ~one screen (~50 lines). If either overflows, the cont
 One line.
 
 ### Work done
-- doc <topic>/notes/NN written
+- doc topics/<topic>/notes/NN written
 - alignment debt opened on docs X/Y/Z
 - ADR-NNNN landed
 
@@ -418,7 +420,7 @@ Promotion is a deliberate move, not a default.
 | `general/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
 | `general/ALIGNMENT-DEBT.md` | Open §7 implications across all topics | Append on doc landing; tick off on alignment pass |
 | `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
-| `<topic>/decisions/NNNN-*.md` | ADRs (per-topic counter) | When a decision settles |
+| `topics/<topic>/decisions/NNNN-*.md` | ADRs (per-topic counter) | When a decision settles |
 
 ### Three lifetimes, three homes for questions
 
@@ -441,14 +443,14 @@ Promotion is a deliberate move, not a default.
 | Flat `RESEARCH/` with 28 chronologically numbered docs | Topic folders + `general/` + minimal root |
 | Docs invent their own shape | Doc-type templates + front matter |
 | No status on docs | `status:` in front matter |
-| Mega "decisions" docs (08, 11, 14) | ADRs in `<topic>/decisions/`; mega-docs become indexes |
+| Mega "decisions" docs (08, 11, 14) | ADRs in `topics/<topic>/decisions/`; mega-docs become indexes |
 | Checkpoint and `06-open-questions` overlap | Checkpoint links to `general/OPEN-QUESTIONS.md`; no duplication |
 | Alignment debt implicit across §7 sections | Explicit `general/ALIGNMENT-DEBT.md` |
 | Sessions visible only via PR titles | `sessions/` log |
 | Glossary updated silently | Glossary has a changelog |
 | Old Docs/ as prior-art folder | Rename to `prior-art/` (cosmetic) |
 | Sample games inline (doc 26) | `samples/` folder, room for a second floor |
-| Cross-references say "doc 28" | Cross-references use paths: `actions/15` |
+| Cross-references say "doc 28" | Cross-references use paths: `topics/actions/15` |
 
 ---
 
@@ -461,10 +463,9 @@ Resolved in this draft:
 - ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
 - ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own topic.
 - ~~Sample `locked` bar~~ → Four-part bar in §4.4: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
+- ~~Topics nesting layout~~ → Topic folders nest under `topics/`. Cleaner globs, more deterministic structure for AI tooling, clearer top-level separation. ~7 extra characters per cross-reference is the only cost.
 
-Still open (workflow design only — migration logistics are a separate concern):
-
-1. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
+No open questions remain on the workflow design. Migration logistics (when, how, ADR backfill scope, etc.) are a separate concern to be planned once the target workflow is locked.
 
 ---
 
