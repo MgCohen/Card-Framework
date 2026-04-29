@@ -50,26 +50,33 @@ RESEARCH/
       checkpoint.md
       plan.md
 
-  features/                  # all per-system design work
+  features/                  # all per-system design work; each feature has a root <feature>.md
     entities/
+      entities.md            # feature root — top-level summary, indexes Models + ADRs
       notes/
       decisions/
     zones/
+      zones.md
       notes/
       decisions/
     actions/
+      actions.md
       notes/
       decisions/
     triggers/                # subfeature of effects, big enough to own a folder
+      triggers.md
       notes/
       decisions/
     effects/
+      effects.md
       notes/
       decisions/
     engine/
+      engine.md
       notes/
       decisions/
     presentation/
+      presentation.md
       notes/
       decisions/
 
@@ -85,6 +92,8 @@ RESEARCH/
 ### Numbering
 
 **Per-feature counters.** Each feature's `notes/` and `decisions/` restart at `01`. Filenames look like `features/actions/notes/03-action-definition.md` and `features/actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
+
+**Feature roots** use the feature name (no counter): `features/engine/engine.md`. One per feature folder. Sits at the top, summarizes what's beneath. See §4.2.
 
 **Sessions** stay globally monotonic (`sessions/session-01.md`, `session-02.md`, …). Sessions are the chronological spine — they cross features by nature.
 
@@ -109,7 +118,8 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | Type | Purpose | Lives in | Status values |
 |------|---------|----------|---------------|
 | **Spike** | Time-boxed investigation; pre-design exploration | `spikes/` | `active`, `concluded`, `graduated`, `archived` |
-| **Model** | Durable description of a system, with decision provenance baked in | `features/<feature>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
+| **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
+| **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
 | **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
@@ -128,7 +138,7 @@ Every doc starts with:
 
 ```yaml
 ---
-type: spike | model | sample | adr | session | checkpoint | plan
+type: spike | feature | model | sample | adr | session | checkpoint | plan
 status: <one of the type's status values>
 last-updated: 2026-04-29
 builds-on: [features/actions/03, features/triggers/02]    # optional, paths
@@ -171,7 +181,50 @@ One paragraph. If graduated, include a forward link to the Model / ADR it inform
 
 **Status transitions.** When a spike informs subsequent work, set its status to `graduated` and add a forward link to the Model / ADR it informed. The spike doc stays put — preserves the trail. `concluded` means findings recorded with no immediate follow-up. `archived` means it didn't go anywhere; kept for future reference.
 
-### 4.2 Model
+### 4.2 Feature
+
+A **Feature** doc is the root description of a feature folder. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. It's the source of truth that Models, ADRs, and spikes underneath it support — and the artifact that promotes to `DOCS/` once stable.
+
+A feature root lives at `features/<feature>/<feature>.md` (e.g., `features/engine/engine.md`). One per feature folder. No counter; the name matches the folder.
+
+**Feature vs. Model.** A Feature is the *container* — its scope is the whole feature. A Model is a *sub-system* within the feature (engine has Models for the evaluation loop, the GameRules contract, the snapshot pipeline). The Feature doc summarizes composition and public surface; the Models carry the design content.
+
+```markdown
+# <feature> — feature
+
+<front matter: type=feature, status=draft>
+
+## Purpose
+What this feature is and why it exists. One paragraph.
+
+## Boundaries
+What this feature owns — and what it explicitly doesn't. Demarcation against neighboring features.
+
+## Composition
+Models that make up this feature.
+- features/<feature>/notes/01-<slug> — short purpose
+- features/<feature>/notes/02-<slug> — short purpose
+
+## Public surface
+What a consumer of this feature sees. Contracts, services, types — the outer boundary that other features touch.
+
+## Dependencies
+- **Upstream:** features/X — consumed
+- **Downstream:** features/Y — consumes this
+
+## Settled decisions
+Pointers to load-bearing ADRs in this feature's `decisions/`.
+
+## Open
+Pointers to `general/OPEN-QUESTIONS.md` items relevant to this feature.
+
+## Implications for prior docs (§7)
+- Models within this feature whose framing this doc affects.
+```
+
+A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature is `settled` and clears the §5.6 promotion gate, it (along with its Models) graduates to `DOCS/`.
+
+### 4.3 Model
 
 The unified design artifact. Top half describes the system; bottom half records the provenance (options weighed, rationale, consequences). A reader gets the model first; clicks down for the "why."
 
@@ -222,7 +275,7 @@ Linked: features/<feature>/decisions/NNNN-<title>.md
 
 A purely descriptive Model (e.g., a system that doesn't have meaningful alternatives) can omit the provenance sections entirely. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look.
 
-### 4.3 Sample
+### 4.4 Sample
 
 A **sample** is a concrete reference instance projected onto the abstractions being designed. It exists to stress-test the design against real cases — a floor (simplest case the design must support) or a ceiling (complex case that bounds expressiveness).
 
@@ -263,7 +316,7 @@ Ambiguous bits, unresolved projections.
 
 After locking, design changes that affect the sample create an explicit `general/ALIGNMENT-DEBT.md` entry naming the locked sample. Resolving the entry is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
 
-### 4.4 ADR
+### 4.5 ADR
 
 ```markdown
 # ADR-NNNN — <title>
@@ -291,7 +344,7 @@ One paragraph.
 - Reverts/replaces: ADR-NNNN
 ```
 
-### 4.5 Session note
+### 4.6 Session note
 
 Two parts, each capped at ~one screen (~50 lines). If either overflows, the content belongs in a numbered doc or an ADR, not the session note.
 
@@ -333,7 +386,7 @@ One line — what the next session opens with.
 - Related sessions: ...
 ```
 
-### 4.6 Checkpoint
+### 4.7 Checkpoint
 
 Keep the current shape; add a rule.
 
@@ -352,7 +405,7 @@ Keep the current shape; add a rule.
 ## Artifacts to read on resume
 ```
 
-### 4.7 Plan
+### 4.8 Plan
 
 ```markdown
 # Plan: <slice name>
@@ -380,6 +433,21 @@ Per session / per week / etc.
 ## 5. Global workflow
 
 A session is a **branching unit**, not a linear one. It opens with an entry context, spawns sub-problems, sketches, and questions as work surfaces them, and lands somewhere. Doc types are tools you reach for mid-flight as branches demand them — not categories you commit to up front.
+
+### 5.0 Bootstrapping a project
+
+Once-per-project phase before §5.1 applies. Output is a working `RESEARCH/` skeleton with enough orientation to start session 02 with a real question.
+
+1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop templates into `general/_templates/`. Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/GLOSSARY.md` (with empty changelog).
+2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
+3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
+4. **Write `general/CAPABILITY-MAP.md`.** What systems will need to exist to deliver the vision? This justifies the feature list from step 3.
+5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
+6. **Seed `general/OPEN-QUESTIONS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
+7. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
+8. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
+
+A bootstrap session usually fits in one sitting. If it sprawls, the project is too big or the vision isn't clear yet — pause and split.
 
 ### 5.1 Starting a session
 
@@ -429,6 +497,8 @@ A research doc can be promoted to `DOCS/` when **all** are true:
 - Referenced by an active `PLANS/` doc **or** an implementation in `Assets/`.
 - Stable for ≥ 2 sessions with no edits to the contract.
 
+**Feature roots are the typical promotion target.** When a Feature passes the gate, it goes to `DOCS/` along with the Models it indexes (which travel with it as supporting material). Models can promote independently if the Feature root isn't ready but the Model is stable on its own — but the default path is feature-shaped, not model-shaped.
+
 Promotion is a deliberate move, not a default.
 
 ---
@@ -443,6 +513,7 @@ Promotion is a deliberate move, not a default.
 | `general/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
 | `general/ALIGNMENT-DEBT.md` | Open §7 implications across all features | Append on doc landing; tick off on alignment pass |
 | `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
+| `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
 | `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
@@ -487,10 +558,10 @@ Resolved in this draft:
 - ~~Numbering scheme inside notes~~ → Per-feature counters, restart at `01` per feature.
 - ~~ADR numbering scheme~~ → Per-feature counters in each `features/<feature>/decisions/`. Path is the prefix.
 - ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
-- ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.5.
-- ~~Doc-type count~~ → 7 types (down from 9). Discussion folded into Model's "Options considered" section; Proposal merged into Model. The unified Model artifact carries both descriptive content (top) and decision provenance (bottom, below divider).
+- ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
+- ~~Doc-type count~~ → 8 types. Original spike→model→ADR was extended with **Feature** (root summary per feature, source of truth that promotes to DOCS/) once it became clear Models alone left no canonical home for the feature itself. Discussion folded into Model's "Options considered" section; Proposal merged into Model. The unified Model artifact carries both descriptive content (top) and decision provenance (bottom, below divider).
 - ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own folder.
-- ~~Sample `locked` bar~~ → Four-part bar in §4.3: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
+- ~~Sample `locked` bar~~ → Four-part bar in §4.4: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
 - ~~Topics-vs-features naming~~ → `features/`, product-dev framing.
 - ~~Topics nesting layout~~ → Feature folders nest under `features/`. Cleaner globs, more deterministic structure for AI tooling, clearer top-level separation.
 - ~~Foundations placement~~ → Folded into `general/` as project-orientation files (`VISION`, `SCOPE`, `ARCHITECTURE`, `ROADMAP`, etc.). Reference-shaped, not feature-design-shaped.

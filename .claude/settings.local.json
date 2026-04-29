@@ -12,7 +12,9 @@
       "WebFetch(domain:hearthsim.info)",
       "WebFetch(domain:wingedsheep.com)",
       "Bash(git checkout *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(mkdir -p \"C:/Unity/Card Framework/Workflow\")",
+      "Bash(git mv *)"
     ]
   }
 }
