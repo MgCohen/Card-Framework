@@ -8,18 +8,18 @@ tags: [#actions, #snapshot, #availability]
 
 # Action Availability and Mapping — The Snapshot Shape
 
-This document defines the shape of the available-actions snapshot and the mapping from a player's choice back into a resolved `GameCommand`. It supersedes [doc 27 §5](27-presentation-loop.md) (snapshot element type) and reshapes parts of §4, §6, §9, §10, §11, §12 — the changes are summarised in [§7](#7-implications-across-existing-docs) below.
+This document defines the shape of the available-actions snapshot and the mapping from a player's choice back into a resolved `GameCommand`. It supersedes [doc 27 §5](features/presentation/notes/01-presentation-loop.md) (snapshot element type) and reshapes parts of §4, §6, §9, §10, §11, §12 — the changes are summarised in [§7](#7-implications-across-existing-docs) below.
 
-[Doc 29](29-snapshot-production-pipeline.md) further refines this doc: the generic `ActionAvailability` record is replaced by typed `ActionTemplate` subtypes per command type, and the eager-vs-lazy discussion in [§6](#6-where-eligibility-lives) is replaced by an "on-demand by the rule" posture. Refinements are noted inline.
+[Doc 29](features/engine/notes/03-snapshot-pipeline.md) further refines this doc: the generic `ActionAvailability` record is replaced by typed `ActionTemplate` subtypes per command type, and the eager-vs-lazy discussion in [§6](#6-where-eligibility-lives) is replaced by an "on-demand by the rule" posture. Refinements are noted inline.
 
-The shape was sketched against Pile Counter (the floor) and a Hearthstone-like scenario (the ceiling for what this shape natively expresses), with prior-art reference to the [Kettle protocol](https://github.com/HearthSim/kettle-design/wiki/6.-Player-Simulator-interaction) used by [SabberStone](Old%20Docs/SabberStone-Architecture-Analysis.md%20%281%29) and [Fireplace](Old%20Docs/Fireplace-Architecture-Analysis.md%20%281%29).
+The shape was sketched against Pile Counter (the floor) and a Hearthstone-like scenario (the ceiling for what this shape natively expresses), with prior-art reference to the [Kettle protocol](https://github.com/HearthSim/kettle-design/wiki/6.-Player-Simulator-interaction) used by [SabberStone](spikes/sabberstone-architecture.md) and [Fireplace](spikes/fireplace-architecture.md).
 
 Builds on:
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` contract
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game; degenerate projection of this shape
-- [27-presentation-loop.md](27-presentation-loop.md) — presentation loop; introduced the `AvailableActions` slot
-- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — typed templates, service-driven publication, on-demand validation
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` contract
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; degenerate projection of this shape
+- [features/presentation/notes/01-presentation-loop.md](features/presentation/notes/01-presentation-loop.md) — presentation loop; introduced the `AvailableActions` slot
+- [features/engine/notes/03-snapshot-pipeline.md](features/engine/notes/03-snapshot-pipeline.md) — typed templates, service-driven publication, on-demand validation
 
 ---
 
@@ -40,7 +40,7 @@ Hearthstone's solution is the Kettle **OptionsBlock**: a hierarchy of `Option �
 
 ## 2. The Shape
 
-> **Refined by [doc 29 §3](29-snapshot-production-pipeline.md):** the single generic `ActionAvailability` record is replaced by **typed `ActionTemplate` subtypes per command type**, with a shared abstract base. `Id: ActionId` becomes `Type CommandType` (the command's type, used directly as the discriminator). The building blocks below (`TargetSlot`, `ModeOption`, `ParameterSpec`) remain valid as fields on subtypes that need them.
+> **Refined by [doc 29 §3](features/engine/notes/03-snapshot-pipeline.md):** the single generic `ActionAvailability` record is replaced by **typed `ActionTemplate` subtypes per command type**, with a shared abstract base. `Id: ActionId` becomes `Type CommandType` (the command's type, used directly as the discriminator). The building blocks below (`TargetSlot`, `ModeOption`, `ParameterSpec`) remain valid as fields on subtypes that need them.
 
 The base + a couple of subtype examples:
 
@@ -84,7 +84,7 @@ public sealed record Subset<T>(string Name, IReadOnlyList<T> Pool, int Min, int 
 | `CommandType` | Which command to construct — the registered command `Type`. Replaces the parallel `ActionId` registry |
 | `Source` | Entity acting (the card cast, the minion attacking). Nullable for sourceless actions like `EndTurn` |
 
-Per-subtype fields express the action's shape directly: `Destinations: IReadOnlyList<EntityId>` for a move, `Targets + Modes + XCost` for a spell, etc. Targets are uniformly `EntityId` lists ([doc 10's instance/entity model](10-entity-definition-instance-model.md)) — whether the entity is a card, slot, player, or zone is a per-action concern.
+Per-subtype fields express the action's shape directly: `Destinations: IReadOnlyList<EntityId>` for a move, `Targets + Modes + XCost` for a spell, etc. Targets are uniformly `EntityId` lists ([doc 10's instance/entity model](features/entities/notes/01-definition-instance-model.md)) — whether the entity is a card, slot, player, or zone is a per-action concern.
 
 The template is the spec. `GameCommand` remains the resolved dispatch. The two are bridged by `PlayerChoice`:
 
@@ -113,7 +113,7 @@ No string-keyed slot lookup; each template subtype names its own fields. This is
 
 ## 3. Pile Counter Projection (the Floor)
 
-Pile Counter has one action, one target slot, no modes, no parameters. With typed templates ([doc 29 §3](29-snapshot-production-pipeline.md)) and service-driven publication ([doc 29 §2](29-snapshot-production-pipeline.md)), `OnQueueDrained` becomes:
+Pile Counter has one action, one target slot, no modes, no parameters. With typed templates ([doc 29 §3](features/engine/notes/03-snapshot-pipeline.md)) and service-driven publication ([doc 29 §2](features/engine/notes/03-snapshot-pipeline.md)), `OnQueueDrained` becomes:
 
 ```csharp
 public override DrainResult OnQueueDrained()
@@ -265,7 +265,7 @@ This breaks doc 27 §9's line "the snapshot is built by *running* `handler.Valid
 
 Step 2 is the approximation. Step 4 is the truth. The snapshot can show actions that are loosely legal; `Validate` catches the bindings that aren't. The UI's `AffordanceMap` is still a projection of "things the rule and validate together think are likely legal."
 
-> **Refined by [doc 29 §2](29-snapshot-production-pipeline.md):** the eager-vs-lazy framing below is replaced by **on-demand validation**. The rule does *not* automatically run `handler.Validate` against candidates during build. The default is per-template eligibility only; per-binding `Validate` is a tool the rule explicitly uses when it wants exhaustive coverage (e.g., a turn-start snapshot for a small game; a debugger UI). Scope of validation is a per-game decision, not a framework default.
+> **Refined by [doc 29 §2](features/engine/notes/03-snapshot-pipeline.md):** the eager-vs-lazy framing below is replaced by **on-demand validation**. The rule does *not* automatically run `handler.Validate` against candidates during build. The default is per-template eligibility only; per-binding `Validate` is a tool the rule explicitly uses when it wants exhaustive coverage (e.g., a turn-start snapshot for a small game; a debugger UI). Scope of validation is a per-game decision, not a framework default.
 
 The earlier eager-vs-lazy framing (kept here for reference; superseded by on-demand):
 
@@ -276,7 +276,7 @@ The earlier eager-vs-lazy framing (kept here for reference; superseded by on-dem
 
 ## 7. Implications Across Existing Docs
 
-Follow-up edits — applied in [doc 29's §8 implications table](29-snapshot-production-pipeline.md) (with overlaps from this doc's original list). Both rounds of edits have been applied to docs 25, 26, 27.
+Follow-up edits — applied in [doc 29's §8 implications table](features/engine/notes/03-snapshot-pipeline.md) (with overlaps from this doc's original list). Both rounds of edits have been applied to docs 25, 26, 27.
 
 | Doc | Section | Change |
 |---|---|---|
@@ -304,19 +304,19 @@ Follow-up edits — applied in [doc 29's §8 implications table](29-snapshot-pro
 - **Modes vs. Parameters unification.** A mode is structurally a discrete-choice parameter that bundles target slots. Could fold into `Parameters` with a `ChoiceWithTargets` spec. Aesthetically cleaner; ergonomically heavier on IntentMapper. Coin flip.
 - **`ParameterSpec` taxonomy.** `IntRange`, `OneOf<T>`, `Subset<T>` cover the survey. Add `WeightedSubset` and `FreeText` when forced; structured-input cases (declare attackers/blockers as a multi-edge bipartite assignment) deserve their own spec.
 - **Multi-stage / staged target picking.** Cross-slot constraints want either lazy slot resolution or `Validate`-as-final-arbiter. Pick one before MTG-shaped games arrive.
-- ~~**Eager vs. lazy binding validation.**~~ Resolved by [doc 29 §2](29-snapshot-production-pipeline.md): on-demand by the rule, no automatic eager validation. Per-game decision.
+- ~~**Eager vs. lazy binding validation.**~~ Resolved by [doc 29 §2](features/engine/notes/03-snapshot-pipeline.md): on-demand by the rule, no automatic eager validation. Per-game decision.
 - **`Source` nullability.** Sourceless actions (`EndTurn`) make `Source` nullable. Could instead model `EndTurn` as having a player-source. Aesthetic; defer.
-- **`PlayerChoice` shape under typed templates.** Targets sketched as `IReadOnlyList<EntityId>` (positional). May want named for ergonomics in templates with several distinct slots. Pin when IntentMapper is implemented ([doc 29 §9](29-snapshot-production-pipeline.md)).
+- **`PlayerChoice` shape under typed templates.** Targets sketched as `IReadOnlyList<EntityId>` (positional). May want named for ergonomics in templates with several distinct slots. Pin when IntentMapper is implemented ([doc 29 §9](features/engine/notes/03-snapshot-pipeline.md)).
 - **Type erasure on `Parameters`.** `IReadOnlyDictionary<string, object>` is loose. Generic per-spec parameters would force compile-time matching but balloon types. Probably stay loose; IntentMapper is the only consumer.
 
 ---
 
 ## 9. Related
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — Pile Counter; degenerate projection
-- [27-presentation-loop.md](27-presentation-loop.md) — presentation loop; primary consumer
-- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — typed templates, service-driven publication, on-demand validation
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` interface
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — Pile Counter; degenerate projection
+- [features/presentation/notes/01-presentation-loop.md](features/presentation/notes/01-presentation-loop.md) — presentation loop; primary consumer
+- [features/engine/notes/03-snapshot-pipeline.md](features/engine/notes/03-snapshot-pipeline.md) — typed templates, service-driven publication, on-demand validation
 - [Kettle protocol — Player Simulator interaction](https://github.com/HearthSim/kettle-design/wiki/6.-Player-Simulator-interaction) — prior art
-- `Old Docs/SabberStone-Architecture-Analysis.md` — Hearthstone task/option flow
-- `Old Docs/Fireplace-Architecture-Analysis.md` — Hearthstone JSON option indexing
+- `spikes/sabberstone-architecture.md` — Hearthstone task/option flow
+- `spikes/fireplace-architecture.md` — Hearthstone JSON option indexing

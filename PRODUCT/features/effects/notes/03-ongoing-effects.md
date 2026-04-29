@@ -12,9 +12,9 @@ This document defines how ongoing effects are modelled in the Card Framework —
 
 Builds on:
 
-- [10-entity-definition-instance-model.md](10-entity-definition-instance-model.md) — entity, definition, instance identity
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — trigger subscription, AbilityDefinition
-- [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) — ITriggerPipeline, fold mechanics
+- [features/entities/notes/01-definition-instance-model.md](features/entities/notes/01-definition-instance-model.md) — entity, definition, instance identity
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — trigger subscription, AbilityDefinition
+- [features/effects/notes/02-replacement-prevention.md](features/effects/notes/02-replacement-prevention.md) — ITriggerPipeline, fold mechanics
 
 ---
 
@@ -155,7 +155,7 @@ This is out of scope for the current session and depends on the stats redesign w
 
 ## 9. Related
 
-- [10-entity-definition-instance-model.md](10-entity-definition-instance-model.md) — entity/definition/instance model
-- [12-zone-model.md](12-zone-model.md) — zone model; attachment storage may extend this
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — trigger subscription and lifecycle
-- [06-open-questions.md](06-open-questions.md) — open items
+- [features/entities/notes/01-definition-instance-model.md](features/entities/notes/01-definition-instance-model.md) — entity/definition/instance model
+- [features/zones/notes/01-zone-model.md](features/zones/notes/01-zone-model.md) — zone model; attachment storage may extend this
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — trigger subscription and lifecycle
+- [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) — open items

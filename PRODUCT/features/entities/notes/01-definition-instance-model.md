@@ -12,9 +12,9 @@ This document expands the Core Model decisions into a concrete conceptual model 
 
 Related docs:
 
-- [Core Model Decisions](08-core-model-decisions.md)
-- [Core Glossary](09-core-glossary.md)
-- [Scaffold Package Fit](04-scaffold-package-fit.md)
+- [Core Model Decisions](features/entities/notes/01-definition-instance-model.md)
+- [Core Glossary](general/GLOSSARY.md)
+- [Scaffold Package Fit](spikes/scaffold-state-fit.md)
 
 ## Model Summary
 
@@ -311,7 +311,7 @@ Doc 8 was a mega-decisions doc spanning entities, zones, and actions. Per §2 of
 
 # Core Model Decisions
 
-This document answers the Core Model questions from [Open Questions](06-open-questions.md). These are early research decisions, not final implementation contracts.
+This document answers the Core Model questions from [Open Questions](general/OPEN-QUESTIONS.md). These are early research decisions, not final implementation contracts.
 
 ## Status
 

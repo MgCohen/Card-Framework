@@ -12,9 +12,9 @@ This document proposes the first action-flow vocabulary for the Card Framework.
 
 Related docs:
 
-- [DeckMech Command Pipeline Reference](13-deckmech-command-pipeline-reference.md)
-- [Action Flow Decisions](14-action-flow-decisions.md)
-- [Zone Model](12-zone-model.md)
+- [DeckMech Command Pipeline Reference](spikes/deckmech-command-pipeline.md)
+- [Action Flow Decisions](features/actions/notes/01-command-pipeline.md)
+- [Zone Model](features/zones/notes/01-zone-model.md)
 
 ## Model Summary
 
@@ -52,7 +52,7 @@ The framework should provide the shape. Games and presets provide the rules.
 | History Envelope | Group of entries with cause metadata.                            | "Player A played Fireball; these changes happened."               |
 
 
-Names are still proposals. See [Action Definition Proposal](17-action-definition-proposal.md). The important distinction is between attempted request, high-level game command, low-level state mutation, result, and history.
+Names are still proposals. See [Action Definition Proposal](features/actions/notes/01-command-pipeline.md). The important distinction is between attempted request, high-level game command, low-level state mutation, result, and history.
 
 ## Pipeline Shape
 
@@ -202,7 +202,7 @@ In a Store-based implementation, state mutations likely map to mutators. In a di
 
 ## Before Triggers (OnBefore\<T\>)
 
-> **Note:** The `CommandPreHook` placeholder from earlier drafts has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full design.
+> **Note:** The `CommandPreHook` placeholder from earlier drafts has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) for the full design.
 
 Before triggers run before the handler. They receive the current `GameCommand` and may:
 
@@ -246,7 +246,7 @@ Handle DealDamageCommand
 
 ## CommandReactions
 
-> **Note:** The inline `CommandReaction` pipeline step has been superseded by two separate mechanisms: `OnAfter<T>` triggers (per-instance reactions dispatched through the channel) and `GameRules.Evaluate` (state-based follow-up commands). `CommandPreHook` has been superseded by `OnBefore<T>` triggers. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full trigger model and [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the evaluator pattern.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by two separate mechanisms: `OnAfter<T>` triggers (per-instance reactions dispatched through the channel) and `GameRules.Evaluate` (state-based follow-up commands). `CommandPreHook` has been superseded by `OnBefore<T>` triggers. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) for the full trigger model and [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) for the evaluator pattern.
 
 The evaluator reads current game state after each command and returns any follow-up actions. After-triggers handle per-instance reactions. Together these replace the need for inline pre/post-hook pipeline steps.
 
@@ -292,7 +292,7 @@ HistoryEnvelope
   // Note: the scope.DispatchChild/child-folds-into-envelope model is superseded.
   // Effects call scope.Dispatch(action); each action gets its own independent envelope.
   // Evaluator follow-ups each produce their own separate envelope sharing originCommandId.
-  // See 22-async-decisions-and-suspension.md.
+  // See features/effects/notes/01-async-dispatch.md.
 ```
 
 Entries might include:
@@ -373,14 +373,14 @@ The zone does not decide broad legality. It organizes approved content changes.
 
 ## Open Questions
 
-- ~~Final names: Intent, Request, Action, Command, GameCommand?~~ **Settled:** `PlayerIntent` for external attempts, `GameCommand` for pipeline commands. See [Action Definition Proposal](17-action-definition-proposal.md).
+- ~~Final names: Intent, Request, Action, Command, GameCommand?~~ **Settled:** `PlayerIntent` for external attempts, `GameCommand` for pipeline commands. See [Action Definition Proposal](features/actions/notes/01-command-pipeline.md).
 - Should possible actions be called `Option`, `ActionOption`, or `AvailableAction`? — still open
 - How are active option lists represented and matched? — partially answered: `IAvailableActionsSnapshot` (doc 20 section 10); shape detail still open
-- ~~How do nested commands produce nested envelopes?~~ — superseded: the `scope.DispatchChild`/child-folds-into-envelope model has been replaced. Effects (the async orchestration layer above handlers) call `scope.Dispatch(action)`; each action gets its own independent envelope. Evaluator follow-ups also each get their own envelope sharing `OriginCommandId`. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
+- ~~How do nested commands produce nested envelopes?~~ — superseded: the `scope.DispatchChild`/child-folds-into-envelope model has been replaced. Effects (the async orchestration layer above handlers) call `scope.Dispatch(action)`; each action gets its own independent envelope. Evaluator follow-ups also each get their own envelope sharing `OriginCommandId`. See [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md).
 - ~~When does an envelope close?~~ — resolved: after the handler returns and history is published, before the evaluator is called (doc 18, doc 20)
-- ~~Can pre-hooks mutate state, or only replace/cancel commands?~~ — resolved: the `OnBefore<T>` fold react function returns `FoldResult` (Keep/Cancel/Replace) — no direct state mutation from triggers. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md).
+- ~~Can pre-hooks mutate state, or only replace/cancel commands?~~ — resolved: the `OnBefore<T>` fold react function returns `FoldResult` (Keep/Cancel/Replace) — no direct state mutation from triggers. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md).
 - ~~Are post-reactions allowed to dispatch immediately or queued?~~ — resolved: there are no inline post-reactions; follow-up commands are returned by the evaluator and enqueued by the engine (doc 20)
-- How do scheduler models affect action flow? — still open; see [06-open-questions.md](06-open-questions.md)
+- How do scheduler models affect action flow? — still open; see [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md)
 - How does rollback/rejection communicate to presentation? — still open
 - What metadata must be mandatory in an envelope? — partially settled: `OriginCommandId`, `OriginIntent` (first command only), `actor`, `sourceInstance`, `result`, `entries` (doc 18)
 
@@ -402,10 +402,10 @@ The zone does not decide broad legality. It organizes approved content changes.
 
 The sections below preserve content from the source docs that were merged into this canonical Command Pipeline Model during workflow migration:
 
-- **`14-action-flow-decisions.md`** — load-bearing decisions on the action flow. Atomic decisions extracted as ADRs in `features/actions/decisions/`.
-- **`17-action-definition-proposal.md`** — original proposal-style doc; folded into the Model. Note: predates the trigger system (`features/triggers/`) and engine loop (`features/engine/notes/01-evaluation-loop.md`); `CommandPreHook`/`CommandReaction` references reflect the older design and have been superseded by `OnBefore<T>`/`OnAfter<T>` triggers and `GameRules.Evaluate`.
-- **`18-action-flow-snippets.md`** — end-to-end code-shaped flow examples; serves as the Model's Examples section.
-- **`19-handler-mutations-and-semantics.md`** — handler return-shape and mutation semantics; the contract for handler bodies that sit alongside the pipeline.
+- **`features/actions/notes/01-command-pipeline.md`** — load-bearing decisions on the action flow. Atomic decisions extracted as ADRs in `features/actions/decisions/`.
+- **`features/actions/notes/01-command-pipeline.md`** — original proposal-style doc; folded into the Model. Note: predates the trigger system (`features/triggers/`) and engine loop (`features/engine/notes/01-evaluation-loop.md`); `CommandPreHook`/`CommandReaction` references reflect the older design and have been superseded by `OnBefore<T>`/`OnAfter<T>` triggers and `GameRules.Evaluate`.
+- **`features/actions/notes/01-command-pipeline.md`** — end-to-end code-shaped flow examples; serves as the Model's Examples section.
+- **`features/actions/notes/01-command-pipeline.md`** — handler return-shape and mutation semantics; the contract for handler bodies that sit alongside the pipeline.
 
 ---
 
@@ -413,7 +413,7 @@ The sections below preserve content from the source docs that were merged into t
 
 # Action Flow Decisions
 
-This document captures the current direction for action flow, based on the Card Framework research so far and the DeckMech command-pipeline sample summarized in [DeckMech Command Pipeline Reference](13-deckmech-command-pipeline-reference.md).
+This document captures the current direction for action flow, based on the Card Framework research so far and the DeckMech command-pipeline sample summarized in [DeckMech Command Pipeline Reference](spikes/deckmech-command-pipeline.md).
 
 These are early research decisions, not implementation contracts.
 
@@ -701,16 +701,16 @@ Confidence: high.
 
 # Action Definition Proposal
 
-> **Status note:** This document predates the trigger system (doc 21) and engine loop (doc 20). References to `CommandPreHook` and `CommandReaction` throughout reflect the design at the time of writing. Both have since been superseded — `CommandPreHook` by `OnBefore<T>` triggers, `CommandReaction` by `OnAfter<T>` triggers and `GameRules.Evaluate`. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) and [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the current model.
+> **Status note:** This document predates the trigger system (doc 21) and engine loop (doc 20). References to `CommandPreHook` and `CommandReaction` throughout reflect the design at the time of writing. Both have since been superseded — `CommandPreHook` by `OnBefore<T>` triggers, `CommandReaction` by `OnAfter<T>` triggers and `GameRules.Evaluate`. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) and [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) for the current model.
 
 This document proposes concrete definitions for the action-related shapes in the Card Framework.
 
 It builds on:
 
-- [Action Flow Decisions](14-action-flow-decisions.md)
-- [Action, Request, Command, And History Model](15-action-request-command-history-model.md)
-- [Action Terminology Discussion](16-action-terminology-discussion.md)
-- [DeckMech Command Pipeline Reference](13-deckmech-command-pipeline-reference.md)
+- [Action Flow Decisions](features/actions/notes/01-command-pipeline.md)
+- [Action, Request, Command, And History Model](features/actions/notes/01-command-pipeline.md)
+- [Action Terminology Discussion](general/GLOSSARY.md)
+- [DeckMech Command Pipeline Reference](spikes/deckmech-command-pipeline.md)
 
 ## Proposal Summary
 
@@ -741,7 +741,7 @@ Recommended working vocabulary:
 | High-level rules command | `GameCommand`                         | Command that enters the game pipeline and returns a result. |
 | Low-level mutation       | `StateMutation`                       | Already-approved state change applied to canonical state.   |
 | Command outcome          | `CommandResult`                       | Structured result, even for failure or no-op.               |
-| ~~Pre-handler hook~~     | ~~`CommandPreHook`~~                  | ~~Can validate, cancel, replace, redirect, or modify.~~ Superseded by `OnBefore<T>` trigger fold. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md). |
+| ~~Pre-handler hook~~     | ~~`CommandPreHook`~~                  | ~~Can validate, cancel, replace, redirect, or modify.~~ Superseded by `OnBefore<T>` trigger fold. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md). |
 | Main resolver            | `CommandHandler`                      | Resolves a game command into state mutations and result.    |
 | Post-result follow-up    | `GameRules`                           | Reads state after command; returns follow-up commands. Replaces inline CommandReaction. |
 | Ordered fact             | `HistoryEntry`                        | One meaningful state or simulation fact.                    |
@@ -1480,7 +1480,7 @@ MoveResult
   wasRedirected
 ```
 
-## Shape 6: CommandPreHook *(superseded — see [21-trigger-reaction-system.md](21-trigger-reaction-system.md))*
+## Shape 6: CommandPreHook *(superseded — see [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md))*
 
 > **Status:** `CommandPreHook` has been replaced by the `OnBefore<T>` trigger fold. The intent described below is valid; the mechanism is not. Refer to doc 21 for the current design.
 
@@ -1543,9 +1543,9 @@ Important properties:
 
 ## Shape 8: CommandReaction
 
-> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `GameRules.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
+> **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](features/engine/notes/01-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `GameRules.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
 
-The `CommandPreHook` placeholder has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold — see [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full design. `CommandReaction` as a post-step is removed; reactions dispatch through `GameRules.OnIncomingCommand` and `GameRules.Evaluate`.
+The `CommandPreHook` placeholder has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold — see [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) for the full design. `CommandReaction` as a post-step is removed; reactions dispatch through `GameRules.OnIncomingCommand` and `GameRules.Evaluate`.
 
 ## Shape 9: HistoryEntry
 
@@ -1604,7 +1604,7 @@ Important properties:
 
 ## Shape 11: Effect
 
-> **Status:** The placeholder `Effect.Trigger(context)` described below is superseded. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) for the current design.
+> **Status:** The placeholder `Effect.Trigger(context)` described below is superseded. See [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) for the current design.
 
 Definition:
 
@@ -1912,7 +1912,7 @@ triggerSystem.OnBefore<PlayCardCommand>(
     react:     (cmd, ctx) => TriggerResult<PlayCardCommand>.Cancel(RejectReason.CardCannotBePlayed));
 ```
 
-Per-instance effects (card abilities that modify or prevent actions) register the same way but with instance-scoped conditions and are unregistered when the instance leaves play. See [21-trigger-reaction-system.md](21-trigger-reaction-system.md) for the full trigger model.
+Per-instance effects (card abilities that modify or prevent actions) register the same way but with instance-scoped conditions and are unregistered when the instance leaves play. See [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) for the full trigger model.
 
 ## 6. Play Card Handler (Placement Only)
 
@@ -1948,7 +1948,7 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 }
 ```
 
-**Note:** This handler is intentionally granular. Deeper design (composites, segment boundaries, and two-command stories) is in [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md).
+**Note:** This handler is intentionally granular. Deeper design (composites, segment boundaries, and two-command stories) is in [Handler Mutations, Sequential Apply, And Semantic Events](features/actions/notes/01-command-pipeline.md).
 
 ## 6b. Evaluator: “PlayArea Has A Card” → `ExecuteCardCommand`
 
@@ -1992,7 +1992,7 @@ public sealed class SampleGameEvaluator : GameRules
 }
 ```
 
-The evaluator is also called when the queue empties (`OnQueueDrained`). That is when the game decides to advance a phase, grant priority, or simply await the next player action. See [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) for the full `GameEngine` drain loop and evaluator interface.
+The evaluator is also called when the queue empties (`OnQueueDrained`). That is when the game decides to advance a phase, grant priority, or simply await the next player action. See [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) for the full `GameEngine` drain loop and evaluator interface.
 
 ## 6c. Execute Card Handler (Effect, Then Discard In This Game)
 
@@ -2319,7 +2319,7 @@ UI receives Envelope 2 (C1): animate discard move
 
 # Handler Mutations, Sequential Apply, And Game Signals
 
-This document responds to design concerns raised about the patterns in [Action Flow Snippets](18-action-flow-snippets.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Emit` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
+This document responds to design concerns raised about the patterns in [Action Flow Snippets](features/actions/notes/01-command-pipeline.md), especially `PlayCardHandler`: sequential `scope.Apply` calls, manual `scope.Emit` next to every zone change, and repeated remove/insert pairs. It is research, not a locked API.
 
 ## 1. Is Sequential `Apply` A Problem?
 
@@ -2419,7 +2419,7 @@ public void RelocateInstance(ZoneId from, ZoneId to, InstanceId instance, Reloca
 **What happens on `Apply` (conceptually, not a prescription):**
 
 1. The **state backend** validates preconditions (instance in `From`, and so on) or returns failure; the handler can react before any other step in the same command.
-2. The backend **removes** the instance from `From`, then **inserts** into `To` with **default** zone policy (no separate “plan” in the handler for the common case; see [Action Flow Snippets](18-action-flow-snippets.md)).
+2. The backend **removes** the instance from `From`, then **inserts** into `To` with **default** zone policy (no separate “plan” in the handler for the common case; see [Action Flow Snippets](features/actions/notes/01-command-pipeline.md)).
 3. The backend appends to the **current segment’s** history: either **two** `StateChange` lines (out of A, into B) or **one** composite “relocated” line if the game wants coarser history for replay/animation.
 4. Optional: one **default** `Emit` for the *net* move, if the project chooses policy-driven `CardMoved` for relocations. Game-specific `Semantic` for “played from hand” still lives in the `PlayCard` handler or in a command-aware policy.
 
@@ -2608,21 +2608,21 @@ To avoid the “remove then insert twice, type four events” feel without losin
 
 - **Composite relocations** (above) and optional **policy defaults** for boring `CardMoved` semantics.
 - **Play lifecycle** may use two `Relocate` calls (to play, then to discard) or a **named** `PlayCard` helper that does both in one place—still one `PlayCard` **command** for the *placement and resolution* story, with **child commands** for effect bodies.
-- **Sibling envelopes** when an Effect calls `scope.Dispatch(action)`: **separate** handler, **separate** envelope, sharing the same `OriginCommandId`. Published inline (before the calling handler’s envelope closes) in dispatch order. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
+- **Sibling envelopes** when an Effect calls `scope.Dispatch(action)`: **separate** handler, **separate** envelope, sharing the same `OriginCommandId`. Published inline (before the calling handler’s envelope closes) in dispatch order. See [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md).
 
-**Takeaway:** The [snippet doc](18-action-flow-snippets.md) is **verbose on purpose** to show each layer. Productivity is **composites** + **child dispatches** with **shaped** envelopes—not one flat list pretending one `GameCommand` did the move and the heal as the same *kind* of action.
+**Takeaway:** The [snippet doc](features/actions/notes/01-command-pipeline.md) is **verbose on purpose** to show each layer. Productivity is **composites** + **child dispatches** with **shaped** envelopes—not one flat list pretending one `GameCommand` did the move and the heal as the same *kind* of action.
 
 ## 7. How This Stays Aligned With Earlier Decisions
 
 - **Determinism and multiplayer:** The boundary remains **game commands** (and, if needed, **aggregated** history for clients). Composites and helpers do not change the boundary; they **package** the same state transitions with less boilerplate.
-- **Zones and legality:** Zone **organization** still applies *after* the command is allowed; compositing moves does not move “who validates legality” into the zone; it is still **game/action rules** before `Apply` (see [Zone Model](12-zone-model.md)).
-- **Batched history for UI:** Whether you record **one** `Relocate` fact or **two** `ZoneContent` facts is an **envelope design** choice; animation can subscribe to **semantics** and/or **deltas** (see [Action Flow Decisions](14-action-flow-decisions.md)).
+- **Zones and legality:** Zone **organization** still applies *after* the command is allowed; compositing moves does not move “who validates legality” into the zone; it is still **game/action rules** before `Apply` (see [Zone Model](features/zones/notes/01-zone-model.md)).
+- **Batched history for UI:** Whether you record **one** `Relocate` fact or **two** `ZoneContent` facts is an **envelope design** choice; animation can subscribe to **semantics** and/or **deltas** (see [Action Flow Decisions](features/actions/notes/01-command-pipeline.md)).
 
 ## 8. Open Choices (To Decide In Implementation, Not In Research)
 
 - **Granularity of `StateChange` in history:** finest grain vs composite rows for replay and net sync.
 - **Whether `Emit` is always explicit for “meaningful” events** vs **inferred** from a small catalog of `NamedGameOperation` types.
-- ~~**Child commands:** flat list in one envelope vs **tree** of segments~~ — **Resolved:** each `scope.Dispatch(action)` call in an Effect produces its own sibling envelope sharing `OriginCommandId`. No folding, no tree. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md).
+- ~~**Child commands:** flat list in one envelope vs **tree** of segments~~ — **Resolved:** each `scope.Dispatch(action)` call in an Effect produces its own sibling envelope sharing `OriginCommandId`. No folding, no tree. See [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md).
 
 These are tuning knobs, not a refutation of the pipeline shape.
 
@@ -2634,7 +2634,7 @@ These are tuning knobs, not a refutation of the pipeline shape.
 
 ## Related
 
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — motivating example
-- [17-action-definition-proposal.md](17-action-definition-proposal.md) — payload/result/service split and flow graph
-- [15-action-request-command-history-model.md](15-action-request-command-history-model.md) — history envelope and layers
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — motivating example
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — payload/result/service split and flow graph
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — history envelope and layers
 

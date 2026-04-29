@@ -39,7 +39,7 @@ Sources:
 
 ## Hearthstone-Style Simulators
 
-Prior notes in [Old Docs](Old%20Docs/) explored SabberStone, Fireplace, and Brimstone. The recurring pattern is an authoritative simulator that computes legal options, accepts option-index selections, resolves through a task/action queue, and emits an ordered history stream.
+Prior notes in [spikes/](spikes/) explored SabberStone, Fireplace, and Brimstone. The recurring pattern is an authoritative simulator that computes legal options, accepts option-index selections, resolves through a task/action queue, and emits an ordered history stream.
 
 Key lessons:
 
@@ -53,9 +53,9 @@ Sources:
 
 - [SabberStone overview](https://hearthsim.info/sabberstone)
 - [Kettle protocol](https://hearthsim.info/kettle/)
-- [SabberStone notes](Old%20Docs/SabberStone-Architecture-Analysis.md%20(1))
-- [Fireplace notes](Old%20Docs/Fireplace-Architecture-Analysis.md%20(1))
-- [Brimstone notes](Old%20Docs/Brimstone-Architecture-Analysis.md%20(1))
+- [SabberStone notes](spikes/SabberStone-Architecture-Analysis.md%20(1))
+- [Fireplace notes](spikes/Fireplace-Architecture-Analysis.md%20(1))
+- [Brimstone notes](spikes/Brimstone-Architecture-Analysis.md%20(1))
 
 ## Roguelike Deckbuilders: Slay The Spire
 

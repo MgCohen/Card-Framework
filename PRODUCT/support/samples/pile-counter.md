@@ -159,7 +159,7 @@ public sealed class Pile
 }
 ```
 
-`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list — see [doc 29 §3–§4](29-snapshot-production-pipeline.md).
+`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list — see [doc 29 §3–§4](features/engine/notes/03-snapshot-pipeline.md).
 
 State is immutable, redux-like. All game-affecting memory lives here — the rule holds none.
 
@@ -200,7 +200,7 @@ public sealed class PileCounterIntentMapper : IIntentMapper
 }
 ```
 
-The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading current state. See [doc 29 §3](29-snapshot-production-pipeline.md) for the typed-template binding pattern.
+The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading current state. See [doc 29 §3](features/engine/notes/03-snapshot-pipeline.md) for the typed-template binding pattern.
 
 ### 9.4 Handler (validate + handle)
 
@@ -312,7 +312,7 @@ public sealed class PileCounterRules : GameRules
 }
 ```
 
-The rule constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the rule does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](29-snapshot-production-pipeline.md).
+The rule constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the rule does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](features/engine/notes/03-snapshot-pipeline.md).
 
 Almost everything else Pile Counter cares about lives elsewhere — handler `Validate` for legality, mutators for state changes, presentation layer for affordances.
 
@@ -386,7 +386,7 @@ public static class PileCounterBootstrap
 }
 ```
 
-The engine builder constructs the four canonical services (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](27-presentation-loop.md) for the presentation loop and [doc 29 §5](29-snapshot-production-pipeline.md) for the service-injection rationale.
+The engine builder constructs the four canonical services (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/notes/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/notes/03-snapshot-pipeline.md) for the service-injection rationale.
 
 ---
 
@@ -401,13 +401,13 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **State mutators react to commands** (Scaffold State pattern). Handlers don't have to know about ancillary state slots.
 - **Player input layer is three-tier:** `PlayerIntent` (UI) → `IIntentMapper` → `GameCommand` (engine).
 - **`OnIncomingCommand` is purely flow.** Pause/lockout/stash routing only. Never inspects command body.
-- **Snapshot lives in `GameState.AvailableActions: AvailableActionsSnapshot`.** Typed templates with scope discriminator. The rule writes through `IAvailableActions.Set` ([doc 29](29-snapshot-production-pipeline.md)).
+- **Snapshot lives in `GameState.AvailableActions: AvailableActionsSnapshot`.** Typed templates with scope discriminator. The rule writes through `IAvailableActions.Set` ([doc 29](features/engine/notes/03-snapshot-pipeline.md)).
 - **`AffordanceMap` is game-specific** and lives in the UI/gateway layer. Computed from snapshot. Framework doesn't define it.
 - **`OnQueueDrained` returns `DrainResult { Dispatch }` only.** Snapshot publication moved to the injected `IAvailableActions` service. Supersedes earlier `DrainResult { Snapshot, Dispatch }`.
 - **Four rejection paths:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect).
 - **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the rule + intent mapper through them.
 - **Engine intake order:** `handler.Validate` first, then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
-- **`GameRules` is service-injected.** `IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry` all on the constructor; methods take only ephemeral data ([doc 29 §5](29-snapshot-production-pipeline.md)).
+- **`GameRules` is service-injected.** `IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry` all on the constructor; methods take only ephemeral data ([doc 29 §5](features/engine/notes/03-snapshot-pipeline.md)).
 
 ---
 
@@ -417,9 +417,9 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 
 ### Resolved (in subsequent docs)
 
-- ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](29-snapshot-production-pipeline.md). Services injected at construction; methods take only ephemeral data; state read via `State.Current`.
-- ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` ([doc 29 §5](29-snapshot-production-pipeline.md)).
-- ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRules` is now an abstract class ([doc 25 §2](25-gamerules-shape.md), [doc 29 §5](29-snapshot-production-pipeline.md)); virtual default is straightforward.
+- ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](features/engine/notes/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read via `State.Current`.
+- ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` ([doc 29 §5](features/engine/notes/03-snapshot-pipeline.md)).
+- ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRules` is now an abstract class ([doc 25 §2](features/engine/notes/02-gamerules-contract.md), [doc 29 §5](features/engine/notes/03-snapshot-pipeline.md)); virtual default is straightforward.
 
 ### Deferred (need decisions, not blocked)
 
@@ -429,15 +429,15 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 
 ### Implementation details (non-blocking)
 
-- **Q5 — `AvailableActions` mutator implementation.** Framework-shipped — the `IAvailableActions` service writes the slot through an internal mutator ([doc 29 §2](29-snapshot-production-pipeline.md)). Confirm at engine implementation.
-- **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [doc 29 §3](29-snapshot-production-pipeline.md)). `PlayerChoice` shape pin during implementation.
+- **Q5 — `AvailableActions` mutator implementation.** Framework-shipped — the `IAvailableActions` service writes the slot through an internal mutator ([doc 29 §2](features/engine/notes/03-snapshot-pipeline.md)). Confirm at engine implementation.
+- **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [doc 29 §3](features/engine/notes/03-snapshot-pipeline.md)). `PlayerChoice` shape pin during implementation.
 - **Q7 — `IGameStore` final shape.** Sketched as a presentation-side wrapper exposing `State`, `OnStateChanged`, `SubmitIntent`. Final shape depends on the chosen state library.
-- **Q8 — `IHandlerContext` shape.** Used as `ctx.Mutate.MoveCardBetweenPiles(...)` — purely placeholder. Will likely also expose `ctx.Actions` (effect-side `IAvailableActions`) per [doc 29 §7](29-snapshot-production-pipeline.md). Resolves with action pipeline cleanup (Q2).
+- **Q8 — `IHandlerContext` shape.** Used as `ctx.Mutate.MoveCardBetweenPiles(...)` — purely placeholder. Will likely also expose `ctx.Actions` (effect-side `IAvailableActions`) per [doc 29 §7](features/engine/notes/03-snapshot-pipeline.md). Resolves with action pipeline cleanup (Q2).
 - **Q9 — `IHandlerRegistry` shape.** Sketched as `handlers.Validate(command, state, out reason)` — needs a typed lookup mechanism (probably keyed by `Type`). Resolves with Q2.
 - **Q11 — `IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
 - **Q12 — Re-validation at dequeue.** Validate at intake plus a second time before handler runs (state may have changed). Currently OK as double-validate.
-- **Q17 — `IGameStateProvider` shape.** `State.Current` returns the immutable state; subscriptions probably live on the Store. Pin at engine implementation ([doc 29 §9](29-snapshot-production-pipeline.md)).
-- **Q18 — Effect-side service symmetry.** Effects need `IAvailableActions` (and possibly `IGameStateProvider`) mid-execution. Likely through `IHandlerContext`. Needs a dedicated effect-flow doc ([doc 29 §7](29-snapshot-production-pipeline.md)).
+- **Q17 — `IGameStateProvider` shape.** `State.Current` returns the immutable state; subscriptions probably live on the Store. Pin at engine implementation ([doc 29 §9](features/engine/notes/03-snapshot-pipeline.md)).
+- **Q18 — Effect-side service symmetry.** Effects need `IAvailableActions` (and possibly `IGameStateProvider`) mid-execution. Likely through `IHandlerContext`. Needs a dedicated effect-flow doc ([doc 29 §7](features/engine/notes/03-snapshot-pipeline.md)).
 
 ### Out of scope for Pile Counter (will surface in richer games)
 

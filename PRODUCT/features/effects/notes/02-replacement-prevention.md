@@ -12,9 +12,9 @@ This document defines the rules-level semantics for replacement and prevention e
 
 Builds on:
 
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — trigger fold, OnBefore/OnAfter, cancel/replace mechanic
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — GameRules interface, scheduling decisions
-- [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — layer hierarchy, Effect/GameAction/Decision
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — trigger fold, OnBefore/OnAfter, cancel/replace mechanic
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — GameRules interface, scheduling decisions
+- [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) — layer hierarchy, Effect/GameAction/Decision
 
 ---
 
@@ -261,7 +261,7 @@ This means the history shows both: "A was replaced" and "B executed." The causal
 
 ## 10. Related
 
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — trigger fold, subscription, OnBefore/OnAfter
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — GameRules, scheduling, engine loop
-- [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — async layer, Decisions
-- [06-open-questions.md](06-open-questions.md) — open items
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — trigger fold, subscription, OnBefore/OnAfter
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — GameRules, scheduling, engine loop
+- [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) — async layer, Decisions
+- [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) — open items

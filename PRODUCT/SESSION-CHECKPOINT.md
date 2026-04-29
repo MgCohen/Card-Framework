@@ -13,7 +13,7 @@
 - **No implementation** in this repo yet: research and outlines under `RESEARCH/` only.
 - **Doc 29 written** — snapshot production pipeline. Resolves checkpoint task #18 (the active open question from session 7).
   - **Service-driven publication.** `IAvailableActions` (`Set`/`Append`/`Clear`) is the single write path for the snapshot. The rule writes from `OnQueueDrained` (default trigger); effects can override mid-execution; engine never auto-publishes. One-shot games (Stacklands) `Set` once at bootstrap. Phase-driven games (MTG) `Set` on phase enter / priority grant by reading state inside `OnQueueDrained`.
-  - **Typed `ActionTemplate` per command type** with shared abstract base (`CommandType: Type`, `Source: EntityId?`). `ActionId` retired in favour of using the registered command `Type` directly. Targets are `IReadOnlyList<EntityId>` uniformly ([doc 10](10-entity-definition-instance-model.md) instance/entity model). IntentMapper switches on the typed subtype; no string-keyed slot lookup.
+  - **Typed `ActionTemplate` per command type** with shared abstract base (`CommandType: Type`, `Source: EntityId?`). `ActionId` retired in favour of using the registered command `Type` directly. Targets are `IReadOnlyList<EntityId>` uniformly ([doc 10](features/entities/notes/01-definition-instance-model.md) instance/entity model). IntentMapper switches on the typed subtype; no string-keyed slot lookup.
   - **On-demand validation, not eager / lazy.** Doc 28 §6's eager-vs-lazy framing is replaced. The rule does not auto-validate during build; per-template eligibility filters whole templates; per-binding `Validate` runs at dispatch (authoritative) and on-demand by the rule when it wants exhaustive coverage.
   - **Snapshot scope.** `AvailableActionsSnapshot { Scope, Templates }` with `Scope = FreeInput | DecisionPrompt(decisionId)`. Transitional — the eventual model is a richer FSM-shaped game state. Sufficient floor; revisit when async-decision-heavy games force the issue.
   - **`GameRules` shape change.** Abstract class with constructor-injected services (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`). Methods take only ephemeral data. `IntakeContext` collapsed; `DrainResult` shrunk to `Dispatch` only. Resolves doc 26 Q1 (state-pattern decision).
@@ -97,23 +97,23 @@ Done in earlier sessions: ~~1, 3, 4, 5, 6a/b/c, 8, 10, 11, 13, 14, 18, 19~~.
 
 | File | Why |
 |------|-----|
-| [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) | **Most recent.** Service-driven publication, typed templates, on-demand validation, services-injected `GameRules`. Resolves task #18. |
-| [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) | Snapshot shape (typed templates with shared base). Refined inline by doc 29 §3 |
-| [27-presentation-loop.md](27-presentation-loop.md) | UI loop end-to-end; aligned with doc 29 (typed templates, service publication) |
-| [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) | Pile Counter sample; rule rewritten under doc 29's shape (services injected, typed templates) |
-| [25-gamerules-shape.md](25-gamerules-shape.md) | `GameRules` interface — abstract class with injected services; `OnQueueDrained` returns Dispatch only |
-| [24-continuous-ongoing-effects.md](24-continuous-ongoing-effects.md) | Attachment entity model, turn signals, cleanup |
-| [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) | `ITriggerPipeline`, `FilterTriggers`, replacement/prevention, priority, async |
-| [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) | Layer hierarchy, two dispatch paths, async model — feeds task #20 |
-| [21-trigger-reaction-system.md](21-trigger-reaction-system.md) | Trigger fold, subscription, OnBefore/OnAfter |
-| [18-action-flow-snippets.md](18-action-flow-snippets.md) | End-to-end flow |
-| [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) | CompositeAction, scope helpers — feeds task #20 |
-| [06-open-questions.md](06-open-questions.md) | Current open question state |
+| [features/engine/notes/03-snapshot-pipeline.md](features/engine/notes/03-snapshot-pipeline.md) | **Most recent.** Service-driven publication, typed templates, on-demand validation, services-injected `GameRules`. Resolves task #18. |
+| [features/actions/notes/02-availability-snapshot.md](features/actions/notes/02-availability-snapshot.md) | Snapshot shape (typed templates with shared base). Refined inline by doc 29 §3 |
+| [features/presentation/notes/01-presentation-loop.md](features/presentation/notes/01-presentation-loop.md) | UI loop end-to-end; aligned with doc 29 (typed templates, service publication) |
+| [support/samples/pile-counter.md](support/samples/pile-counter.md) | Pile Counter sample; rule rewritten under doc 29's shape (services injected, typed templates) |
+| [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) | `GameRules` interface — abstract class with injected services; `OnQueueDrained` returns Dispatch only |
+| [features/effects/notes/03-ongoing-effects.md](features/effects/notes/03-ongoing-effects.md) | Attachment entity model, turn signals, cleanup |
+| [features/effects/notes/02-replacement-prevention.md](features/effects/notes/02-replacement-prevention.md) | `ITriggerPipeline`, `FilterTriggers`, replacement/prevention, priority, async |
+| [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) | Layer hierarchy, two dispatch paths, async model — feeds task #20 |
+| [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) | Trigger fold, subscription, OnBefore/OnAfter |
+| [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) | End-to-end flow |
+| [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) | CompositeAction, scope helpers — feeds task #20 |
+| [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) | Current open question state |
 
 Prior art (Old Docs):
 
-- `Old Docs/SabberStone-Architecture-Analysis.md` — Hearthstone task/option flow, Kettle integration
-- `Old Docs/Fireplace-Architecture-Analysis.md` — Hearthstone JSON option indexing
+- `spikes/sabberstone-architecture.md` — Hearthstone task/option flow, Kettle integration
+- `spikes/fireplace-architecture.md` — Hearthstone JSON option indexing
 
 ---
 

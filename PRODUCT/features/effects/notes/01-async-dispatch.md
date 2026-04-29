@@ -12,10 +12,10 @@ This document defines how the engine handles effects that require player input �
 
 Builds on:
 
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop, `GameRules`, `OnQueueDrained`
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — type hierarchy, trigger fold
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — pipeline, envelope, handler flow
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — composite actions and scope
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — engine loop, `GameRules`, `OnQueueDrained`
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — type hierarchy, trigger fold
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — pipeline, envelope, handler flow
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — composite actions and scope
 
 ---
 
@@ -207,7 +207,7 @@ public interface IEffectScope
 
 ## 9. Related
 
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop, Stash scheduling
-- [21-trigger-reaction-system.md](21-trigger-reaction-system.md) — type hierarchy, trigger fold
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — CompositeAction and scope utilities
-- [06-open-questions.md](06-open-questions.md) — async suspension open item
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — engine loop, Stash scheduling
+- [features/triggers/notes/01-trigger-fold.md](features/triggers/notes/01-trigger-fold.md) — type hierarchy, trigger fold
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — CompositeAction and scope utilities
+- [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) — async suspension open item

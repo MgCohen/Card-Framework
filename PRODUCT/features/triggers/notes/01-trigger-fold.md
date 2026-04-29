@@ -12,9 +12,9 @@ This document defines the trigger and reaction model for the Card Framework. It 
 
 Builds on:
 
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — pipeline and envelope model
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop and GameRules evaluator
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — composite actions and scope
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — pipeline and envelope model
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — engine loop and GameRules evaluator
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — composite actions and scope
 
 ---
 
@@ -44,7 +44,7 @@ The previous `GameCommand` (the executable action type from docs 18–20) is now
 
 `CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit.
 
-An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) for the full layer hierarchy.
+An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) for the full layer hierarchy.
 
 ---
 
@@ -252,7 +252,7 @@ public CommandResult Execute(GameAction action)
 
 ## 9. Related
 
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — pipeline, envelope, handler flow
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop, GameRules, OnQueueDrained
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — CompositeAction utilities and scope
-- [06-open-questions.md](06-open-questions.md) — async suspension and other open items
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — pipeline, envelope, handler flow
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — engine loop, GameRules, OnQueueDrained
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — CompositeAction utilities and scope
+- [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) — async suspension and other open items

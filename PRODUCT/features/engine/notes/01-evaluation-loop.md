@@ -12,8 +12,8 @@ This document defines what the **engine** is in the Card Framework: its structur
 
 Builds on:
 
-- [Action Flow Snippets](18-action-flow-snippets.md) — the existing pipeline that the engine wraps
-- [Handler Mutations, Sequential Apply, And Semantic Events](19-handler-mutations-and-semantics.md) — what happens inside a single command execution
+- [Action Flow Snippets](features/actions/notes/01-command-pipeline.md) — the existing pipeline that the engine wraps
+- [Handler Mutations, Sequential Apply, And Semantic Events](features/actions/notes/01-command-pipeline.md) — what happens inside a single command execution
 
 ---
 
@@ -35,7 +35,7 @@ The engine does not know what any particular command means or what game is being
 
 ### ICommandPipeline
 
-The framework's executor. Receives one action, runs before triggers, invokes the handler, runs after triggers, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](18-action-flow-snippets.md).
+The framework's executor. Receives one action, runs before triggers, invokes the handler, runs after triggers, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](features/actions/notes/01-command-pipeline.md).
 
 ### GameRules
 
@@ -138,7 +138,7 @@ public sealed class TurnTimerService
 
 // A trigger reaction fires — dispatches through the same channel as everything else.
 // GameRules.OnIncomingCommand decides scheduling (RunNext, Enqueue, Stash, Discard).
-// See 21-trigger-reaction-system.md for the full trigger model.
+// See features/triggers/notes/01-trigger-fold.md for the full trigger model.
 public sealed class TriggerContext
 {
     private readonly GameEngine engine;
@@ -316,7 +316,7 @@ The structure is identical. The only difference is the conditions read from `sta
 
 ## 9. Relationship To The Existing Pipeline
 
-The pipeline described in [Action Flow Snippets](18-action-flow-snippets.md) does not change. The engine wraps it:
+The pipeline described in [Action Flow Snippets](features/actions/notes/01-command-pipeline.md) does not change. The engine wraps it:
 
 
 | Concern                                                                | Where it lives                                   |
@@ -410,8 +410,8 @@ public IntentResult Submit(MoveInstanceToZoneRequest request)
 
 ## 12. Related
 
-- [18-action-flow-snippets.md](18-action-flow-snippets.md) — the existing end-to-end flow that this engine wraps
-- [19-handler-mutations-and-semantics.md](19-handler-mutations-and-semantics.md) — what happens inside a single pipeline execution
-- [17-action-definition-proposal.md](17-action-definition-proposal.md) — payload and result shapes
-- [06-open-questions.md](06-open-questions.md) — scheduler and rules-engine open questions
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — the existing end-to-end flow that this engine wraps
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — what happens inside a single pipeline execution
+- [features/actions/notes/01-command-pipeline.md](features/actions/notes/01-command-pipeline.md) — payload and result shapes
+- [general/OPEN-QUESTIONS.md](general/OPEN-QUESTIONS.md) — scheduler and rules-engine open questions
 

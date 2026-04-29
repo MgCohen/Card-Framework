@@ -8,13 +8,13 @@ tags: [#zones, #model]
 
 # Zone Model
 
-This document outlines the conceptual model for zones after the decisions in [Zone Model Decisions](11-zone-model-decisions.md).
+This document outlines the conceptual model for zones after the decisions in [Zone Model Decisions](features/zones/notes/01-zone-model.md).
 
 Related docs:
 
-- [Core Glossary](09-core-glossary.md)
-- [Entity, Definition, And Instance Model](10-entity-definition-instance-model.md)
-- [Zone Model Decisions](11-zone-model-decisions.md)
+- [Core Glossary](general/GLOSSARY.md)
+- [Entity, Definition, And Instance Model](features/entities/notes/01-definition-instance-model.md)
+- [Zone Model Decisions](features/zones/notes/01-zone-model.md)
 
 ## Model Summary
 
@@ -265,7 +265,7 @@ Atomic decisions captured below also become ADRs in `features/zones/decisions/` 
 
 # Zone Model Decisions
 
-This document answers the Zones questions from [Open Questions](06-open-questions.md). These are early research decisions, not final implementation contracts.
+This document answers the Zones questions from [Open Questions](general/OPEN-QUESTIONS.md). These are early research decisions, not final implementation contracts.
 
 ## Status
 

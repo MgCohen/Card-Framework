@@ -12,9 +12,9 @@ This document captures the end-to-end loop from engine to UI and back, with a fo
 
 Builds on:
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` four-method interface, `OnQueueDrained`, snapshot ownership question
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — concrete sample game used to ground the design
-- [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — layer hierarchy
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` four-method interface, `OnQueueDrained`, snapshot ownership question
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — concrete sample game used to ground the design
+- [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) — layer hierarchy
 
 ---
 
@@ -89,7 +89,7 @@ public sealed class GameState
 }
 ```
 
-`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list (see [doc 28](28-action-availability-and-mapping.md) for the shape, [doc 29](29-snapshot-production-pipeline.md) for production).
+`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list (see [doc 28](features/actions/notes/02-availability-snapshot.md) for the shape, [doc 29](features/engine/notes/03-snapshot-pipeline.md) for production).
 
 Treating the snapshot as state — not as a side-channel — has three consequences:
 
@@ -101,7 +101,7 @@ Treating the snapshot as state — not as a side-channel — has three consequen
 
 ## 5. The Snapshot's Element Type
 
-The snapshot stores **typed `ActionTemplate` subtypes** — not resolved commands, not intents, not game-specific affordances. Each command type has a paired template type (`MoveCardCommand` ↔ `MoveCardTemplate`, etc.) that declares the action's shape: source entity, target slots, modes, parameters. Resolution to a `GameCommand` happens at the IntentMapper boundary when the player picks. See [doc 28](28-action-availability-and-mapping.md) for the shape and [doc 29 §3](29-snapshot-production-pipeline.md) for the typed-template rationale.
+The snapshot stores **typed `ActionTemplate` subtypes** — not resolved commands, not intents, not game-specific affordances. Each command type has a paired template type (`MoveCardCommand` ↔ `MoveCardTemplate`, etc.) that declares the action's shape: source entity, target slots, modes, parameters. Resolution to a `GameCommand` happens at the IntentMapper boundary when the player picks. See [doc 28](features/actions/notes/02-availability-snapshot.md) for the shape and [doc 29 §3](features/engine/notes/03-snapshot-pipeline.md) for the typed-template rationale.
 
 Reasoning:
 
@@ -239,7 +239,7 @@ Validation runs at multiple layers; each has a different purpose.
 
 The relationship between AffordanceMap and `handler.Validate`:
 
-- The snapshot is the rule's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the rule wants exhaustive coverage, but it's not the default ([doc 29 §2](29-snapshot-production-pipeline.md)).
+- The snapshot is the rule's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the rule wants exhaustive coverage, but it's not the default ([doc 29 §2](features/engine/notes/03-snapshot-pipeline.md)).
 - AffordanceMap is **prophylactic** — projects the snapshot to prevent obviously bad intents.
 - `handler.Validate` at dispatch is **authoritative** — single source of truth, catches stale bindings (state changed between snapshot publication and intent dispatch) and any bindings the rule didn't pre-validate.
 
@@ -270,7 +270,7 @@ A player makes a move in Pile Counter:
 ## 11. Decisions Locked
 
 - **Snapshot lives in state.** `GameState.AvailableActions: AvailableActionsSnapshot` (Scope + typed templates). No separate channel, no push API.
-- **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters. See [doc 28](28-action-availability-and-mapping.md), [doc 29 §3](29-snapshot-production-pipeline.md).
+- **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters. See [doc 28](features/actions/notes/02-availability-snapshot.md), [doc 29 §3](features/engine/notes/03-snapshot-pipeline.md).
 - **Snapshot is written via the `IAvailableActions` service** by the rule (default in `OnQueueDrained`) or effects (mid-execution overrides). Engine never auto-publishes.
 - **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change. Pattern-matches typed templates.
 - **View consumes AffordanceMap, not snapshot directly.** The view never touches raw templates or commands.
@@ -299,7 +299,7 @@ public override DrainResult OnQueueDrained()
 }
 ```
 
-The engine dispatches each `Dispatch` command. The snapshot write is a service call — see [doc 29 §2](29-snapshot-production-pipeline.md). The rule never holds a `GameEngine` reference; it holds narrow capability services.
+The engine dispatches each `Dispatch` command. The snapshot write is a service call — see [doc 29 §2](features/engine/notes/03-snapshot-pipeline.md). The rule never holds a `GameEngine` reference; it holds narrow capability services.
 
 (This supersedes the earlier `DrainResult { Snapshot, Dispatch }` shape. Service-driven publication lets effects override the snapshot mid-execution through the same write path.)
 
@@ -320,19 +320,19 @@ These extend the framework's snapshot story; they don't break the four-layer mod
 
 ## 14. Open Items
 
-- ~~**`AvailableActions` mutator implementation**~~ — Resolved. Framework-ships an internal mutator behind the `IAvailableActions` service ([doc 29 §2](29-snapshot-production-pipeline.md)).
-- **`IIntentMapper` shape** — refined: `Map(ActionTemplate, PlayerChoice) → GameCommand` ([doc 29 §3](29-snapshot-production-pipeline.md)). `PlayerChoice` shape (positional vs named, parameter typing) pin during implementation.
+- ~~**`AvailableActions` mutator implementation**~~ — Resolved. Framework-ships an internal mutator behind the `IAvailableActions` service ([doc 29 §2](features/engine/notes/03-snapshot-pipeline.md)).
+- **`IIntentMapper` shape** — refined: `Map(ActionTemplate, PlayerChoice) → GameCommand` ([doc 29 §3](features/engine/notes/03-snapshot-pipeline.md)). `PlayerChoice` shape (positional vs named, parameter typing) pin during implementation.
 - **`IGameStore` shape** — sketched here as a presentation-side wrapper; final shape depends on the chosen state library (Scaffold State).
 - **Snapshot revision tag** — useful for the UI to detect "I have a stale snapshot." Worth adding once we hit a concrete need.
-- **Snapshot scope as state machine** — `FreeInput`/`DecisionPrompt` is transitional; richer FSM-shaped game-state model is the eventual direction ([doc 29 §4](29-snapshot-production-pipeline.md)).
+- **Snapshot scope as state machine** — `FreeInput`/`DecisionPrompt` is transitional; richer FSM-shaped game-state model is the eventual direction ([doc 29 §4](features/engine/notes/03-snapshot-pipeline.md)).
 
 ---
 
 ## 15. Related
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game used as the working reference
-- [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop, drain cycle
-- [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — layer hierarchy, two dispatch paths
-- [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) — snapshot shape (typed templates)
-- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — service-driven snapshot publication
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` interface
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game used as the working reference
+- [features/engine/notes/01-evaluation-loop.md](features/engine/notes/01-evaluation-loop.md) — engine loop, drain cycle
+- [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) — layer hierarchy, two dispatch paths
+- [features/actions/notes/02-availability-snapshot.md](features/actions/notes/02-availability-snapshot.md) — snapshot shape (typed templates)
+- [features/engine/notes/03-snapshot-pipeline.md](features/engine/notes/03-snapshot-pipeline.md) — service-driven snapshot publication

@@ -11,7 +11,7 @@ These are unresolved design questions worth answering before implementation or d
 
 ## Core Model
 
-Status: initial answers captured in [Core Model Decisions](08-core-model-decisions.md), then incorporated into [Core Glossary](09-core-glossary.md) and [Entity, Definition, And Instance Model](10-entity-definition-instance-model.md).
+Status: initial answers captured in [Core Model Decisions](features/entities/notes/01-definition-instance-model.md), then incorporated into [Core Glossary](general/GLOSSARY.md) and [Entity, Definition, And Instance Model](features/entities/notes/01-definition-instance-model.md).
 
 - ~~Should the pure simulation core depend directly on Scaffold packages, or should Scaffold be used only in Unity-facing adapters?~~ → No enforced boundary yet; allow Scaffold wherever it fits. (doc 08)
 - ~~Should card/entity values be stored primarily as flexible variables/tags, typed state records, or a hybrid?~~ → Start with key-value variables. (doc 08)
@@ -22,7 +22,7 @@ Status: initial answers captured in [Core Model Decisions](08-core-model-decisio
 
 ## Zones
 
-Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisions.md), then incorporated into [Zone Model](12-zone-model.md).
+Status: initial answers captured in [Zone Model Decisions](features/zones/notes/01-zone-model.md), then incorporated into [Zone Model](features/zones/notes/01-zone-model.md).
 
 - ~~What zone traits are mandatory in core?~~ → Zones are responsibility-based models (contents, arrangement, capacity, insertion/removal behavior, visibility, change bookkeeping), not a fixed trait checklist. (docs 11, 12)
 - ~~How should spatial board positions relate to zone membership?~~ → Spatial placement is outside the core zone model; it is view-defined or game-specific. (docs 11, 12)
@@ -33,7 +33,7 @@ Status: initial answers captured in [Zone Model Decisions](11-zone-model-decisio
 
 ## Rules And Scheduling
 
-Status: action-flow foundation captured in [Action Flow Decisions](14-action-flow-decisions.md) and [Action, Request, Command, And History Model](15-action-request-command-history-model.md). Naming discussion is framed in [Action Terminology Discussion](16-action-terminology-discussion.md), with a proposed vocabulary in [Action Definition Proposal](17-action-definition-proposal.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](20-engine-evaluation-loop.md). Trigger and reaction system captured in [Trigger And Reaction System](21-trigger-reaction-system.md). `GameRules` contract in [GameRules Shape](25-gamerules-shape.md). Snapshot shape in [Action Availability](28-action-availability-and-mapping.md). Snapshot production in [Snapshot Production Pipeline](29-snapshot-production-pipeline.md).
+Status: action-flow foundation captured in [Action Flow Decisions](features/actions/notes/01-command-pipeline.md) and [Action, Request, Command, And History Model](features/actions/notes/01-command-pipeline.md). Naming discussion is framed in [Action Terminology Discussion](general/GLOSSARY.md), with a proposed vocabulary in [Action Definition Proposal](features/actions/notes/01-command-pipeline.md). Engine loop and evaluator pattern captured in [Engine — Orchestrator And Evaluation Loop](features/engine/notes/01-evaluation-loop.md). Trigger and reaction system captured in [Trigger And Reaction System](features/triggers/notes/01-trigger-fold.md). `GameRules` contract in [GameRules Shape](features/engine/notes/02-gamerules-contract.md). Snapshot shape in [Action Availability](features/actions/notes/02-availability-snapshot.md). Snapshot production in [Snapshot Production Pipeline](features/engine/notes/03-snapshot-pipeline.md).
 
 Resolved:
 - ~~**Is the first scheduler a simple deterministic queue, or should a stack/priority model exist from the start?**~~ → FIFO queue in `GameEngine`. Stack/priority is a named variation via the same `GameRules` interface — no separate abstraction needed from the start. (doc 20)

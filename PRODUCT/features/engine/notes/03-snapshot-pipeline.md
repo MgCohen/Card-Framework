@@ -8,14 +8,14 @@ tags: [#engine, #snapshot, #available-actions]
 
 # Snapshot Production Pipeline — How AvailableActions Gets Built
 
-This document defines **how** the available-actions snapshot is produced and published. [Doc 28](28-action-availability-and-mapping.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](27-presentation-loop.md) and the `DrainResult.Snapshot` slot in [doc 25 §6](25-gamerules-shape.md).
+This document defines **how** the available-actions snapshot is produced and published. [Doc 28](features/actions/notes/02-availability-snapshot.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](features/presentation/notes/01-presentation-loop.md) and the `DrainResult.Snapshot` slot in [doc 25 §6](features/engine/notes/02-gamerules-contract.md).
 
 Builds on:
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface; `OnQueueDrained`
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game; concrete sketch
-- [27-presentation-loop.md](27-presentation-loop.md) — presentation loop; snapshot consumer
-- [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) — snapshot shape (templates)
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` interface; `OnQueueDrained`
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; concrete sketch
+- [features/presentation/notes/01-presentation-loop.md](features/presentation/notes/01-presentation-loop.md) — presentation loop; snapshot consumer
+- [features/actions/notes/02-availability-snapshot.md](features/actions/notes/02-availability-snapshot.md) — snapshot shape (templates)
 
 ---
 
@@ -90,7 +90,7 @@ public sealed record CastSpellTemplate(
 
 Two simplifications from doc 28's draft:
 
-- **`Type CommandType` instead of `ActionId`.** The handler registry is already keyed by command type ([doc 25 §6](25-gamerules-shape.md)); IntentMapper dispatches on it; history serialises it. No parallel string-id registry.
+- **`Type CommandType` instead of `ActionId`.** The handler registry is already keyed by command type ([doc 25 §6](features/engine/notes/02-gamerules-contract.md)); IntentMapper dispatches on it; history serialises it. No parallel string-id registry.
 - **Targets are `IReadOnlyList<EntityId>` uniformly.** Doc 10's instance/entity model already says everything targetable is an entity. Whether the entity is a card, slot, player, or zone is a per-action concern; the snapshot layer doesn't need to know.
 
 `TargetSlot` / `ModeOption` / `ParameterSpec` from doc 28 §2 remain valid building blocks; they live as fields on subtypes that need them. A `MoveCardTemplate` doesn't carry `Modes` or `Parameters` because it doesn't need them — typed shapes let each action surface only what it actually has.
@@ -213,7 +213,7 @@ Three reasons:
 
 1. **Effect-side symmetry.** Effects mid-execution also need to write the snapshot ([§7](#7-effect-side-symmetry-deferred)). Services give us one write path the rule and effects share. Parameter-passing would force the engine to build a different surface for effects.
 2. **Method signatures shrink to "what's ephemeral."** Cleaner reading; method intent is obvious.
-3. **Resolves [doc 26 Q1](26-pile-counter-sample-game.md) (state-pattern decision).** No method takes `state`; all read it from the provider. The asymmetry between `OnIncomingCommand` (no state) and the others (state passed) goes away.
+3. **Resolves [doc 26 Q1](support/samples/pile-counter.md) (state-pattern decision).** No method takes `state`; all read it from the provider. The asymmetry between `OnIncomingCommand` (no state) and the others (state passed) goes away.
 
 ---
 
@@ -329,17 +329,17 @@ Mechanical follow-up edits, not done in this doc.
 - **Effect-side symmetry.** Effects need `IAvailableActions` mid-execution. Likely through `IHandlerContext.Actions`. Needs a dedicated effect-flow doc that walks the full lifecycle (decision id threading, await semantics, suspension). Tracked as task #20.
 - **Snapshot scope as a state machine.** Current `FreeInput` / `DecisionPrompt` discriminator is transitional. The richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation) is the eventual direction. Revisit when the first async-decision-heavy game arrives.
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
-- **Bootstrap wiring.** Engine builder constructs services and the rule. Sketched in [doc 26 §9.8](26-pile-counter-sample-game.md); expand there to show service-injection wiring. Not blocking; cosmetic.
-- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([doc 28 §8](28-action-availability-and-mapping.md)).
+- **Bootstrap wiring.** Engine builder constructs services and the rule. Sketched in [doc 26 §9.8](support/samples/pile-counter.md); expand there to show service-injection wiring. Not blocking; cosmetic.
+- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([doc 28 §8](features/actions/notes/02-availability-snapshot.md)).
 - **`PlayerChoice` shape under typed templates.** Doc 28's `PlayerChoice` had named-string targets/parameters. With typed templates, IntentMapper switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<EntityId>` + `IReadOnlyDictionary<string, object>` parameters. Pin when IntentMapper is implemented.
 
 ---
 
 ## 10. Related
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface (this doc reshapes it)
-- [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game; concrete sketch
-- [27-presentation-loop.md](27-presentation-loop.md) — presentation loop; snapshot consumer
-- [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) — snapshot shape (templates)
-- [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — effect/decision flow context for [§7](#7-effect-side-symmetry-deferred)
-- [10-entity-definition-instance-model.md](10-entity-definition-instance-model.md) — entity model; informs uniform `EntityId` slots
+- [features/engine/notes/02-gamerules-contract.md](features/engine/notes/02-gamerules-contract.md) — `GameRules` interface (this doc reshapes it)
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; concrete sketch
+- [features/presentation/notes/01-presentation-loop.md](features/presentation/notes/01-presentation-loop.md) — presentation loop; snapshot consumer
+- [features/actions/notes/02-availability-snapshot.md](features/actions/notes/02-availability-snapshot.md) — snapshot shape (templates)
+- [features/effects/notes/01-async-dispatch.md](features/effects/notes/01-async-dispatch.md) — effect/decision flow context for [§7](#7-effect-side-symmetry-deferred)
+- [features/entities/notes/01-definition-instance-model.md](features/entities/notes/01-definition-instance-model.md) — entity model; informs uniform `EntityId` slots
