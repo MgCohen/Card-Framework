@@ -2,7 +2,7 @@
 type: plan
 status: drafting
 last-updated: 2026-04-29
-builds-on: [WORKFLOW-PROPOSAL.md, FLOW-SIMULATION.md]
+builds-on: [PRODUCT-BUILDER-PROPOSAL.md, FLOW-SIMULATION.md]
 tags: [#workflow, #migration]
 ---
 
@@ -10,7 +10,7 @@ tags: [#workflow, #migration]
 
 **Purpose.** Spell out exactly where each existing artifact lands, what needs to be created, what needs to be backfilled, and in what order. The workflow proposal punted migration to §9; this is that doc.
 
-**Scope.** One-time migration of the current 28-doc flat `RESEARCH/` (plus session checkpoint, prior art, sample game material) into the proposed `general/` + `features/` + `spikes/` + `support/` layout. Forward-going workflow lives in `WORKFLOW-PROPOSAL.md`.
+**Scope.** One-time migration of the current 28-doc flat `RESEARCH/` (plus session checkpoint, prior art, sample game material) into the proposed `general/` + `features/` + `spikes/` + `support/` layout. Forward-going workflow lives in `PRODUCT-BUILDER-PROPOSAL.md`.
 
 ---
 
@@ -24,7 +24,7 @@ RESEARCH/
     session-01.md … session-12.md # backfilled retroactively (lightweight)
 
   general/
-    WORKFLOW.md                   # promoted from Workflow/WORKFLOW-PROPOSAL.md
+    WORKFLOW.md                   # promoted from ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md
     GLOSSARY.md                   # from doc 09
     OPEN-QUESTIONS.md             # from doc 06
     ALIGNMENT-DEBT.md             # NEW — single source of truth for cascade entries; empty at start
@@ -38,7 +38,7 @@ RESEARCH/
     RECOMMENDATIONS.md            # from doc 07
     decisions/                    # NEW — project-wide ADRs; first entry: 0001-adopt-workflow.md
       0001-adopt-workflow.md      # the workflow itself, captured as ADR
-    _templates/                   # 8 doc-type templates (extracted from WORKFLOW-PROPOSAL §4)
+    _templates/                   # 7 doc-type templates (extracted from PRODUCT-BUILDER-PROPOSAL §4.1–§4.7)
       spike.md
       feature.md                  # NEW (Feature is doc type 4.2)
       model.md
@@ -46,7 +46,6 @@ RESEARCH/
       adr.md
       session.md
       checkpoint.md
-      plan.md
 
   features/
     entities/
@@ -115,7 +114,7 @@ RESEARCH/
 - **Doc 08 (core model decisions)** is a mega-decisions doc. Each decision becomes an ADR; the doc itself either disappears or becomes an index pointing to the ADRs.
 - **Doc 11 (zone model decisions)** folds into `features/zones/notes/01-zone-model.md` as the provenance section below the divider. Same pattern for doc 14 → `features/actions/notes/01-command-pipeline.md`.
 - **Doc 26 → Sample.** Pile Counter is the only sample so far. Status: `locked` (per session 9 decision), but re-check the four-part bar against current state of `features/engine/notes/02-gamerules-contract.md`.
-- **`Workflow/` folder** does not survive migration. Once the workflow is accepted, `WORKFLOW-PROPOSAL.md` → `general/WORKFLOW.md`; this guide becomes a session note for the migration session(s); `FLOW-SIMULATION.md` and `AI-FIRST-AUTOMATION.md` either fold into `general/` or get retired.
+- **`ProductBuilder/` folder** does not survive migration. Once the workflow is accepted, `PRODUCT-BUILDER-PROPOSAL.md` → `general/PRODUCT-BUILDER.md`; this guide becomes a session note for the migration session(s); `FLOW-SIMULATION.md` and `AI-FIRST-AUTOMATION.md` either fold into `general/` or get retired.
 
 ---
 
@@ -212,7 +211,7 @@ Plus async/effects:
 
 Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one screen, options-considered + decision + consequences. **One session** if focused, **two** if interleaved with structural moves.
 
-**Open question — global vs feature ADRs.** The proposal §1 only shows `features/<feature>/decisions/`. Workflow-level decisions (this migration; choice of ADR backfill scope; promotion-gate thresholds) have nowhere to live. **Suggestion**: add `general/decisions/` for project-wide decisions, mirroring per-feature counters. *Or* treat workflow decisions as out-of-band (in this `Workflow/` folder, pre-migration, and as ADRs against the workflow itself once `general/WORKFLOW.md` exists).
+**Open question — global vs feature ADRs.** The proposal §1 only shows `features/<feature>/decisions/`. Workflow-level decisions (this migration; choice of ADR backfill scope; promotion-gate thresholds) have nowhere to live. **Suggestion**: add `general/decisions/` for project-wide decisions, mirroring per-feature counters. *Or* treat workflow decisions as out-of-band (in this `ProductBuilder/` folder, pre-migration, and as ADRs against the workflow itself once `general/PRODUCT-BUILDER.md` exists).
 
 ---
 
@@ -224,8 +223,12 @@ Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one scre
 
 1. Create directories: `RESEARCH/general/`, `RESEARCH/general/_templates/`, `RESEARCH/features/{entities,zones,actions,triggers,effects,engine,presentation}/{notes,decisions}/`, `RESEARCH/spikes/`, `RESEARCH/support/{samples,prior-art}/`, `RESEARCH/sessions/`.
 2. Drop `.gitkeep` in empty leaves so git tracks the structure.
-3. Write the 8 doc-type templates into `general/_templates/` (extracted from §4 fenced blocks of WORKFLOW-PROPOSAL): `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`, `plan.md`. Ledger entry shapes are spec-only in §6 — no template files for them.
-4. Create empty ledgers with headers: `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (initial table + empty mermaid block). Seed `BACKLOG.md` with known deferred items: FEATURE-MAP auto-generator (trigger: ~15 Models or first drift), `/research:lint` skill, AI-driven check routines per [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md).
+3. Write the 7 doc-type templates into `general/_templates/` (extracted from §4.1–§4.7 fenced blocks of PRODUCT-BUILDER-PROPOSAL): `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`. §4.8 (Plan) and ledger entry shapes (§6) are spec-only — no template files.
+4. Create empty ledgers with headers: `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (initial table + empty mermaid block). Seed `BACKLOG.md` with known deferred items:
+   - FEATURE-MAP auto-generator (trigger: ~15 Models or first drift incident).
+   - `/builder:lint` skill (trigger: post-migration, after Tier 1 commands settle).
+   - `builder-drift-detection` skill (session + CI modes — trigger: first feature reaches `implemented` status). Per [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §5.
+   - Other Tier 2/3 commands and skills (see `AI-FIRST-AUTOMATION.md` §8 sequencing).
 5. Create `general/decisions/` folder with `.gitkeep` and write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption itself.
 6. Commit + PR titled "Workflow migration phase 1: skeleton."
 
@@ -287,8 +290,8 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 
 ### Phase 8 — Workflow promotion + cleanup
 
-30. `git mv Workflow/WORKFLOW-PROPOSAL.md RESEARCH/general/WORKFLOW.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
-31. Leave `Workflow/MIGRATION-GUIDE.md`, `Workflow/FLOW-SIMULATION.md`, `Workflow/AI-FIRST-AUTOMATION.md`, and `Workflow/WORKFLOW-GAPS.md` in place. They're living artifacts that may evolve when the workflow gets exercised for real — staging room for the workflow's own iteration. `Workflow/` survives.
+30. `git mv ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md RESEARCH/general/PRODUCT-BUILDER.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
+31. Leave `ProductBuilder/MIGRATION-GUIDE.md`, `ProductBuilder/FLOW-SIMULATION.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md`, and `ProductBuilder/PRODUCT-BUILDER-GAPS.md` in place. They're living artifacts that may evolve when the workflow gets exercised for real — staging room for the workflow's own iteration. `ProductBuilder/` survives.
 32. Final commit + PR titled "Workflow accepted and migrated."
 
 ---
@@ -310,7 +313,7 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 
 ## 7. Out of scope for this migration
 
-- Updating `DOCS/` and `PLANS/` — they're not part of the research workflow scope.
+- `PLANS/` design — internals are not workflow-specified; it's an ephemeral schedule layer. Migration doesn't touch it.
 - Code-side renames in `Assets/` — separate effort.
-- Promoting any settled Models to `DOCS/` (the §5.6 promotion gate) — eligibility checks happen post-migration on a per-doc basis.
+- Flipping any Models to `implemented` (the §5.6.2 build gate) — eligibility checks happen post-migration on a per-doc basis, when code lands that satisfies the contract.
 - Workflow tooling automation — covered in `AI-FIRST-AUTOMATION.md`, separate work stream.

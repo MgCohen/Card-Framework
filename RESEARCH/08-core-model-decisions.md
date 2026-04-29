@@ -8,7 +8,7 @@ The direction for the core model is now:
 
 - Do not enforce a hard Scaffold boundary yet.
 - Start with key-value variables; do not hardcode variable names into the framework.
-- Let later exploration decide whether Store, Entities, a hybrid, or a custom project model should become canonical.
+- Per-entity variables are canonical Store slices accessed through Entities-shaped handles, via the `com.scaffold.entities.states` bridge package. (See "Canonical State" below.)
 - Card instances are independent from zone membership.
 - Every entity should have a base definition.
 - Instances are definitions plus modifiers, with attachments and equipment modeled as their own instances.
@@ -38,7 +38,7 @@ Confidence: medium.
 
 Follow-up:
 
-Validate whether `com.scaffold.entities` can represent runtime card state comfortably, and whether `com.scaffold.states` should wrap, mirror, or replace that state.
+Resolved by `com.scaffold.entities.states`: per-entity variables are canonical `EntityVariableState` slices in the Store, exposed through `StateEntity<TDef>` handles that implement both `IReadOnlyEntity` and `IMutableEntity`. Store wraps; Entities is the ergonomic surface. (See "Canonical State" below and doc 10.)
 
 ## Value Model
 
@@ -86,36 +86,30 @@ Define how variable keys are registered, typed, validated, displayed, and versio
 
 Question: what is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?
 
-Decision: unresolved, but keep Entities and Store both on the table.
+Decision: **Store is canonical; Entities is the API.** Per-entity variables live as `EntityVariableState` slices in the Store. `StateEntity<TDefinition>` is a thin handle implementing `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. Mutations route through `Store.Execute` / `Store.ExecuteBatch`; reads use a per-rebuild effective-value cache. Game-level state (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside the entity slices.
 
-If Store and Entities work well together, use them together. If they fight, choose one canonical path or create a custom project-specific style.
-
-Possible directions:
-
-- Entities are canonical, Store observes or indexes them.
-- Store is canonical, entity instances are a convenient authoring/runtime facade.
-- Definitions use Scaffold Entities, runtime state uses Store.
-- A custom card framework model borrows ideas from both.
+This is implemented by **`com.scaffold.entities.states`** (the bridge package). See doc 10 §"Store And Entities Relationship" for the integration shape.
 
 Reasoning:
 
-This is the most important Core Model uncertainty. Deciding too early could either duplicate state or make simple card behavior hard to express.
+- One source of truth — no duplication, no two-way sync.
+- Snapshot/rollback comes from the Store for free, including per-entity variables.
+- Polymorphic substitution: any code holding `IReadOnlyEntity` / `IMutableEntity` works against either plain Entities or the state-backed handle.
+- Modifier ordering, source attribution, atomic batches, and coalesced subscriber notifications all come from the Store + bridge.
 
 Implication:
 
-Upcoming docs should describe concepts without pretending the storage implementation is decided.
+Three engine-side responsibilities follow from the bridge boundary (none require further Scaffold work):
 
-Confidence: low.
+- **Handle re-hydration after `LoadSnapshot`.** Snapshots contain canonical `EntityVariableState` slices, not handles. The engine maintains an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` references after load.
+- **Disposal on entity death.** The engine calls `StateEntity.Dispose()` on the entity-removal path so the Store listener is released; short-lived tokens otherwise leak handlers.
+- **Structural-change subscriptions are diff-based.** A single `ExecuteBatch` that removes and re-adds the same variable produces no net `Added`/`Removed` event. For per-mutation granularity, subscribe to the `EntityVariableState` slice directly and diff. (Coalesced view is the right default for continuous-effects cleanup — doc 24.)
+
+Confidence: high.
 
 Follow-up:
 
-Design a small scenario later and model it both ways:
-
-- Card definition with base cost and attack.
-- Runtime card instance in hand.
-- Cost modifier attached by an aura/equipment.
-- Zone movement from hand to play area.
-- History emitted for the move and value changes.
+The small scenario sketch (definition + base values, runtime instance, cost modifier from aura, zone movement, history) is now an implementation exercise, not a design exercise.
 
 ## Instances And Zones
 
@@ -232,7 +226,7 @@ The exact storage for this model is still open. The conceptual model is accepted
 
 - Do not require a pure non-Scaffold simulation boundary yet.
 - Use key-value variable-based entities as the first mental model.
-- Keep canonical state open until Store and Entities are compared.
+- Per-entity variables are canonical Store slices; the entity handle is the API. (`com.scaffold.entities.states` bridge.)
 - Preserve the same instance across zone changes by default.
 - Require every entity to have a definition.
 - Model attachments/equipment/composition as relationships between instances, not as hidden fields on one card.

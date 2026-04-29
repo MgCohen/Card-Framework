@@ -2,13 +2,13 @@
 type: model
 status: draft
 last-updated: 2026-04-29
-builds-on: [WORKFLOW-PROPOSAL.md]
+builds-on: [PRODUCT-BUILDER-PROPOSAL.md]
 tags: [#workflow, #simulation]
 ---
 
 # Flow Simulation — Replaying Past Sessions Under the New Workflow
 
-**Purpose.** Walk session-by-session through what we *actually* did and re-cast it as it would have unfolded under the WORKFLOW-PROPOSAL. The goal is to stress-test the workflow against history we already know — does it absorb the moves we made, or does it pinch?
+**Purpose.** Walk session-by-session through what we *actually* did and re-cast it as it would have unfolded under the PRODUCT-BUILDER-PROPOSAL. The goal is to stress-test the workflow against history we already know — does it absorb the moves we made, or does it pinch?
 
 **Method.** One section per session, drawn from PR titles, commits, and the docs that landed. For each: the entry context, the branches taken, the artifacts created, and how each maps onto the proposed structure. Where the proposed workflow would have produced a *different* shape, that's called out.
 
@@ -205,15 +205,15 @@ tags: [#workflow, #simulation]
 
 **Entry context.** Pattern of sessions had stabilized; no shared shape for the work was written down.
 
-**What actually happened.** Multiple iterations on `WORKFLOW-PROPOSAL.md`. Then the user asked to move it to `Workflow/` and expand with this doc, a migration guide, and an AI-first plan.
+**What actually happened.** Multiple iterations on `PRODUCT-BUILDER-PROPOSAL.md`. Then the user asked to move it to `ProductBuilder/` and expand with this doc, a migration guide, and an AI-first plan.
 
 **Under the new workflow.** This is meta — the proposal *defines* the workflow, so it can't fully obey it yet. But forward-going:
 
-- This very document, `Workflow/FLOW-SIMULATION.md`, is itself a Model (or arguably an analysis spike). Front-matter says `type: model`.
-- `Workflow/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 8 doc types — closer to a Plan than anything else.
-- `Workflow/AI-FIRST-AUTOMATION.md` is a forward-looking spec. Closest to a Spike (premise: "what would AI-first look like?") that may graduate into multiple Models as items get built.
+- This very document, `ProductBuilder/FLOW-SIMULATION.md`, is itself a Model (or arguably an analysis spike). Front-matter says `type: model`.
+- `ProductBuilder/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 8 doc types — closer to a Plan than anything else.
+- `ProductBuilder/AI-FIRST-AUTOMATION.md` is a forward-looking spec. Closest to a Spike (premise: "what would AI-first look like?") that may graduate into multiple Models as items get built.
 
-**Note.** `Workflow/` is the staging area for the workflow design itself. After migration, `WORKFLOW-PROPOSAL.md` graduates to `RESEARCH/general/WORKFLOW.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `WORKFLOW-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
+**Note.** `ProductBuilder/` is the staging area for the workflow design itself. After migration, `PRODUCT-BUILDER-PROPOSAL.md` graduates to `RESEARCH/general/PRODUCT-BUILDER.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
 
 ---
 

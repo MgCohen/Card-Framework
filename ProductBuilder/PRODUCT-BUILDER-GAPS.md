@@ -2,13 +2,13 @@
 type: spike
 status: concluded
 last-updated: 2026-04-29
-builds-on: [WORKFLOW-PROPOSAL.md]
+builds-on: [PRODUCT-BUILDER-PROPOSAL.md]
 tags: [#workflow, #gaps]
 ---
 
 # Workflow Gaps — Pressure-Testing the Hard Parts
 
-> **Status: concluded 2026-04-29.** All 13 questions resolved. Resolutions folded into [`WORKFLOW-PROPOSAL.md`](WORKFLOW-PROPOSAL.md) (§3, §4.3, §4.4, §5.7–§5.10, §6, §8) and [`MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md) (§1 structure, §5 phases 1–2). Doc kept as the trail of *why* each direction was chosen — the sketch is the provenance. See §8 of WORKFLOW-PROPOSAL for the canonical resolved list.
+> **Status: concluded 2026-04-29.** All 13 questions resolved. Resolutions folded into [`PRODUCT-BUILDER-PROPOSAL.md`](PRODUCT-BUILDER-PROPOSAL.md) (§3, §4.3, §4.4, §5.7–§5.10, §6, §8) and [`MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md) (§1 structure, §5 phases 1–2). Doc kept as the trail of *why* each direction was chosen — the sketch is the provenance. See §8 of PRODUCT-BUILDER-PROPOSAL for the canonical resolved list.
 
 **Premise.** Two areas in the workflow proposal need pressure-testing before they get folded in: the **debt flow mechanics** (§5.7–§5.10 candidates) and the **feature map** (a bird's-eye view artifact). Both are clearly needed, but the *shape* of each isn't obvious. This doc sketches each, lists open design questions, and recommends a default direction.
 
@@ -38,7 +38,7 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 **Open questions.**
 
 - **Granularity.** One ledger entry per affected doc, or one per cascading Model edit? *Recommend: per affected doc.* Coarser entries are easier to write but harder to close — you'd need a checkbox per affected doc anyway.
-- **Who writes it — human or AI?** Either. The skill `/research:open-debt` (AI-FIRST §2) automates the mechanical part. Human still picks the affected-paths list because that's a judgment call.
+- **Who writes it — human or AI?** Either. The skill `/builder:open-debt` (AI-FIRST §2) automates the mechanical part. Human still picks the affected-paths list because that's a judgment call.
 - **What about cross-feature cascades (Model in features/effects affects features/actions)?** Same flow — the §7 list crosses feature boundaries freely. The ledger is project-global.
 - **Does the front-matter `has-pending-debt: true` flag actually pull weight?** Suggested but optional. Lets a linter find docs whose state lags. If we don't build the linter, the flag is noise — ledger alone suffices.
 
@@ -86,7 +86,7 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 
 - **`builds-on:` is optional in front matter today (§3 says "optional, paths"). Should it become mandatory for Models?** Probably yes — it's the input to backtracking. Cheap to fill in at write time, expensive to reconstruct later.
 - **What about transitive dependencies?** If A builds on B and B builds on C, and C supersedes — does A know? Only if `builds-on:` chains explicitly. Recommend: keep direct edges only, walk transitively at debt-time.
-- **Auto-walking the graph is a tooling job.** Pure manual dependency-walk is error-prone. This pushes us toward a `/research:supersede-cascade` skill (AI-FIRST tier 2 candidate).
+- **Auto-walking the graph is a tooling job.** Pure manual dependency-walk is error-prone. This pushes us toward a `/builder:supersede-cascade` skill (AI-FIRST tier 2 candidate).
 
 ### 1.4 §5.10 — Reference staleness (automation, not workflow)
 
@@ -94,7 +94,7 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 
 **Proposed shape.**
 
-- Runs as a CI hook or a `/research:lint` skill.
+- Runs as a CI hook or a `/builder:lint` skill.
 - Output: a list of stale references. Doesn't auto-fix.
 - Findings go into `general/ALIGNMENT-DEBT.md` as new entries (one per stale ref).
 
@@ -203,7 +203,7 @@ After this sketch is reviewed:
 
 - Fold a one-paragraph mention into proposal §1 (folder layout) noting `general/FEATURE-MAP.md`.
 - Add a §6 row in the cross-cutting infrastructure table.
-- Defer the auto-generation skill to AI-FIRST tier 2 (`/research:rebuild-feature-map`).
+- Defer the auto-generation skill to AI-FIRST tier 2 (`/builder:rebuild-feature-map`).
 - Hand-maintain v1; auto-generate v2.
 
 ---

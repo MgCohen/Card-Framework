@@ -2,7 +2,7 @@
 type: spike
 status: active
 last-updated: 2026-04-29
-builds-on: [WORKFLOW-PROPOSAL.md, FLOW-SIMULATION.md, MIGRATION-GUIDE.md]
+builds-on: [PRODUCT-BUILDER-PROPOSAL.md, FLOW-SIMULATION.md, MIGRATION-GUIDE.md]
 tags: [#workflow, #automation, #ai-first]
 ---
 
@@ -37,31 +37,35 @@ The full automation surface in one table. Single source of truth for "what exist
 
 | Name | Type | Trigger | Status | Section |
 |------|------|---------|--------|---------|
-| `/research:bootstrap` | command | New project (once-per-project) | sketched | §3 |
-| `/research:start-session` | command | Beginning of every session | documented | §3 |
-| `/research:new <type> <feature> <title>` | command | Creating a doc | documented | §3 |
-| `/research:settle-decision <model-path>` | command | Model decision becomes ADR-worthy | documented | §3 |
-| `/research:open-debt <reason> <paths…>` | command | Model edit cascades | documented | §3 |
-| `/research:close-debt <entry-id>` | command | Reconciling debt | documented | §3 |
-| `/research:supersede-cascade <old-adr> <new-adr>` | command | ADR superseded | sketched | §3 |
-| `/research:abandon-model <model-path> <reason>` | command | Model abandoned (Q9) | sketched | §3 |
-| `/research:add-to-backlog <title>` | command | Deferring concrete work (Q7) | sketched | §3 |
-| `/research:promote-glossary <term> [def]` | command | New term or rename | documented | §3 |
-| `/research:rebuild-feature-map` | command | Models added/removed (Q6 deferred) | sketched | §3 |
-| `/research:lint` | command | Manual or CI (Q13) | sketched | §3 |
-| `/research:end-session` | command | Wrapping up a session | documented | §3 |
-| `/research:promote-to-docs <model-path>` | command | Model passes promotion gate | documented | §3 |
+| `/builder:bootstrap` | command | New project (once-per-project) | sketched | §3 |
+| `/builder:start-session` | command | Beginning of every session | documented | §3 |
+| `/builder:new <type> <feature> <title>` | command | Creating a doc | documented | §3 |
+| `/builder:new-feature <name>` | command | Adding a new feature post-v1 (§5.11) | documented | §3 |
+| `/builder:settle-decision <model-path>` | command | Model decision becomes ADR-worthy | documented | §3 |
+| `/builder:open-debt <reason> <paths…>` | command | Model edit cascades | documented | §3 |
+| `/builder:close-debt <entry-id>` | command | Reconciling debt | documented | §3 |
+| `/builder:supersede-cascade <old-adr> <new-adr>` | command | ADR superseded | sketched | §3 |
+| `/builder:abandon-model <model-path> <reason>` | command | Model abandoned (Q9) | sketched | §3 |
+| `/builder:add-to-backlog <title>` | command | Deferring concrete work (Q7) | sketched | §3 |
+| `/builder:promote-glossary <term> [def]` | command | New term or rename | documented | §3 |
+| `/builder:rebuild-feature-map` | command | Models added/removed (Q6 deferred) | sketched | §3 |
+| `/builder:lint` | command | Manual or CI (Q13) | sketched | §3 |
+| `/builder:check-drift <feature>` | command | Session-time drift check on a feature (§5.12) | documented | §3 |
+| `/builder:end-session` | command | Wrapping up a session | documented | §3 |
+| `/builder:settle <path>` | command | Research gate: `draft → settled` (§5.6.1) | documented | §3 |
+| `/builder:implement <path>` | command | Build gate: `settled → implemented` (§5.6.2) | documented | §3 |
 | `PostToolUse` front-matter check | hook | Write/Edit to `RESEARCH/**.md` | sketched | §4 |
 | `Stop` end-session reminder | hook | Claude stops mid-session | sketched | §4 |
 | `PreToolUse` git-commit sanity | hook | Bash `git commit` in `RESEARCH/` | sketched | §4 |
-| `research-debt-pass` | skill | Discharging debt at threshold | documented | §5 |
-| `research-rename-cascade` | skill | Glossary rename | documented | §5 |
-| `research-spike-graduate` | skill | Spike informs Model | documented | §5 |
-| `research-sample-relock` | skill | Locked sample dependency changes | documented | §5 |
-| `research-feature-map-rebuild` | skill | Richer FEATURE-MAP regen + analysis | sketched | §5 |
-| `research-promote` | skill | End-to-end DOCS/ promotion | sketched | §5 |
-| `research-explorer` | subagent | Project-scoped search | documented | §6 |
-| `research-reviewer` | subagent | Pre-commit Model/ADR review | documented | §6 |
+| `builder-debt-pass` | skill | Discharging debt at threshold | documented | §5 |
+| `builder-rename-cascade` | skill | Glossary rename | documented | §5 |
+| `builder-spike-graduate` | skill | Spike informs Model | documented | §5 |
+| `builder-sample-relock` | skill | Locked sample dependency changes | documented | §5 |
+| `builder-feature-map-rebuild` | skill | Richer FEATURE-MAP regen + analysis | sketched | §5 |
+| `builder-drift-detection` | skill / CI agent | Compare contracts to code post-merge; propose updates via PR (§5.12) | documented | §5 |
+| `builder-promote` | skill | End-to-end status promotion (settle + implement chain) | sketched | §5 |
+| `builder-explorer` | subagent | Project-scoped search | documented | §6 |
+| `builder-reviewer` | subagent | Pre-commit Model/ADR review | documented | §6 |
 
 **Outstanding mechanics** (rules without a clear automation home yet) — see §9:
 - Session-note `debt: N opened` assertion enforcement.
@@ -72,9 +76,9 @@ The full automation surface in one table. Single source of truth for "what exist
 
 ## 3. Slash commands (high-leverage, build first)
 
-Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<name>`.
+Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<name>`.
 
-### `/research:start-session`
+### `/builder:start-session`
 
 **Trigger.** Beginning of every session.
 
@@ -87,7 +91,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Today, every session opens with re-reading the checkpoint to recover state. This compresses that into one command. The pre-created session note means the trail starts capturing immediately, not at session-end.
 
-### `/research:new <type> <feature> <title>`
+### `/builder:new <type> <feature> <title>`
 
 **Trigger.** "I need a new doc."
 
@@ -101,7 +105,22 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Prevents template drift. Enforces front matter without nagging.
 
-### `/research:settle-decision <model-path>`
+### `/builder:new-feature <name>`
+
+**Trigger.** A new feature is being added (post-v1, recurring; or during initial design exploration when a major system is identified).
+
+**Behavior.** Walks the §5.11 ceremony interactively:
+
+1. Create folder structure: `features/<name>/`, `features/<name>/notes/`, `features/<name>/decisions/`.
+2. Generate `features/<name>/<name>.md` stub from `_templates/feature.md`. Status `draft`. Prompt user for: Purpose blurb, Boundaries blurb. Other sections empty (thicken later).
+3. Prompt for dependencies: which existing features does this build on? Generate suggested `builds-on:` candidates for the first Model.
+4. Surface orientation files for review: `general/CAPABILITY-MAP.md`, `general/FEATURE-MAP.md`, `general/ROADMAP.md`. Show the spots where edits make sense (don't auto-edit; suggest with diff).
+5. Patch the current `sessions/session-NN.md` content section: `feature: <name> created`.
+6. Report: feature scaffold ready; first design session can begin.
+
+**Why.** Post-v1, feature additions are recurring. Without this skill, the §5.11 steps get half-followed (orientation files lag, dependencies get unnamed, session-note assertions miss). Encoding makes it cheap to do correctly.
+
+### `/builder:settle-decision <model-path>`
 
 **Trigger.** A Model just made a real decision; ADR-worthy.
 
@@ -114,17 +133,17 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Today, "and now write the ADR" is a manual second pass. This makes ADR-writing a one-command tax instead of a five-minute one.
 
-### `/research:open-debt <reason> <affected-paths…>`
+### `/builder:open-debt <reason> <affected-paths…>`
 
 **Trigger.** A Model just changed; downstream docs need re-checking.
 
 **Behavior.**
-1. Append **one entry per affected doc** to `general/ALIGNMENT-DEBT.md`: source path, target path, date, reason, status `open`. (Per [WORKFLOW-PROPOSAL.md §5.7](WORKFLOW-PROPOSAL.md) the ledger is the single source of truth — no inline `## Implications` section gets written to the Model.)
+1. Append **one entry per affected doc** to `general/ALIGNMENT-DEBT.md`: source path, target path, date, reason, status `open`. (Per [PRODUCT-BUILDER-PROPOSAL.md §5.7](PRODUCT-BUILDER-PROPOSAL.md) the ledger is the single source of truth — no inline `## Implications` section gets written to the Model.)
 2. Append a `debt: N opened` line to the current `sessions/session-NN.md` content section (or update it if a `debt:` line already exists for this edit).
 
 **Why.** Implicit alignment debt was the workflow's killer feature in the FLOW-SIMULATION analysis. This makes opening debt cheap.
 
-### `/research:close-debt <entry-id>`
+### `/builder:close-debt <entry-id>`
 
 **Trigger.** The debt-pass session is doing the actual reconciliation.
 
@@ -134,7 +153,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Symmetry with `open-debt`. Closing debt is mechanical; should be one command.
 
-### `/research:promote-glossary <term> [definition]`
+### `/builder:promote-glossary <term> [definition]`
 
 **Trigger.** New vocabulary just got named, or an existing term got renamed.
 
@@ -145,7 +164,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Sessions 3, 5, 6 of FLOW-SIMULATION were all rename cascades. The bottleneck is human-eyeballed grep. Lifting it into one command shrinks rename sessions by half.
 
-### `/research:end-session`
+### `/builder:end-session`
 
 **Trigger.** Wrapping up.
 
@@ -159,18 +178,23 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** End-of-session is the highest-leverage automation point — most state writes happen here, and forgetting one breaks the spine.
 
-### `/research:promote-to-docs <model-path>`
+### `/builder:settle <feature-or-model-path>` and `/builder:implement <feature-or-model-path>`
 
-**Trigger.** A Model passes the §5.6 promotion gate.
+Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 build gate).
 
-**Behavior.**
-1. Verify the four conditions: status=settled, no open debt, referenced by an active plan or implementation, stable ≥ 2 sessions.
-2. If all pass: `git mv` to `DOCS/`, update front matter, leave a tombstone in `RESEARCH/` pointing at the new home (or just rely on git history — this is a real choice for the workflow).
+**`/builder:settle` — flips `draft → settled`.**
+1. Verify §5.6.1 conditions: no open ledger entries against this path, stable ≥ 2 sessions, all glossary terms used appear in `general/GLOSSARY.md`.
+2. If all pass: flip frontmatter `status: draft → settled`, bump `last-updated`. Optionally surface dependent docs (`builds-on:` reverse lookup) so user can chain settles.
 3. If any fail: print the failing condition, abort.
 
-**Why.** Promotion is rare and easy to fluff. Making it a command makes it deliberate AND verified.
+**`/builder:implement` — flips `settled → implemented`.**
+1. Verify §5.6.2 conditions: status is `settled`, no open drift entries, code in implementation directory satisfies the contract (run `/builder:lint` drift check first).
+2. If lint passes and user confirms: flip status to `implemented`, bump `last-updated`.
+3. If any fail: print the failing condition, abort.
 
-### `/research:lint`
+**Why.** Status flips are commitments, not casual edits. Making each gate a command makes it deliberate AND verified. Replaces the old `promote-to-docs` notion (no DOCS/ to promote to — status is the gate).
+
+### `/builder:lint`
 
 **Trigger.** Manual run, CI step, or end-of-session sweep.
 
@@ -182,7 +206,25 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Q13 locked report-only enforcement. The linter feeds the ledger; the §5.8 threshold of 5 catches accumulation. Blocking commits creates bypass habits — generation-and-record beats blocking.
 
-### `/research:rebuild-feature-map`
+### `/builder:check-drift <feature>`
+
+**Trigger.** Session-time invocation when you want to verify a specific feature's contract still matches its implementation. Mirrors the CI-time `builder-drift-detection` agent (§5) but runs on demand and on a single feature.
+
+**Behavior.**
+1. Resolve the feature path. Read its Feature root + Models.
+2. Identify implementation files for this feature — AI judgment from the contract surface and project structure.
+3. Read the implementation code.
+4. Compare semantically: contract surface (Contracts, Invariants, Examples) vs. code behavior. Surface:
+   - Contract describes X but code does Y (semantic drift).
+   - Code adds capability not in contract (contract underspecified).
+   - Contract Example doesn't match implementation (example drift).
+   - Terminology mismatch (rename drift).
+5. Print findings to the session. For each finding, propose a resolution (update contract, update code, accept divergence). User decides per finding.
+6. Apply the decisions: open ledger entries for accepted-divergence; patch contract or open code-update tickets for the others.
+
+**Why.** Mirrors the CI agent's logic, lets you check on demand. Useful when the CI agent is rate-limited, when working on a feature without a recent merge, or when the user wants explicit visibility before an `implemented` status flip.
+
+### `/builder:rebuild-feature-map`
 
 **Trigger.** Models added or removed; or end-of-session cleanup if `general/FEATURE-MAP.md` is suspected stale. Q6 defers active build until ~15 Models or first drift incident.
 
@@ -197,7 +239,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Sketched here so the implementation is on the BACKLOG with a clear shape. Picks up ready when the deferral trigger hits.
 
-### `/research:supersede-cascade <old-adr> <new-adr>`
+### `/builder:supersede-cascade <old-adr> <new-adr>`
 
 **Trigger.** An ADR is being superseded.
 
@@ -211,7 +253,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** §5.9 backtracking is impossible to do reliably by hand. Highest-value automation candidate after the open/close-debt commands. Without it, supersessions silently invalidate downstream framing.
 
-### `/research:abandon-model <model-path> <reason>`
+### `/builder:abandon-model <model-path> <reason>`
 
 **Trigger.** A Model is being abandoned — the line of inquiry was wrong; no replacement exists. Distinct from supersession.
 
@@ -224,7 +266,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Q9 added `abandoned` as a distinct status. Wrong handling either loses the trail or pollutes the dep graph. Encoding the steps prevents both.
 
-### `/research:add-to-backlog <title>`
+### `/builder:add-to-backlog <title>`
 
 **Trigger.** Deferring concrete work mid-session (per Q7).
 
@@ -235,14 +277,14 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 
 **Why.** Q7 added the BACKLOG ledger. Cheap-to-invoke entry-opening is the matching primitive — without it, deferred work falls back to scattering notes.
 
-### `/research:bootstrap`
+### `/builder:bootstrap`
 
 **Trigger.** Starting a new project under this workflow. Once-per-project.
 
 **Behavior.** Walks the §5.0 8-step bootstrap interactively:
 1. Ask for: project name, vision blurb, candidate features (5–12 likely).
 2. Create skeleton: `general/`, `features/<each>/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`.
-3. Drop all 8 doc-type templates into `general/_templates/` (extracted from WORKFLOW.md §4).
+3. Drop all 7 doc-type templates into `general/_templates/` (extracted from PRODUCT-BUILDER.md §4.1–§4.7).
 4. Initialize empty ledgers: `OPEN-QUESTIONS.md`, `ALIGNMENT-DEBT.md`, `BACKLOG.md`, `FEATURE-MAP.md` (stub with vision + empty mermaid), `GLOSSARY.md` (empty changelog).
 5. Create `general/decisions/` with `0001-adopt-workflow.md` from a project template.
 6. Write `general/VISION.md` from the supplied blurb.
@@ -264,7 +306,7 @@ Hooks fire on Claude Code events. They run whether you want them or not — high
 
 ### `Stop` (session-end auto-checkpoint)
 
-- After Claude stops responding, scan for changed `RESEARCH/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /research:end-session"*.
+- After Claude stops responding, scan for changed `RESEARCH/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /builder:end-session"*.
 - Friction cost is real here. Build only if forgetting end-session becomes a recurring problem.
 
 ### `PreToolUse` on `Bash` for `git commit` in `RESEARCH/`
@@ -282,24 +324,24 @@ The proposal favors generative over enforcing. Blocking hooks fight the user. Ev
 
 Skills (under `.claude/skills/<name>/`) bundle instructions + light tooling. Use when the task needs a sequence of steps with judgment at each branch.
 
-### `research-debt-pass`
+### `builder-debt-pass`
 
 A full alignment-debt session as a skill. Steps:
 
 1. Read `general/ALIGNMENT-DEBT.md`. Pick top entries (or honor a user-passed list).
 2. For each entry, read the "implications" doc and each affected doc.
 3. Propose patches as diffs. User approves each.
-4. Run `/research:close-debt` per resolved entry.
+4. Run `/builder:close-debt` per resolved entry.
 5. End with a session-note draft.
 
 This is what session 6 of FLOW-SIMULATION looks like, fully automated except for the diff approvals.
 
-### `research-rename-cascade`
+### `builder-rename-cascade`
 
 Glossary rename → cascade across the project. Steps:
 
 1. User specifies old → new term.
-2. `/research:promote-glossary` first.
+2. `/builder:promote-glossary` first.
 3. Grep `RESEARCH/` for old term (case-sensitive AND -insensitive variants).
 4. Generate per-file diff proposals.
 5. Apply approved diffs in one commit per logical scope (per-feature is a reasonable grain).
@@ -308,7 +350,7 @@ Glossary rename → cascade across the project. Steps:
 
 This is sessions 3 + 5 + 6 collapsed.
 
-### `research-spike-graduate`
+### `builder-spike-graduate`
 
 A spike just informed a Model. Steps:
 
@@ -320,7 +362,7 @@ A spike just informed a Model. Steps:
 
 Trivial but the kind of thing that's *always* forgotten. Strong candidate.
 
-### `research-sample-relock`
+### `builder-sample-relock`
 
 A locked sample's design dependencies changed. Steps:
 
@@ -334,9 +376,9 @@ A locked sample's design dependencies changed. Steps:
 
 This handles session 11's Pile Counter cascade explicitly, instead of the silent re-validation that actually happened.
 
-### `research-feature-map-rebuild`
+### `builder-feature-map-rebuild`
 
-Richer than `/research:rebuild-feature-map`. The slash command does the mechanical regen; this skill adds analysis steps that surface design problems:
+Richer than `/builder:rebuild-feature-map`. The slash command does the mechanical regen; this skill adds analysis steps that surface design problems:
 
 1. **Detect orphan Models** — Models whose `builds-on:` chain doesn't reach a `root` Model. Flag with suggested cause (typo? actual orphan?).
 2. **Detect dependency cycles** between features. Surface as findings — cycles are usually a factoring smell.
@@ -347,9 +389,37 @@ Richer than `/research:rebuild-feature-map`. The slash command does the mechanic
 
 **Why.** Hand-maintained FEATURE-MAP eventually drifts; the analysis layer is what makes the auto-version actually trustworthy. Build alongside the basic regen, or skip until the basic version has been used and the seams show.
 
-### `research-promote`
+### `builder-promote`
 
-End-to-end promotion to DOCS. Composes `/research:promote-to-docs` with cross-ref sweep. Build later — promotion is rare today.
+End-to-end status promotion. Composes `/builder:settle` (research gate) and `/builder:implement` (build gate) with cross-ref sweep — typically used to promote a Feature plus all its Models in one chain when ready. Build later — chains are rare day-to-day.
+
+### `builder-drift-detection`
+
+The core drift-detection automation backing §5.12 of the proposal. A composite skill that runs in two modes:
+
+- **CI mode (primary):** triggered by PR merge events (GitHub Action or equivalent). Runs autonomously, produces PRs with proposed contract updates.
+- **Session mode:** invoked via `/builder:check-drift <feature>` (§3). Same logic, single feature, interactive surfacing.
+
+**Behavior (both modes).**
+
+1. **Identify changed files.** Git diff of the merged PR (CI) or files associated with the explicit feature (session).
+2. **Map files → features.** AI judgment: given the changed file paths and the project's feature roots, determine which features each file implements. Ambiguous cases → ledger entry "couldn't map file X" with status `open`; continue with mapped files.
+3. **Schedule checks** (CI mode only). De-duplicate (multiple PRs touching same feature get one check), batch (run on a cadence — immediate for high-priority features, batched for lower).
+4. **Read contracts and code.** For each touched feature, read the Feature root + Models, read the corresponding code.
+5. **Compare semantically.** AI agent compares contract surface (Contracts, Invariants, Examples sections) to code behavior. Categorizes findings: semantic drift / underspecification / example drift / terminology drift.
+6. **Propose resolution.**
+   - **CI mode:** opens a PR with proposed contract updates. PR description names the divergences and the proposed direction (update contract, mark drift, etc.). Each divergence is a commit in the PR for granular review.
+   - **Session mode:** prints findings; user/AI decides per-finding.
+7. **Track in ledger.** Each finding becomes an entry in `general/ALIGNMENT-DEBT.md` (`source=drift-detection, target=<feature>, reason=<finding>`). Closes when the proposed PR merges OR an explicit accept-divergence resolution lands.
+
+**Why two modes share one skill.** Same compare/propose logic; differs only in trigger and surfacing. Build session mode first (cheaper to debug), then wire to CI when the skill stabilizes.
+
+**Build sequence.**
+1. Session mode prototype. Tier 3.
+2. CI mode (GitHub Action or similar) once session mode is reliable. Tier 3.
+3. Eventual: smart enough to auto-resolve trivial cases (rename mirrors, typo fixes) — hybrid auto-update path. Far future BACKLOG.
+
+**BACKLOG seed entry.** *"Build `builder-drift-detection` skill (session mode + CI mode). Trigger: first feature reaches `implemented` status. References: PRODUCT-BUILDER-PROPOSAL §5.12, AI-FIRST §5."*
 
 ---
 
@@ -357,13 +427,13 @@ End-to-end promotion to DOCS. Composes `/research:promote-to-docs` with cross-re
 
 Cases where a subagent (separate context) earns its keep:
 
-### `research-explorer` (an Explore-style agent, project-tuned)
+### `builder-explorer` (an Explore-style agent, project-tuned)
 
 Pre-loaded with the project's structure: knows about `features/`, knows the doc types, knows ADR conventions. Used for: "find all ADRs that touch the snapshot pipeline," "what models depend on `features/effects/notes/01`," "summarize the trigger system across notes + ADRs."
 
 The `Explore` agent already exists. This is the same idea but with a project-specific knowledge prompt baked in.
 
-### `research-reviewer`
+### `builder-reviewer`
 
 Reviews a freshly-landed Model or ADR. Checklist:
 - Front matter valid? (`builds-on:` present and either path-list or `root`?)
@@ -383,11 +453,11 @@ The repo's root `AGENTS.md` (or a new `RESEARCH/CLAUDE.md`) should encode the wo
 1. The 8 doc types and their templates.
 2. The naming convention (`features/<feature>/notes/NN-<slug>.md`).
 3. The three-lifetimes-for-questions rule.
-4. The promotion gate.
+4. The two status gates (research gate + build gate).
 5. Pointer to `general/_templates/`.
 6. *Critical*: "Don't write to `RESEARCH/` outside the prescribed structure. If unsure, write a spike."
 
-Memory-side, equivalent guidance: "When working in `RESEARCH/`, follow `general/WORKFLOW.md`."
+Memory-side, equivalent guidance: "When working in `RESEARCH/`, follow `general/PRODUCT-BUILDER.md`."
 
 ---
 
@@ -396,33 +466,36 @@ Memory-side, equivalent guidance: "When working in `RESEARCH/`, follow `general/
 The 80/20 picks based on FLOW-SIMULATION patterns and the locked Q-set:
 
 **Tier 1 (build immediately post-migration):**
-- `/research:bootstrap` — only if a *new* project is being started. Post-migration this is dormant for Card Framework, but it's tier-1 for the workflow's reuse story.
-- `/research:start-session`
-- `/research:new`
-- `/research:end-session`
-- `/research:promote-glossary`
+- `/builder:bootstrap` — only if a *new* project is being started. Post-migration this is dormant for Card Framework, but it's tier-1 for the workflow's reuse story.
+- `/builder:start-session`
+- `/builder:new`
+- `/builder:end-session`
+- `/builder:promote-glossary`
 - CLAUDE.md / AGENTS.md additions
 
 These cover the bulk of every session and prevent the most common drift.
 
 **Tier 2 (build after a few sessions running on Tier 1):**
-- `/research:open-debt` and `/research:close-debt`
-- `/research:settle-decision`
-- `/research:add-to-backlog` (Q7)
-- `/research:lint` (Q13 — debt-feeding linter)
-- `research-debt-pass` skill
-- `research-rename-cascade` skill
+- `/builder:open-debt` and `/builder:close-debt`
+- `/builder:settle-decision`
+- `/builder:settle` and `/builder:implement` (the two status gates, §5.6)
+- `/builder:new-feature` (post-v1 cycle entry, §5.11 — dormant pre-v1, elevates to Tier 1 once interleaved mode begins)
+- `/builder:add-to-backlog` (Q7)
+- `/builder:lint` (Q13 — debt-feeding linter)
+- `builder-debt-pass` skill
+- `builder-rename-cascade` skill
 
 These automate the recurring patterns (debt, rename cascades, ADR creation, deferral capture, staleness detection) that the locked decisions depend on.
 
 **Tier 3 (build only when needed):**
-- `/research:supersede-cascade` — first ADR supersession will make this immediately valuable; until then, dormant.
-- `/research:abandon-model` — needed when first draft Model is abandoned.
-- `/research:rebuild-feature-map` and `research-feature-map-rebuild` — Q6 trigger: ~15 Models or first drift incident.
+- `/builder:supersede-cascade` — first ADR supersession will make this immediately valuable; until then, dormant.
+- `/builder:abandon-model` — needed when first draft Model is abandoned.
+- `/builder:rebuild-feature-map` and `builder-feature-map-rebuild` — Q6 trigger: ~15 Models or first drift incident.
+- `/builder:check-drift` and `builder-drift-detection` — trigger: first feature reaches `implemented` status (§5.12 of the proposal).
 - All hooks
-- `/research:promote-to-docs`, `research-promote` skill
-- `research-spike-graduate`, `research-sample-relock`
-- `research-explorer`, `research-reviewer` subagents
+- `/builder:settle`, `/builder:implement`, `builder-promote` skill
+- `builder-spike-graduate`, `builder-sample-relock`
+- `builder-explorer`, `builder-reviewer` subagents
 
 Lower-frequency operations. Build when forgetting them becomes a real cost, not preemptively.
 
@@ -439,22 +512,22 @@ Rules from the locked Q-set that need an automation home but don't have one yet.
 
 ### Session-note `debt: N opened` assertion enforcement
 
-**The rule (per §5.7 of WORKFLOW-PROPOSAL).** Every Model edit, before commit, must have either a matching `debt: N opened` line in `sessions/session-NN.md` content section, or `debt: none`. Empty/missing is forbidden.
+**The rule (per §5.7 of PRODUCT-BUILDER-PROPOSAL).** Every Model edit, before commit, must have either a matching `debt: N opened` line in `sessions/session-NN.md` content section, or `debt: none`. Empty/missing is forbidden.
 
 **Where it could live:**
-- **Inside `/research:open-debt`** — when opening debt, append the line. Already in updated behavior (§3) — covers the "edit cascades" path.
-- **Inside `/research:end-session`** — at session-end, scan diff for Model edits without matching `debt:` lines; surface for the user to either open debt or assert `debt: none`.
+- **Inside `/builder:open-debt`** — when opening debt, append the line. Already in updated behavior (§3) — covers the "edit cascades" path.
+- **Inside `/builder:end-session`** — at session-end, scan diff for Model edits without matching `debt:` lines; surface for the user to either open debt or assert `debt: none`.
 - **As a hook** — pre-commit warn-only when a Model file in the diff has no matching `debt:` line in the session note.
 
-**Recommended:** layer 1 in `/research:open-debt` (covers normal flow), layer 2 in `/research:end-session` (catches misses).
+**Recommended:** layer 1 in `/builder:open-debt` (covers normal flow), layer 2 in `/builder:end-session` (catches misses).
 
 ### Sample cooldown commit-message convention
 
 **The rule (per §4.4).** Sample edits commit with either `contract edit — cooldown reset` or `hygiene edit — no cooldown reset` in the message.
 
 **Where it could live:**
-- **Templated commit message** in a hypothetical `/research:edit-sample` skill that prompts for the type.
-- **Linter check** — `/research:lint` includes a rule: "Sample doc edited in last commit; commit message must contain one of the two markers."
+- **Templated commit message** in a hypothetical `/builder:edit-sample` skill that prompts for the type.
+- **Linter check** — `/builder:lint` includes a rule: "Sample doc edited in last commit; commit message must contain one of the two markers."
 
 **Recommended:** linter rule. Cheaper than a dedicated skill; surfaces violations as ledger entries.
 
@@ -463,8 +536,8 @@ Rules from the locked Q-set that need an automation home but don't have one yet.
 **The rule.** ADR filenames use a 4-digit counter scoped to their parent decisions/ folder. `general/decisions/` and each `features/<feature>/decisions/` have independent counters.
 
 **Where it could live:**
-- **Inside `/research:settle-decision`** — when generating the ADR file, glob the target folder, find the max NNNN, increment.
-- **Inside `/research:new adr <feature>`** — same logic when creating an ADR directly.
+- **Inside `/builder:settle-decision`** — when generating the ADR file, glob the target folder, find the max NNNN, increment.
+- **Inside `/builder:new adr <feature>`** — same logic when creating an ADR directly.
 
 **Recommended:** both. Trivial logic, costs nothing to duplicate.
 
@@ -478,9 +551,9 @@ Each outstanding mechanic is small. The cost isn't in defining them; it's in ens
 
 - **Where do these skills/commands live?** Under `.claude/` per-project, or as a shared plugin? Per-project is simpler; plugin lets other Card Framework forks pick up the workflow.
 - **Do hooks survive PRs?** If a hook lives in `.claude/settings.json` and the PR changes settings, the user needs to re-approve permissions. Friction. Probably keep hooks minimal and global, slash commands per-project.
-- **What's the test story?** Skills are essentially prompts; "tests" are eval runs. Probably overkill for this volume. A manual smoke-test ("run `/research:start-session` after each major skill change") is enough.
-- **How do we keep the skills aligned with the workflow doc?** If the workflow evolves and skills don't, they drift. Probably: skills reference `general/WORKFLOW.md` by section number; ADR-on-workflow-change updates skills as a checklist item.
-- **Is `/research:` the right namespace?** Or `/r:`? Or no namespace at all? Ergonomics matter; pick when building.
+- **What's the test story?** Skills are essentially prompts; "tests" are eval runs. Probably overkill for this volume. A manual smoke-test ("run `/builder:start-session` after each major skill change") is enough.
+- **How do we keep the skills aligned with the workflow doc?** If the workflow evolves and skills don't, they drift. Probably: skills reference `general/PRODUCT-BUILDER.md` by section number; ADR-on-workflow-change updates skills as a checklist item.
+- **Is `/builder:` the right namespace?** Or `/r:`? Or no namespace at all? Ergonomics matter; pick when building.
 - **Should ADRs be auto-numbered or human-named?** Auto-numbered is simpler; human-named is more searchable. Suggest auto-number with mandatory slug (`0007-typed-action-template.md`).
 
 ---
@@ -490,4 +563,5 @@ Each outstanding mechanic is small. The cost isn't in defining them; it's in ens
 - **Cross-project workflow tooling.** This spec assumes Card Framework. A generic version (publishable plugin) is a separate concern.
 - **Migration tooling.** The MIGRATION-GUIDE phase 1–8 is one-shot work; doesn't merit per-step skills. Maybe one skill for the cross-ref sweep (phase 6); the rest is just `git mv` + edits.
 - **Live-collaboration workflows.** Multi-Claude orchestration patterns (one Claude writing the Model, another reviewing it) are out of scope here. Worth its own spike if it ever becomes a real mode.
-- **DOCS/ and PLANS/ workflow.** Both are out of scope of the research workflow proposal. Their automations come later.
+- **PLANS/ workflow internals.** Out of scope of the proposal — plans are ephemeral; their structure is up to the implementer. Automations for plan creation/closure come if and when patterns emerge.
+- **Drift-check automation depth.** §5.10 linter does basic drift detection (paths, glossary, status mismatches). A *contract-vs-code* drift check (does the code actually implement the Feature/Model?) is harder — requires parsing the implementation. Listed here, deferred to BACKLOG with trigger "first time we hit drift we missed."

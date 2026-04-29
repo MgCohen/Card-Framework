@@ -69,9 +69,9 @@ Potential fit:
 - Reactive presentation state.
 - Batch mutation and deferred notifications for large effect resolution.
 
-Open concern:
+Resolved (was: "decide whether Store, Entities, or a hybrid"):
 
-- We should decide whether every card instance is represented as Store slices, whether Scaffold Entities owns per-entity values, or whether a project-specific hybrid is needed. Simplicity favors one canonical path, but this is not answered yet.
+- **`com.scaffold.entities.states` bridge package.** Per-entity variables live as canonical `EntityVariableState` slices in the Store. `StateEntity<TDefinition>` is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>`, backed by `StoreVariableStorage`. One source of truth (Store), one entity API (Entities). See doc 10 §"Store And Entities Relationship" for the integration shape and engine responsibilities.
 
 ### MVVM / Model / ViewModel / View
 
@@ -153,7 +153,7 @@ Open issue: if a later decision requires a Unity-free `CardFramework.Core`, it m
 | ----------------------------- | ------------------------------------------------------------ |
 | Card definition authoring     | `com.scaffold.entities`                                      |
 | Runtime simulation state      | `com.scaffold.states`                                        |
-| Mutable values/modifiers      | `com.scaffold.entities`, or custom pure model inspired by it |
+| Mutable values/modifiers      | `com.scaffold.entities.states` (state-backed entities)       |
 | Card presentation models      | `com.scaffold.model`, `com.scaffold.mvvm`                    |
 | Card presentation controllers | `com.scaffold.viewmodel`                                     |
 | Unity card/zone views         | `com.scaffold.view`                                          |

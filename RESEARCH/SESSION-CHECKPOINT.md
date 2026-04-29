@@ -4,6 +4,8 @@
 
 **Last updated:** 2026-04-29 (session 8)
 
+**Bridge decision landed (mid-session 8):** Scaffold shipped `com.scaffold.entities.states` (`feature/entities-state-bridge`). We commit to it. Per-entity variables are canonical Store slices (`EntityVariableState`); `StateEntity<TDef>` is a handle implementing `IReadOnlyEntity` / `IMutableEntity`. Closes the long-standing canonical-state question (doc 08 §"Canonical State", doc 10 §"Store And Entities Relationship", doc 04 §States, doc 06). Engine owns three integration responsibilities: handle re-hydration after `LoadSnapshot`, `Dispose` on entity death, and aware of diff-based structural-change subscriptions. None require further Scaffold changes.
+
 ---
 
 ## Where We Stopped
@@ -32,7 +34,8 @@
 - **Generic primitive + rule-enforced constraint.** Framework ships `MoveCardCommand` not `MoveTopCardCommand`.
 - **Player input layer:** `PlayerIntent` (UI) → `IIntentMapper.Map(template, choice)` → `GameCommand`. Typed switch on template subtype. (doc 28 §2)
 - **Five validation layers:** per-template eligibility (rule) / AffordanceMap (UI) / IntentMapper (well-formedness) / `handler.Validate` (authoritative) / `OnIncomingCommand` (flow). (doc 27 §9)
-- **State pattern:** `GameState` immutable, redux-like, likely Scaffold State. Mutators react to commands. `IAvailableActions` writes via internal mutator.
+- **State pattern:** `GameState` immutable, redux-like, on Scaffold States. Mutators react to commands. `IAvailableActions` writes via internal mutator.
+- **Entities ↔ States relationship:** Store canonical, Entities-as-API via `com.scaffold.entities.states` bridge. Per-entity variables are `EntityVariableState` slices; `StateEntity<TDef>` is a handle implementing `IReadOnlyEntity` / `IMutableEntity`. (doc 08, doc 10)
 - **MTG-strict SBA ordering is a known semantic difference.** (doc 25 §5)
 
 ---
@@ -53,7 +56,7 @@ Carried forward; some deferred while we work the active question.
 
 - **`IGameStateProvider` shape** — `State.Current` returns the immutable state; subscriptions probably live on the Store. Pin at engine implementation.
 - **`IIntakeQueue` shape** — same ops as old `LinkedList<GameCommand>` Pending. `CurrentlyExecuting` lives here or on state provider. Pin at engine implementation.
-- **`GameState` contract / Engine ↔ Store ownership.** Does Engine own state with Store as reactive wrapper, or does Store (Scaffold State) own state and Engine reduce into it? Blocked on Scaffold State decision.
+- **`GameState` contract / Engine ↔ Store ownership.** Store (Scaffold States) owns state; Engine dispatches commands that translate to mutator payloads. Remaining work is the concrete slice catalog (turn, phase, decisions, zones, available actions) and the `InstanceId → (definition, store)` registry the engine maintains for handle re-hydration. No longer blocked.
 - **`EndGameCommand` semantics.** What does the engine do when it resolves? Bleeds into session lifecycle.
 - **Game lifecycle design.** Session start, turn structure, phase transitions, end conditions. Prerequisite for trigger subscription lifecycle.
 - **Trigger subscription lifecycle.** Register/Unregister timing relative to zone transitions. Depends on game lifecycle.
@@ -82,8 +85,8 @@ Carried forward; some deferred while we work the active question.
 | 16 | **Action pipeline cleanup** | Handler lookup, validate, execute, trigger folds — currently scattered across docs 18/19/22/25. Pull into one canonical doc. May merge with #20 since both are about the per-command pipeline + effect orchestration. |
 | 12 | **Game lifecycle design** | Session start, turn structure, phase transitions, end conditions — prerequisite for trigger subscription lifecycle. Best unblocked task after #20 lands. |
 | 7 | **Write `PLANS/` doc** | Minimal implementation slice. Pull after #20/#16/#12 land. |
-| 2 | **`GameState` contract** | Blocked on canonical state (Scaffold State). |
-| 9 | **Revisit `StateChange` and state overall** | Blocked on canonical state. |
+| 2 | **`GameState` contract** | Concrete slice catalog (turn, phase, decisions, zones, available actions) on top of Store. Entity slices use `EntityVariableState` via the bridge. |
+| 9 | **Revisit `StateChange` and state overall** | Unblocked by bridge decision. Folds into task #2. |
 | 15 | **MTG-strict SBA ordering** | Decide whether to add a pre-after-fold evaluator hook or document the workaround. Defer until a game needs it. |
 
 Done in earlier sessions: ~~1, 3, 4, 5, 6a/b/c, 8, 10, 11, 13, 14, 18, 19~~.

@@ -8,7 +8,7 @@ Status: initial answers captured in [Core Model Decisions](08-core-model-decisio
 
 - ~~Should the pure simulation core depend directly on Scaffold packages, or should Scaffold be used only in Unity-facing adapters?~~ → No enforced boundary yet; allow Scaffold wherever it fits. (doc 08)
 - ~~Should card/entity values be stored primarily as flexible variables/tags, typed state records, or a hybrid?~~ → Start with key-value variables. (doc 08)
-- **What is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?** → Still open. Doc 08 decision: "unresolved, keep Entities and Store both on the table." Low confidence. See doc 10 for options. Revisit when a small scenario can be modeled both ways.
+- ~~What is the canonical source of truth: entity instances, Store slices, or a composed model?~~ → **Store is canonical; Entities is the API.** Per-entity variables are `EntityVariableState` slices; `StateEntity<TDef>` is a handle implementing `IReadOnlyEntity` / `IMutableEntity`. Implemented by `com.scaffold.entities.states` bridge. (doc 08, doc 10 §"Store And Entities Relationship")
 - ~~How should instances behave when a card changes zones?~~ → Same instance preserved by default; game-specific rules may explicitly replace it. (doc 08)
 - ~~Do all entities have definitions, or can runtime-only entities exist without definitions?~~ → All entities must have a base definition, including generated tokens. (doc 08)
 - ~~How do attachments, equipment, stacked cards, tokens, and transformed cards relate to a base card instance?~~ → Instance = definition + modifiers. Attachments are separate instances connected through relationships. (doc 08)
@@ -84,9 +84,12 @@ Still open:
 
 ## Scaffold Integration
 
-- Is `com.scaffold.entities` suitable for runtime simulation, or better for authoring only?
-- Should `com.scaffold.states` become the canonical match state store?
-- How do `com.scaffold.entities` variable modifiers and `com.scaffold.states` mutators interact without duplicating state?
+Resolved:
+- ~~Is `com.scaffold.entities` suitable for runtime simulation, or better for authoring only?~~ → Used at runtime via the state-backed bridge (`com.scaffold.entities.states`). Plain `EntityInstance` remains valid for non-state-backed cases. (doc 08, doc 10)
+- ~~Should `com.scaffold.states` become the canonical match state store?~~ → Yes, including per-entity variables via the bridge. (doc 08, doc 10)
+- ~~How do entity variable modifiers and States mutators interact without duplicating state?~~ → Entity mutations *are* Store payloads. `StateEntity` is a thin handle; modifier stacks live in `EntityVariableState`. No duplication. (doc 10)
+
+Still open:
 - Should MVVM models be generated from simulation state/history, or should they subscribe directly to Store slices?
 - When do we introduce AutoPacker: after local simulation, after multiplayer design, or only when payloads are stable?
 
@@ -124,7 +127,7 @@ Still open:
 The first practical decisions should probably be:
 
 1. ~~Pure core dependency boundary.~~ → No enforced boundary yet. (doc 08)
-2. **Canonical state model.** → Still open; Entities vs. Store vs. custom unresolved. (doc 08)
+2. ~~Canonical state model.~~ → Resolved: Store-canonical, Entities-as-API via the `com.scaffold.entities.states` bridge. (doc 08, doc 10)
 3. ~~Entity/definition/instance and instance ID rules.~~ → Resolved. (docs 08, 09, 10)
 4. ~~Zone taxonomy.~~ → Resolved. (docs 11, 12)
 5. ~~Command/task/event/history terminology.~~ → Resolved. (docs 09, 14, 15, 16, 17, 18)

@@ -235,17 +235,31 @@ They should be deterministic and traceable.
 
 ## Store And Entities Relationship
 
-The canonical storage model is not decided yet.
+**Resolved.** Store is canonical; Entities is the API. The `com.scaffold.entities.states` bridge package wires this together.
 
-Open options:
+Shape:
 
-- Scaffold Entities as canonical runtime instances.
-- Scaffold States as canonical runtime state.
-- Entities for definitions and authoring, Store for simulation state.
-- Store for global/session state, Entities for per-entity variable state.
-- A custom model that borrows from both.
+- **Per-entity variables** are canonical `EntityVariableState` slices in the Store (`BaseValues`, `ModifierStacks` keyed by `InstanceId`).
+- **`StateEntity<TDefinition>`** is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. It substitutes for plain `EntityInstance` in polymorphic APIs.
+- **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` (`AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload`, etc.). `IMutableEntity` calls produce the same payloads internally.
+- **Reads** use a per-rebuild effective-value cache; `Variable` enumeration is ordered by `Variable.Key` (ordinal) for determinism.
+- **Game-level state** (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside entity slices.
+- **Definition swap (transformation)** — `Definition` is on the handle, not in `EntityVariableState`. To transform, create a new `StateEntity<TNewDef>` for the same `InstanceId`. There is no state-level `SetDefinitionPayload`.
 
-The next design work should avoid depending on one answer too early. Docs should speak in terms of concepts unless they are specifically about package integration.
+Why this resolution:
+
+- One source of truth, no duplicate state, no two-way sync.
+- Snapshot/rollback (doc 23, 29) covers per-entity variables for free.
+- Modifier ordering, source attribution (doc 24 continuous-effects cleanup), atomic batches (doc 19 command-as-batch), and coalesced subscriber notifications (doc 27 presentation loop) all come from the Store + bridge.
+
+### Engine responsibilities (bridge boundary)
+
+These are integration concerns the engine owns. None require further Scaffold work.
+
+- **Handle registry and re-hydration.** `StateEntity` is not a `State`; only `EntityVariableState` slices are in `SaveSnapshot()`. The engine keeps an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` handles after `LoadSnapshot`. A snapshot rolling back to a state where an entity still existed will re-create its canonical row; the engine re-issues handles for those ids.
+- **Disposal on entity death.** Calling `StateEntity.Dispose()` releases the per-instance Store listener. The engine calls this on the entity-removal path so short-lived tokens do not retain handlers.
+- **Single mutator registration per Store.** `EntityBridgeContext.RegisterMutators(store)` runs once per Store at engine bootstrap; a duplicate call throws `DuplicateMutatorRegistrationException`.
+- **Structural-change subscription is diff-based.** Per-mutation granularity (an `Added` and a `Removed` for a remove-and-re-add inside one batch) requires subscribing to the `EntityVariableState` slice directly and diffing. The bridge's `SubscribeToVariableStructuralChanges` is the coalesced view, which is what continuous-effects cleanup actually wants.
 
 ## What The Framework Should Not Assume Yet
 
@@ -279,5 +293,4 @@ This model pushes the next important questions into the Zone and State docs:
 - Is zone membership a variable, relationship, Store slice, or combination?
 - How does ordered or grouped arrangement work inside zones?
 - How do visibility and ownership interact?
-- What exact comparison should we make between Scaffold Entities and Scaffold States?
 

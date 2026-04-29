@@ -6,11 +6,11 @@ builds-on: [SESSION-CHECKPOINT.md, 06-open-questions.md]
 tags: [#workflow, #meta]
 ---
 
-# Research Workflow — Proposal
+# Product Builder — Proposal
 
-**Purpose.** Codify the research workflow we've been running, plug the gaps we noticed (no doc-type templates, no per-decision log, no session log, no glossary changelog, no alignment-debt tracker, no place for exploratory work), and lock the patterns into shared conventions so new sessions inherit the method, not just the artifacts.
+**Purpose.** Codify the product-building workflow we've been running, plug the gaps we noticed (no doc-type templates, no per-decision log, no session log, no glossary changelog, no alignment-debt tracker, no place for exploratory work), and lock the patterns into shared conventions so new sessions inherit the method, not just the artifacts.
 
-**Scope.** Research-phase workflow only (RESEARCH/). Plans (PLANS/) and durable docs (DOCS/) get minimal touchpoints — full conventions come when we cross those gates.
+**Scope.** End-to-end workflow: design → contract → implementation → drift handling. The workflow covers `RESEARCH/` (canonical knowledge layer, status governs role) and `PLANS/` (ephemeral implementation slices, minimal touchpoints — internals not workflow-specified). Implementation lives in the project's code directory (`Assets/` for Card Framework). No separate `DOCS/` layer — `settled` features in `RESEARCH/` *are* the contract.
 
 ---
 
@@ -44,7 +44,7 @@ RESEARCH/
     ROADMAP.md               # phases and sequencing
     RECOMMENDATIONS.md       # current synthesis
     decisions/               # project-wide ADRs (general/decisions/0001-*.md)
-    _templates/              # 8 doc-type templates; ledger entry shapes are spec-only in §6
+    _templates/              # 7 doc-type templates; Plan and ledger entry shapes are spec-only (in §4.8 and §6 respectively)
       spike.md
       feature.md
       model.md
@@ -52,7 +52,6 @@ RESEARCH/
       adr.md
       session.md
       checkpoint.md
-      plan.md
 
   features/                  # all per-system design work; each feature has a root <feature>.md
     entities/
@@ -91,7 +90,7 @@ RESEARCH/
     prior-art/               # frozen external reference (was Old Docs/)
 ```
 
-`DOCS/` and `PLANS/` sit outside `RESEARCH/` as gated promotion targets — see §2 (Doc types) and §5.6 (promotion gate).
+`PLANS/` sits outside `RESEARCH/` as the home for ephemeral implementation slices (internals not workflow-specified). Implementation lives in the project's code directory (e.g., `Assets/` for a Unity project). No separate `DOCS/` directory — `settled` features in `RESEARCH/` *are* the canonical contract; status governs role (see §5.6 Status gates).
 
 ### Numbering
 
@@ -124,8 +123,8 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | Type | Purpose | Lives in | Status values |
 |------|---------|----------|---------------|
 | **Spike** | Time-boxed investigation; pre-design exploration | `spikes/` | `active`, `concluded`, `graduated`, `archived` |
-| **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded`, `abandoned` |
-| **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded`, `abandoned` |
+| **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
+| **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/notes/` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
 | **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
@@ -164,7 +163,7 @@ Feature roots derive their `Dependencies` section from the union of contained Mo
 
 ## 4. Templates
 
-**Source of truth.** Each fenced `markdown` block in this section is the canonical content for the corresponding file in `general/_templates/`. Migration Phase 1 extracts these blocks into the templates directory; future workflow edits land here, then are re-extracted on next regen. Single source — no parallel content store.
+**Source of truth.** Each fenced `markdown` block in §4.1–§4.7 is the canonical content for the corresponding file in `general/_templates/` (7 templates: Spike, Feature, Model, Sample, ADR, Session, Checkpoint). Migration Phase 1 extracts these blocks into the templates directory; future workflow edits land here, then are re-extracted on next regen. Single source — no parallel content store. §4.8 (Plan) is descriptive prose only — no template file.
 
 ### 4.1 Spike
 
@@ -198,7 +197,7 @@ One paragraph. If graduated, include a forward link to the Model / ADR it inform
 
 ### 4.2 Feature
 
-A **Feature** doc is the root description of a feature folder. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. It's the source of truth that Models, ADRs, and spikes underneath it support — and the artifact that promotes to `DOCS/` once stable.
+A **Feature** doc is the root description of a feature folder. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. It's the source of truth that Models, ADRs, and spikes underneath it support — and **the canonical contract once `settled`** (see §5.6 Status gates).
 
 A feature root lives at `features/<feature>/<feature>.md` (e.g., `features/engine/engine.md`). One per feature folder. No counter; the name matches the folder.
 
@@ -234,11 +233,15 @@ Pointers to load-bearing ADRs in this feature's `decisions/`.
 Pointers to `general/OPEN-QUESTIONS.md` items relevant to this feature.
 ```
 
-A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature is `settled` and clears the §5.6 promotion gate, it (along with its Models) graduates to `DOCS/`.
+A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature clears the §5.6.1 research gate, status flips `draft → settled` and it becomes the canonical contract for that feature. When code lands in the implementation directory that satisfies the contract, status flips `settled → implemented` (§5.6.2 build gate).
 
 **Cascade implications** (when this doc's edits affect downstream docs) are not captured inline — they live as entries in `general/ALIGNMENT-DEBT.md`. See §5.7.
 
+**`implemented` status convention.** A Feature flips to `implemented` (via §5.6.2 build gate) when code lands that satisfies its contract. While `implemented`, edits to the contract surface open **drift entries** against the implementation — either code updates to match, or the Feature reverts to `settled` (signaling "code is no longer guaranteed to match"). Most of a project's lifetime, mature features sit in `implemented` — that's the steady state.
+
 **`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `builds-on:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
+
+**Feature ↔ Model status sync.** A Feature's status is bounded above by its qualifying Models (settled or implemented). Drafts and abandoneds don't count, so adding a new draft Model to an implemented Feature doesn't drag it down. Forward flips are deliberate user actions; backward reverts are automatic when a qualifying Model drops a tier. Full rule and worked examples in §5.6.3.
 
 ### 4.3 Model
 
@@ -289,6 +292,8 @@ Linked: features/<feature>/decisions/NNNN-<title>.md
 A purely descriptive Model (e.g., a system that doesn't have meaningful alternatives) can omit the provenance sections entirely. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look.
 
 **Cascade implications** (downstream docs affected by edits to this Model) are not captured inline — they live as entries in `general/ALIGNMENT-DEBT.md`. See §5.7.
+
+**`implemented` status convention.** A Model flips to `implemented` (via §5.6.2 build gate) when code in the implementation directory satisfies its contract. Edits to an `implemented` Model's contract surface open **drift entries** against the code — either code updates to match, or the Model reverts to `settled`.
 
 **`abandoned` status convention.** A Model that gets partway through and is decided against keeps its body as historical record, but receives a one-line header at the top: *"Status: abandoned YYYY-MM-DD — <reason>. Original attempt below for record."* The `abandoned` status is distinct from `superseded` (which implies a replacement Model exists). Use `abandoned` when the line of inquiry was wrong, not when a better answer was found.
 
@@ -424,26 +429,16 @@ Keep the current shape; add a rule.
 
 ### 4.8 Plan
 
-```markdown
-# Plan: <slice name>
+Plans are ephemeral implementation slices — schedules for moving from `settled` to `implemented`. Their internals are **not workflow-specified**: slice unit, lifecycle, format are the project's choice.
 
-<front matter: type=plan, status=drafting>
+A minimal Plan entry typically lists:
+- What's being built (link to the Feature/Model it implements).
+- What it depends on (other Models or Features).
+- What "done" means for this slice (exit criteria).
 
-## Slice
-Smallest useful chunk.
+Status values: `drafting`, `active`, `done`, `abandoned`. Lives in `PLANS/`.
 
-## Prerequisites
-Research findings this depends on (link to docs/ADRs).
-
-## Exit criteria
-Concrete checks that mean "done."
-
-## Risks
-What could derail.
-
-## Check-in cadence
-Per session / per week / etc.
-```
+No fenced template here — Plans don't get a `_templates/` file. Projects shape Plans to fit their team's rhythm. The workflow only commits to *that they exist* and *roughly what role they serve*.
 
 ---
 
@@ -455,7 +450,7 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 Once-per-project phase before §5.1 applies. Output is a working `RESEARCH/` skeleton with enough orientation to start session 02 with a real question.
 
-1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 8 doc-type templates into `general/_templates/` (extracted from §4). Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (stub with empty mermaid block), `general/GLOSSARY.md` (with empty changelog). Create `general/decisions/` folder.
+1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `general/_templates/` (extracted from §4.1–§4.7). Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (stub with empty mermaid block), `general/GLOSSARY.md` (with empty changelog). Create `general/decisions/` folder.
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
 4. **Write `general/CAPABILITY-MAP.md`.** What systems will need to exist to deliver the vision? This justifies the feature list from step 3.
@@ -508,17 +503,54 @@ Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old AD
 
 A session can be entirely alignment-pass-shaped. Same flow — the entry context is "discharge entries from `general/ALIGNMENT-DEBT.md`," and the work is mechanical updates. Listed separately because it's a recognizable session pattern, not a different workflow.
 
-### 5.6 Promotion gate: RESEARCH → DOCS
+### 5.6 Status gates
 
-A research doc can be promoted to `DOCS/` when **all** are true:
-- Status is `settled`.
+Two status gates govern the lifecycle: `draft → settled` (research gate) and `settled → implemented` (build gate). Each is a deliberate transition — a *commitment*, not a default. There is no separate `DOCS/` directory; status governs the role of each Feature/Model.
+
+#### 5.6.1 Research gate: `draft → settled`
+
+A Feature or Model can flip to `settled` when **all** are true:
 - No open ledger entries against it in `general/ALIGNMENT-DEBT.md` (target=this path).
-- Referenced by an active `PLANS/` doc **or** an implementation in `Assets/`.
-- Stable for ≥ 2 sessions with no edits to the contract.
+- Stable for ≥ 2 sessions with no edits to its contract surface (Problem / Concepts / Contracts / Invariants / Examples).
+- All glossary terms it uses appear in `general/GLOSSARY.md`.
 
-**Feature roots are the typical promotion target.** When a Feature passes the gate, it goes to `DOCS/` along with the Models it indexes (which travel with it as supporting material). Models can promote independently if the Feature root isn't ready but the Model is stable on its own — but the default path is feature-shaped, not model-shaped.
+Once `settled`, the Feature/Model **is** the canonical contract. Edits to a `settled` doc are deliberate events: each opens a debt entry per affected downstream doc (per §5.7).
 
-Promotion is a deliberate move, not a default.
+**Feature roots are the typical settle target.** When a Feature settles, the Models it indexes typically settle along with it (they're the components of the contract). Models can settle independently if a Feature root isn't ready but a sub-Model is stable on its own — but the feature-shaped path is the default.
+
+#### 5.6.2 Build gate: `settled → implemented`
+
+A Feature or Model can flip to `implemented` when **all** are true:
+- Status is currently `settled`.
+- Code in the implementation directory satisfies the contract (manual confirmation; mechanical drift check via `/builder:lint` available — see §5.10).
+- No open drift entries against this Feature/Model.
+
+The `implemented` flip is a deliberate user action: *"yes, the code matches the contract."* This is the steady state — most of a project's lifetime, mature features sit in `implemented`.
+
+**Drift is debt.** Any edit to an `implemented` Feature/Model's contract surface opens a drift entry against the code. Resolution: either code updates to match (entry closes), or status reverts to `settled` (signaling "code is no longer guaranteed to match"). Drift entries are normal alignment-debt entries with `source=` the contract path and `target=` the implementation directory.
+
+#### 5.6.3 Feature ↔ Model status sync
+
+A Feature has a status; its nested Models each have their own. The two are constrained but not mechanically coupled:
+
+> **Feature.status is bounded above by the *qualifying* Models inside it.** Qualifying = Models with status `settled` or `implemented`. Drafts, abandoneds, and supersededs don't count.
+
+**Forward (advancing).** A Feature can flip to status X when either:
+- all qualifying Models are at X or higher, OR
+- there are no qualifying Models at all (a small Feature might have zero Models — the Feature root *is* the contract).
+
+The flip itself is a deliberate user action — Models reaching the target makes the Feature *eligible*; the user makes the commitment.
+
+**Backward (reverting).** If a qualifying Model drops a tier (e.g., drift forces a Model from `implemented` back to `settled`), the Feature auto-reverts to match. Adding new `draft` Models, abandoning Models, or superseding Models does **not** trigger a revert — those are in-flight expansions or excisions, not regressions of the existing contract.
+
+**Worked examples.**
+
+- Engine has 3 `implemented` Models. User adds a new `draft` Model for save/load → Feature stays `implemented`.
+- The save/load Model graduates to `settled` (contract written, code not yet) → Feature auto-reverts to `settled` (now there's a qualifying Model that's not implemented).
+- User implements the save/load code and flips its Model to `implemented` → Feature is eligible to flip back to `implemented` (manual confirm).
+- One of the 3 original Models drifts: `implemented → settled` → Feature auto-reverts to `settled`.
+- A Model is abandoned → Feature stays at its current status.
+- A tiny Feature has zero Models, just the root → user can flip the Feature freely; no Model constraint.
 
 ### 5.7 Debt notification
 
@@ -556,7 +588,7 @@ Without `builds-on:` mandatory in front matter (§3), this walk has holes. With 
 
 ### 5.10 Reference-staleness linter
 
-Automation, not a session shape. A linter (run as `/research:lint` skill or CI step) checks:
+Automation, not a session shape. A linter (run as `/builder:lint` skill or CI step) checks:
 
 - Every path reference in `RESEARCH/` resolves.
 - Every term in a doc has a `general/GLOSSARY.md` entry.
@@ -567,6 +599,106 @@ Automation, not a session shape. A linter (run as `/research:lint` skill or CI s
 
 The linter doesn't enforce; the threshold does.
 
+### 5.11 Adding a new feature
+
+Post-v1, the workflow operates in interleaved mode: features get added over time, not just during the initial bootstrap. This subsection codifies the recurring entry to the cycle. Parallel in shape to §5.0 Bootstrapping, but at per-feature cadence rather than per-project.
+
+When a new feature is requested or designed:
+
+1. **Create the feature folder.** `features/<feature>/` with `notes/` and `decisions/` subfolders.
+2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
+3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `builds-on:` pointing at upstream Models (or `root` if genuinely foundational).
+4. **Update orientation.** Patch `general/CAPABILITY-MAP.md` (new system identified), `general/FEATURE-MAP.md` (new node + edges), `general/ROADMAP.md` if scheduling shifts.
+5. **Record in session note.** Content section: `feature: <name> created` — visible event in the trail.
+6. **Begin design.** From this point, the feature's evolution follows the standard per-session flow (§5.1+).
+
+These steps are mandatory in spirit, optional in tooling: a `/builder:new-feature <name>` skill (see [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §3) automates 1–5 once built. Until then, follow the steps manually.
+
+**Why this section exists.** Post-v1 work is *recurring* feature addition. Without a canonical shape, each new feature gets invented ad-hoc — different sessions do different subsets, orientation files lag, dependency edges go unnamed. Codifying the ceremony makes the recurring cycle reproducible.
+
+### 5.12 Drift detection
+
+Drift — divergence between code in the implementation directory and the contracts in `RESEARCH/` (`settled` and `implemented` Features/Models) — is the failure mode the workflow exists to prevent. The detection mechanism is **event-driven post-merge automation by AI agents**.
+
+**The flow.**
+
+1. A PR merges to main.
+2. An AI agent identifies which files changed.
+3. The agent maps changed files to the features they touch — via AI judgment from the feature roots, not via mandatory code-side linkage.
+4. The agent schedules a drift check on each touched feature (de-duplicated; batched).
+5. At check time, the agent reads the contract and the changed code, comparing semantically.
+6. If divergence is found: the agent opens a **PR with proposed contract updates**, plus ledger entries in `general/ALIGNMENT-DEBT.md` naming each divergence.
+7. Human / AI session reviews the proposed PR — merges, edits, or rejects (accept-divergence with explicit ledger annotation).
+
+**Why propose-PR rather than auto-update.** Canonical contracts are too important to let an AI agent edit silently. PR review is the human-in-the-loop checkpoint; same speed in practice (trivial accepts merge fast). Auto-merge can be considered later (hybrid model) once AI agents have a track record of low false-positive proposals.
+
+**Why no code-side linkage convention.** Strict per-PR or per-file linkage (header comments, PR-description rules) was rejected: the maintenance overhead exceeds the value once AI agents can map files to features contextually. Workflow stays generic across project layouts; AI does the contextual matching.
+
+**Specifics.** Skill specs in [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) (`builder-drift-detection`, plus session-time `/builder:check-drift <feature>`). Build target: `general/BACKLOG.md` — trigger *"first feature reaches `implemented` status."*
+
+### 5.13 Lifecycle reference
+
+Visual / tabular summary of §5.0–§5.12. Reference for *"what happens when, in what order."*
+
+#### Status state machine — Feature & Model
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : doc created
+    draft --> settled : §5.6.1 research gate
+    draft --> abandoned : direct abandonment
+    settled --> implemented : §5.6.2 build gate
+    settled --> superseded : §5.4 supersession
+    settled --> abandoned : explicit abandonment
+    implemented --> settled : drift auto-revert
+    implemented --> superseded : §5.4 supersession
+```
+
+- `abandoned` and `superseded` are quasi-terminal — docs stay as historical record.
+- `settled → draft` is not a valid transition. Reopening a settled decision goes through supersession or abandonment.
+- Feature status is constrained by its qualifying Models per §5.6.3 — the Feature can't be at a higher tier than the lowest qualifying Model (where qualifying = `settled` or `implemented`).
+
+#### Status state machine — Spike
+
+```mermaid
+stateDiagram-v2
+    [*] --> active : spike opened
+    active --> concluded : findings, no follow-up
+    active --> graduated : informed Model/ADR
+    active --> archived : kept for reference
+```
+
+Spikes are static once resolved (§4.1). Downstream Model supersession doesn't propagate back.
+
+#### Feature lifecycle — phases
+
+A feature progresses through these phases. Each phase corresponds to one or more §5.X subsections.
+
+| # | Phase | What happens | Driving sections |
+|---|-------|-------------|-----------------|
+| 1 | **Initiated** | Feature folder created via §5.11 ceremony. Feature root stub written (Purpose + Boundaries). Status: `draft`. | §5.11 |
+| 2 | **Designed** | Models drafted in `notes/`. ADRs land in `decisions/` as decisions settle. Spikes feed Models. Cascade implications captured as ledger entries. | §5.2, §5.4, §5.7 |
+| 3 | **Settled** | Each Model passes research gate (§5.6.1). When all qualifying Models settled, Feature is eligible — user commits with deliberate flip. | §5.6.1, §5.6.3 |
+| 4 | **Implemented** | Code lands in implementation directory. Each Model passes build gate (§5.6.2). When all qualifying Models implemented, Feature is eligible — user commits. | §5.6.2, §5.6.3 |
+| 5 | **Steady state** | Most of project lifetime. Drift detection runs post-merge (§5.12). Drift opens ledger entries / proposes contract updates via PR. Consistency passes (§5.5/§5.8) discharge accumulated debt. | §5.5, §5.8, §5.12 |
+| 6 | **Expansion** | New Models added to extend scope. Drafts don't affect Feature status. When new Models settle, Feature may revert to `settled` until code catches up. | §5.6.3, §5.11 |
+| 7 | **Retirement (rare)** | Feature abandoned (§4.2) or superseded. Folder kept as historical record; status flips signal end-of-life. | §4.2, §5.4 |
+
+#### When automations run
+
+| Trigger | Automations |
+|---------|-------------|
+| **Project start (once)** | `/builder:bootstrap` |
+| **Every session start** | `/builder:start-session` |
+| **Mid-session, on demand** | `/builder:new`, `/builder:new-feature`, `/builder:settle-decision`, `/builder:open-debt`, `/builder:close-debt`, `/builder:add-to-backlog`, `/builder:promote-glossary`, `/builder:abandon-model`, `/builder:supersede-cascade`, `/builder:check-drift` |
+| **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
+| **Periodic / on demand** | `/builder:lint` (reference staleness), `/builder:rebuild-feature-map` |
+| **Every session end** | `/builder:end-session` |
+| **PR merge to main** | `builder-drift-detection` (CI mode) |
+| **Threshold-driven session shape** | Consistency pass (§5.5/§5.8) when ledger crosses 5 open entries |
+
+Full automation catalog: [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §2.
+
 ---
 
 ## 6. Cross-cutting infrastructure
@@ -574,7 +706,7 @@ The linter doesn't enforce; the threshold does.
 | File | Role | Cadence |
 |------|------|---------|
 | `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-QUESTIONS items by link with current context | End of every session |
-| `general/WORKFLOW.md` | This doc, once accepted | When workflow conventions change |
+| `general/PRODUCT-BUILDER.md` | This doc, once accepted | When workflow conventions change |
 | `general/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
 | `general/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
 | `general/ALIGNMENT-DEBT.md` | Single source of truth for cascade implications. One entry per (source-edit, affected-doc) pair. Drives §5.8 threshold | Append on Model edit; tick off on discharge |
@@ -612,7 +744,7 @@ These don't overlap. A question is "we don't know what to do." Debt is "this Mod
 
 ### Ledger entry shapes
 
-Canonical entry shape per ledger. Automations (`/research:open-debt`, `/research:lint`, `/research:add-to-backlog`, etc.) write entries in this exact shape; humans writing entries by hand follow the same.
+Canonical entry shape per ledger. Automations (`/builder:open-debt`, `/builder:lint`, `/builder:add-to-backlog`, etc.) write entries in this exact shape; humans writing entries by hand follow the same.
 
 Unlike §4 doc templates (which become files in `_templates/`), ledger entry shapes are **spec-only** — they're appended to existing ledger files, not used to spawn new ones. Edits land here in §6; automations either hard-code the shape from this section or read it at build time. No template file extraction.
 
@@ -691,7 +823,7 @@ Resolved in this draft:
 - ~~ADR numbering scheme~~ → Per-feature counters in each `features/<feature>/decisions/`. Path is the prefix.
 - ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
 - ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
-- ~~Doc-type count~~ → 8 types. Original spike→model→ADR was extended with **Feature** (root summary per feature, source of truth that promotes to DOCS/) once it became clear Models alone left no canonical home for the feature itself. Discussion folded into Model's "Options considered" section; Proposal merged into Model. The unified Model artifact carries both descriptive content (top) and decision provenance (bottom, below divider).
+- ~~Doc-type count~~ → 8 types. Original spike→model→ADR was extended with **Feature** (root summary per feature, source of truth) once it became clear Models alone left no canonical home for the feature itself. Discussion folded into Model's "Options considered" section; Proposal merged into Model. The unified Model artifact carries both descriptive content (top) and decision provenance (bottom, below divider).
 - ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own folder.
 - ~~Sample `locked` bar~~ → Four-part bar in §4.4: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
 - ~~Topics-vs-features naming~~ → `features/`, product-dev framing.
@@ -712,8 +844,12 @@ Resolved in this draft:
 - ~~`has-pending-debt:` front-matter flag~~ → Dropped. Query the ledger directly (filter by target=path). Avoids reintroducing dual-write drift.
 - ~~Debt entry granularity~~ → Per affected doc. Each entry has one binary status. Honest counting for the §5.8 threshold.
 - ~~Linter: block vs report~~ → Report only. Findings flow into ledger as new entries (`source=linter`). Blocking creates bypass habits; the §5.8 threshold catches accumulation. AI-driven check routines.
+- ~~Separate `DOCS/` directory~~ → Dropped. `settled` features in `RESEARCH/` *are* the canonical contract; status governs role. Eliminates duplication between RESEARCH/ and DOCS/ versions of the same artifact.
+- ~~`implemented` status~~ → Added to Feature and Model. Two-gate lifecycle: `draft → settled` (research gate, §5.6.1) and `settled → implemented` (build gate, §5.6.2). Drift is captured as alignment-debt entries against code.
+- ~~Workflow scope~~ → End-to-end (design through drift handling), not just research. Reframed as "Product Builder" — the system for building a product from concept to code.
+- ~~PLANS/ scope~~ → Outside strict workflow scope. Plans are ephemeral implementation slices; their internals are not workflow-specified. §4.8 is descriptive prose only — no template file in `_templates/`. Templates count = 7 (one per doc type *except* Plan).
 
-No open questions remain on the workflow design. Migration logistics (when, how, ADR backfill scope, etc.) are a separate concern — planned in [`Workflow/MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md). Open mechanics worth pressure-testing further (linter implementation details, FEATURE-MAP auto-generator design) live in [`Workflow/AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) and `general/BACKLOG.md`.
+No open questions remain on the workflow design. Migration logistics (when, how, ADR backfill scope, etc.) are a separate concern — planned in [`ProductBuilder/MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md). Open mechanics worth pressure-testing further (linter implementation details, FEATURE-MAP auto-generator design) live in [`ProductBuilder/AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) and `general/BACKLOG.md`.
 
 ---
 
