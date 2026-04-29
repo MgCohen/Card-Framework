@@ -86,6 +86,12 @@ PLANS/                     # implementation slices (gated)
 
 When a doc spans multiple systems (e.g., `16-action-terminology-discussion` touches naming hygiene broadly): it lives in the topic that triggered it (here, `actions/`) and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references (glossary, open questions, alignment debt, workflow) live in `general/`.
 
+### Topic names are project-specific
+
+The folder names shown above (`foundations/`, `entities/`, `zones/`, `actions/`, `triggers/`, `effects/`, `engine/`, `presentation/`) are *this* project's topics. Another project applying this workflow picks its own topics — one folder per major feature/system, sized so a topic can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates topic-first organization, not these specific names.
+
+A rule of thumb: if a topic folder has fewer than ~3 docs after several sessions, it might belong as a tag inside a sibling. If it grows past ~15 docs without natural sub-clusters, consider splitting.
+
 ---
 
 ## 2. Doc types
@@ -205,28 +211,46 @@ At minimum, walked through against the floor sample game.
 ...
 ```
 
-### 4.4 Sample Game
+### 4.4 Sample
+
+A **sample** is a concrete reference instance projected onto the abstractions being designed. It exists to stress-test the design against real cases — a floor (simplest case the design must support) or a ceiling (complex case that bounds expressiveness).
+
+In this project: a card game's rules and how its elements map onto framework concepts. In other projects it could be a client codebase using a library, a protocol implementation, a sample program for a language, an integration for an API — anything concrete enough to project the design onto.
+
+A sample doc has two layers:
+
+- **Subject** — the concrete thing being described. Usually stable once written.
+- **Projection** — how the subject's elements map onto the design abstractions. Moves whenever the design moves. This is the load-bearing layer.
 
 ```markdown
-# <game> — sample
+# <sample name> — sample
 
 <front matter: type=sample, status=draft>
 
-## Game rules (player-facing)
-Plain English, no framework terms.
+## Subject
+The concrete thing this sample describes, in plain language. No design-doc terminology.
 
 ## Why this sample
 Floor / ceiling / stresses-which-feature.
 
-## Projection onto framework
-Map game elements to framework concepts.
+## Projection
+How the subject's elements map onto the design abstractions.
 
 ## What this does NOT exercise
-Honest list.
+Honest list — keeps us from over-claiming coverage.
 
 ## Open mappings
-Ambiguous bits.
+Ambiguous bits, unresolved projections.
 ```
+
+**`draft` → `locked` transition.** A sample becomes `locked` when **all** are true:
+
+1. **Subject finalized** — the concrete description is fully specified; we aren't still debating what the example is.
+2. **Projection uses only `settled` abstractions** — every design concept the projection depends on is itself `settled`, not `draft` or `proposed`. (No locking onto sand.)
+3. **No open implications against the sample** in `ALIGNMENT-DEBT.md`.
+4. **Stable ≥ 1 session** — at least one session has passed without edits to either the sample or its dependencies. Soft cooldown.
+
+After locking, design changes that affect the sample create an explicit `ALIGNMENT-DEBT.md` entry naming the locked sample. Resolving the entry is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
 
 ### 4.5 ADR
 
@@ -436,11 +460,11 @@ Resolved in this draft:
 - ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
 - ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
 - ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own topic.
+- ~~Sample `locked` bar~~ → Four-part bar in §4.4: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
 
 Still open (workflow design only — migration logistics are a separate concern):
 
-1. When is a sample game `locked` vs `draft`? Define the bar.
-2. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
+1. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
 
 ---
 
