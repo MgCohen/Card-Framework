@@ -1,12 +1,14 @@
 ---
 type: spike
-status: active
+status: concluded
 last-updated: 2026-04-29
 builds-on: [WORKFLOW-PROPOSAL.md]
 tags: [#workflow, #gaps]
 ---
 
 # Workflow Gaps — Pressure-Testing the Hard Parts
+
+> **Status: concluded 2026-04-29.** All 13 questions resolved. Resolutions folded into [`WORKFLOW-PROPOSAL.md`](WORKFLOW-PROPOSAL.md) (§3, §4.3, §4.4, §5.7–§5.10, §6, §8) and [`MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md) (§1 structure, §5 phases 1–2). Doc kept as the trail of *why* each direction was chosen — the sketch is the provenance. See §8 of WORKFLOW-PROPOSAL for the canonical resolved list.
 
 **Premise.** Two areas in the workflow proposal need pressure-testing before they get folded in: the **debt flow mechanics** (§5.7–§5.10 candidates) and the **feature map** (a bird's-eye view artifact). Both are clearly needed, but the *shape* of each isn't obvious. This doc sketches each, lists open design questions, and recommends a default direction.
 

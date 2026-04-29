@@ -27,54 +27,67 @@ RESEARCH/
     WORKFLOW.md                   # promoted from Workflow/WORKFLOW-PROPOSAL.md
     GLOSSARY.md                   # from doc 09
     OPEN-QUESTIONS.md             # from doc 06
-    ALIGNMENT-DEBT.md             # NEW — empty at start, filled forward
+    ALIGNMENT-DEBT.md             # NEW — single source of truth for cascade entries; empty at start
+    BACKLOG.md                    # NEW — deferred concrete work; seeded with FEATURE-MAP generator + linter skills
+    FEATURE-MAP.md                # NEW — bird's-eye view: feature index, mermaid dep graph, model breakdown
     VISION.md                     # from doc 00 (vision portion)
     SCOPE.md                      # from doc 00 (scope portion) or folded into VISION
     CAPABILITY-MAP.md             # from doc 02
     ARCHITECTURE.md               # from doc 03
     ROADMAP.md                    # from doc 05
     RECOMMENDATIONS.md            # from doc 07
+    decisions/                    # NEW — project-wide ADRs; first entry: 0001-adopt-workflow.md
+      0001-adopt-workflow.md      # the workflow itself, captured as ADR
     _templates/
       spike.md
+      feature.md                  # NEW template (per Q-set: Feature is doc type 4.2)
       model.md
       sample.md
       adr.md
       session.md
       checkpoint.md
       plan.md
+      backlog.md                  # NEW template — entry shape for deferred work
 
   features/
     entities/
+      entities.md                           # NEW — Feature root (doc type 4.2); indexes Models below
       notes/
         01-definition-instance-model.md     # from doc 10
       decisions/
         # backfilled ADRs (see §4)
     zones/
+      zones.md                              # NEW — Feature root
       notes/
         01-zone-model.md                    # from doc 12 (carries doc 11's provenance)
       decisions/
     actions/
+      actions.md                            # NEW — Feature root
       notes/
         01-command-pipeline.md              # synthesized from docs 14, 15, 17, 18, 19
         02-availability-snapshot.md         # from doc 28
       decisions/
     triggers/
+      triggers.md                           # NEW — Feature root
       notes/
         01-trigger-fold.md                  # from doc 21
       decisions/
     effects/
+      effects.md                            # NEW — Feature root
       notes/
         01-async-dispatch.md                # from doc 22
         02-replacement-prevention.md        # from doc 23
         03-ongoing-effects.md               # from doc 24
       decisions/
     engine/
+      engine.md                             # NEW — Feature root
       notes/
         01-evaluation-loop.md               # from doc 20
         02-gamerules-contract.md            # from doc 25
         03-snapshot-pipeline.md             # from doc 29
       decisions/
     presentation/
+      presentation.md                       # NEW — Feature root
       notes/
         01-presentation-loop.md             # from doc 27
       decisions/
@@ -185,7 +198,7 @@ The proposal calls for ADRs in `features/<feature>/decisions/`. The current 28 d
 Plus the renames as ADRs (since they cascaded across many docs):
 
 14. `features/actions/decisions/0008-intent-vocabulary.md` (OriginRequest→OriginIntent etc.)
-15. `general/decisions/0001-naming-alignment-pass.md` *(or fold into a single ADR with multi-rename body — open question whether `general/decisions/` exists at all; the proposal §1 doesn't show it. Could go in `features/actions/decisions/` since most renames were action-side.)*
+15. `general/decisions/0002-naming-alignment-conventions.md` (project-wide rename conventions; lives in `general/decisions/` per the locked Q-set. Counter is `0002` because `0001` is reserved for `0001-adopt-workflow.md`.)
 
 Plus the trigger system:
 
@@ -212,71 +225,73 @@ Roughly 20 ADRs total. Write each in template form (§4.4 of proposal): one scre
 
 1. Create directories: `RESEARCH/general/`, `RESEARCH/general/_templates/`, `RESEARCH/features/{entities,zones,actions,triggers,effects,engine,presentation}/{notes,decisions}/`, `RESEARCH/spikes/`, `RESEARCH/support/{samples,prior-art}/`, `RESEARCH/sessions/`.
 2. Drop `.gitkeep` in empty leaves so git tracks the structure.
-3. Write the 7 templates into `general/_templates/`.
-4. Create empty `general/ALIGNMENT-DEBT.md` with header.
-5. Commit + PR titled "Workflow migration phase 1: skeleton."
+3. Write the 9 templates into `general/_templates/`: `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`, `plan.md`, `backlog.md`.
+4. Create empty ledgers with headers: `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (initial table + empty mermaid block). Seed `BACKLOG.md` with known deferred items: FEATURE-MAP auto-generator (trigger: ~15 Models or first drift), `/research:lint` skill, AI-driven check routines per [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md).
+5. Create `general/decisions/` folder with `.gitkeep` and write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption itself.
+6. Commit + PR titled "Workflow migration phase 1: skeleton."
 
-**Exit criteria:** structure exists; nothing moved yet.
+**Exit criteria:** structure exists with all three ledgers + project-decisions folder seeded; nothing else moved yet.
 
 ### Phase 2 — `general/` content (lowest-risk moves)
 
-6. `git mv` orientation docs: 00, 01, 02, 03, 05, 06, 07, 09 → `general/` with new names per §2 table.
-7. Add front matter to each. Status: `settled` for all (they describe project-wide reality, not pending decisions).
-8. Update `RESEARCH/README.md` to point at the new structure.
-9. Commit + PR.
+7. `git mv` orientation docs: 00, 01, 02, 03, 05, 06, 07, 09 → `general/` with new names per §2 table.
+8. Add front matter to each. Status: `settled` for all (they describe project-wide reality, not pending decisions).
+9. Update `RESEARCH/README.md` to point at the new structure.
+10. Commit + PR.
 
 **Exit criteria:** `general/` is populated; cross-refs in remaining flat docs not yet fixed (handled in phase 6).
 
 ### Phase 3 — Spikes + prior-art
 
-10. `git mv` doc 04 → `spikes/scaffold-state-fit.md`. Add front matter, set status `graduated`, add forward-link to `features/engine/`.
-11. `git mv` doc 13 → `spikes/deckmech-command-pipeline.md`. Status `concluded`.
-12. `git mv` Old Docs/ contents per §3 table.
-13. Commit + PR.
+11. `git mv` doc 04 → `spikes/scaffold-state-fit.md`. Add front matter, set status `graduated`, add forward-link to `features/engine/`.
+12. `git mv` doc 13 → `spikes/deckmech-command-pipeline.md`. Status `concluded`.
+13. `git mv` Old Docs/ contents per §3 table.
+14. Commit + PR.
 
 ### Phase 4 — Features (the big move)
 
 This is the heaviest phase. Split if needed: one PR per feature folder.
 
-14. Move and convert per §2 table. For each Model:
-    - Add front matter (`type: model`, `status: settled`).
-    - Restructure into the §4.2 template (Problem / Concepts / Contracts / Invariants / Examples / Implications / Open follow-ups, then divider, then Options/Rationale/Consequences if applicable).
+15. Move and convert per §2 table. For each Model:
+    - Add front matter (`type: model`, `status: settled`, `builds-on: [paths]` or `builds-on: root`).
+    - Restructure into the §4.3 Model template (Problem / Concepts / Contracts / Invariants / Examples / Open follow-ups, then divider, then Options / Rationale / Consequences / ADR if applicable). No `## Implications for prior docs` section — cascade lives in `general/ALIGNMENT-DEBT.md` per §5.7.
     - Most docs only need front matter + light reorganization, not rewrites.
-15. For docs that merge (e.g., 14+15+17+18 → `features/actions/notes/01-command-pipeline.md`): merge content, delete originals (`git rm`), make sure no unique content is lost.
-16. For doc 11 → fold into doc 12's provenance section.
-17. Commit + PR (or one per feature).
+16. For each Feature root (`features/<feature>/<feature>.md`): write a stub per §4.2 template (Purpose / Boundaries / Composition / Public surface / Dependencies / Settled decisions / Open). Stub form is fine — they thicken later.
+17. For docs that merge (e.g., 14+15+17+18 → `features/actions/notes/01-command-pipeline.md`): merge content, delete originals (`git rm`), make sure no unique content is lost.
+18. For doc 11 → fold into doc 12's provenance section.
+19. Commit + PR (or one per feature).
 
-**Exit criteria:** all 28 numbered docs are gone or moved; `features/` is populated.
+**Exit criteria:** all 28 numbered docs are gone or moved; `features/` is populated; every feature folder has a root.
 
 ### Phase 5 — Sample lock + ADR backfill
 
-18. `git mv` doc 26 → `support/samples/pile-counter.md`. Restructure into Sample template (Subject / Why this sample / Projection / Not exercised / Open mappings).
-19. Re-check the four-part lock-bar against current state of `features/engine/notes/02-gamerules-contract.md`. Set status accordingly.
-20. Write the ~20 ADRs from §4 above. One commit per feature's ADR set, or one PR for the lot.
+20. `git mv` doc 26 → `support/samples/pile-counter.md`. Restructure into Sample template (Subject / Why this sample / Projection / Not exercised / Open mappings).
+21. Re-check the four-part lock-bar (§4.4) against current state of `features/engine/notes/02-gamerules-contract.md`. Set status accordingly.
+22. Write the ~20 ADRs from §4 above. One commit per feature's ADR set, or one PR for the lot. Project-wide ADRs land in `general/decisions/` (counter starts at `0002` since `0001-adopt-workflow.md` was created in Phase 1).
 
 ### Phase 6 — Cross-reference sweep
 
-21. Grep `RESEARCH/` for `doc NN` and `NN-` references. Replace with paths (`features/actions/notes/01`, etc.).
-22. Grep for old filenames. Replace with new paths.
-23. Update `SESSION-CHECKPOINT.md` "Artifacts to read on resume" table.
-24. Update README.
-25. Commit + PR.
+23. Grep `RESEARCH/` for `doc NN` and `NN-` references. Replace with paths (`features/actions/notes/01`, etc.).
+24. Grep for old filenames. Replace with new paths.
+25. Update `SESSION-CHECKPOINT.md` "Artifacts to read on resume" table.
+26. Update README.
+27. Commit + PR.
 
 **Exit criteria:** no references to old doc numbers anywhere in `RESEARCH/`.
 
 ### Phase 7 — Session backfill (lightweight)
 
-26. For each historical session (1–12): write a thin `sessions/session-NN.md` from PR descriptions + commits. Two-part template, but very short — these are reconstructions, not records.
-27. Commit + PR.
+28. For each historical session (1–12): write a thin `sessions/session-NN.md` from PR descriptions + commits. Two-part template, but very short — these are reconstructions, not records.
+29. Commit + PR.
 
 **Exit criteria:** `sessions/` has 12 entries, each ~one screen.
 
 ### Phase 8 — Workflow promotion + cleanup
 
-28. `git mv Workflow/WORKFLOW-PROPOSAL.md RESEARCH/general/WORKFLOW.md`. Strip `status: proposed`, set `status: accepted`. Strip §7 (vs. today) and §9 (out of scope) — those were proposal-only sections.
-29. Decide: do `Workflow/FLOW-SIMULATION.md` and `Workflow/AI-FIRST-AUTOMATION.md` graduate into `general/` (e.g., `general/AI-FIRST-PLAN.md`) or stay in `Workflow/` as historical context, or get retired entirely?
-30. Delete `Workflow/` if everything graduated.
-31. Final commit + PR titled "Workflow accepted and migrated."
+30. `git mv Workflow/WORKFLOW-PROPOSAL.md RESEARCH/general/WORKFLOW.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
+31. Decide: do `Workflow/FLOW-SIMULATION.md` and `Workflow/AI-FIRST-AUTOMATION.md` graduate into `general/` (e.g., `general/AI-FIRST-PLAN.md`) or stay in `Workflow/` as historical context, or get retired entirely? `WORKFLOW-GAPS.md` (status `concluded`) likely retires — its conclusions already live in WORKFLOW.md §8.
+32. Delete `Workflow/` if everything graduated.
+33. Final commit + PR titled "Workflow accepted and migrated."
 
 ---
 
@@ -291,7 +306,7 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 | `git mv` not preserving history on rename+content-edit | Make the moves and content edits in *separate commits*. `git mv` first (pure rename), then edit. |
 | Disagreement on placements (e.g., doc 19 in actions vs. its own folder) | Resolve before phase 4 starts. This guide is the place to lock it. |
 | Phase 4 PR is too large to review | Split per feature — one PR per `features/<feature>/`. ~7 PRs. |
-| `general/decisions/` open question (§4) | Decide before backfill starts. Default: skip it; put workflow ADRs in `Workflow/` until promotion, then in `general/` as a flat file. |
+| Feature root files start nearly empty | Acceptable — Feature stubs are valid (§4.2). Thickens as Models land. The empty Feature carries Purpose + Boundaries at minimum. |
 
 ---
 

@@ -194,8 +194,8 @@ tags: [#workflow, #simulation]
 
 - Doc 29 → Model in `features/engine/notes/03-snapshot-pipeline.md` (or split between `features/engine/` and `features/actions/`).
 - ADRs: service-driven publication, typed ActionTemplate, on-demand validation, GameRules-as-abstract-class-with-injected-services.
-- The doc-alignment edits to 25, 26, 27, 28 = alignment debt opened by doc 29's §7 implications, closed in same session.
-- The Pile Counter sample (`support/samples/pile-counter.md`) gets re-checked against the new GameRules shape. If the sample was `locked`, this triggers the §4.3 "design changes that affect the locked sample" path — explicit alignment-debt entry naming the sample, deliberate decision to re-lock.
+- The doc-alignment edits to 25, 26, 27, 28 = ledger entries opened in `general/ALIGNMENT-DEBT.md` (one per affected doc) when doc 29 lands, closed in same session.
+- The Pile Counter sample (`support/samples/pile-counter.md`) gets re-checked against the new GameRules shape. If the sample was `locked`, this triggers the §4.4 "design changes that affect the locked sample" path — explicit ledger entry naming the sample as target, deliberate decision to re-lock.
 
 **Where the workflow helps most.** Doc 29 cascades. Today, "what did doc 29 change in doc 25?" is hidden in the merge commit. Under the new workflow, the alignment-debt ledger names every affected artifact, and resolution is a tracked checkbox.
 
@@ -528,8 +528,8 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 
 **Actions taken.**
 - Snapshot pipeline Model. Three ADRs.
-- `ALIGNMENT-DEBT.md` opens four entries from §7 implications → all four closed in the same session via mechanical alignment pass.
-- Pile Counter lock re-validated explicitly: per workflow §4.3, locked-sample-affecting changes trigger a deliberate decision. Outcome: re-lock with the new shape (Sample's Projection updated, status stays `locked`).
+- `ALIGNMENT-DEBT.md` opens four entries (one per affected doc, per §5.7) → all four closed in the same session via mechanical alignment pass. Session note carries `debt: 4 opened` for the snapshot-pipeline Model edit.
+- Pile Counter lock re-validated explicitly: per workflow §4.4, locked-sample-affecting changes trigger a deliberate decision. Outcome: re-lock with the new shape (Sample's Projection updated, status stays `locked`).
 
 **Key points.**
 - The most cascade-heavy session. Workflow handles it: every affected doc named, every reconciliation tracked, sample relock recorded as a deliberate decision rather than silent drift.
