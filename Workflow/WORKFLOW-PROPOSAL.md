@@ -44,7 +44,7 @@ RESEARCH/
     ROADMAP.md               # phases and sequencing
     RECOMMENDATIONS.md       # current synthesis
     decisions/               # project-wide ADRs (general/decisions/0001-*.md)
-    _templates/
+    _templates/              # 8 doc-type templates; ledger entry shapes are spec-only in §6
       spike.md
       feature.md
       model.md
@@ -53,7 +53,6 @@ RESEARCH/
       session.md
       checkpoint.md
       plan.md
-      backlog.md
 
   features/                  # all per-system design work; each feature has a root <feature>.md
     entities/
@@ -125,7 +124,7 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | Type | Purpose | Lives in | Status values |
 |------|---------|----------|---------------|
 | **Spike** | Time-boxed investigation; pre-design exploration | `spikes/` | `active`, `concluded`, `graduated`, `archived` |
-| **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
+| **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded`, `abandoned` |
 | **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded`, `abandoned` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
 | **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
@@ -149,7 +148,6 @@ type: spike | feature | model | sample | adr | session | checkpoint | plan
 status: <one of the type's status values>
 last-updated: 2026-04-29
 builds-on: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
-superseded-by: features/presentation/02                   # optional, path
 tags: [#async, #triggers]                                 # optional
 ---
 ```
@@ -160,9 +158,13 @@ Reader knows in 2 seconds what they're holding.
 
 Feature roots derive their `Dependencies` section from the union of contained Models' `builds-on:`, so they don't need to repeat it in front matter.
 
+**Supersession** is recorded in two places only: the old doc's `status: superseded by NNNN` string (where NNNN is the new ADR's identifier), and the new doc's `## Consequences > Reverts/replaces` field. No `superseded-by:` front-matter field — would be a third locus for the same fact, with the same drift risk Q3 eliminated for cascade implications.
+
 ---
 
 ## 4. Templates
+
+**Source of truth.** Each fenced `markdown` block in this section is the canonical content for the corresponding file in `general/_templates/`. Migration Phase 1 extracts these blocks into the templates directory; future workflow edits land here, then are re-extracted on next regen. Single source — no parallel content store.
 
 ### 4.1 Spike
 
@@ -191,6 +193,8 @@ One paragraph. If graduated, include a forward link to the Model / ADR it inform
 ```
 
 **Status transitions.** When a spike informs subsequent work, set its status to `graduated` and add a forward link to the Model / ADR it informed. The spike doc stays put — preserves the trail. `concluded` means findings recorded with no immediate follow-up. `archived` means it didn't go anywhere; kept for future reference.
+
+**History doesn't update.** A Spike's status reflects only its own resolution. If the Model it graduated into is later superseded or abandoned, the Spike stays `graduated` — the supersession chain on the destination tells the rest of the story. Spikes are static once resolved; they're not re-edited as downstream evolves.
 
 ### 4.2 Feature
 
@@ -233,6 +237,8 @@ Pointers to `general/OPEN-QUESTIONS.md` items relevant to this feature.
 A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature is `settled` and clears the §5.6 promotion gate, it (along with its Models) graduates to `DOCS/`.
 
 **Cascade implications** (when this doc's edits affect downstream docs) are not captured inline — they live as entries in `general/ALIGNMENT-DEBT.md`. See §5.7.
+
+**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `builds-on:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
 
 ### 4.3 Model
 
@@ -449,7 +455,7 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 Once-per-project phase before §5.1 applies. Output is a working `RESEARCH/` skeleton with enough orientation to start session 02 with a real question.
 
-1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop templates into `general/_templates/`. Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/GLOSSARY.md` (with empty changelog).
+1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 8 doc-type templates into `general/_templates/` (extracted from §4). Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (stub with empty mermaid block), `general/GLOSSARY.md` (with empty changelog). Create `general/decisions/` folder.
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
 4. **Write `general/CAPABILITY-MAP.md`.** What systems will need to exist to deliver the vision? This justifies the feature list from step 3.
@@ -604,6 +610,57 @@ These don't overlap. A question is "we don't know what to do." Debt is "this Mod
 
 **Single-source rule.** Each piece of state lives in exactly one of these files. The checkpoint *links to* the others; it does not duplicate them. Models do not duplicate ledger entries inline (no `## Implications for prior docs` section — debt lives only in `ALIGNMENT-DEBT.md`).
 
+### Ledger entry shapes
+
+Canonical entry shape per ledger. Automations (`/research:open-debt`, `/research:lint`, `/research:add-to-backlog`, etc.) write entries in this exact shape; humans writing entries by hand follow the same.
+
+Unlike §4 doc templates (which become files in `_templates/`), ledger entry shapes are **spec-only** — they're appended to existing ledger files, not used to spawn new ones. Edits land here in §6; automations either hard-code the shape from this section or read it at build time. No template file extraction.
+
+**`ALIGNMENT-DEBT.md` entry**
+
+```markdown
+- 2026-04-29 | source: features/engine/notes/02-gamerules-contract.md | target: features/actions/notes/01-command-pipeline.md | reason: validation responsibility shifted to handlers | open
+```
+
+Resolved entries get strikethrough plus resolution date and link to the resolving commit/PR:
+
+```markdown
+- ~~2026-04-29 | source: ... | target: ... | reason: ... | open~~ → resolved 2026-05-02 ([commit](link))
+```
+
+**`BACKLOG.md` entry**
+
+```markdown
+- **Title** — 2-line context describing what's deferred and why.
+  Trigger: `<condition that makes this actionable>`.
+  References: `<paths or links to related docs>`.
+  Status: open
+```
+
+Done entries get strikethrough plus link to the PR/commit that closed them:
+
+```markdown
+- ~~**Title** — context. Trigger: ... References: ... Status: open~~ → done 2026-05-02 ([commit](link))
+```
+
+**`OPEN-QUESTIONS.md` entry**
+
+```markdown
+- **Title** — one-paragraph framing of the question. What's known, what's unknown, what's blocked on it.
+  Linked context: `<paths to related docs>`.
+  Status: open
+```
+
+Resolved entries get strikethrough + link to the resolving doc:
+
+```markdown
+- ~~**Title** — framing... Status: open~~ → resolved by [features/engine/notes/03](path)
+```
+
+**`FEATURE-MAP.md` layout**
+
+Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (per BACKLOG entry, trigger ~15 Models).
+
 ---
 
 ## 7. What changes vs. today
@@ -611,7 +668,7 @@ These don't overlap. A question is "we don't know what to do." Debt is "this Mod
 | Current | Proposed |
 |---------|----------|
 | Flat `RESEARCH/` with 28 chronologically numbered docs | `features/` + `general/` + `spikes/` + `support/` + minimal root |
-| Docs invent their own shape | 7 doc types with templates + front matter |
+| Docs invent their own shape | 8 doc types with templates + front matter |
 | No status on docs | `status:` in front matter |
 | Discussion + Proposal + Model as separate types in early drafts | Folded into one **Model** type with provenance below a divider |
 | Mega "decisions" docs (08, 11, 14) | ADRs in `features/<feature>/decisions/`; mega-docs become Model indexes |

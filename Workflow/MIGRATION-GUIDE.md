@@ -38,16 +38,15 @@ RESEARCH/
     RECOMMENDATIONS.md            # from doc 07
     decisions/                    # NEW — project-wide ADRs; first entry: 0001-adopt-workflow.md
       0001-adopt-workflow.md      # the workflow itself, captured as ADR
-    _templates/
+    _templates/                   # 8 doc-type templates (extracted from WORKFLOW-PROPOSAL §4)
       spike.md
-      feature.md                  # NEW template (per Q-set: Feature is doc type 4.2)
+      feature.md                  # NEW (Feature is doc type 4.2)
       model.md
       sample.md
       adr.md
       session.md
       checkpoint.md
       plan.md
-      backlog.md                  # NEW template — entry shape for deferred work
 
   features/
     entities/
@@ -211,7 +210,7 @@ Plus async/effects:
 19. `features/effects/decisions/0002-suspension-model.md`
 20. `features/effects/decisions/0003-replacement-priority.md`
 
-Roughly 20 ADRs total. Write each in template form (§4.4 of proposal): one screen, options-considered + decision + consequences. **One session** if focused, **two** if interleaved with structural moves.
+Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one screen, options-considered + decision + consequences. **One session** if focused, **two** if interleaved with structural moves.
 
 **Open question — global vs feature ADRs.** The proposal §1 only shows `features/<feature>/decisions/`. Workflow-level decisions (this migration; choice of ADR backfill scope; promotion-gate thresholds) have nowhere to live. **Suggestion**: add `general/decisions/` for project-wide decisions, mirroring per-feature counters. *Or* treat workflow decisions as out-of-band (in this `Workflow/` folder, pre-migration, and as ADRs against the workflow itself once `general/WORKFLOW.md` exists).
 
@@ -225,7 +224,7 @@ Roughly 20 ADRs total. Write each in template form (§4.4 of proposal): one scre
 
 1. Create directories: `RESEARCH/general/`, `RESEARCH/general/_templates/`, `RESEARCH/features/{entities,zones,actions,triggers,effects,engine,presentation}/{notes,decisions}/`, `RESEARCH/spikes/`, `RESEARCH/support/{samples,prior-art}/`, `RESEARCH/sessions/`.
 2. Drop `.gitkeep` in empty leaves so git tracks the structure.
-3. Write the 9 templates into `general/_templates/`: `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`, `plan.md`, `backlog.md`.
+3. Write the 8 doc-type templates into `general/_templates/` (extracted from §4 fenced blocks of WORKFLOW-PROPOSAL): `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`, `plan.md`. Ledger entry shapes are spec-only in §6 — no template files for them.
 4. Create empty ledgers with headers: `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (initial table + empty mermaid block). Seed `BACKLOG.md` with known deferred items: FEATURE-MAP auto-generator (trigger: ~15 Models or first drift), `/research:lint` skill, AI-driven check routines per [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md).
 5. Create `general/decisions/` folder with `.gitkeep` and write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption itself.
 6. Commit + PR titled "Workflow migration phase 1: skeleton."
@@ -289,9 +288,8 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 ### Phase 8 — Workflow promotion + cleanup
 
 30. `git mv Workflow/WORKFLOW-PROPOSAL.md RESEARCH/general/WORKFLOW.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
-31. Decide: do `Workflow/FLOW-SIMULATION.md` and `Workflow/AI-FIRST-AUTOMATION.md` graduate into `general/` (e.g., `general/AI-FIRST-PLAN.md`) or stay in `Workflow/` as historical context, or get retired entirely? `WORKFLOW-GAPS.md` (status `concluded`) likely retires — its conclusions already live in WORKFLOW.md §8.
-32. Delete `Workflow/` if everything graduated.
-33. Final commit + PR titled "Workflow accepted and migrated."
+31. Leave `Workflow/MIGRATION-GUIDE.md`, `Workflow/FLOW-SIMULATION.md`, `Workflow/AI-FIRST-AUTOMATION.md`, and `Workflow/WORKFLOW-GAPS.md` in place. They're living artifacts that may evolve when the workflow gets exercised for real — staging room for the workflow's own iteration. `Workflow/` survives.
+32. Final commit + PR titled "Workflow accepted and migrated."
 
 ---
 

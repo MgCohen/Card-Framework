@@ -161,11 +161,11 @@ tags: [#workflow, #simulation]
 
 - Doc 25 → Model in `features/engine/notes/02-gamerules-contract.md` (or its own feature folder if `gamerules` warrants one).
 - Doc 26 → **Sample** in `support/samples/pile-counter.md`. Two-layer (Subject = Pile Counter game rules; Projection = how it maps onto framework concepts).
-  - The "lock" commits map to status transition `draft` → `locked`. Per §4.3, the four-part lock-bar is checked: subject finalized ✓, projection uses settled abstractions ✓ (mostly — see below), no open alignment debt ✓, stable ≥ 1 session ✓ (after the alignment pass).
+  - The "lock" commits map to status transition `draft` → `locked`. Per §4.4, the four-part lock-bar is checked: subject finalized ✓, projection uses settled abstractions ✓ (mostly — see below), no open alignment debt ✓, stable ≥ 1 session ✓ (after the alignment pass).
 - Doc 27 → Model in `features/presentation/notes/01-presentation-loop.md`.
 - Aligning doc 25 with 26 + 27 = alignment-debt entries created when 26/27 surfaced gaps in 25; closed in same session.
 
-**Where this stresses the workflow.** The Sample's `locked` bar requires that the projection uses only `settled` abstractions. In session 9, GameRules was *just* finalized — projection-onto-GameRules counted as "settled" only because we said so. Under the workflow this would have been a `draft` sample for at least one more session (§4.3 condition 4: stable ≥ 1 session). The workflow would have *slowed us down here*, by one session. Worth it? Probably yes — the lock is a load-bearing claim.
+**Where this stresses the workflow.** The Sample's `locked` bar requires that the projection uses only `settled` abstractions. In session 9, GameRules was *just* finalized — projection-onto-GameRules counted as "settled" only because we said so. Under the workflow this would have been a `draft` sample for at least one more session (§4.4 condition 4: stable ≥ 1 session). The workflow would have *slowed us down here*, by one session. Worth it? Probably yes — the lock is a load-bearing claim.
 
 ---
 
@@ -210,10 +210,10 @@ tags: [#workflow, #simulation]
 **Under the new workflow.** This is meta — the proposal *defines* the workflow, so it can't fully obey it yet. But forward-going:
 
 - This very document, `Workflow/FLOW-SIMULATION.md`, is itself a Model (or arguably an analysis spike). Front-matter says `type: model`.
-- `Workflow/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 7 doc types — closer to a Plan than anything else.
+- `Workflow/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 8 doc types — closer to a Plan than anything else.
 - `Workflow/AI-FIRST-AUTOMATION.md` is a forward-looking spec. Closest to a Spike (premise: "what would AI-first look like?") that may graduate into multiple Models as items get built.
 
-**Note.** `Workflow/` itself is *not* one of the four root directories in the proposal (§1 says: operational, `general/`, `features/`, `spikes/`, `support/`). It's a pre-adoption staging area for the workflow design itself. Once the workflow is accepted and migrated, `WORKFLOW-PROPOSAL.md` graduates into `RESEARCH/general/WORKFLOW.md`, and the other three docs either graduate alongside or get retired. **Open question**: does `Workflow/` survive post-migration as a meta-folder for *future* workflow evolution, or does it fold entirely into `general/`?
+**Note.** `Workflow/` is the staging area for the workflow design itself. After migration, `WORKFLOW-PROPOSAL.md` graduates to `RESEARCH/general/WORKFLOW.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `WORKFLOW-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
 
 ---
 
@@ -475,7 +475,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 **Actions taken.**
 - Pile Counter written as a Sample: Subject (the puzzle game), Why-this-sample (floor case for solo / no async / no triggers), Projection onto framework abstractions, What-this-does-NOT-exercise.
 - Presentation loop Model written alongside, since the sample needed it to project onto.
-- Status stays `draft` — lock-bar requires stable ≥ 1 session, see workflow §4.3.
+- Status stays `draft` — lock-bar requires stable ≥ 1 session, see workflow §4.4.
 
 **Key points.**
 - Sample is honest about what it doesn't exercise: no async, no triggers, no effects, no multiplayer.

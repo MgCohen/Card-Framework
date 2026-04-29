@@ -242,7 +242,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/research:<n
 **Behavior.** Walks the §5.0 8-step bootstrap interactively:
 1. Ask for: project name, vision blurb, candidate features (5–12 likely).
 2. Create skeleton: `general/`, `features/<each>/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`.
-3. Drop all 9 templates into `general/_templates/`.
+3. Drop all 8 doc-type templates into `general/_templates/` (extracted from WORKFLOW.md §4).
 4. Initialize empty ledgers: `OPEN-QUESTIONS.md`, `ALIGNMENT-DEBT.md`, `BACKLOG.md`, `FEATURE-MAP.md` (stub with vision + empty mermaid), `GLOSSARY.md` (empty changelog).
 5. Create `general/decisions/` with `0001-adopt-workflow.md` from a project template.
 6. Write `general/VISION.md` from the supplied blurb.
@@ -380,7 +380,7 @@ Run before commit, reads diff, posts findings. Cheap insurance.
 
 The repo's root `AGENTS.md` (or a new `RESEARCH/CLAUDE.md`) should encode the workflow as durable instructions:
 
-1. The 7 doc types and their templates.
+1. The 8 doc types and their templates.
 2. The naming convention (`features/<feature>/notes/NN-<slug>.md`).
 3. The three-lifetimes-for-questions rule.
 4. The promotion gate.
