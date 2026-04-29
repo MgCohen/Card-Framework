@@ -114,7 +114,7 @@ RESEARCH/
 - **Doc 08 (core model decisions)** is a mega-decisions doc. Each decision becomes an ADR; the doc itself either disappears or becomes an index pointing to the ADRs.
 - **Doc 11 (zone model decisions)** folds into `features/zones/notes/01-zone-model.md` as the provenance section below the divider. Same pattern for doc 14 → `features/actions/notes/01-command-pipeline.md`.
 - **Doc 26 → Sample.** Pile Counter is the only sample so far. Status: `locked` (per session 9 decision), but re-check the four-part bar against current state of `features/engine/notes/02-gamerules-contract.md`.
-- **`ProductBuilder/` folder** does not survive migration. Once the workflow is accepted, `PRODUCT-BUILDER-PROPOSAL.md` → `general/PRODUCT-BUILDER.md`; this guide becomes a session note for the migration session(s); `FLOW-SIMULATION.md` and `AI-FIRST-AUTOMATION.md` either fold into `general/` or get retired.
+- **`ProductBuilder/` folder** survives migration. `PRODUCT-BUILDER-PROPOSAL.md` graduates to `general/PRODUCT-BUILDER.md` (the canonical workflow doc), but the four remaining staging artifacts — `MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md` — stay in place as living workflow-about-the-workflow docs. They may evolve as the workflow gets exercised against real implementation work. Retirement of the folder is a manual decision, made later, once these docs are no longer load-bearing.
 
 ---
 
@@ -141,7 +141,7 @@ RESEARCH/
 | `16-action-terminology-discussion.md` | Dissolved | Result lives in glossary; debate doesn't survive. |
 | `17-action-definition-proposal.md` | Merge into `features/actions/notes/01-command-pipeline.md` | Original "Proposal" doc type folds into Model. |
 | `18-action-flow-snippets.md` | Merge into `features/actions/notes/01-command-pipeline.md` | The end-to-end snippets become the Model's "Examples" section. |
-| `19-handler-mutations-and-semantics.md` | Merge into `features/actions/notes/01-command-pipeline.md` | Or keep separate as `features/actions/notes/02-handler-semantics.md` if doc 01 grows too long. |
+| `19-handler-mutations-and-semantics.md` | Merge into `features/actions/notes/01-command-pipeline.md` | Handler mutation/return-shape semantics belong alongside the pipeline contract; splitting forces cross-doc reading to understand handler return shape. |
 | `20-engine-evaluation-loop.md` | `features/engine/notes/01-evaluation-loop.md` | Direct rename; convert to Model. |
 | `21-trigger-reaction-system.md` | `features/triggers/notes/01-trigger-fold.md` | Direct rename; convert to Model. |
 | `22-async-decisions-and-suspension.md` | `features/effects/notes/01-async-dispatch.md` | Direct rename; convert to Model. Atomic decisions → ADRs. |
@@ -196,7 +196,7 @@ The proposal calls for ADRs in `features/<feature>/decisions/`. The current 28 d
 Plus the renames as ADRs (since they cascaded across many docs):
 
 14. `features/actions/decisions/0008-intent-vocabulary.md` (OriginRequest→OriginIntent etc.)
-15. `general/decisions/0002-naming-alignment-conventions.md` (project-wide rename conventions; lives in `general/decisions/` per the locked Q-set. Counter is `0002` because `0001` is reserved for `0001-adopt-workflow.md`.)
+15. `general/decisions/0002-naming-alignment-conventions.md` (project-wide rename conventions; lives in `general/decisions/` per the locked Q-set. Counter is `0002` because `0001` is reserved for `0001-adopt-workflow.md`, written in Phase 8.)
 
 Plus the trigger system:
 
@@ -229,10 +229,10 @@ Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one scre
    - `/builder:lint` skill (trigger: post-migration, after Tier 1 commands settle).
    - `builder-drift-detection` skill (session + CI modes — trigger: first feature reaches `implemented` status). Per [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §5.
    - Other Tier 2/3 commands and skills (see `AI-FIRST-AUTOMATION.md` §8 sequencing).
-5. Create `general/decisions/` folder with `.gitkeep` and write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption itself.
+5. Create `general/decisions/` folder with `.gitkeep`. The `0001-adopt-workflow.md` ADR is deferred to Phase 8 (after `general/PRODUCT-BUILDER.md` exists, so the ADR can cite the canonical path).
 6. Commit + PR titled "Workflow migration phase 1: skeleton."
 
-**Exit criteria:** structure exists with all three ledgers + project-decisions folder seeded; nothing else moved yet.
+**Exit criteria:** structure exists with all three ledgers + empty project-decisions folder; nothing else moved yet.
 
 ### Phase 2 — `general/` content (lowest-risk moves)
 
@@ -269,7 +269,7 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 
 20. `git mv` doc 26 → `support/samples/pile-counter.md`. Restructure into Sample template (Subject / Why this sample / Projection / Not exercised / Open mappings).
 21. Re-check the four-part lock-bar (§4.4) against current state of `features/engine/notes/02-gamerules-contract.md`. Set status accordingly.
-22. Write the ~20 ADRs from §4 above. One commit per feature's ADR set, or one PR for the lot. Project-wide ADRs land in `general/decisions/` (counter starts at `0002` since `0001-adopt-workflow.md` was created in Phase 1).
+22. Write the ~19 ADRs from §4 above (the `0001-adopt-workflow.md` entry is deferred to Phase 8). One commit per feature's ADR set, or one PR for the lot. Project-wide ADRs land in `general/decisions/` with counter starting at `0002` — `0001` is reserved for the workflow-adoption ADR written in Phase 8.
 
 ### Phase 6 — Cross-reference sweep
 
@@ -291,8 +291,9 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 ### Phase 8 — Workflow promotion + cleanup
 
 30. `git mv ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md RESEARCH/general/PRODUCT-BUILDER.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
-31. Leave `ProductBuilder/MIGRATION-GUIDE.md`, `ProductBuilder/FLOW-SIMULATION.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md`, and `ProductBuilder/PRODUCT-BUILDER-GAPS.md` in place. They're living artifacts that may evolve when the workflow gets exercised for real — staging room for the workflow's own iteration. `ProductBuilder/` survives.
-32. Final commit + PR titled "Workflow accepted and migrated."
+31. Write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption as an ADR. Cites `general/PRODUCT-BUILDER.md` (now the canonical path, just landed in step 30). Status `accepted`.
+32. Leave `ProductBuilder/MIGRATION-GUIDE.md`, `ProductBuilder/FLOW-SIMULATION.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md`, and `ProductBuilder/PRODUCT-BUILDER-GAPS.md` in place. They're living artifacts that may evolve as the workflow gets exercised against real implementation work — staging room for the workflow's own iteration. `ProductBuilder/` survives migration; folder retirement is a manual decision later, once these docs are no longer load-bearing.
+33. Final commit + PR titled "Workflow accepted and migrated."
 
 ---
 
