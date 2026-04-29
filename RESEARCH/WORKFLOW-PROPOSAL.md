@@ -407,30 +407,38 @@ Per session / per week / etc.
 
 ## 5. Global workflow
 
-### 5.1 Starting a new piece of work
+A session is a **branching unit**, not a linear one. It opens with an entry context, spawns sub-problems, sketches, and questions as work surfaces them, and lands somewhere. Doc types are tools you reach for mid-flight as branches demand them — not categories you commit to up front.
 
-1. Open `SESSION-CHECKPOINT.md`. Confirm the active question is the focus, or pick from "other still-open."
-2. Decide doc type:
-   - Open-ended exploration / prior-art survey / "see what's there" → **Spike**.
-   - Vocabulary or shape contested with known options → **Discussion** doc first.
-   - Well-framed and committing → **Proposal** doc.
-   - New system's structure → **Model** doc.
-   - New concrete reference instance → **Sample** doc.
-3. Copy the template from `general/_templates/`. Fill front matter.
-4. New vocabulary → also patch `general/GLOSSARY.md` and append to its changelog.
+### 5.1 Starting a session
+
+Open `SESSION-CHECKPOINT.md`. Take stock — note the entry context: the active question, alignment debt, PR feedback, or whatever brought you here. That's it. No commitment to a single direction.
 
 ### 5.2 During a session
 
-- Stay focused on the active question. Defer side threads to "other still-open."
-- When a major decision settles → write an ADR in the relevant `features/<feature>/decisions/`.
-- Anything that changes the model → §7 "Implications for prior docs" section, and append each item to `general/ALIGNMENT-DEBT.md`.
-- When a spike concludes or graduates → update its status and add forward links if it informed other work.
-- Settle one thing well rather than half-settle three.
+Sessions branch. That's normal, not an exception. As work surfaces sub-problems, sketches, or new questions:
+
+- **Address inline** if it's small and feeds the active thread.
+- **Spawn a doc** if it deserves one. Pick the doc type from §2:
+  - Open-ended exploration / prior-art survey → **Spike** (in `spikes/`).
+  - Vocabulary or shape contested with known options → **Discussion**.
+  - Well-framed and committing → **Proposal**.
+  - New system's structure → **Model**.
+  - New concrete reference instance → **Sample** (in `support/samples/`).
+- **Capture for later** if it's out of scope: promote to `general/OPEN-QUESTIONS.md` so it doesn't get lost.
+
+When a major decision settles → write an ADR in `features/<feature>/decisions/`.
+When the model changes → §7 "Implications for prior docs" section + append each item to `general/ALIGNMENT-DEBT.md`.
+When a spike concludes or graduates → update its status and add forward links.
+New vocabulary → patch `general/GLOSSARY.md` and append to its changelog.
+
+Branch freely; the session log captures the trail. Returning to the original thread after a detour is normal — just record both in the session note.
 
 ### 5.3 Ending a session
 
+The session note records the **trail**, not a linear narrative: what was created, what was touched, what branched, what was answered, what's still open.
+
 1. Write `sessions/session-NN.md` (two parts, ~50 lines each cap).
-2. Refresh `SESSION-CHECKPOINT.md` (rewrite, don't append).
+2. Refresh `SESSION-CHECKPOINT.md` with the landing state (rewrite, don't append).
 3. Update `general/OPEN-QUESTIONS.md` — strikethrough resolved with link to resolving doc; add new opens.
 4. Update `general/GLOSSARY.md` changelog if vocabulary changed.
 5. Commit + PR on `claude/<topic>` branch.
@@ -439,9 +447,9 @@ Per session / per week / etc.
 
 Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in the session log.
 
-### 5.5 Alignment-debt discharge
+### 5.5 Alignment-debt discharge as a focus
 
-A session can be entirely a **mechanical alignment pass** — discharging entries from `general/ALIGNMENT-DEBT.md`. Counts as progress. Tick off entries; reference the commit.
+A session can be entirely alignment-pass-shaped. Same flow — the entry context is "discharge entries from `general/ALIGNMENT-DEBT.md`," and the work is mechanical updates. Listed separately because it's a recognizable session pattern, not a different workflow.
 
 ### 5.6 Promotion gate: RESEARCH → DOCS
 
