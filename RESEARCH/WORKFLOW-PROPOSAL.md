@@ -52,7 +52,10 @@ RESEARCH/
   actions/                 # 13, 14, 15, 16, 17, 18, 19, 20
     notes/
     decisions/
-  triggers-effects/        # 21, 22, 23, 24
+  triggers/                # trigger system (subfeature of effects, but big enough to own a topic)
+    notes/
+    decisions/
+  effects/                 # effects, async orchestration, ongoing/continuous effects
     notes/
     decisions/
   engine/                  # 25
@@ -432,12 +435,12 @@ Resolved in this draft:
 - ~~ADR numbering scheme~~ → Per-topic counters in each `<topic>/decisions/`. Path is the prefix.
 - ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
 - ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
+- ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own topic.
 
 Still open (workflow design only — migration logistics are a separate concern):
 
 1. When is a sample game `locked` vs `draft`? Define the bar.
-2. Topic-folder design: is `triggers-effects` one folder or two (`triggers/` + `effects/`)? Does `engine` include `gamerules` or split? These are conceptual category questions, not "where does an existing doc go."
-3. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
+2. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
 
 ---
 
