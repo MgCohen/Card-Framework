@@ -16,35 +16,72 @@ tags: [#workflow, #meta]
 
 ## 1. Folder layout
 
+Three tiers:
+
+- **Root** — operational, live, "what's happening right now." Minimal.
+- **`general/`** — cross-cutting, durable reference and conventions. The shared vocabulary the topics depend on.
+- **Topic folders** — one per system, each self-contained with its own notes, decisions, and local numbering.
+
 ```
 RESEARCH/
-  README.md                # index, grouped by topic
-  WORKFLOW.md              # this doc, once accepted
-  SESSION-CHECKPOINT.md    # replaceable spine (current)
-  GLOSSARY.md              # canonical vocabulary (was 09)
-  OPEN-QUESTIONS.md        # canonical ledger (was 06)
-  ALIGNMENT-DEBT.md        # open §7 implications
+  README.md                # index — points to general/ and topics
+  SESSION-CHECKPOINT.md    # replaceable spine — live operational state
 
-  _templates/              # ready-to-copy templates
-    discussion.md
-    proposal.md
-    model.md
-    sample.md
-    adr.md
-    session.md
+  general/                 # cross-cutting / general-purpose
+    WORKFLOW.md            # this doc, once accepted
+    GLOSSARY.md            # canonical vocabulary (was 09)
+    OPEN-QUESTIONS.md      # canonical ledger (was 06)
+    ALIGNMENT-DEBT.md      # open §7 implications across all topics
+    _templates/
+      discussion.md
+      proposal.md
+      model.md
+      sample.md
+      adr.md
+      session.md
 
-  notes/                   # numbered research docs (00, 01, ...)
-  decisions/               # ADRs, numbered 0001-, 0002-, ...
-  sessions/                # one short file per session
-  samples/                 # sample-game docs (was inline doc 26)
+  foundations/             # 00, 01, 02, 03, 05, 07
+    notes/
+    decisions/
+  entities/                # 08, 10
+    notes/
+    decisions/
+  zones/                   # 11, 12
+    notes/
+    decisions/
+  actions/                 # 13, 14, 15, 16, 17, 18, 19, 20
+    notes/
+    decisions/
+  triggers-effects/        # 21, 22, 23, 24
+    notes/
+    decisions/
+  engine/                  # 25
+    notes/
+    decisions/
+  presentation/            # 27, 28
+    notes/
+    decisions/
+
+  samples/                 # whole-system stress tests (was 26)
   prior-art/               # frozen reference (was Old Docs/)
+  sessions/                # one short file per session
 
 DOCS/                      # durable, implementation-ready docs (gated)
 PLANS/                     # implementation slices (gated)
   _TEMPLATE.md
 ```
 
-Numbering inside `notes/` continues forward (next is 29). ADRs and sessions get their own monotonic counters.
+### Numbering
+
+**Per-topic counters.** Each topic's `notes/` and `decisions/` restart at `01`. Filenames look like `actions/notes/03-action-definition-proposal.md` and `actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
+
+**Sessions** stay globally monotonic (`sessions/session-01.md`, `session-02.md`, …). Sessions are the chronological spine — they cross topics by nature.
+
+**Cross-references.** Use the path: `actions/notes/03` or just `actions/03` as shorthand. Old "doc N" references get rewritten in the migration.
+
+### Where cross-cutting docs live
+
+When a doc spans multiple systems (e.g., `16-action-terminology-discussion` touches naming hygiene broadly): it lives in the topic that triggered it (here, `actions/`) and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references (glossary, open questions, alignment debt, workflow) live in `general/`.
 
 ---
 
@@ -52,11 +89,11 @@ Numbering inside `notes/` continues forward (next is 29). ADRs and sessions get 
 
 | Type | Purpose | Lives in | Status values |
 |------|---------|----------|---------------|
-| **Discussion** | Frame a contested problem; list candidates; **do not decide** | `notes/` | `discussion`, `closed` |
-| **Proposal / Decision** | Commit a position with rationale and implications | `notes/` | `proposed`, `settled`, `superseded` |
-| **Model** | Durable description of a system | `notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
+| **Discussion** | Frame a contested problem; list candidates; **do not decide** | `<topic>/notes/` | `discussion`, `closed` |
+| **Proposal / Decision** | Commit a position with rationale and implications | `<topic>/notes/` | `proposed`, `settled`, `superseded` |
+| **Model** | Durable description of a system | `<topic>/notes/` (→ `DOCS/` on promotion) | `draft`, `settled`, `superseded` |
 | **Sample Game** | Concrete game projected onto framework — floor or ceiling | `samples/` | `draft`, `locked` |
-| **ADR** | One atomic decision per file | `decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
+| **ADR** | One atomic decision per file | `<topic>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
 | **Checkpoint** | Replaceable handoff for next session | `RESEARCH/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
@@ -335,11 +372,12 @@ Promotion is a deliberate move, not a default.
 | File | Role | Cadence |
 |------|------|---------|
 | `SESSION-CHECKPOINT.md` | Replaceable handoff; single active question | End of every session |
-| `GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
-| `OPEN-QUESTIONS.md` | Categorized ledger; strikethrough + link on resolve | When questions open or resolve |
-| `ALIGNMENT-DEBT.md` | Open §7 implications across docs | Append on doc landing; tick off on alignment pass |
+| `general/WORKFLOW.md` | This doc, once accepted | When workflow conventions change |
+| `general/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
+| `general/OPEN-QUESTIONS.md` | Categorized ledger; strikethrough + link on resolve | When questions open or resolve |
+| `general/ALIGNMENT-DEBT.md` | Open §7 implications across all topics | Append on doc landing; tick off on alignment pass |
 | `sessions/session-NN.md` | Per-session narrative (append-only) | End of every session |
-| `decisions/NNNN-*.md` | ADRs | When a decision settles |
+| `<topic>/decisions/NNNN-*.md` | ADRs (per-topic counter) | When a decision settles |
 
 **Single-source rule.** Each piece of state lives in exactly one of these files. The checkpoint *links to* the others; it does not duplicate them.
 
@@ -349,26 +387,34 @@ Promotion is a deliberate move, not a default.
 
 | Current | Proposed |
 |---------|----------|
+| Flat `RESEARCH/` with 28 chronologically numbered docs | Topic folders + `general/` + minimal root |
 | Docs invent their own shape | Doc-type templates + front matter |
 | No status on docs | `status:` in front matter |
-| Mega "decisions" docs (08, 11, 14) | ADRs; mega-docs become indexes |
-| Checkpoint and `06-open-questions` overlap | Checkpoint links to OPEN-QUESTIONS; no duplication |
-| Alignment debt implicit across §7 sections | Explicit `ALIGNMENT-DEBT.md` |
+| Mega "decisions" docs (08, 11, 14) | ADRs in `<topic>/decisions/`; mega-docs become indexes |
+| Checkpoint and `06-open-questions` overlap | Checkpoint links to `general/OPEN-QUESTIONS.md`; no duplication |
+| Alignment debt implicit across §7 sections | Explicit `general/ALIGNMENT-DEBT.md` |
 | Sessions visible only via PR titles | `sessions/` log |
 | Glossary updated silently | Glossary has a changelog |
 | Old Docs/ as prior-art folder | Rename to `prior-art/` (cosmetic) |
 | Sample games inline (doc 26) | `samples/` folder, room for a second floor |
+| Cross-references say "doc 28" | Cross-references use paths: `actions/15` |
 
 ---
 
 ## 8. Open questions about the workflow itself
 
-1. Do we keep numbering monotonic across `notes/`, or restart per system?
-2. ADR numbering: monotonic forever, or per-domain prefix (`async-0001`, `zone-0001`)?
-3. Is `OPEN-QUESTIONS.md` the canonical ledger, or is the checkpoint? (Proposal: canonical is OPEN-QUESTIONS; checkpoint links.)
-4. When is a sample game `locked` vs `draft`? Define the bar.
-5. Do session notes need a max length cap (e.g., one screen)?
-6. Do we backfill ADRs for major past decisions, or only forward from now?
+Resolved in this draft:
+- ~~Numbering scheme inside notes~~ → Per-topic counters, restart at `01` per topic.
+- ~~ADR numbering scheme~~ → Per-topic counters in each `<topic>/decisions/`. Path is the prefix.
+
+Still open:
+
+1. Is `general/OPEN-QUESTIONS.md` the canonical ledger, or is `SESSION-CHECKPOINT.md`? (Proposal: canonical is OPEN-QUESTIONS; checkpoint links to a hot-list view.)
+2. When is a sample game `locked` vs `draft`? Define the bar.
+3. Do session notes need a max length cap (e.g., one screen)?
+4. Do we backfill ADRs for major past decisions, or only forward from now?
+5. Topic boundaries for the initial migration — do we accept the proposed split (foundations / entities / zones / actions / triggers-effects / engine / presentation) or refine? Boundaries can shift later via `git mv` + a reference sweep, but starting close to right is cheaper.
+6. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
 
 ---
 
@@ -376,23 +422,24 @@ Promotion is a deliberate move, not a default.
 
 Each step is non-disruptive on its own. Stop at any line; the rest still works.
 
-1. **Front matter + status fields** on the 28 existing docs. Mechanical pass, ~1 session.
-2. **`_templates/` folder** with the 8 templates above. ~30 minutes.
-3. **`sessions/` folder** + retroactive 1-line entries for sessions 1–7 reconstructed from PR titles. ~30 minutes.
-4. **`ALIGNMENT-DEBT.md`** seeded from current §7 lists (today: doc 28 §7 → docs 25, 26, 27).
-5. **`decisions/` folder** + ADRs for the top-tier decisions already made:
-   - Async layer hierarchy (Effect / GameAction / CompositeAction)
-   - GameRules contract (sync, observer-shaped, zero state)
-   - Snapshot stores templates not commands
-   - PlayerIntent → IntentMapper → GameCommand boundary
-   - FIFO queue + evaluator pattern
+1. **Create `general/`** and move `09-core-glossary.md` → `general/GLOSSARY.md`, `06-open-questions.md` → `general/OPEN-QUESTIONS.md`. Add empty `general/ALIGNMENT-DEBT.md`. ~10 minutes + reference sweep.
+2. **`general/_templates/` folder** with the 8 templates above. ~30 minutes.
+3. **Topic folders + migration.** Move the 26 remaining numbered docs into topic folders, restart counters per topic. One commit per topic to keep diffs reviewable. Update cross-references in the same pass. ~1 session.
+4. **Front matter + status fields** on all migrated docs. Mechanical pass, can run alongside step 3.
+5. **`sessions/` folder** + retroactive 1-line entries for sessions 1–7 reconstructed from PR titles. ~30 minutes.
+6. **Seed `general/ALIGNMENT-DEBT.md`** from current §7 lists (today: doc 28 §7 → docs 25, 26, 27 — now `actions/...` and `presentation/...` paths).
+7. **ADRs for top-tier past decisions** in their topic folders:
+   - `triggers-effects/decisions/0001-async-layer-hierarchy.md` (Effect / GameAction / CompositeAction)
+   - `engine/decisions/0001-gamerules-contract.md` (sync, observer-shaped, zero state)
+   - `presentation/decisions/0001-snapshot-stores-templates.md`
+   - `actions/decisions/0001-playerintent-boundary.md`
+   - `engine/decisions/0002-fifo-queue-evaluator.md`
    Lower-tier decisions stay in their proposal docs.
-6. **Glossary changelog** — start now; don't backfill renames.
-7. **Folder reshuffle** (`notes/`, `samples/`, `prior-art/`). Most disruptive; do last or skip.
-8. **`PLANS/_TEMPLATE.md`** — write when the first slice approaches.
-9. **Promotion gate to `DOCS/`** — codify when a first promotion candidate appears.
+8. **Glossary changelog** — start now; don't backfill renames.
+9. **`PLANS/_TEMPLATE.md`** — write when the first slice approaches.
+10. **Promotion gate to `DOCS/`** — codify when a first promotion candidate appears.
 
-Steps 1–6 are non-disruptive. Step 7 is optional polish. Steps 8–9 trigger when crossing the research → implementation boundary.
+Steps 1–8 are doable inside the research phase without touching `Assets/`. Steps 9–10 trigger when crossing the research → implementation boundary.
 
 ---
 
