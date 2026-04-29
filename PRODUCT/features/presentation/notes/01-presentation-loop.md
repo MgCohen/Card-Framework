@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/actions/notes/02-availability-snapshot.md, features/engine/notes/03-snapshot-pipeline.md]
+tags: [#presentation, #loop, #available-actions]
+---
+
 # Presentation Loop and Available Actions Flow
 
 This document captures the end-to-end loop from engine to UI and back, with a focus on how player-facing affordances are computed, surfaced, and acted upon. It came out of sketching the Pile Counter sample game (doc 26) against the `GameRules` interface (doc 25) — the snapshot's shape and publication mechanism couldn't be settled in isolation, so we worked through the full presentation cycle.

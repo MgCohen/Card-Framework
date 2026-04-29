@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/engine/notes/01-evaluation-loop.md]
+tags: [#triggers, #reactions, #fold]
+---
+
 # Trigger And Reaction System
 
 This document defines the trigger and reaction model for the Card Framework. It replaces the `CommandPreHook` placeholder from docs 18 and 20 with a proper design.

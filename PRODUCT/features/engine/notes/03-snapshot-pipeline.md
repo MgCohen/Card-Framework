@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/engine/notes/02-gamerules-contract.md, features/actions/notes/02-availability-snapshot.md]
+tags: [#engine, #snapshot, #available-actions]
+---
+
 # Snapshot Production Pipeline — How AvailableActions Gets Built
 
 This document defines **how** the available-actions snapshot is produced and published. [Doc 28](28-action-availability-and-mapping.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](27-presentation-loop.md) and the `DrainResult.Snapshot` slot in [doc 25 §6](25-gamerules-shape.md).

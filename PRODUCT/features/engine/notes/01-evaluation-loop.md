@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: root
+tags: [#engine, #evaluation-loop, #orchestrator]
+---
+
 # Engine — Orchestrator And Evaluation Loop
 
 This document defines what the **engine** is in the Card Framework: its structure, its responsibilities, and how game-specific rules plug into it. It is research, not a locked API.

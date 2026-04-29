@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/effects/notes/01-async-dispatch.md]
+tags: [#effects, #continuous, #ongoing]
+---
+
 # Continuous And Ongoing Effects
 
 This document defines how ongoing effects are modelled in the Card Framework — effects that persist across multiple actions or turns, managing their own state and lifetime.

@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: root
+tags: [#actions, #model, #command-pipeline]
+---
+
 # Action, Request, Command, And History Model
 
 This document proposes the first action-flow vocabulary for the Card Framework.

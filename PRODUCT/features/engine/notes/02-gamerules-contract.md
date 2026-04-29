@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/engine/notes/01-evaluation-loop.md]
+tags: [#engine, #gamerules, #contract]
+---
+
 # GameRules — The Game's Rules Brain
 
 This document locks the contract for `GameRules`: the game-specific decision layer plugged into the engine. The engine itself (loop, queue, pipeline wiring) is framework code described in [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md). This doc is for the game author who has to implement `GameRules` for a specific game.

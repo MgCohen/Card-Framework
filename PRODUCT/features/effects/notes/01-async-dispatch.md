@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: root
+tags: [#effects, #async, #suspension]
+---
+
 # Async Decisions And Suspension
 
 This document defines how the engine handles effects that require player input — targeting, choices, mulligans — and establishes the layer hierarchy that makes async orchestration tractable.

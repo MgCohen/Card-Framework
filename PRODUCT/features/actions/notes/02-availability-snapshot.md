@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/actions/notes/01-command-pipeline.md, features/engine/notes/03-snapshot-pipeline.md]
+tags: [#actions, #snapshot, #availability]
+---
+
 # Action Availability and Mapping — The Snapshot Shape
 
 This document defines the shape of the available-actions snapshot and the mapping from a player's choice back into a resolved `GameCommand`. It supersedes [doc 27 §5](27-presentation-loop.md) (snapshot element type) and reshapes parts of §4, §6, §9, §10, §11, §12 — the changes are summarised in [§7](#7-implications-across-existing-docs) below.

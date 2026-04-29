@@ -1,3 +1,11 @@
+---
+type: model
+status: settled
+last-updated: 2026-04-29
+builds-on: [features/effects/notes/01-async-dispatch.md]
+tags: [#effects, #replacement, #prevention]
+---
+
 # Replacement And Prevention Effects
 
 This document defines the rules-level semantics for replacement and prevention effects — how the before-fold is interpreted, how competing replacements are handled, and where game-specific ordering policy lives.
