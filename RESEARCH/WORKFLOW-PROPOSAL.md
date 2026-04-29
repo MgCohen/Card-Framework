@@ -80,11 +80,9 @@ RESEARCH/
   support/
     samples/                 # whole-system stress tests
     prior-art/               # frozen external reference (was Old Docs/)
-
-DOCS/                        # durable, implementation-ready docs (gated)
-PLANS/                       # implementation slices (gated)
-  _TEMPLATE.md
 ```
+
+`DOCS/` and `PLANS/` sit outside `RESEARCH/` as gated promotion targets — see §2 (Doc types) and §5.6 (promotion gate).
 
 ### Numbering
 
