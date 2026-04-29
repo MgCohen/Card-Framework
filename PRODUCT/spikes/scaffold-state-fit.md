@@ -1,4 +1,14 @@
+---
+type: spike
+status: graduated
+last-updated: 2026-04-29
+forward-link: features/engine/
+tags: [#spike, #scaffold]
+---
+
 # Scaffold Package Fit
+
+> **Status: graduated.** Findings from this spike fed the engine evaluation loop and gamerules contract — see `features/engine/`.
 
 This note maps existing Scaffold packages to possible Card Framework responsibilities. It is based on local Scaffold package docs and the reference `Gear-Engine` manifest.
 

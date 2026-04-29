@@ -1,4 +1,14 @@
+---
+type: spike
+status: concluded
+last-updated: 2026-04-29
+forward-link: features/actions/
+tags: [#spike, #deckmech, #command-pipeline]
+---
+
 # DeckMech Command Pipeline Reference
+
+> **Status: concluded.** Reference exploration of an external library's command pipeline. Findings fed `features/actions/`.
 
 This note summarizes the relevant command/action pipeline research from the local `C:\Unity\DeckMech` project, especially `C:\Unity\DeckMech\Plans\GameCommandPipeline\GameCommandPipeline-ExecPlan.md`.
 
