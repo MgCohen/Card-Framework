@@ -167,11 +167,8 @@ Investigation steps, code read, prior art consulted, prototypes sketched.
 ## Findings
 What we learned.
 
-## Next steps
-- Graduate to feature design? (link forward)
-- Open a discussion?
-- Park for later?
-- Archive?
+## Outcome
+One paragraph. If graduated, include a forward link to the doc / discussion / ADR it informed.
 ```
 
 **Status transitions.** When a spike informs subsequent work, set its status to `graduated` and add a forward link to the feature doc / discussion / ADR it informed. The spike doc stays put — preserves the trail. `concluded` means findings recorded with no immediate follow-up. `archived` means it didn't go anywhere; kept for future reference.
