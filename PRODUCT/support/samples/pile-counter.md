@@ -1,4 +1,14 @@
+---
+type: sample
+status: locked
+last-updated: 2026-04-29
+builds-on: [features/engine/notes/02-gamerules-contract.md, features/actions/notes/01-command-pipeline.md]
+tags: [#sample, #pile-counter]
+---
+
 # Pile Counter — Reference Sample Game
+
+> **Status: locked.** Re-checked against `features/engine/notes/02-gamerules-contract.md` during migration phase 5 — the four-part lock-bar (§4.4 of PRODUCT-BUILDER-PROPOSAL) holds: (1) Subject and Projection are coherent; (2) projection covers the contracts the GameRules class exposes; (3) "what this does not exercise" remains honest; (4) no breaking renames since session 9 lock. If a future Model edit invalidates the projection, downgrade to `draft` and re-lock.
 
 This document defines a small, deliberately simple game we use as a working reference while shaping the framework. Whenever a framework concept feels under- or over-specified, we sketch its implementation in **Pile Counter** and see where the seams are.
 
