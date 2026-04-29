@@ -7,7 +7,12 @@
       "Bash(gh pr *)",
       "Read(//c/c/Unity/Card Framework/**)",
       "Read(//c/c/Unity/Card Framework/DOCS/**)",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:hearthsim.info)",
+      "WebFetch(domain:wingedsheep.com)",
+      "Bash(git checkout *)",
+      "Bash(git add *)"
     ]
   }
 }
