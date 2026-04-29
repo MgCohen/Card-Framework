@@ -325,6 +325,8 @@ One paragraph.
 
 Two parts, each capped at ~one screen (~50 lines). If either overflows, the content belongs in a numbered doc or an ADR, not the session note.
 
+*Active question coming in* mirrors the active question in `SESSION-CHECKPOINT.md` at session start; *active question going out* is what the refreshed checkpoint will hold at session end.
+
 ```markdown
 # Session NN — <date>
 
