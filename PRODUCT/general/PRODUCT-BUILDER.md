@@ -10,7 +10,7 @@ tags: [#workflow, #meta]
 
 **Purpose.** Codify the product-building workflow we've been running, plug the gaps we noticed (no doc-type templates, no per-decision log, no session log, no glossary changelog, no alignment-debt tracker, no place for exploratory work), and lock the patterns into shared conventions so new sessions inherit the method, not just the artifacts.
 
-**Scope.** End-to-end workflow: design → contract → implementation → drift handling. The workflow covers `PRODUCT/` (canonical knowledge layer, status governs role) and `PLANS/` (ephemeral implementation slices, minimal touchpoints — internals not workflow-specified). Implementation lives in the project's code directory (`Assets/` for Card Framework). No separate `DOCS/` layer — `settled` features in `PRODUCT/` *are* the contract.
+**Scope.** End-to-end workflow: design → contract → implementation → drift handling. The workflow covers `PRODUCT/` (canonical knowledge layer, status governs role) and `PLANS/` (ephemeral implementation slices, minimal touchpoints — internals not workflow-specified). Implementation lives in the project's code directory (e.g., `Assets/` for a Unity project). No separate `DOCS/` layer — `settled` features in `PRODUCT/` *are* the contract.
 
 ---
 
@@ -54,34 +54,15 @@ PRODUCT/
       checkpoint.md
 
   features/                  # all per-system design work; each feature has a root <feature>.md
-    entities/
-      entities.md            # feature root — top-level summary, indexes Models + ADRs
+    <feature-a>/
+      <feature-a>.md         # feature root — top-level summary, indexes Models + ADRs
+      notes/                 # Models (NN-<slug>.md, per-feature counter)
+      decisions/             # ADRs (NNNN-<slug>.md, per-feature counter)
+    <feature-b>/
+      <feature-b>.md
       notes/
       decisions/
-    zones/
-      zones.md
-      notes/
-      decisions/
-    actions/
-      actions.md
-      notes/
-      decisions/
-    triggers/                # subfeature of effects, big enough to own a folder
-      triggers.md
-      notes/
-      decisions/
-    effects/
-      effects.md
-      notes/
-      decisions/
-    engine/
-      engine.md
-      notes/
-      decisions/
-    presentation/
-      presentation.md
-      notes/
-      decisions/
+    ...                      # one folder per major system in the project
 
   spikes/                    # flat — most spikes are single docs
 
@@ -112,7 +93,7 @@ When a doc spans multiple systems (e.g., a terminology discussion touching namin
 
 ### Feature names are project-specific
 
-The folder names shown above (`entities/`, `zones/`, `actions/`, `triggers/`, `effects/`, `engine/`, `presentation/`) are *this* project's features. Another project applying this workflow picks its own — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/notes/`, `features/<name>/decisions/`), not these specific names.
+Each project applying this workflow picks its own feature names — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/notes/`, `features/<name>/decisions/`), not any particular set of names.
 
 A rule of thumb: if a feature folder has fewer than ~3 docs after several sessions, it might belong as a tag inside a sibling. If it grows past ~15 docs without natural sub-clusters, consider splitting.
 
@@ -301,7 +282,7 @@ A purely descriptive Model (e.g., a system that doesn't have meaningful alternat
 
 A **sample** is a concrete reference instance projected onto the abstractions being designed. It exists to stress-test the design against real cases — a floor (simplest case the design must support) or a ceiling (complex case that bounds expressiveness).
 
-In this project: a card game's rules and how its elements map onto framework concepts. In other projects it could be a client codebase using a library, a protocol implementation, a sample program for a language, an integration for an API — anything concrete enough to project the design onto.
+Examples of subjects: a card game's rules and how its elements map onto framework concepts; a client codebase using a library; a protocol implementation; a sample program for a language; an integration for an API — anything concrete enough to project the design onto.
 
 A sample doc has two layers:
 
@@ -792,42 +773,4 @@ Resolved entries get strikethrough + link to the resolving doc:
 **`FEATURE-MAP.md` layout**
 
 Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (per BACKLOG entry, trigger ~15 Models).
-
----
-
-## 8. Open questions about the workflow itself
-
-Resolved in this draft:
-- ~~Numbering scheme inside notes~~ → Per-feature counters, restart at `01` per feature.
-- ~~ADR numbering scheme~~ → Per-feature counters in each `features/<feature>/decisions/`. Path is the prefix.
-- ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
-- ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
-- ~~Doc-type count~~ → 8 types. Original spike→model→ADR was extended with **Feature** (root summary per feature, source of truth) once it became clear Models alone left no canonical home for the feature itself. Discussion folded into Model's "Options considered" section; Proposal merged into Model. The unified Model artifact carries both descriptive content (top) and decision provenance (bottom, below divider).
-- ~~Topic-folder design (triggers vs effects)~~ → One folder per feature. `triggers/` and `effects/` are separate. Triggers depend heavily on effects but warrant their own folder.
-- ~~Sample `locked` bar~~ → Four-part bar in §4.4: subject finalized, projection uses only `settled` abstractions, no open alignment debt against it, stable ≥ 1 session. Sample template abstracted to subject/projection so the workflow is project-agnostic.
-- ~~Topics-vs-features naming~~ → `features/`, product-dev framing.
-- ~~Topics nesting layout~~ → Feature folders nest under `features/`. Cleaner globs, more deterministic structure for AI tooling, clearer top-level separation.
-- ~~Foundations placement~~ → Folded into `general/` as project-orientation files (`VISION`, `SCOPE`, `ARCHITECTURE`, `ROADMAP`, etc.). Reference-shaped, not feature-design-shaped.
-- ~~Spikes as a category~~ → Top-level `spikes/` folder + new `Spike` doc type with `active`/`concluded`/`graduated`/`archived` lifecycle. Captures exploration distinct from feature design.
-- ~~`support/` wrapper~~ → `support/samples/` and `support/prior-art/`. `sessions/` stays at root (operational, written every session, not background reference).
-- ~~Debt source of truth~~ → **Ledger only.** `general/ALIGNMENT-DEBT.md` is the single source. Models and Features have no inline `## Implications` section. Drift mode (two writes for one truth) eliminated by construction. See §5.7.
-- ~~"Explicit no implications" rule~~ → Discipline kept, but relocated. With §7 dropped, the assertion lands in the session note as `debt: N opened` or `debt: none` per Model edit. Empty signal is forbidden.
-- ~~Consistency-pass cadence~~ → Threshold-based. `> 5 open ledger entries` forces the next session into pass-mode (§5.5). See §5.8.
-- ~~`builds-on:` mandatory~~ → Yes, for Models. Either a list of paths or the literal `root` when standalone. Empty list (`[]`) is not allowed. Powers cascade-walking on supersession (§5.9) and FEATURE-MAP rendering. Feature roots derive from contained Models.
-- ~~Mermaid in FEATURE-MAP~~ → Yes. GitHub renders it; no ASCII fallback. Source itself remains human-readable for non-rendering tools.
-- ~~FEATURE-MAP maintenance~~ → Hand-maintained v1; auto-generator deferred to BACKLOG (trigger: ~15 Models or first drift incident, whichever first).
-- ~~Where deferred work lives~~ → New `general/BACKLOG.md`. Distinct shape from open questions and alignment debt. Three ledgers, three lifecycles, no overlap.
-- ~~Project-wide ADRs~~ → New `general/decisions/` folder. Independent counter from feature decisions. First entry: `0001-adopt-workflow.md` (the workflow itself).
-- ~~`abandoned` Model status~~ → Added. Distinct from `superseded`. Body kept as historical record; one-line abandonment header at top.
-- ~~Sample cooldown fuzziness~~ → Contract edits reset; hygiene edits don't. Commit message marks the edit explicitly.
-- ~~`has-pending-debt:` front-matter flag~~ → Dropped. Query the ledger directly (filter by target=path). Avoids reintroducing dual-write drift.
-- ~~Debt entry granularity~~ → Per affected doc. Each entry has one binary status. Honest counting for the §5.8 threshold.
-- ~~Linter: block vs report~~ → Report only. Findings flow into ledger as new entries (`source=linter`). Blocking creates bypass habits; the §5.8 threshold catches accumulation. AI-driven check routines.
-- ~~Separate `DOCS/` directory~~ → Dropped. `settled` features in `PRODUCT/` *are* the canonical contract; status governs role. Eliminates duplication between PRODUCT/ and DOCS/ versions of the same artifact.
-- ~~`implemented` status~~ → Added to Feature and Model. Two-gate lifecycle: `draft → settled` (research gate, §5.6.1) and `settled → implemented` (build gate, §5.6.2). Drift is captured as alignment-debt entries against code.
-- ~~Workflow scope~~ → End-to-end (design through drift handling), not just research. Reframed as "Product Builder" — the system for building a product from concept to code.
-- ~~PLANS/ scope~~ → Outside strict workflow scope. Plans are ephemeral implementation slices; their internals are not workflow-specified. §4.8 is descriptive prose only — no template file in `_templates/`. Templates count = 7 (one per doc type *except* Plan).
-
-No open questions remain on the workflow design. Migration logistics (when, how, ADR backfill scope, etc.) are a separate concern — planned in [`ProductBuilder/MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md). Open mechanics worth pressure-testing further (linter implementation details, FEATURE-MAP auto-generator design) live in [`ProductBuilder/AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) and `general/BACKLOG.md`.
-
 
