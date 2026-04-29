@@ -10,7 +10,7 @@ tags: [#workflow, #meta]
 
 **Purpose.** Codify the product-building workflow we've been running, plug the gaps we noticed (no doc-type templates, no per-decision log, no session log, no glossary changelog, no alignment-debt tracker, no place for exploratory work), and lock the patterns into shared conventions so new sessions inherit the method, not just the artifacts.
 
-**Scope.** End-to-end workflow: design → contract → implementation → drift handling. The workflow covers `RESEARCH/` (canonical knowledge layer, status governs role) and `PLANS/` (ephemeral implementation slices, minimal touchpoints — internals not workflow-specified). Implementation lives in the project's code directory (`Assets/` for Card Framework). No separate `DOCS/` layer — `settled` features in `RESEARCH/` *are* the contract.
+**Scope.** End-to-end workflow: design → contract → implementation → drift handling. The workflow covers `PRODUCT/` (canonical knowledge layer, status governs role) and `PLANS/` (ephemeral implementation slices, minimal touchpoints — internals not workflow-specified). Implementation lives in the project's code directory (`Assets/` for Card Framework). No separate `DOCS/` layer — `settled` features in `PRODUCT/` *are* the contract.
 
 ---
 
@@ -25,7 +25,7 @@ Four kinds of work at the root:
 - **`support/`** — material that supports the design but isn't the design: stress-test samples and frozen prior art.
 
 ```
-RESEARCH/
+PRODUCT/
   README.md                  # index — points to general/, features/, spikes/
   SESSION-CHECKPOINT.md      # replaceable spine — live operational state
   sessions/                  # per-session narrative (append-only)
@@ -90,7 +90,7 @@ RESEARCH/
     prior-art/               # frozen external reference (was Old Docs/)
 ```
 
-`PLANS/` sits outside `RESEARCH/` as the home for ephemeral implementation slices (internals not workflow-specified). Implementation lives in the project's code directory (e.g., `Assets/` for a Unity project). No separate `DOCS/` directory — `settled` features in `RESEARCH/` *are* the canonical contract; status governs role (see §5.6 Status gates).
+`PLANS/` sits outside `PRODUCT/` as the home for ephemeral implementation slices (internals not workflow-specified). Implementation lives in the project's code directory (e.g., `Assets/` for a Unity project). No separate `DOCS/` directory — `settled` features in `PRODUCT/` *are* the canonical contract; status governs role (see §5.6 Status gates).
 
 ### Numbering
 
@@ -128,7 +128,7 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
 | **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
-| **Checkpoint** | Replaceable handoff for next session | `RESEARCH/` root | n/a (replaceable) |
+| **Checkpoint** | Replaceable handoff for next session | `PRODUCT/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
 
 A Model is the unified design artifact: it describes a system **and** records the decisions baked into it (options weighed, rationale, consequences). The descriptive content sits at the top; provenance sits below a divider as track record.
@@ -448,7 +448,7 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 ### 5.0 Bootstrapping a project
 
-Once-per-project phase before §5.1 applies. Output is a working `RESEARCH/` skeleton with enough orientation to start session 02 with a real question.
+Once-per-project phase before §5.1 applies. Output is a working `PRODUCT/` skeleton with enough orientation to start session 02 with a real question.
 
 1. **Create the skeleton.** `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `general/_templates/` (extracted from §4.1–§4.7). Initialize empty ledgers: `general/OPEN-QUESTIONS.md`, `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (stub with empty mermaid block), `general/GLOSSARY.md` (with empty changelog). Create `general/decisions/` folder.
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
@@ -590,7 +590,7 @@ Without `builds-on:` mandatory in front matter (§3), this walk has holes. With 
 
 Automation, not a session shape. A linter (run as `/builder:lint` skill or CI step) checks:
 
-- Every path reference in `RESEARCH/` resolves.
+- Every path reference in `PRODUCT/` resolves.
 - Every term in a doc has a `general/GLOSSARY.md` entry.
 - No Model points at a `superseded` ADR without acknowledging.
 - No `builds-on:` references missing or pointing at non-existent paths.
@@ -618,7 +618,7 @@ These steps are mandatory in spirit, optional in tooling: a `/builder:new-featur
 
 ### 5.12 Drift detection
 
-Drift — divergence between code in the implementation directory and the contracts in `RESEARCH/` (`settled` and `implemented` Features/Models) — is the failure mode the workflow exists to prevent. The detection mechanism is **event-driven post-merge automation by AI agents**.
+Drift — divergence between code in the implementation directory and the contracts in `PRODUCT/` (`settled` and `implemented` Features/Models) — is the failure mode the workflow exists to prevent. The detection mechanism is **event-driven post-merge automation by AI agents**.
 
 **The flow.**
 
@@ -844,7 +844,7 @@ Resolved in this draft:
 - ~~`has-pending-debt:` front-matter flag~~ → Dropped. Query the ledger directly (filter by target=path). Avoids reintroducing dual-write drift.
 - ~~Debt entry granularity~~ → Per affected doc. Each entry has one binary status. Honest counting for the §5.8 threshold.
 - ~~Linter: block vs report~~ → Report only. Findings flow into ledger as new entries (`source=linter`). Blocking creates bypass habits; the §5.8 threshold catches accumulation. AI-driven check routines.
-- ~~Separate `DOCS/` directory~~ → Dropped. `settled` features in `RESEARCH/` *are* the canonical contract; status governs role. Eliminates duplication between RESEARCH/ and DOCS/ versions of the same artifact.
+- ~~Separate `DOCS/` directory~~ → Dropped. `settled` features in `PRODUCT/` *are* the canonical contract; status governs role. Eliminates duplication between PRODUCT/ and DOCS/ versions of the same artifact.
 - ~~`implemented` status~~ → Added to Feature and Model. Two-gate lifecycle: `draft → settled` (research gate, §5.6.1) and `settled → implemented` (build gate, §5.6.2). Drift is captured as alignment-debt entries against code.
 - ~~Workflow scope~~ → End-to-end (design through drift handling), not just research. Reframed as "Product Builder" — the system for building a product from concept to code.
 - ~~PLANS/ scope~~ → Outside strict workflow scope. Plans are ephemeral implementation slices; their internals are not workflow-specified. §4.8 is descriptive prose only — no template file in `_templates/`. Templates count = 7 (one per doc type *except* Plan).

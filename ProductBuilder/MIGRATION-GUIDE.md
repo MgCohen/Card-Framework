@@ -6,18 +6,20 @@ builds-on: [PRODUCT-BUILDER-PROPOSAL.md, FLOW-SIMULATION.md]
 tags: [#workflow, #migration]
 ---
 
-# Migration Guide — From Flat RESEARCH/ to the Proposed Workflow
+# Migration Guide — From Flat RESEARCH/ to PRODUCT/
 
 **Purpose.** Spell out exactly where each existing artifact lands, what needs to be created, what needs to be backfilled, and in what order. The workflow proposal punted migration to §9; this is that doc.
 
-**Scope.** One-time migration of the current 28-doc flat `RESEARCH/` (plus session checkpoint, prior art, sample game material) into the proposed `general/` + `features/` + `spikes/` + `support/` layout. Forward-going workflow lives in `PRODUCT-BUILDER-PROPOSAL.md`.
+**Scope.** One-time migration of the current 28-doc flat `RESEARCH/` (plus session checkpoint, prior art, sample game material) into the new `PRODUCT/` root with the proposed `general/` + `features/` + `spikes/` + `support/` layout. Forward-going workflow lives in `PRODUCT-BUILDER-PROPOSAL.md`.
+
+**Naming convention used in this doc.** `RESEARCH/` always refers to the *source* (current flat folder being migrated *from*). `PRODUCT/` always refers to the *destination* (the new canonical knowledge layer). In §2/§3 mapping tables, "Current" paths are relative to `RESEARCH/`, "Target" paths are relative to `PRODUCT/`.
 
 ---
 
 ## 1. Final structure (target)
 
 ```
-RESEARCH/
+PRODUCT/
   README.md                       # rewritten as index
   SESSION-CHECKPOINT.md           # stays at root
   sessions/
@@ -221,7 +223,7 @@ Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one scre
 
 ### Phase 1 — Skeleton (pure plumbing, no content moves)
 
-1. Create directories: `RESEARCH/general/`, `RESEARCH/general/_templates/`, `RESEARCH/features/{entities,zones,actions,triggers,effects,engine,presentation}/{notes,decisions}/`, `RESEARCH/spikes/`, `RESEARCH/support/{samples,prior-art}/`, `RESEARCH/sessions/`.
+1. Create directories: `PRODUCT/general/`, `PRODUCT/general/_templates/`, `PRODUCT/features/{entities,zones,actions,triggers,effects,engine,presentation}/{notes,decisions}/`, `PRODUCT/spikes/`, `PRODUCT/support/{samples,prior-art}/`, `PRODUCT/sessions/`.
 2. Drop `.gitkeep` in empty leaves so git tracks the structure.
 3. Write the 7 doc-type templates into `general/_templates/` (extracted from §4.1–§4.7 fenced blocks of PRODUCT-BUILDER-PROPOSAL): `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`. §4.8 (Plan) and ledger entry shapes (§6) are spec-only — no template files.
 4. Create empty ledgers with headers: `general/ALIGNMENT-DEBT.md`, `general/BACKLOG.md`, `general/FEATURE-MAP.md` (initial table + empty mermaid block). Seed `BACKLOG.md` with known deferred items:
@@ -238,7 +240,7 @@ Roughly 20 ADRs total. Write each in template form (§4.5 of proposal): one scre
 
 7. `git mv` orientation docs: 00, 01, 02, 03, 05, 06, 07, 09 → `general/` with new names per §2 table.
 8. Add front matter to each. Status: `settled` for all (they describe project-wide reality, not pending decisions).
-9. Update `RESEARCH/README.md` to point at the new structure.
+9. Write `PRODUCT/README.md` as the new index pointing at the structure. (The legacy `RESEARCH/README.md` can be left in place; it'll be removed when the source folder is retired post-migration.)
 10. Commit + PR.
 
 **Exit criteria:** `general/` is populated; cross-refs in remaining flat docs not yet fixed (handled in phase 6).
@@ -273,13 +275,13 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 
 ### Phase 6 — Cross-reference sweep
 
-23. Grep `RESEARCH/` for `doc NN` and `NN-` references. Replace with paths (`features/actions/notes/01`, etc.).
+23. Grep `PRODUCT/` for `doc NN` and `NN-` references. Replace with paths (`features/actions/notes/01`, etc.).
 24. Grep for old filenames. Replace with new paths.
 25. Update `SESSION-CHECKPOINT.md` "Artifacts to read on resume" table.
 26. Update README.
 27. Commit + PR.
 
-**Exit criteria:** no references to old doc numbers anywhere in `RESEARCH/`.
+**Exit criteria:** no references to old doc numbers anywhere in `PRODUCT/`.
 
 ### Phase 7 — Session backfill (lightweight)
 
@@ -290,7 +292,7 @@ This is the heaviest phase. Split if needed: one PR per feature folder.
 
 ### Phase 8 — Workflow promotion + cleanup
 
-30. `git mv ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md RESEARCH/general/PRODUCT-BUILDER.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
+30. `git mv ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md PRODUCT/general/PRODUCT-BUILDER.md`. Strip `status: proposed`, set `status: accepted`. Strip the proposal-only sections — currently §7 *("What changes vs. today")* and §9 *("Out of scope")* — neither belongs in the canonical workflow doc. (Note: "§7" here refers to the proposal's section number, not the now-removed Model template section.)
 31. Write `general/decisions/0001-adopt-workflow.md` capturing the workflow adoption as an ADR. Cites `general/PRODUCT-BUILDER.md` (now the canonical path, just landed in step 30). Status `accepted`.
 32. Leave `ProductBuilder/MIGRATION-GUIDE.md`, `ProductBuilder/FLOW-SIMULATION.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md`, and `ProductBuilder/PRODUCT-BUILDER-GAPS.md` in place. They're living artifacts that may evolve as the workflow gets exercised against real implementation work — staging room for the workflow's own iteration. `ProductBuilder/` survives migration; folder retirement is a manual decision later, once these docs are no longer load-bearing.
 33. Final commit + PR titled "Workflow accepted and migrated."

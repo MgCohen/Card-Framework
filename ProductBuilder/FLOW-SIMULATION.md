@@ -213,7 +213,7 @@ tags: [#workflow, #simulation]
 - `ProductBuilder/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 8 doc types — closer to a Plan than anything else.
 - `ProductBuilder/AI-FIRST-AUTOMATION.md` is a forward-looking spec. Closest to a Spike (premise: "what would AI-first look like?") that may graduate into multiple Models as items get built.
 
-**Note.** `ProductBuilder/` is the staging area for the workflow design itself. After migration, `PRODUCT-BUILDER-PROPOSAL.md` graduates to `RESEARCH/general/PRODUCT-BUILDER.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
+**Note.** `ProductBuilder/` is the staging area for the workflow design itself. After migration, `PRODUCT-BUILDER-PROPOSAL.md` graduates to `PRODUCT/general/PRODUCT-BUILDER.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
 
 ---
 
