@@ -42,13 +42,15 @@ RESEARCH/
     ROADMAP.md               # phases and sequencing
     RECOMMENDATIONS.md       # current synthesis
     _templates/
+      spike.md
       discussion.md
       proposal.md
       model.md
       sample.md
-      spike.md
       adr.md
       session.md
+      checkpoint.md
+      plan.md
 
   features/                  # all per-system design work
     entities/
@@ -133,9 +135,9 @@ Every doc starts with:
 type: spike | discussion | proposal | model | sample | adr | session | checkpoint | plan
 status: <one of the type's status values>
 last-updated: 2026-04-29
-builds-on: [17, 20, 21]      # optional
-superseded-by: 28            # optional
-tags: [#async, #triggers]    # optional
+builds-on: [features/actions/03, features/triggers/02]    # optional, paths
+superseded-by: features/presentation/02                   # optional, path
+tags: [#async, #triggers]                                 # optional
 ---
 ```
 
@@ -177,7 +179,7 @@ What we learned.
 ### 4.2 Discussion
 
 ```markdown
-# <topic> — discussion
+# <subject> — discussion
 
 <front matter: type=discussion, status=discussion>
 
@@ -198,7 +200,7 @@ Short prose per candidate.
 ### 4.3 Proposal / Decision
 
 ```markdown
-# <topic> — proposal
+# <subject> — proposal
 
 <front matter: type=proposal, status=proposed>
 
@@ -220,14 +222,14 @@ Why.
 What this enables; what it constrains.
 
 ## Implications for prior docs (§7)
-- doc 25: type flip on DrainResult.Snapshot
-- doc 27: AffordanceMap reads templates not commands
+- features/engine/04: type flip on DrainResult.Snapshot
+- features/presentation/02: AffordanceMap reads templates not commands
 
 ## Open follow-ups
 Unresolved threads.
 
 ## ADR
-Linked: decisions/0023-...
+Linked: features/<feature>/decisions/0023-<title>.md
 ```
 
 ### 4.4 Model
@@ -247,7 +249,7 @@ Interfaces, methods, return shapes, forbidden behaviors.
 What must always be true.
 
 ## Examples
-At minimum, walked through against the floor sample game.
+At minimum, walked through against the floor sample.
 
 ## Implications for prior docs (§7)
 ...
@@ -289,19 +291,21 @@ Ambiguous bits, unresolved projections.
 
 1. **Subject finalized** — the concrete description is fully specified; we aren't still debating what the example is.
 2. **Projection uses only `settled` abstractions** — every design concept the projection depends on is itself `settled`, not `draft` or `proposed`. (No locking onto sand.)
-3. **No open implications against the sample** in `ALIGNMENT-DEBT.md`.
+3. **No open implications against the sample** in `general/ALIGNMENT-DEBT.md`.
 4. **Stable ≥ 1 session** — at least one session has passed without edits to either the sample or its dependencies. Soft cooldown.
 
-After locking, design changes that affect the sample create an explicit `ALIGNMENT-DEBT.md` entry naming the locked sample. Resolving the entry is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
+After locking, design changes that affect the sample create an explicit `general/ALIGNMENT-DEBT.md` entry naming the locked sample. Resolving the entry is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
 
 ### 4.6 ADR
 
 ```markdown
 # ADR-NNNN — <title>
 
-Status: proposed | accepted | superseded by NNNN
+<front matter: type=adr, status=proposed>
+
 Date: 2026-04-29
-Context-doc: notes/22-async-decisions-and-suspension.md
+Context-doc: features/<feature>/notes/NN-<title>.md
+Proposal: features/<feature>/notes/NN-<title>.md
 
 ## Context
 Two paragraphs max.
@@ -367,6 +371,8 @@ Keep the current shape; add a rule.
 ```markdown
 # Research Session Checkpoint
 
+<front matter: type=checkpoint>
+
 **Last updated:** YYYY-MM-DD (session NN)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
@@ -404,9 +410,9 @@ Per session / per week / etc.
 
 ## 5. Global workflow
 
-### 5.1 Starting a new topic
+### 5.1 Starting a new piece of work
 
-1. Open `SESSION-CHECKPOINT.md`. Confirm the active question is the topic, or pick from "other still-open."
+1. Open `SESSION-CHECKPOINT.md`. Confirm the active question is the focus, or pick from "other still-open."
 2. Decide doc type:
    - Open-ended exploration / prior-art survey / "see what's there" → **Spike**.
    - Vocabulary or shape contested with known options → **Discussion** doc first.
