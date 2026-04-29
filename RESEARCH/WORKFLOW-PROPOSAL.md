@@ -433,47 +433,14 @@ Resolved in this draft:
 - ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
 - ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
 
-Still open:
+Still open (workflow design only — migration logistics are a separate concern):
 
 1. When is a sample game `locked` vs `draft`? Define the bar.
-2. Do we backfill ADRs for major past decisions, or only forward from now?
-3. Topic boundaries for the initial migration — do we accept the proposed split (foundations / entities / zones / actions / triggers-effects / engine / presentation) or refine? Specifically: split `triggers-effects` or keep merged; does `engine` swallow `gamerules`; does action-availability (current doc 28) live in `presentation/` or `actions/`.
-4. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
+2. Topic-folder design: is `triggers-effects` one folder or two (`triggers/` + `effects/`)? Does `engine` include `gamerules` or split? These are conceptual category questions, not "where does an existing doc go."
+3. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
 
 ---
 
-## 9. Adoption order (incremental)
+## 9. Out of scope
 
-Each step is non-disruptive on its own. Stop at any line; the rest still works.
-
-1. **Create `general/`** and move `09-core-glossary.md` → `general/GLOSSARY.md`, `06-open-questions.md` → `general/OPEN-QUESTIONS.md`. Add empty `general/ALIGNMENT-DEBT.md`. ~10 minutes + reference sweep.
-2. **`general/_templates/` folder** with the 8 templates above. ~30 minutes.
-3. **Topic folders + migration.** Move the 26 remaining numbered docs into topic folders, restart counters per topic. One commit per topic to keep diffs reviewable. Update cross-references in the same pass. ~1 session.
-4. **Front matter + status fields** on all migrated docs. Mechanical pass, can run alongside step 3.
-5. **`sessions/` folder** + retroactive 1-line entries for sessions 1–7 reconstructed from PR titles. ~30 minutes.
-6. **Seed `general/ALIGNMENT-DEBT.md`** from current §7 lists (today: doc 28 §7 → docs 25, 26, 27 — now `actions/...` and `presentation/...` paths).
-7. **ADRs for top-tier past decisions** in their topic folders:
-   - `triggers-effects/decisions/0001-async-layer-hierarchy.md` (Effect / GameAction / CompositeAction)
-   - `engine/decisions/0001-gamerules-contract.md` (sync, observer-shaped, zero state)
-   - `presentation/decisions/0001-snapshot-stores-templates.md`
-   - `actions/decisions/0001-playerintent-boundary.md`
-   - `engine/decisions/0002-fifo-queue-evaluator.md`
-   Lower-tier decisions stay in their proposal docs.
-8. **Glossary changelog** — start now; don't backfill renames.
-9. **`PLANS/_TEMPLATE.md`** — write when the first slice approaches.
-10. **Promotion gate to `DOCS/`** — codify when a first promotion candidate appears.
-
-Steps 1–8 are doable inside the research phase without touching `Assets/`. Steps 9–10 trigger when crossing the research → implementation boundary.
-
----
-
-## 10. Decision needed
-
-Pick a cut:
-
-- **All of it, in adoption order.**
-- **Minimum viable:** front matter + `_templates/` + `sessions/` + `ALIGNMENT-DEBT.md` (steps 1–4).
-- **Templates only, leave structure alone:** step 2.
-- **Custom cut:** specify.
-
-Once chosen, the next session executes the adoption.
+**Migration from the current 28-doc flat layout** — backfill of ADRs for past decisions, where existing docs land in the new topic folders, reference-sweep ordering, and adoption sequencing. These get planned once the target workflow is locked. Until then, the proposal describes the destination, not the path to it.
