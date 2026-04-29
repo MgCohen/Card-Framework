@@ -1,12 +1,12 @@
 ---
 type: model
-status: proposed
+status: accepted
 last-updated: 2026-04-29
-builds-on: [SESSION-CHECKPOINT.md, 06-open-questions.md]
+builds-on: [SESSION-CHECKPOINT.md, general/OPEN-QUESTIONS.md]
 tags: [#workflow, #meta]
 ---
 
-# Product Builder — Proposal
+# Product Builder
 
 **Purpose.** Codify the product-building workflow we've been running, plug the gaps we noticed (no doc-type templates, no per-decision log, no session log, no glossary changelog, no alignment-debt tracker, no place for exploratory work), and lock the patterns into shared conventions so new sessions inherit the method, not just the artifacts.
 
@@ -795,27 +795,6 @@ Three layers — see §6 cross-cutting infrastructure table for the canonical st
 
 ---
 
-## 7. What changes vs. today
-
-| Current | Proposed |
-|---------|----------|
-| Flat `RESEARCH/` with 28 chronologically numbered docs | `features/` + `general/` + `spikes/` + `support/` + minimal root |
-| Docs invent their own shape | 8 doc types with templates + front matter |
-| No status on docs | `status:` in front matter |
-| Discussion + Proposal + Model as separate types in early drafts | Folded into one **Model** type with provenance below a divider |
-| Mega "decisions" docs (08, 11, 14) | ADRs in `features/<feature>/decisions/`; mega-docs become Model indexes |
-| Foundations (vision, scope, architecture, roadmap) numbered alongside feature docs | Folded into `general/` as project orientation, separate from feature design work |
-| Spike-shaped exploration numbered into the regular sequence (docs 04, 13) | Lives in `spikes/` with its own doc type and status lifecycle |
-| Checkpoint and `06-open-questions` overlap | Checkpoint links to `general/OPEN-QUESTIONS.md`; no duplication |
-| Alignment debt implicit across §7 sections | Explicit `general/ALIGNMENT-DEBT.md` |
-| Sessions visible only via PR titles | `sessions/` log at root (operational) |
-| Glossary updated silently | Glossary has a changelog |
-| Old Docs/ as prior-art folder | Renamed and grouped: `support/prior-art/` |
-| Sample games inline (doc 26) | `support/samples/` folder, room for a second floor |
-| Cross-references say "doc 28" | Cross-references use paths: `features/actions/15` |
-
----
-
 ## 8. Open questions about the workflow itself
 
 Resolved in this draft:
@@ -851,8 +830,4 @@ Resolved in this draft:
 
 No open questions remain on the workflow design. Migration logistics (when, how, ADR backfill scope, etc.) are a separate concern — planned in [`ProductBuilder/MIGRATION-GUIDE.md`](MIGRATION-GUIDE.md). Open mechanics worth pressure-testing further (linter implementation details, FEATURE-MAP auto-generator design) live in [`ProductBuilder/AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) and `general/BACKLOG.md`.
 
----
 
-## 9. Out of scope
-
-**Migration from the current 28-doc flat layout** — backfill of ADRs for past decisions, where existing docs land in the new feature folders, reference-sweep ordering, and adoption sequencing. These get planned once the target workflow is locked. Until then, the proposal describes the destination, not the path to it.
