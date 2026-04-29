@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #vision, #scope]
+---
+
 # Vision and Scope
 
 ## Goal

@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #roadmap]
+---
+
 # Initial Roadmap
 
 This roadmap is intentionally high-level. It describes learning and construction phases, not implementation tasks.

@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #architecture]
+---
+
 # Architecture Directions
 
 This note sketches candidate architecture boundaries. It is not an implementation spec.

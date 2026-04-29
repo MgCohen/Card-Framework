@@ -1,3 +1,10 @@
+---
+type: glossary
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #glossary]
+---
+
 # Core Glossary
 
 This glossary establishes working language for the Card Framework. Terms may be refined later, but new research docs should use these meanings unless they explicitly propose a change.

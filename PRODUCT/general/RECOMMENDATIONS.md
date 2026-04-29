@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #recommendations]
+---
+
 # Current Recommendations
 
 This is the opinionated synthesis from the first research pass. It should be challenged as the project evolves.

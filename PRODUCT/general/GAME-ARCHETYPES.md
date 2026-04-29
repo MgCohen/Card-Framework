@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #archetypes]
+---
+
 # Game Archetypes
 
 This note compares representative card-game families so the framework can aim at reusable foundations instead of a single game's rules.

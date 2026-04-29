@@ -1,3 +1,10 @@
+---
+type: ledger
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #questions]
+---
+
 # Open Questions
 
 These are unresolved design questions worth answering before implementation or during small focused spikes.

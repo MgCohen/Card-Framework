@@ -1,3 +1,10 @@
+---
+type: reference
+status: settled
+last-updated: 2026-04-29
+tags: [#general, #capabilities]
+---
+
 # Framework Capability Map
 
 This is a broad inventory of systems the framework may eventually need. It is intentionally high-level and should be refined into packages, milestones, and tests later.
