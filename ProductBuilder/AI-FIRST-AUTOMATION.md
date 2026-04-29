@@ -54,9 +54,9 @@ The full automation surface in one table. Single source of truth for "what exist
 | `/builder:end-session` | command | Wrapping up a session | documented | §3 |
 | `/builder:settle <path>` | command | Research gate: `draft → settled` (§5.6.1) | documented | §3 |
 | `/builder:implement <path>` | command | Build gate: `settled → implemented` (§5.6.2) | documented | §3 |
-| `PostToolUse` front-matter check | hook | Write/Edit to `RESEARCH/**.md` | sketched | §4 |
+| `PostToolUse` front-matter check | hook | Write/Edit to `PRODUCT/**.md` | sketched | §4 |
 | `Stop` end-session reminder | hook | Claude stops mid-session | sketched | §4 |
-| `PreToolUse` git-commit sanity | hook | Bash `git commit` in `RESEARCH/` | sketched | §4 |
+| `PreToolUse` git-commit sanity | hook | Bash `git commit` in `PRODUCT/` | sketched | §4 |
 | `builder-debt-pass` | skill | Discharging debt at threshold | documented | §5 |
 | `builder-rename-cascade` | skill | Glossary rename | documented | §5 |
 | `builder-spike-graduate` | skill | Spike informs Model | documented | §5 |
@@ -160,7 +160,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 **Behavior.**
 1. Add or update entry in `general/GLOSSARY.md`.
 2. Append to glossary changelog with date and reason.
-3. (Optional) `grep` for the old term across `RESEARCH/` and offer to scaffold an alignment-debt entry for the rename.
+3. (Optional) `grep` for the old term across `PRODUCT/` and offer to scaffold an alignment-debt entry for the rename.
 
 **Why.** Sessions 3, 5, 6 of FLOW-SIMULATION were all rename cascades. The bottleneck is human-eyeballed grep. Lifting it into one command shrinks rename sessions by half.
 
@@ -199,7 +199,7 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 **Trigger.** Manual run, CI step, or end-of-session sweep.
 
 **Behavior.**
-1. Scan `RESEARCH/` for stale references: broken paths, terms used without glossary entries, Models pointing at `superseded` ADRs without acknowledgment, missing or invalid `builds-on:` (must be path-list or literal `root`), Sample edits without the cooldown commit-message marker (§4.4).
+1. Scan `PRODUCT/` for stale references: broken paths, terms used without glossary entries, Models pointing at `superseded` ADRs without acknowledgment, missing or invalid `builds-on:` (must be path-list or literal `root`), Sample edits without the cooldown commit-message marker (§4.4).
 2. For each finding: append a ledger entry to `general/ALIGNMENT-DEBT.md` with `source=linter`, target=affected doc, reason=type of staleness, status `open`.
 3. Idempotent: before opening a new entry, check whether an open entry already exists for this (linter, target, reason) tuple.
 4. Output structured findings to stdout + count of new entries opened.
@@ -299,17 +299,17 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 
 Hooks fire on Claude Code events. They run whether you want them or not — high cost when wrong, so use sparingly.
 
-### `PostToolUse` on `Write`/`Edit` to `RESEARCH/**.md`
+### `PostToolUse` on `Write`/`Edit` to `PRODUCT/**.md`
 
 - Verify front matter exists. Block save (or warn) if missing — *warn, don't block*. Adoption matters more than purity.
 - Refresh `last-updated:` automatically if the doc was changed.
 
 ### `Stop` (session-end auto-checkpoint)
 
-- After Claude stops responding, scan for changed `RESEARCH/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /builder:end-session"*.
+- After Claude stops responding, scan for changed `PRODUCT/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /builder:end-session"*.
 - Friction cost is real here. Build only if forgetting end-session becomes a recurring problem.
 
-### `PreToolUse` on `Bash` for `git commit` in `RESEARCH/`
+### `PreToolUse` on `Bash` for `git commit` in `PRODUCT/`
 
 - Sanity-check: is there a session note for this session? If not, warn.
 - Could be annoying. Skip unless missing-session-notes becomes a real pattern.
@@ -342,7 +342,7 @@ Glossary rename → cascade across the project. Steps:
 
 1. User specifies old → new term.
 2. `/builder:promote-glossary` first.
-3. Grep `RESEARCH/` for old term (case-sensitive AND -insensitive variants).
+3. Grep `PRODUCT/` for old term (case-sensitive AND -insensitive variants).
 4. Generate per-file diff proposals.
 5. Apply approved diffs in one commit per logical scope (per-feature is a reasonable grain).
 6. Open alignment-debt entry per file touched, close in same session.
@@ -448,16 +448,16 @@ Run before commit, reads diff, posts findings. Cheap insurance.
 
 ## 7. CLAUDE.md additions
 
-The repo's root `AGENTS.md` (or a new `RESEARCH/CLAUDE.md`) should encode the workflow as durable instructions:
+The repo's root `AGENTS.md` (or a new `PRODUCT/CLAUDE.md`) should encode the workflow as durable instructions:
 
 1. The 8 doc types and their templates.
 2. The naming convention (`features/<feature>/notes/NN-<slug>.md`).
 3. The three-lifetimes-for-questions rule.
 4. The two status gates (research gate + build gate).
 5. Pointer to `general/_templates/`.
-6. *Critical*: "Don't write to `RESEARCH/` outside the prescribed structure. If unsure, write a spike."
+6. *Critical*: "Don't write to `PRODUCT/` outside the prescribed structure. If unsure, write a spike."
 
-Memory-side, equivalent guidance: "When working in `RESEARCH/`, follow `general/PRODUCT-BUILDER.md`."
+Memory-side, equivalent guidance: "When working in `PRODUCT/`, follow `general/PRODUCT-BUILDER.md`."
 
 ---
 

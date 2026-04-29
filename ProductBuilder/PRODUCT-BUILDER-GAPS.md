@@ -90,7 +90,7 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 
 ### 1.4 §5.10 — Reference staleness (automation, not workflow)
 
-**Not a session shape.** This is a linter pass: check that every path reference in `RESEARCH/` resolves; check that every term used appears in glossary; check that no Model references a `superseded` ADR without acknowledging.
+**Not a session shape.** This is a linter pass: check that every path reference in `PRODUCT/` resolves; check that every term used appears in glossary; check that no Model references a `superseded` ADR without acknowledging.
 
 **Proposed shape.**
 
