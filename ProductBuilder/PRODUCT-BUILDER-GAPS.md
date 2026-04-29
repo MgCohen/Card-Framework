@@ -18,17 +18,17 @@ The Feature doc type and §5.0 Bootstrapping have already landed in the proposal
 
 ## 1. Debt flow mechanics
 
-The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignment-pass session shape. But the *flow* — who notifies whom, when, with what enforcement — is implicit. This section sketches four candidate sub-sections.
+The proposal has `ledgers/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignment-pass session shape. But the *flow* — who notifies whom, when, with what enforcement — is implicit. This section sketches four candidate sub-sections.
 
 ### 1.1 §5.7 — Debt notification (the hard step)
 
-**The rule.** Every Model edit that changes contracts, invariants, or examples *must* fill in `## Implications for prior docs (§7)` before commit. Each item in §7 produces a corresponding entry in `general/ALIGNMENT-DEBT.md`.
+**The rule.** Every Model edit that changes contracts, invariants, or examples *must* fill in `## Implications for prior docs (§7)` before commit. Each item in §7 produces a corresponding entry in `ledgers/ALIGNMENT-DEBT.md`.
 
 **Proposed wording.**
 
 > When you edit a Model in a way that affects downstream docs:
 > 1. List affected docs in the Model's `## Implications for prior docs (§7)` section.
-> 2. For each, append an entry to `general/ALIGNMENT-DEBT.md`: date, source doc, target doc, one-line reason, status `open`.
+> 2. For each, append an entry to `ledgers/ALIGNMENT-DEBT.md`: date, source doc, target doc, one-line reason, status `open`.
 > 3. Patch each affected doc's front matter with `has-pending-debt: true`.
 >
 > If the edit has no implications, the §7 section gets an explicit `_(no implications)_` line. Empty is not allowed — empty is forgetting.
@@ -56,7 +56,7 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 
 **What a consistency-pass session looks like (mechanical, but worth spelling out).**
 
-1. Read `general/ALIGNMENT-DEBT.md`. Group entries by target doc.
+1. Read `ledgers/ALIGNMENT-DEBT.md`. Group entries by target doc.
 2. For each target doc: read it, read the source, propose minimal patch.
 3. Apply approved patches. Strike through the ledger entry, add resolution date.
 4. Where references are broken (paths moved, terms renamed): record as new debt items if you can't fix in-session.
@@ -90,13 +90,13 @@ The proposal has `general/ALIGNMENT-DEBT.md` as a ledger and §5.5 as an alignme
 
 ### 1.4 §5.10 — Reference staleness (automation, not workflow)
 
-**Not a session shape.** This is a linter pass: check that every path reference in `PRODUCT/` resolves; check that every term used appears in glossary; check that no Model references a `superseded` ADR without acknowledging.
+**Not a session shape.** This is a linter pass: check that every path reference in `Product/` resolves; check that every term used appears in glossary; check that no Model references a `superseded` ADR without acknowledging.
 
 **Proposed shape.**
 
 - Runs as a CI hook or a `/builder:lint` skill.
 - Output: a list of stale references. Doesn't auto-fix.
-- Findings go into `general/ALIGNMENT-DEBT.md` as new entries (one per stale ref).
+- Findings go into `ledgers/ALIGNMENT-DEBT.md` as new entries (one per stale ref).
 
 **Why this isn't workflow.** Workflow steps run in human/AI heads. This runs in a script. Surface it via the debt ledger so it threads into §5.7–§5.9, but don't pretend it's a session shape.
 
@@ -126,11 +126,11 @@ The user surfaced this: a top-level doc that gives a bird's-eye view of all feat
 Two distinct artifacts:
 
 - **`general/ARCHITECTURE.md`** — *direction*: redux-like state, mutator pattern, services-injected, sync-vs-async story. Prose. Stable.
-- **`general/FEATURE-MAP.md`** — *graph*: which features exist, which Models live in each, which features depend on which. Mostly structural. Updates whenever a Model lands or a Feature changes.
+- **`ledgers/FEATURE-MAP.md`** — *graph*: which features exist, which Models live in each, which features depend on which. Mostly structural. Updates whenever a Model lands or a Feature changes.
 
 Today they'd be one doc. Splitting makes the second auto-derivable, which the first can't be.
 
-### 2.2 What `general/FEATURE-MAP.md` contains
+### 2.2 What `ledgers/FEATURE-MAP.md` contains
 
 Three layers, each shorter:
 
@@ -169,9 +169,9 @@ graph LR
 ```
 ### features/engine
 - engine.md (feature root, draft)
-- notes/01-evaluation-loop.md (Model, settled)
-- notes/02-gamerules-contract.md (Model, settled)
-- notes/03-snapshot-pipeline.md (Model, settled)
+- models/01-evaluation-loop.md (Model, settled)
+- models/02-gamerules-contract.md (Model, settled)
+- models/03-snapshot-pipeline.md (Model, settled)
 - decisions/0001-evaluator-pull-loop.md (ADR, accepted)
 - decisions/0002-gamerules-as-class-with-services.md (ADR, accepted)
 - ...
@@ -201,7 +201,7 @@ Hand-maintained parts: the one-line purpose in Layer 1 (lives in Feature root, c
 
 After this sketch is reviewed:
 
-- Fold a one-paragraph mention into proposal §1 (folder layout) noting `general/FEATURE-MAP.md`.
+- Fold a one-paragraph mention into proposal §1 (folder layout) noting `ledgers/FEATURE-MAP.md`.
 - Add a §6 row in the cross-cutting infrastructure table.
 - Defer the auto-generation skill to AI-FIRST tier 2 (`/builder:rebuild-feature-map`).
 - Hand-maintain v1; auto-generate v2.
@@ -210,7 +210,7 @@ After this sketch is reviewed:
 
 ## 3. Other gaps surfaced (lighter, won't pressure-test here)
 
-- **No `general/decisions/` for project-wide decisions.** Surfaced in MIGRATION-GUIDE §4. The workflow ADR for "we adopt this workflow" has no obvious home today. *Recommend: add `general/decisions/` to the proposal as a sibling of feature decisions/. One ADR series, project-scoped.*
+- **No `decisions/` for project-wide decisions.** Surfaced in MIGRATION-GUIDE §4. The workflow ADR for "we adopt this workflow" has no obvious home today. *Recommend: add `decisions/` to the proposal as a sibling of feature decisions/. One ADR series, project-scoped.*
 - **No explicit "draft Model abandon" path.** What happens if you start a Model, get 30% in, realize it's wrong? Today: silent delete. *Recommend: status `draft` → `abandoned` (new status value); doc stays in place with a one-line "abandoned because X" header.*
 - **Sample lock-bar's "stable ≥ 1 session" is fuzzy.** What counts as "stable"? Any edits at all, or only contract edits? *Recommend: contract edits only — Examples/typo edits don't reset the cooldown.*
 
@@ -227,6 +227,6 @@ Before folding any of this into the proposal, decide:
 3. **Promote `builds-on:` to mandatory** for Models in §3 front matter?
 4. **Mermaid in FEATURE-MAP** — yes?
 5. **Hand-maintain FEATURE-MAP v1** — yes?
-6. **Add `general/decisions/`** for project-wide ADRs?
+6. **Add `decisions/`** for project-wide ADRs?
 
 Each is a small decision but landing them as a batch keeps the proposal's revision coherent.

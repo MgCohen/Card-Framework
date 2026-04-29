@@ -4,7 +4,7 @@ argument-hint: <term> [definition] | <old-term> -> <new-term>
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-You are updating `PRODUCT/general/GLOSSARY.md`. Most painful sessions in this project's history were rename cascades — this command is the entry point for getting them right.
+You are updating `Product/ledgers/GLOSSARY.md`. Most painful sessions in this project's history were rename cascades — this command is the entry point for getting them right.
 
 User input: `$ARGUMENTS`
 
@@ -22,7 +22,7 @@ If the form is ambiguous, ask. Don't guess.
 
 ### Mode: Add or update
 
-1. **Read** `PRODUCT/general/GLOSSARY.md`. Find the appropriate section (Foundational Terms, Entity Model, Zones, etc.). If no obvious section, ask.
+1. **Read** `Product/ledgers/GLOSSARY.md`. Find the appropriate section (Foundational Terms, Entity Model, Zones, etc.). If no obvious section, ask.
 
 2. **Add or replace the row** in the relevant table. Preserve table column count and alignment.
 
@@ -44,7 +44,7 @@ If the form is ambiguous, ask. Don't guess.
    - YYYY-MM-DD — renamed `<old-term>` → `<new-term>`. <reason>.
    ```
 
-3. **Cascade scan.** Run `grep -rl "<old-term>" PRODUCT/ --include='*.md'` (case-sensitive) and a separate case-insensitive pass (`grep -rli`). Combine results.
+3. **Cascade scan.** Run `grep -rl "<old-term>" Product/ --include='*.md'` (case-sensitive) and a separate case-insensitive pass (`grep -rli`). Combine results.
 
 4. **Surface the cascade.** Print:
    - Number of files containing `<old-term>`.
@@ -52,7 +52,7 @@ If the form is ambiguous, ask. Don't guess.
    - The grouped file list (by feature folder).
 
 5. **Offer to scaffold ledger entries.** Ask the user: "Open one alignment-debt entry per affected file?" If yes:
-   - Append entries to `PRODUCT/general/ALIGNMENT-DEBT.md`. One entry per `(source=GLOSSARY rename, target=<file>)` pair, status `open`, today's date, reason `term renamed: <old> → <new>`.
+   - Append entries to `Product/ledgers/ALIGNMENT-DEBT.md`. One entry per `(source=GLOSSARY rename, target=<file>)` pair, status `open`, today's date, reason `term renamed: <old> → <new>`.
    - Append `debt: N opened` to the session note's Part 1.
    - **Do not auto-edit the affected files.** That's `builder-rename-cascade` skill (Tier 2).
 

@@ -3,11 +3,11 @@ description: Close the session — verify session note, draft a refreshed checkp
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-You are closing a Product Builder session. Workflow rules: `PRODUCT/general/PRODUCT-BUILDER.md`. End-of-session is the highest-leverage automation point — most state writes happen here, and forgetting one breaks the spine.
+You are closing a Product Builder session. Workflow rules: `Product/_workflow/PRODUCT-BUILDER.md`. End-of-session is the highest-leverage automation point — most state writes happen here, and forgetting one breaks the spine.
 
 ## Steps
 
-1. **Identify the session note.** Find the most recent `PRODUCT/sessions/session-NN.md` with `status: in-progress`. If none, surface that and stop. If multiple, surface and ask which one.
+1. **Identify the session note.** Find the most recent `Product/sessions/session-NN.md` with `status: in-progress`. If none, surface that and stop. If multiple, surface and ask which one.
 
 2. **Verify session-note hygiene.**
    - Both parts cap ~50 lines each. Warn if Part 1 or Part 2 exceeds 50 (don't block).
@@ -16,7 +16,7 @@ You are closing a Product Builder session. Workflow rules: `PRODUCT/general/PROD
    - Part 1 "Active question going out" — required. Empty signals an unfinished session note; warn.
 
 3. **Cascade-discipline check** (per `PRODUCT-BUILDER.md` §5.7).
-   - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `PRODUCT/features/**/{notes,decisions}/*.md` and `PRODUCT/general/decisions/*.md`.
+   - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `Product/features/**/{notes,decisions}/*.md` and `Product/decisions/*.md`.
    - For each touched Model edit, the session note's Part 1 must contain either `debt: N opened` or `debt: none`. Empty signal is forbidden.
    - If missing, print the affected docs and ask: open debt entries via `/builder:open-debt`, or assert `debt: none`. Don't auto-add either.
 
@@ -26,13 +26,13 @@ You are closing a Product Builder session. Workflow rules: `PRODUCT/general/PROD
    - ADRs landed: `<list>` (filter to `A`, path under `**/decisions/`).
    - Debt opened: `<count from session note's "debt: N opened" lines>`.
    - Debt closed: `<count from grep '\[closed\]' on ALIGNMENT-DEBT.md diff>`.
-   - Glossary updates: `<terms>` (grep changelog section of `general/GLOSSARY.md`).
+   - Glossary updates: `<terms>` (grep changelog section of `ledgers/GLOSSARY.md`).
    - Backlog entries opened: `<titles>`.
 
-5. **Draft the refreshed checkpoint.** **Critical: do not overwrite `PRODUCT/SESSION-CHECKPOINT.md` directly.** Build a draft and surface it for human approval first.
+5. **Draft the refreshed checkpoint.** **Critical: do not overwrite `Product/SESSION-CHECKPOINT.md` directly.** Build a draft and surface it for human approval first.
    - Read the current `SESSION-CHECKPOINT.md`.
    - Read the session note's Part 1 "Active question going out" — that becomes the new "active open question" in the checkpoint.
-   - Read `general/OPEN-QUESTIONS.md` and `general/BACKLOG.md` for items to surface.
+   - Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md` for items to surface.
    - Generate the draft following the §4.7 template structure: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume.
    - Bump the `last-updated` and the session counter line.
    - Show the diff against the current checkpoint. **Wait for the user's approval** before writing.
@@ -56,4 +56,4 @@ You are closing a Product Builder session. Workflow rules: `PRODUCT/general/PROD
 - If the cascade-discipline check fails, surface, don't silently fix.
 - If session-note caps are blown (>50 lines per part), trim suggestions go to the user; don't trim automatically.
 - Don't auto-commit or push. Suggest the commit message; the user runs the commit.
-- If `general/ALIGNMENT-DEBT.md` has more than 5 open entries after this session closes, flag it loudly — the next session is forced into pass-mode (§5.8).
+- If `ledgers/ALIGNMENT-DEBT.md` has more than 5 open entries after this session closes, flag it loudly — the next session is forced into pass-mode (§5.8).

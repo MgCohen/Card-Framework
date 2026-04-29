@@ -54,9 +54,9 @@ The full automation surface in one table. Single source of truth for "what exist
 | `/builder:end-session` | command | Wrapping up a session | documented | §3 |
 | `/builder:settle <path>` | command | Research gate: `draft → settled` (§5.6.1) | documented | §3 |
 | `/builder:implement <path>` | command | Build gate: `settled → implemented` (§5.6.2) | documented | §3 |
-| `PostToolUse` front-matter check | hook | Write/Edit to `PRODUCT/**.md` | sketched | §4 |
+| `PostToolUse` front-matter check | hook | Write/Edit to `Product/**.md` | sketched | §4 |
 | `Stop` end-session reminder | hook | Claude stops mid-session | sketched | §4 |
-| `PreToolUse` git-commit sanity | hook | Bash `git commit` in `PRODUCT/` | sketched | §4 |
+| `PreToolUse` git-commit sanity | hook | Bash `git commit` in `Product/` | sketched | §4 |
 | `builder-debt-pass` | skill | Discharging debt at threshold | documented | §5 |
 | `builder-rename-cascade` | skill | Glossary rename | documented | §5 |
 | `builder-spike-graduate` | skill | Spike informs Model | documented | §5 |
@@ -70,7 +70,7 @@ The full automation surface in one table. Single source of truth for "what exist
 **Outstanding mechanics** (rules without a clear automation home yet) — see §9:
 - Session-note `debt: N opened` assertion enforcement.
 - Sample cooldown commit-message convention (`contract edit` vs. `hygiene edit`).
-- ADR auto-numbering across `general/decisions/` and `features/<feature>/decisions/`.
+- ADR auto-numbering across `decisions/` and `features/<feature>/decisions/`.
 
 ---
 
@@ -84,7 +84,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 
 **Behavior.**
 1. Read `SESSION-CHECKPOINT.md`.
-2. Read `general/OPEN-QUESTIONS.md` and `general/ALIGNMENT-DEBT.md`.
+2. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/ALIGNMENT-DEBT.md`.
 3. Identify the session counter (max `sessions/session-NN.md` + 1).
 4. Surface a 5-line briefing: active question coming in, top 3 alignment-debt items, top 3 open questions. Ask the user to confirm or pivot.
 5. Pre-create `sessions/session-NN.md` (draft, type=session) with the active question filled in.
@@ -97,10 +97,10 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 
 **Behavior.**
 1. Type ∈ {spike, model, sample, adr, plan}. (Session and checkpoint have their own commands.)
-2. For models/ADRs: feature must be one of `features/*/`. Auto-pick next counter (`02`, `03`, …) in `notes/` or `decisions/`.
+2. For models/ADRs: feature must be one of `features/*/`. Auto-pick next counter (`02`, `03`, …) in `models/` or `decisions/`.
 3. Spike: lands in `spikes/`, no counter, slug from title.
 4. Sample: lands in `support/samples/`.
-5. Generate file from `general/_templates/<type>.md` with front matter pre-filled (`type`, `status`, `last-updated`).
+5. Generate file from `_workflow/_templates/<type>.md` with front matter pre-filled (`type`, `status`, `last-updated`).
 6. Open the file in the editor (or just Read it back).
 
 **Why.** Prevents template drift. Enforces front matter without nagging.
@@ -111,10 +111,10 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 
 **Behavior.** Walks the §5.11 ceremony interactively:
 
-1. Create folder structure: `features/<name>/`, `features/<name>/notes/`, `features/<name>/decisions/`.
+1. Create folder structure: `features/<name>/`, `features/<name>/models/`, `features/<name>/decisions/`.
 2. Generate `features/<name>/<name>.md` stub from `_templates/feature.md`. Status `draft`. Prompt user for: Purpose blurb, Boundaries blurb. Other sections empty (thicken later).
 3. Prompt for dependencies: which existing features does this build on? Generate suggested `builds-on:` candidates for the first Model.
-4. Surface orientation files for review: `general/CAPABILITY-MAP.md`, `general/FEATURE-MAP.md`, `general/ROADMAP.md`. Show the spots where edits make sense (don't auto-edit; suggest with diff).
+4. Surface orientation files for review: `general/CAPABILITY-MAP.md`, `ledgers/FEATURE-MAP.md`, `general/ROADMAP.md`. Show the spots where edits make sense (don't auto-edit; suggest with diff).
 5. Patch the current `sessions/session-NN.md` content section: `feature: <name> created`.
 6. Report: feature scaffold ready; first design session can begin.
 
@@ -138,7 +138,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 **Trigger.** A Model just changed; downstream docs need re-checking.
 
 **Behavior.**
-1. Append **one entry per affected doc** to `general/ALIGNMENT-DEBT.md`: source path, target path, date, reason, status `open`. (Per [PRODUCT-BUILDER-PROPOSAL.md §5.7](PRODUCT-BUILDER-PROPOSAL.md) the ledger is the single source of truth — no inline `## Implications` section gets written to the Model.)
+1. Append **one entry per affected doc** to `ledgers/ALIGNMENT-DEBT.md`: source path, target path, date, reason, status `open`. (Per [PRODUCT-BUILDER-PROPOSAL.md §5.7](PRODUCT-BUILDER-PROPOSAL.md) the ledger is the single source of truth — no inline `## Implications` section gets written to the Model.)
 2. Append a `debt: N opened` line to the current `sessions/session-NN.md` content section (or update it if a `debt:` line already exists for this edit).
 
 **Why.** Implicit alignment debt was the workflow's killer feature in the FLOW-SIMULATION analysis. This makes opening debt cheap.
@@ -158,9 +158,9 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 **Trigger.** New vocabulary just got named, or an existing term got renamed.
 
 **Behavior.**
-1. Add or update entry in `general/GLOSSARY.md`.
+1. Add or update entry in `ledgers/GLOSSARY.md`.
 2. Append to glossary changelog with date and reason.
-3. (Optional) `grep` for the old term across `PRODUCT/` and offer to scaffold an alignment-debt entry for the rename.
+3. (Optional) `grep` for the old term across `Product/` and offer to scaffold an alignment-debt entry for the rename.
 
 **Why.** Sessions 3, 5, 6 of FLOW-SIMULATION were all rename cascades. The bottleneck is human-eyeballed grep. Lifting it into one command shrinks rename sessions by half.
 
@@ -183,7 +183,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 build gate).
 
 **`/builder:settle` — flips `draft → settled`.**
-1. Verify §5.6.1 conditions: no open ledger entries against this path, stable ≥ 2 sessions, all glossary terms used appear in `general/GLOSSARY.md`.
+1. Verify §5.6.1 conditions: no open ledger entries against this path, stable ≥ 2 sessions, all glossary terms used appear in `ledgers/GLOSSARY.md`.
 2. If all pass: flip frontmatter `status: draft → settled`, bump `last-updated`. Optionally surface dependent docs (`builds-on:` reverse lookup) so user can chain settles.
 3. If any fail: print the failing condition, abort.
 
@@ -199,8 +199,8 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 **Trigger.** Manual run, CI step, or end-of-session sweep.
 
 **Behavior.**
-1. Scan `PRODUCT/` for stale references: broken paths, terms used without glossary entries, Models pointing at `superseded` ADRs without acknowledgment, missing or invalid `builds-on:` (must be path-list or literal `root`), Sample edits without the cooldown commit-message marker (§4.4).
-2. For each finding: append a ledger entry to `general/ALIGNMENT-DEBT.md` with `source=linter`, target=affected doc, reason=type of staleness, status `open`.
+1. Scan `Product/` for stale references: broken paths, terms used without glossary entries, Models pointing at `superseded` ADRs without acknowledgment, missing or invalid `builds-on:` (must be path-list or literal `root`), Sample edits without the cooldown commit-message marker (§4.4).
+2. For each finding: append a ledger entry to `ledgers/ALIGNMENT-DEBT.md` with `source=linter`, target=affected doc, reason=type of staleness, status `open`.
 3. Idempotent: before opening a new entry, check whether an open entry already exists for this (linter, target, reason) tuple.
 4. Output structured findings to stdout + count of new entries opened.
 
@@ -226,12 +226,12 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 
 ### `/builder:rebuild-feature-map`
 
-**Trigger.** Models added or removed; or end-of-session cleanup if `general/FEATURE-MAP.md` is suspected stale. Q6 defers active build until ~15 Models or first drift incident.
+**Trigger.** Models added or removed; or end-of-session cleanup if `ledgers/FEATURE-MAP.md` is suspected stale. Q6 defers active build until ~15 Models or first drift incident.
 
 **Behavior.**
 1. Walk `features/*/` to collect: feature root status, Model count, ADR count, contained docs.
 2. Walk `builds-on:` across all Models; project up to feature-level edges.
-3. Regenerate the three layers of `general/FEATURE-MAP.md`:
+3. Regenerate the three layers of `ledgers/FEATURE-MAP.md`:
    - **Layer 1 (table):** one row per feature with purpose snippet (pulled from feature root), status, model count, deps.
    - **Layer 2 (mermaid):** dependency graph of features, edges from union of contained Models' `builds-on:`.
    - **Layer 3 (breakdown):** per-feature listing of Models, ADRs, statuses.
@@ -272,7 +272,7 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 
 **Behavior.**
 1. Prompt for: title, 2-line context, trigger condition (when to revisit), references (paths or links).
-2. Append entry to `general/BACKLOG.md` with date and status `open`.
+2. Append entry to `ledgers/BACKLOG.md` with date and status `open`.
 3. Patch the calling session's note: record the deferral in "followups."
 
 **Why.** Q7 added the BACKLOG ledger. Cheap-to-invoke entry-opening is the matching primitive — without it, deferred work falls back to scattering notes.
@@ -283,10 +283,10 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 
 **Behavior.** Walks the §5.0 8-step bootstrap interactively:
 1. Ask for: project name, vision blurb, candidate features (5–12 likely).
-2. Create skeleton: `general/`, `features/<each>/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`.
-3. Drop all 7 doc-type templates into `general/_templates/` (extracted from PRODUCT-BUILDER.md §4.1–§4.7).
+2. Create skeleton: `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/<each>/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`.
+3. Drop all 7 doc-type templates into `_workflow/_templates/` (extracted from PRODUCT-BUILDER.md §4.1–§4.7).
 4. Initialize empty ledgers: `OPEN-QUESTIONS.md`, `ALIGNMENT-DEBT.md`, `BACKLOG.md`, `FEATURE-MAP.md` (stub with vision + empty mermaid), `GLOSSARY.md` (empty changelog).
-5. Create `general/decisions/` with `0001-adopt-workflow.md` from a project template.
+5. Create `decisions/` with `0001-adopt-workflow.md` from a project template.
 6. Write `general/VISION.md` from the supplied blurb.
 7. Open `sessions/session-01.md` with active question coming in: *"what is this project?"*
 8. Report: filesystem ready; first session can begin.
@@ -299,17 +299,17 @@ Two commands matching the two status gates (§5.6.1 research gate and §5.6.2 bu
 
 Hooks fire on Claude Code events. They run whether you want them or not — high cost when wrong, so use sparingly.
 
-### `PostToolUse` on `Write`/`Edit` to `PRODUCT/**.md`
+### `PostToolUse` on `Write`/`Edit` to `Product/**.md`
 
 - Verify front matter exists. Block save (or warn) if missing — *warn, don't block*. Adoption matters more than purity.
 - Refresh `last-updated:` automatically if the doc was changed.
 
 ### `Stop` (session-end auto-checkpoint)
 
-- After Claude stops responding, scan for changed `PRODUCT/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /builder:end-session"*.
+- After Claude stops responding, scan for changed `Product/` files. Print a one-line reminder if `SESSION-CHECKPOINT.md` wasn't touched: *"Hint: end-session refresh not run. /builder:end-session"*.
 - Friction cost is real here. Build only if forgetting end-session becomes a recurring problem.
 
-### `PreToolUse` on `Bash` for `git commit` in `PRODUCT/`
+### `PreToolUse` on `Bash` for `git commit` in `Product/`
 
 - Sanity-check: is there a session note for this session? If not, warn.
 - Could be annoying. Skip unless missing-session-notes becomes a real pattern.
@@ -328,7 +328,7 @@ Skills (under `.claude/skills/<name>/`) bundle instructions + light tooling. Use
 
 A full alignment-debt session as a skill. Steps:
 
-1. Read `general/ALIGNMENT-DEBT.md`. Pick top entries (or honor a user-passed list).
+1. Read `ledgers/ALIGNMENT-DEBT.md`. Pick top entries (or honor a user-passed list).
 2. For each entry, read the "implications" doc and each affected doc.
 3. Propose patches as diffs. User approves each.
 4. Run `/builder:close-debt` per resolved entry.
@@ -342,7 +342,7 @@ Glossary rename → cascade across the project. Steps:
 
 1. User specifies old → new term.
 2. `/builder:promote-glossary` first.
-3. Grep `PRODUCT/` for old term (case-sensitive AND -insensitive variants).
+3. Grep `Product/` for old term (case-sensitive AND -insensitive variants).
 4. Generate per-file diff proposals.
 5. Apply approved diffs in one commit per logical scope (per-feature is a reasonable grain).
 6. Open alignment-debt entry per file touched, close in same session.
@@ -367,7 +367,7 @@ Trivial but the kind of thing that's *always* forgotten. Strong candidate.
 A locked sample's design dependencies changed. Steps:
 
 1. User passes sample path.
-2. Read `general/ALIGNMENT-DEBT.md` for entries naming this sample.
+2. Read `ledgers/ALIGNMENT-DEBT.md` for entries naming this sample.
 3. Show the user the three options from §4.4 of the proposal: re-lock, unlock-to-draft, accept-divergence.
 4. Apply chosen path:
    - Re-lock: re-check four-part bar, update sample, close debt entries.
@@ -410,7 +410,7 @@ The core drift-detection automation backing §5.12 of the proposal. A composite 
 6. **Propose resolution.**
    - **CI mode:** opens a PR with proposed contract updates. PR description names the divergences and the proposed direction (update contract, mark drift, etc.). Each divergence is a commit in the PR for granular review.
    - **Session mode:** prints findings; user/AI decides per-finding.
-7. **Track in ledger.** Each finding becomes an entry in `general/ALIGNMENT-DEBT.md` (`source=drift-detection, target=<feature>, reason=<finding>`). Closes when the proposed PR merges OR an explicit accept-divergence resolution lands.
+7. **Track in ledger.** Each finding becomes an entry in `ledgers/ALIGNMENT-DEBT.md` (`source=drift-detection, target=<feature>, reason=<finding>`). Closes when the proposed PR merges OR an explicit accept-divergence resolution lands.
 
 **Why two modes share one skill.** Same compare/propose logic; differs only in trigger and surfacing. Build session mode first (cheaper to debug), then wire to CI when the skill stabilizes.
 
@@ -429,7 +429,7 @@ Cases where a subagent (separate context) earns its keep:
 
 ### `builder-explorer` (an Explore-style agent, project-tuned)
 
-Pre-loaded with the project's structure: knows about `features/`, knows the doc types, knows ADR conventions. Used for: "find all ADRs that touch the snapshot pipeline," "what models depend on `features/effects/notes/01`," "summarize the trigger system across notes + ADRs."
+Pre-loaded with the project's structure: knows about `features/`, knows the doc types, knows ADR conventions. Used for: "find all ADRs that touch the snapshot pipeline," "what models depend on `features/effects/models/01`," "summarize the trigger system across notes + ADRs."
 
 The `Explore` agent already exists. This is the same idea but with a project-specific knowledge prompt baked in.
 
@@ -438,7 +438,7 @@ The `Explore` agent already exists. This is the same idea but with a project-spe
 Reviews a freshly-landed Model or ADR. Checklist:
 - Front matter valid? (`builds-on:` present and either path-list or `root`?)
 - All template sections present (or explicitly omitted with rationale)?
-- Cascade considered → ledger entries opened in `general/ALIGNMENT-DEBT.md`, OR session note carries `debt: none` for this edit?
+- Cascade considered → ledger entries opened in `ledgers/ALIGNMENT-DEBT.md`, OR session note carries `debt: none` for this edit?
 - ADR linked from Model and vice versa?
 - Glossary changelog updated for any new term?
 
@@ -448,16 +448,16 @@ Run before commit, reads diff, posts findings. Cheap insurance.
 
 ## 7. CLAUDE.md additions
 
-The repo's root `AGENTS.md` (or a new `PRODUCT/CLAUDE.md`) should encode the workflow as durable instructions:
+The repo's root `AGENTS.md` (or a new `Product/CLAUDE.md`) should encode the workflow as durable instructions:
 
 1. The 8 doc types and their templates.
-2. The naming convention (`features/<feature>/notes/NN-<slug>.md`).
+2. The naming convention (`features/<feature>/models/NN-<slug>.md`).
 3. The three-lifetimes-for-questions rule.
 4. The two status gates (research gate + build gate).
-5. Pointer to `general/_templates/`.
-6. *Critical*: "Don't write to `PRODUCT/` outside the prescribed structure. If unsure, write a spike."
+5. Pointer to `_workflow/_templates/`.
+6. *Critical*: "Don't write to `Product/` outside the prescribed structure. If unsure, write a spike."
 
-Memory-side, equivalent guidance: "When working in `PRODUCT/`, follow `general/PRODUCT-BUILDER.md`."
+Memory-side, equivalent guidance: "When working in `Product/`, follow `_workflow/PRODUCT-BUILDER.md`."
 
 ---
 
@@ -533,7 +533,7 @@ Rules from the locked Q-set that need an automation home but don't have one yet.
 
 ### ADR auto-numbering
 
-**The rule.** ADR filenames use a 4-digit counter scoped to their parent decisions/ folder. `general/decisions/` and each `features/<feature>/decisions/` have independent counters.
+**The rule.** ADR filenames use a 4-digit counter scoped to their parent decisions/ folder. `decisions/` and each `features/<feature>/decisions/` have independent counters.
 
 **Where it could live:**
 - **Inside `/builder:settle-decision`** — when generating the ADR file, glob the target folder, find the max NNNN, increment.
@@ -552,7 +552,7 @@ Each outstanding mechanic is small. The cost isn't in defining them; it's in ens
 - **Where do these skills/commands live?** Under `.claude/` per-project, or as a shared plugin? Per-project is simpler; plugin lets other Card Framework forks pick up the workflow.
 - **Do hooks survive PRs?** If a hook lives in `.claude/settings.json` and the PR changes settings, the user needs to re-approve permissions. Friction. Probably keep hooks minimal and global, slash commands per-project.
 - **What's the test story?** Skills are essentially prompts; "tests" are eval runs. Probably overkill for this volume. A manual smoke-test ("run `/builder:start-session` after each major skill change") is enough.
-- **How do we keep the skills aligned with the workflow doc?** If the workflow evolves and skills don't, they drift. Probably: skills reference `general/PRODUCT-BUILDER.md` by section number; ADR-on-workflow-change updates skills as a checklist item.
+- **How do we keep the skills aligned with the workflow doc?** If the workflow evolves and skills don't, they drift. Probably: skills reference `_workflow/PRODUCT-BUILDER.md` by section number; ADR-on-workflow-change updates skills as a checklist item.
 - **Is `/builder:` the right namespace?** Or `/r:`? Or no namespace at all? Ergonomics matter; pick when building.
 - **Should ADRs be auto-numbered or human-named?** Auto-numbered is simpler; human-named is more searchable. Suggest auto-number with mandatory slug (`0007-typed-action-template.md`).
 

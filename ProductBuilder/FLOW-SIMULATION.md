@@ -23,15 +23,15 @@ tags: [#workflow, #simulation]
 **Under the new workflow.**
 
 - The orientation block (vision, archetypes, capability map, architecture, roadmap, open-questions, recommendations) lands in `general/`:
-  - `general/VISION.md`, `general/SCOPE.md`, `general/CAPABILITY-MAP.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `general/OPEN-QUESTIONS.md`, `general/RECOMMENDATIONS.md`, `general/GLOSSARY.md`.
+  - `general/VISION.md`, `general/SCOPE.md`, `general/CAPABILITY-MAP.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `ledgers/OPEN-QUESTIONS.md`, `general/RECOMMENDATIONS.md`, `ledgers/GLOSSARY.md`.
 - The scaffold-fit investigation (doc 04) is recognized as a **spike** — pre-design exploration of an external package. Lands as `spikes/scaffold-state-fit.md` with status `active` → `concluded`.
 - The core-model docs (10, 11, 12) land as **Models** in feature folders:
-  - `features/entities/notes/01-definition-instance-model.md` (model)
-  - `features/zones/notes/01-zone-model.md` (model, with provenance from old doc 11 folded below the divider)
+  - `features/entities/models/01-definition-instance-model.md` (model)
+  - `features/zones/models/01-zone-model.md` (model, with provenance from old doc 11 folded below the divider)
 - The action-track explosion (docs 13–20) is the messy part. Under the new workflow:
   - Doc 13 (deckmech reference) is a **spike** in `spikes/deckmech-command-pipeline.md`.
   - Doc 14 (action flow decisions) collapses: each major decision becomes an ADR in `features/actions/decisions/`. The discussion narrative folds into the relevant Model's provenance section.
-  - Docs 15, 17, 18, 19, 20 collapse into roughly two Models — `features/actions/notes/01-command-pipeline.md` and `features/engine/notes/01-evaluation-loop.md` — each with options/rationale/consequences below the divider.
+  - Docs 15, 17, 18, 19, 20 collapse into roughly two Models — `features/actions/models/01-command-pipeline.md` and `features/engine/models/01-evaluation-loop.md` — each with options/rationale/consequences below the divider.
   - Doc 16 (action terminology discussion) doesn't get a doc of its own; it becomes glossary entries + a session-note ephemeral thread, since terminology debates don't survive as durable artifacts.
 
 **Session note (~50 lines, two parts).** Active question in: "what's the framework actually shaped like?" Active question out: "is the action pipeline coherent end-to-end?" Decisions settled: ~6 ADRs covering envelope, dispatch, handler return shape, etc. Followups: ~10 entries to OPEN-QUESTIONS.
@@ -46,9 +46,9 @@ tags: [#workflow, #simulation]
 
 **What actually happened.** Updated docs, session-checkpoint refresh, fixed return-value and envelope grouping in doc 18 (alignment with doc 20).
 
-**Under the new workflow.** This is a recognizable pattern: an alignment-pass session (§5.5). Entry context = "discharge inconsistencies between docs 18 and 20." Work = mechanical edits. The session note records the trail; `general/ALIGNMENT-DEBT.md` gets ticked off.
+**Under the new workflow.** This is a recognizable pattern: an alignment-pass session (§5.5). Entry context = "discharge inconsistencies between docs 18 and 20." Work = mechanical edits. The session note records the trail; `ledgers/ALIGNMENT-DEBT.md` gets ticked off.
 
-**Artifact-level mapping.** No new docs. Edits to `features/actions/notes/01-command-pipeline.md` and `features/engine/notes/01-evaluation-loop.md`. Two debt entries closed.
+**Artifact-level mapping.** No new docs. Edits to `features/actions/models/01-command-pipeline.md` and `features/engine/models/01-evaluation-loop.md`. Two debt entries closed.
 
 **Verdict.** Workflow absorbs this cleanly. The §5.5 pattern was *invented* for sessions like this.
 
@@ -62,10 +62,10 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- The rename is a **decision**, so it gets an ADR: `features/actions/decisions/0002-intent-vocabulary.md` (or a top-level `general/decisions/`-style ADR if we add one — see §1 of MIGRATION-GUIDE for that question).
+- The rename is a **decision**, so it gets an ADR: `features/actions/decisions/0002-intent-vocabulary.md` (or a top-level `decisions/`-style ADR if we add one — see §1 of MIGRATION-GUIDE for that question).
 - Glossary changelog gets an entry: `2026-XX-XX: Renamed OriginRequest→OriginIntent, PlayerRequest→PlayerIntent. ADR-NNNN.`
 - Session note records the sweep across affected docs.
-- Multiple `general/ALIGNMENT-DEBT.md` entries created and closed in the same session (rename-and-reconcile is one pass).
+- Multiple `ledgers/ALIGNMENT-DEBT.md` entries created and closed in the same session (rename-and-reconcile is one pass).
 
 **Where the workflow helps.** Today, the rename is visible only in PR titles. Under the new workflow, the ADR is searchable (`features/actions/decisions/`) and the glossary changelog gives a single read-out of vocabulary churn.
 
@@ -80,7 +80,7 @@ tags: [#workflow, #simulation]
 **Under the new workflow.**
 
 - The composite/scope-helper choice is a real fork → ADR: `features/actions/decisions/NNNN-composite-vs-scope-helper.md`.
-- The model `features/actions/notes/01-command-pipeline.md` (or a sibling) gets edited to carry the new shape; "Options considered" below the divider gets the entry.
+- The model `features/actions/models/01-command-pipeline.md` (or a sibling) gets edited to carry the new shape; "Options considered" below the divider gets the entry.
 - Session note: branch from "doc 19 review" → "scope helper feels wrong" → "composite pattern" → ADR landed → model updated.
 
 **Verdict.** This is the workflow's sweet spot — a single decision with two siblings considered, settled in-session, ADR created. Clean.
@@ -95,7 +95,7 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- The trigger system gets its own feature folder: `features/triggers/`. First model: `features/triggers/notes/01-trigger-fold.md`.
+- The trigger system gets its own feature folder: `features/triggers/`. First model: `features/triggers/models/01-trigger-fold.md`.
 - Multiple ADRs land in `features/triggers/decisions/`: trigger-fold semantics, OnBefore/OnAfter shape, subscription model.
 - Terminology cleanup is another alignment pass — debt entries against docs 02–20 (now scattered across `general/` orientation files + `features/actions/`, `features/engine/`).
 - Glossary changelog gets a multi-line entry.
@@ -110,7 +110,7 @@ tags: [#workflow, #simulation]
 
 **What actually happened.** Naming alignment pass: applied all settled renames across all research docs (commit `fd99468`).
 
-**Under the new workflow.** Pure §5.5 alignment pass. Entry context = `general/ALIGNMENT-DEBT.md` entries from terminology decisions. Work = mechanical sweep. Session note records which features were touched. Most debt entries close in one session.
+**Under the new workflow.** Pure §5.5 alignment pass. Entry context = `ledgers/ALIGNMENT-DEBT.md` entries from terminology decisions. Work = mechanical sweep. Session note records which features were touched. Most debt entries close in one session.
 
 **Pattern observed.** Terminology decisions create debt in O(N) docs. Sessions 3, 5, 6 are all variations on this. The workflow absorbs them but doesn't shrink them. **Possible automation hook** (see AI-FIRST doc): glossary-rename → automated grep + suggested replacements as a skill.
 
@@ -126,7 +126,7 @@ tags: [#workflow, #simulation]
 
 - Scaffold States / Scaffold Entities deep-dives are **spikes** (prior-art surveys): `spikes/scaffold-states-deep-dive.md`, `spikes/scaffold-entities-deep-dive.md`. Status `concluded` (or `graduated` if they fed a Model).
   - The spike → Model graduation is a recognized transition in the workflow. Forward-link added when doc 22 lands.
-- Doc 22 lands as a Model in a new feature folder: `features/effects/notes/01-async-dispatch.md` (or `features/engine/notes/02-async-dispatch.md` — see MIGRATION for placement).
+- Doc 22 lands as a Model in a new feature folder: `features/effects/models/01-async-dispatch.md` (or `features/engine/models/02-async-dispatch.md` — see MIGRATION for placement).
 - The rewrite-mid-session is interesting: under the new workflow, the first version doesn't get a separate file; it's a draft that converges. Session-note ephemeral thread records the pivot ("first cut had three layers; collapsed to two").
 - ADRs: probably 2–3 — async-layer hierarchy, suspension model, dispatch-path split.
 
@@ -142,8 +142,8 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- Doc 23 → Model in `features/effects/notes/02-replacement-prevention.md`.
-- Doc 24 → Model in `features/effects/notes/03-ongoing-effects.md`.
+- Doc 23 → Model in `features/effects/models/02-replacement-prevention.md`.
+- Doc 24 → Model in `features/effects/models/03-ongoing-effects.md`.
 - Snippet drift = alignment debt. Cross-doc audit closes it.
 - ADRs: priority model for replacement, attachment-entity choice, turn-signal lifecycle.
 
@@ -159,10 +159,10 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- Doc 25 → Model in `features/engine/notes/02-gamerules-contract.md` (or its own feature folder if `gamerules` warrants one).
+- Doc 25 → Model in `features/engine/models/02-gamerules-contract.md` (or its own feature folder if `gamerules` warrants one).
 - Doc 26 → **Sample** in `support/samples/pile-counter.md`. Two-layer (Subject = Pile Counter game rules; Projection = how it maps onto framework concepts).
   - The "lock" commits map to status transition `draft` → `locked`. Per §4.4, the four-part lock-bar is checked: subject finalized ✓, projection uses settled abstractions ✓ (mostly — see below), no open alignment debt ✓, stable ≥ 1 session ✓ (after the alignment pass).
-- Doc 27 → Model in `features/presentation/notes/01-presentation-loop.md`.
+- Doc 27 → Model in `features/presentation/models/01-presentation-loop.md`.
 - Aligning doc 25 with 26 + 27 = alignment-debt entries created when 26/27 surfaced gaps in 25; closed in same session.
 
 **Where this stresses the workflow.** The Sample's `locked` bar requires that the projection uses only `settled` abstractions. In session 9, GameRules was *just* finalized — projection-onto-GameRules counted as "settled" only because we said so. Under the workflow this would have been a `draft` sample for at least one more session (§4.4 condition 4: stable ≥ 1 session). The workflow would have *slowed us down here*, by one session. Worth it? Probably yes — the lock is a load-bearing claim.
@@ -177,7 +177,7 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- Doc 28 → Model in `features/actions/notes/02-availability-snapshot.md` (or `features/presentation/notes/02-availability-snapshot.md`, depending on how we decide the actions-vs-presentation boundary in MIGRATION).
+- Doc 28 → Model in `features/actions/models/02-availability-snapshot.md` (or `features/presentation/models/02-availability-snapshot.md`, depending on how we decide the actions-vs-presentation boundary in MIGRATION).
 - ADR: typed-template-vs-generic-template; eligibility filter shape.
 
 **Verdict.** Single-purpose session, single-doc landing. Workflow trivially absorbs it.
@@ -192,9 +192,9 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- Doc 29 → Model in `features/engine/notes/03-snapshot-pipeline.md` (or split between `features/engine/` and `features/actions/`).
+- Doc 29 → Model in `features/engine/models/03-snapshot-pipeline.md` (or split between `features/engine/` and `features/actions/`).
 - ADRs: service-driven publication, typed ActionTemplate, on-demand validation, GameRules-as-abstract-class-with-injected-services.
-- The doc-alignment edits to 25, 26, 27, 28 = ledger entries opened in `general/ALIGNMENT-DEBT.md` (one per affected doc) when doc 29 lands, closed in same session.
+- The doc-alignment edits to 25, 26, 27, 28 = ledger entries opened in `ledgers/ALIGNMENT-DEBT.md` (one per affected doc) when doc 29 lands, closed in same session.
 - The Pile Counter sample (`support/samples/pile-counter.md`) gets re-checked against the new GameRules shape. If the sample was `locked`, this triggers the §4.4 "design changes that affect the locked sample" path — explicit ledger entry naming the sample as target, deliberate decision to re-lock.
 
 **Where the workflow helps most.** Doc 29 cascades. Today, "what did doc 29 change in doc 25?" is hidden in the merge commit. Under the new workflow, the alignment-debt ledger names every affected artifact, and resolution is a tracked checkbox.
@@ -213,7 +213,7 @@ tags: [#workflow, #simulation]
 - `ProductBuilder/MIGRATION-GUIDE.md` is a one-shot artifact: a plan for the migration. Not quite any of the 8 doc types — closer to a Plan than anything else.
 - `ProductBuilder/AI-FIRST-AUTOMATION.md` is a forward-looking spec. Closest to a Spike (premise: "what would AI-first look like?") that may graduate into multiple Models as items get built.
 
-**Note.** `ProductBuilder/` is the staging area for the workflow design itself. After migration, `PRODUCT-BUILDER-PROPOSAL.md` graduates to `PRODUCT/general/PRODUCT-BUILDER.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
+**Note.** `ProductBuilder/` is the staging area for the workflow design itself. After migration, `PRODUCT-BUILDER-PROPOSAL.md` graduates to `Product/_workflow/PRODUCT-BUILDER.md`. The other docs (`MIGRATION-GUIDE.md`, `FLOW-SIMULATION.md`, `AI-FIRST-AUTOMATION.md`, `PRODUCT-BUILDER-GAPS.md`) stay in place — they're living artifacts that may evolve when the workflow gets exercised for real. Nothing else graduates, nothing retires.
 
 ---
 
@@ -228,7 +228,7 @@ tags: [#workflow, #simulation]
 
 ## What the workflow would have prevented
 
-- Doc-number drift: today, "doc 28" means whatever 28 currently is. Under per-feature counters, `features/actions/notes/02` is stable — its position in the pipeline doesn't shift when an unrelated feature adds a doc.
+- Doc-number drift: today, "doc 28" means whatever 28 currently is. Under per-feature counters, `features/actions/models/02` is stable — its position in the pipeline doesn't shift when an unrelated feature adds a doc.
 - Lost decision provenance: ADRs would have made every rename, every async-layer choice, every snapshot-publication choice individually searchable.
 - Implicit alignment debt: every "align doc X with doc Y" pass would have been visible as ledger entries before being worked.
 - Sample-projection rot: the locked-bar prevents a sample from claiming coverage it doesn't have.
@@ -258,8 +258,8 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 - `general/SCOPE.md`
 - `general/CAPABILITY-MAP.md`
 - `general/ROADMAP.md`
-- `general/GLOSSARY.md` (skeleton)
-- `general/OPEN-QUESTIONS.md` (seeded)
+- `ledgers/GLOSSARY.md` (skeleton)
+- `ledgers/OPEN-QUESTIONS.md` (seeded)
 - `general/RECOMMENDATIONS.md` (placeholder)
 - `sessions/session-01.md`
 
@@ -280,7 +280,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 **Files added.**
 - `spikes/scaffold-state-fit.md` (status: `active` → `concluded`)
 - `general/ARCHITECTURE.md`
-- `features/entities/notes/01-definition-instance-model.md` (Model, draft)
+- `features/entities/models/01-definition-instance-model.md` (Model, draft)
 - `features/entities/decisions/0001-definition-vs-instance-split.md`
 - `sessions/session-02.md`
 
@@ -300,7 +300,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 03 — Zones model
 
 **Files added.**
-- `features/zones/notes/01-zone-model.md` (Model, settled)
+- `features/zones/models/01-zone-model.md` (Model, settled)
 - `features/zones/decisions/0001-zone-as-collection.md`
 - `features/zones/decisions/0002-zone-membership-mutator.md`
 - `features/zones/decisions/0003-stack-vs-bag-zone-typing.md`
@@ -322,8 +322,8 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 
 **Files added.**
 - `spikes/deckmech-command-pipeline.md` (status: `concluded`)
-- `features/actions/notes/01-command-pipeline.md` (Model)
-- `features/engine/notes/01-evaluation-loop.md` (Model)
+- `features/actions/models/01-command-pipeline.md` (Model)
+- `features/engine/models/01-evaluation-loop.md` (Model)
 - `features/actions/decisions/0001-command-envelope-shape.md`
 - `features/actions/decisions/0002-handler-validate-authoritative.md`
 - `features/actions/decisions/0003-onincomingcommand-flow-only.md`
@@ -350,10 +350,10 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 - `sessions/session-05.md`
 
 **Files modified (alignment-debt closure).**
-- `features/actions/notes/01-command-pipeline.md`
-- `features/engine/notes/01-evaluation-loop.md`
-- `features/zones/notes/01-zone-model.md` (one stray reference)
-- `general/GLOSSARY.md` (changelog entry)
+- `features/actions/models/01-command-pipeline.md`
+- `features/engine/models/01-evaluation-loop.md`
+- `features/zones/models/01-zone-model.md` (one stray reference)
+- `ledgers/GLOSSARY.md` (changelog entry)
 
 **Actions taken.**
 - ADR proposed and accepted: rename `OriginRequest`/`PlayerRequest` → `OriginIntent`/`PlayerIntent`. One file, one decision.
@@ -370,7 +370,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 06 — Trigger system
 
 **Files added.**
-- `features/triggers/notes/01-trigger-fold.md` (Model)
+- `features/triggers/models/01-trigger-fold.md` (Model)
 - `features/triggers/decisions/0001-fold-semantics.md`
 - `features/triggers/decisions/0002-onbefore-onafter-split.md`
 - `features/triggers/decisions/0003-priority-by-source.md`
@@ -393,7 +393,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 **Files added.**
 - `spikes/sabberstone-architecture.md` (status: `graduated`)
 - `spikes/fireplace-architecture.md` (status: `concluded`)
-- `features/effects/notes/01-async-dispatch.md` (Model)
+- `features/effects/models/01-async-dispatch.md` (Model)
 - `features/effects/decisions/0001-async-layer-hierarchy.md`
 - `features/effects/decisions/0002-two-dispatch-paths.md`
 - `features/effects/decisions/0003-suspension-via-handle.md`
@@ -403,7 +403,7 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 - Two prior-art spikes for context (SabberStone task/option flow, Fireplace JSON option indexing).
 - Async/dispatch Model. Provenance section records the rejected three-layer hierarchy and why it collapsed to two.
 - Three ADRs.
-- `ALIGNMENT-DEBT.md`: one entry against `features/actions/notes/01` (composite-action mention now formalized).
+- `ALIGNMENT-DEBT.md`: one entry against `features/actions/models/01` (composite-action mention now formalized).
 
 **Key points.**
 - Spike → Model → ADR cascade in one session. Forward-link from each spike to the Model.
@@ -415,15 +415,15 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 08 — Replacement, prevention, ongoing
 
 **Files added.**
-- `features/effects/notes/02-replacement-prevention.md` (Model)
-- `features/effects/notes/03-ongoing-effects.md` (Model)
+- `features/effects/models/02-replacement-prevention.md` (Model)
+- `features/effects/models/03-ongoing-effects.md` (Model)
 - `features/effects/decisions/0004-trigger-pipeline-priority.md`
 - `features/effects/decisions/0005-ongoing-as-attachment-entity.md`
 - `sessions/session-08.md`
 
 **Files modified (debt closure).**
-- `features/effects/notes/01-async-dispatch.md` (debt entry from session 07 closed — composite-action mention reconciled)
-- `features/triggers/notes/01-trigger-fold.md` (replacement effects clarified relationship to fold)
+- `features/effects/models/01-async-dispatch.md` (debt entry from session 07 closed — composite-action mention reconciled)
+- `features/triggers/models/01-trigger-fold.md` (replacement effects clarified relationship to fold)
 
 **Actions taken.**
 - Two siblings under `features/effects/`. Replacement/prevention as Model 02; ongoing as Model 03.
@@ -440,14 +440,14 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 09 — GameRules contract
 
 **Files added.**
-- `features/engine/notes/02-gamerules-contract.md` (Model)
+- `features/engine/models/02-gamerules-contract.md` (Model)
 - `features/engine/decisions/0002-gamerules-as-class-with-services.md`
 - `features/engine/decisions/0003-gamerules-zero-state.md`
 - `features/engine/decisions/0004-onqueuedrained-trigger.md`
 - `sessions/session-09.md`
 
 **Files modified (debt closure).**
-- `features/actions/notes/01-command-pipeline.md` (validation-in-handler reference now points at GameRules contract)
+- `features/actions/models/01-command-pipeline.md` (validation-in-handler reference now points at GameRules contract)
 
 **Actions taken.**
 - GameRules Model. Top half describes the class shape and method set; provenance records why interface-then-class, why services injected.
@@ -464,13 +464,13 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 
 **Files added.**
 - `support/samples/pile-counter.md` (Sample, status: `draft`)
-- `features/presentation/notes/01-presentation-loop.md` (Model)
+- `features/presentation/models/01-presentation-loop.md` (Model)
 - `features/presentation/decisions/0001-pull-not-push.md`
 - `sessions/session-10.md`
 
 **Files modified.**
-- `features/engine/notes/02-gamerules-contract.md` (Examples section now references pile-counter.md)
-- `general/GLOSSARY.md` (terms surfaced by the sample: `PuzzleSource`, `PileTarget`)
+- `features/engine/models/02-gamerules-contract.md` (Examples section now references pile-counter.md)
+- `ledgers/GLOSSARY.md` (terms surfaced by the sample: `PuzzleSource`, `PileTarget`)
 
 **Actions taken.**
 - Pile Counter written as a Sample: Subject (the puzzle game), Why-this-sample (floor case for solo / no async / no triggers), Projection onto framework abstractions, What-this-does-NOT-exercise.
@@ -487,14 +487,14 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 11 — Pile Counter lock + ActionAvailability snapshot
 
 **Files added.**
-- `features/actions/notes/02-availability-snapshot.md` (Model)
+- `features/actions/models/02-availability-snapshot.md` (Model)
 - `features/actions/decisions/0005-typed-action-template.md`
 - `features/actions/decisions/0006-eligibility-as-template-filter.md`
 - `sessions/session-11.md`
 
 **Files modified.**
 - `support/samples/pile-counter.md` (status: `draft` → `locked`)
-- `features/presentation/notes/01-presentation-loop.md` (snapshot consumer side filled in)
+- `features/presentation/models/01-presentation-loop.md` (snapshot consumer side filled in)
 
 **Actions taken.**
 - Re-check the four-part lock-bar against Pile Counter:
@@ -514,16 +514,16 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 ## Session 12 — Snapshot pipeline + sample relock cascade
 
 **Files added.**
-- `features/engine/notes/03-snapshot-pipeline.md` (Model)
+- `features/engine/models/03-snapshot-pipeline.md` (Model)
 - `features/engine/decisions/0005-snapshot-in-state.md`
 - `features/engine/decisions/0006-iavailableactions-single-writer.md`
 - `features/actions/decisions/0007-on-demand-validation.md`
 - `sessions/session-12.md`
 
 **Files modified (debt cascade).**
-- `features/engine/notes/02-gamerules-contract.md` (services-injected shape now formalized via snapshot pipeline)
-- `features/actions/notes/02-availability-snapshot.md` (eager-vs-lazy framing replaced by on-demand)
-- `features/presentation/notes/01-presentation-loop.md` (consumer side aligned)
+- `features/engine/models/02-gamerules-contract.md` (services-injected shape now formalized via snapshot pipeline)
+- `features/actions/models/02-availability-snapshot.md` (eager-vs-lazy framing replaced by on-demand)
+- `features/presentation/models/01-presentation-loop.md` (consumer side aligned)
 - `support/samples/pile-counter.md` (re-checked against new GameRules shape)
 
 **Actions taken.**
