@@ -75,31 +75,33 @@ The snapshot lives in `GameState` as a first-class slot:
 ```csharp
 public sealed class GameState
 {
-    public IReadOnlyList<Pile>           Piles            { get; }
-    public LastMove?                     LastMove         { get; }
-    public IReadOnlyList<GameCommand>    AvailableActions { get; }   // canonical, generic
+    public IReadOnlyList<Pile>        Piles            { get; }
+    public LastMove?                  LastMove         { get; }
+    public AvailableActionsSnapshot   AvailableActions { get; }   // canonical
 }
 ```
+
+`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list (see [doc 28](28-action-availability-and-mapping.md) for the shape, [doc 29](29-snapshot-production-pipeline.md) for production).
 
 Treating the snapshot as state — not as a side-channel — has three consequences:
 
 1. **Reactive UI for free.** The UI subscribes to state; snapshot updates flow through the same path as any other state change. No separate channel to wire.
 2. **Replays carry it.** Snapshots restore as part of state, useful for debugging "why did the UI show this affordance?"
-3. **Generic across games.** `IReadOnlyList<GameCommand>` works for any game; framework ships this shape.
+3. **Generic across games.** The framework ships the slot type; per-game `ActionTemplate` subtypes plug in.
 
 ---
 
 ## 5. The Snapshot's Element Type
 
-The snapshot stores **fully resolved `GameCommand`s**, not intents or game-specific affordances.
+The snapshot stores **typed `ActionTemplate` subtypes** — not resolved commands, not intents, not game-specific affordances. Each command type has a paired template type (`MoveCardCommand` ↔ `MoveCardTemplate`, etc.) that declares the action's shape: source entity, target slots, modes, parameters. Resolution to a `GameCommand` happens at the IntentMapper boundary when the player picks. See [doc 28](28-action-availability-and-mapping.md) for the shape and [doc 29 §3](29-snapshot-production-pipeline.md) for the typed-template rationale.
 
 Reasoning:
 
-- `GameCommand`s are the canonical, framework-level vocabulary. The pipeline, history, and snapshot all speak the same language — entries in the snapshot match the shape of envelopes in history.
-- Intents are lossier (they elide things like `From` that are derivable from state). Snapshot consumers may want the full resolution.
-- Game-specific affordance shapes belong in the UI layer, not in state. State is generic; the projection happens at the boundary.
+- **Templates express the *space* of legal actions.** A multi-target spell is one template with multiple target slots, not 6 separate commands. Modal cards are one template with mode options. X-cost spells declare a parameter range. Flat command enumeration would be combinatorially huge or unbounded.
+- **Per-action typed shapes.** Each template subtype exposes only the fields its action needs — Pile Counter's `MoveCardTemplate` has `Card` + `Destinations`, no modes or parameters; a `CastSpellTemplate` carries modes + X-cost. No string-keyed slot lookup; IntentMapper switches on type.
+- **Game-specific affordance shapes belong in the UI layer, not in state.** State is generic; the projection happens at the boundary.
 
-Trade-off accepted: the UI never reads `MoveCardCommand` directly. It reads its game-specific `AffordanceMap`, which is built from the snapshot once per state change.
+Trade-off accepted: the UI never reads typed templates directly for rendering. It reads its game-specific `AffordanceMap`, which is built from the snapshot once per state change.
 
 ---
 
@@ -112,14 +114,13 @@ public sealed class PileCounterAffordances
 {
     private readonly Dictionary<InstanceId, IReadOnlyList<PileId>> moveTargets;
 
-    public PileCounterAffordances(IReadOnlyList<GameCommand> snapshot)
+    public PileCounterAffordances(AvailableActionsSnapshot snapshot)
     {
-        moveTargets = snapshot
-            .OfType<MoveCardCommand>()
-            .GroupBy(c => c.Card)
+        moveTargets = snapshot.Templates
+            .OfType<MoveCardTemplate>()
             .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<PileId>)g.Select(c => c.To).ToList());
+                t => t.Card,
+                t => (IReadOnlyList<PileId>)t.Destinations.Cast<PileId>().ToList());
     }
 
     public bool CanDrag(InstanceId card)
@@ -129,6 +130,8 @@ public sealed class PileCounterAffordances
         => moveTargets.GetValueOrDefault(card, Array.Empty<PileId>());
 }
 ```
+
+The map pattern-matches on typed template subtypes — no string-keyed slot lookup, no command construction. Each template already exposes its data as named fields.
 
 **Properties:**
 - Pure projection of `AvailableActions`. No additional state.
@@ -220,16 +223,17 @@ Validation runs at multiple layers; each has a different purpose.
 
 | Layer | What it answers | Failure mode |
 |---|---|---|
+| **Per-template eligibility** (rule, snapshot build) | "Should this template appear at all?" (e.g., suppress "twice in a row") | Template not added to snapshot |
 | **`AffordanceMap.CanDrag` / `ValidDrops`** (UI) | "Is this drag visually allowed?" | UI silently disallows — player sees no error |
-| **`IntentMapper.Map`** (gateway) | "Can this intent be resolved into a command?" | Throws or returns null — programmer error if UI emitted a bogus intent |
+| **`IntentMapper.Map`** (gateway) | "Can this template + choice be resolved into a command?" | Throws or returns null — programmer error if UI emitted a bogus intent |
 | **`handler.Validate`** (engine, intake) | "Is this command legal in the current state?" | `IntakeResult.Reject(reason)` — gateway shows toast |
 | **`rule.OnIncomingCommand`** (engine, intake) | "Is the engine accepting commands right now?" | `IntakeResult.Reject(reason)` — paused, ended, etc. |
 
 The relationship between AffordanceMap and `handler.Validate`:
 
-- They aren't duplicated logic. The snapshot was built by *running* `handler.Validate` against every candidate command. The AffordanceMap is a projection of that same answer.
-- AffordanceMap is **prophylactic** — prevents bad intents from being sent.
-- `handler.Validate` is **authoritative** — single source of truth, catches stale-state cases (state changed between affordance computation and intent dispatch).
+- The snapshot is the rule's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the rule wants exhaustive coverage, but it's not the default ([doc 29 §2](29-snapshot-production-pipeline.md)).
+- AffordanceMap is **prophylactic** — projects the snapshot to prevent obviously bad intents.
+- `handler.Validate` at dispatch is **authoritative** — single source of truth, catches stale bindings (state changed between snapshot publication and intent dispatch) and any bindings the rule didn't pre-validate.
 
 ---
 
@@ -237,59 +241,59 @@ The relationship between AffordanceMap and `handler.Validate`:
 
 A player makes a move in Pile Counter:
 
-1. **Engine idle.** Queue empty after last drain. `OnQueueDrained` fired; snapshot was written to `state.AvailableActions`.
+1. **Engine idle.** Queue empty after last drain. `OnQueueDrained` fired; the rule wrote the snapshot via `Actions.Set`. `state.AvailableActions` updated.
 2. **Store fires `OnStateChanged`.** View receives event.
-3. **View recomputes AffordanceMap.** `MoveCardCommand`s in the snapshot grouped by `Card`. UI re-renders; only draggable cards show drag handles.
+3. **View recomputes AffordanceMap.** `MoveCardTemplate`s in the snapshot keyed by `Card`. UI re-renders; only draggable cards show drag handles.
 4. **Player drags a card.** `OnDragStart` highlights valid drop piles from the affordance map.
 5. **Player releases over a target pile.** `OnDrop` validates against affordance map (defensive), emits `MoveCardIntent(card, destination)`.
-6. **Store receives intent.** Calls `IntentMapper.Map(intent)` → `MoveCardCommand(card, from, to)`.
+6. **Store binds the intent.** Picks the matching `ActionTemplate` from the snapshot (or builds one from the intent), wraps the player's pick in `PlayerChoice`, calls `IntentMapper.Map(template, choice)` → `MoveCardCommand(card, from, to)`.
 7. **Store calls `engine.Dispatch(command, PlayerIntent)`.**
 8. **Engine intake pipeline:**
-   1. `handler.Validate(command, state, out reason)` — passes (UI prevented illegal intents).
-   2. `rule.OnIncomingCommand(command, ctx)` — Pile Counter's rule trivially `AddLast`s the command, returns `Ok`.
+   1. `handler.Validate(command, state, out reason)` — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
+   2. `rule.OnIncomingCommand(command, origin)` — Pile Counter's rule trivially `Pending.AddLast(command)`, returns `Ok`.
 9. **Drain begins.** Pipeline runs: before-fold (no triggers) → `MoveCardHandler.Handle` → after-fold (no triggers) → envelope published.
 10. **State mutators fire.** `MoveCardBetweenPiles` mutator updates pile contents; `LastMoveMutator` writes `state.LastMove`.
 11. **`rule.Evaluate`** runs — checks if all piles match targets. If yes, returns `[EndGameCommand]`; engine dispatches it next.
-12. **Queue drains.** `rule.OnQueueDrained` runs, computes new snapshot (calling `handler.Validate` against every candidate), engine writes to `state.AvailableActions`.
+12. **Queue drains.** `rule.OnQueueDrained` runs, enumerates new templates, calls `Actions.Set(...)`. The `IAvailableActions` mutator writes to `state.AvailableActions`.
 13. **Store fires `OnStateChanged`.** Loop returns to step 2.
 
 ---
 
 ## 11. Decisions Locked
 
-- **Snapshot lives in state.** `GameState.AvailableActions: IReadOnlyList<GameCommand>`. No separate channel, no push API. Engine writes via mutator after each drain.
-- **Snapshot element type is `GameCommand`.** Canonical, generic, framework-defined. Mirrors history.
-- **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change.
-- **View consumes AffordanceMap, not snapshot directly.** The view never touches raw commands.
+- **Snapshot lives in state.** `GameState.AvailableActions: AvailableActionsSnapshot` (Scope + typed templates). No separate channel, no push API.
+- **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters. See [doc 28](28-action-availability-and-mapping.md), [doc 29 §3](29-snapshot-production-pipeline.md).
+- **Snapshot is written via the `IAvailableActions` service** by the rule (default in `OnQueueDrained`) or effects (mid-execution overrides). Engine never auto-publishes.
+- **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change. Pattern-matches typed templates.
+- **View consumes AffordanceMap, not snapshot directly.** The view never touches raw templates or commands.
 - **Intents are emitted at drag-end, not earlier.** Drag highlights come from AffordanceMap; the intent is built only when the player drops.
-- **Validation has four layers.** AffordanceMap (prophylactic) → IntentMapper (well-formedness) → `handler.Validate` (authoritative legality) → `rule.OnIncomingCommand` (engine flow).
-- **`handler.Validate` is the single source of truth for legality.** The snapshot is built by running it; AffordanceMap is a projection of its answers.
+- **Validation has five layers.** Per-template eligibility (rule) → AffordanceMap (prophylactic) → IntentMapper (well-formedness) → `handler.Validate` (authoritative legality) → `rule.OnIncomingCommand` (engine flow).
+- **`handler.Validate` at dispatch is the single source of truth for legality.** The snapshot is the rule's best-effort approximation; per-binding `Validate` runs on demand only if the rule opts in.
 
 ---
 
 ## 12. `OnQueueDrained` Output Shape
 
-To keep the rule pure (returns data, never side-effects), `OnQueueDrained` returns a result rather than dispatching directly:
+`OnQueueDrained` returns only follow-up dispatches; the snapshot is published through the injected `IAvailableActions` service:
 
 ```csharp
-public sealed record DrainResult(
-    IReadOnlyList<GameCommand> Snapshot,    // legal player actions
-    IReadOnlyList<GameCommand> Dispatch);   // follow-ups (phase advance, end-game check)
-
-public interface GameRules
+public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch)
 {
-    DrainResult OnQueueDrained(GameState state);
-    // … other methods …
+    public static readonly DrainResult Empty = new(Array.Empty<GameCommand>());
+}
+
+// Inside the rule (services injected via base class)
+public override DrainResult OnQueueDrained()
+{
+    var templates = EnumerateTemplates(State.Current);
+    Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+    return DrainResult.Empty;
 }
 ```
 
-Engine processes the result:
-- Writes `Snapshot` into `state.AvailableActions` via internal mutator.
-- Dispatches each `Dispatch` command.
+The engine dispatches each `Dispatch` command. The snapshot write is a service call — see [doc 29 §2](29-snapshot-production-pipeline.md). The rule never holds a `GameEngine` reference; it holds narrow capability services.
 
-This unifies the rule's interface around "observer returning data" — `Evaluate` returns commands, `OnQueueDrained` returns commands plus a snapshot, `FilterTriggers` returns a filtered list, `OnIncomingCommand` returns an intake result. The rule never holds a `GameEngine` reference.
-
-(This supersedes doc 25 §6, which had `OnQueueDrained` taking `GameEngine` and dispatching directly. Doc 25 will be amended to match.)
+(This supersedes the earlier `DrainResult { Snapshot, Dispatch }` shape. Service-driven publication lets effects override the snapshot mid-execution through the same write path.)
 
 ---
 
@@ -308,16 +312,19 @@ These extend the framework's snapshot story; they don't break the four-layer mod
 
 ## 14. Open Items
 
-- **`AvailableActions` mutator implementation** — does the engine ship this internally, or does each game wire it? (Probably framework-shipped, since the snapshot type is canonical.)
-- **`IIntentMapper` shape** — out of scope here; deferred to action-pipeline cleanup (checkpoint #5).
+- ~~**`AvailableActions` mutator implementation**~~ — Resolved. Framework-ships an internal mutator behind the `IAvailableActions` service ([doc 29 §2](29-snapshot-production-pipeline.md)).
+- **`IIntentMapper` shape** — refined: `Map(ActionTemplate, PlayerChoice) → GameCommand` ([doc 29 §3](29-snapshot-production-pipeline.md)). `PlayerChoice` shape (positional vs named, parameter typing) pin during implementation.
 - **`IGameStore` shape** — sketched here as a presentation-side wrapper; final shape depends on the chosen state library (Scaffold State).
 - **Snapshot revision tag** — useful for the UI to detect "I have a stale snapshot." Worth adding once we hit a concrete need.
+- **Snapshot scope as state machine** — `FreeInput`/`DecisionPrompt` is transitional; richer FSM-shaped game-state model is the eventual direction ([doc 29 §4](29-snapshot-production-pipeline.md)).
 
 ---
 
 ## 15. Related
 
-- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface (will be amended for `DrainResult`)
+- [25-gamerules-shape.md](25-gamerules-shape.md) — `GameRules` interface
 - [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game used as the working reference
 - [20-engine-evaluation-loop.md](20-engine-evaluation-loop.md) — engine loop, drain cycle
 - [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — layer hierarchy, two dispatch paths
+- [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) — snapshot shape (typed templates)
+- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — service-driven snapshot publication
