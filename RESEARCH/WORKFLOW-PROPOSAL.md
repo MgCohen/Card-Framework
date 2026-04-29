@@ -253,28 +253,42 @@ One paragraph.
 
 ### 4.6 Session note
 
+Two parts, each capped at ~one screen (~50 lines). If either overflows, the content belongs in a numbered doc or an ADR, not the session note.
+
 ```markdown
 # Session NN — <date>
 
 <front matter: type=session>
 
-## Active question coming in
+## Part 1 — Content (cap ~50 lines)
+
+### Active question coming in
 One line.
 
-## Work done
-- doc NN written
+### Work done
+- doc <topic>/notes/NN written
 - alignment debt opened on docs X/Y/Z
 - ADR-NNNN landed
 
-## Decisions settled
+### Decisions settled
 - ADR-NNNN: <one line>
 
-## Active question going out
+### Active question going out
 One line — what the next session opens with.
 
-## Followups created
+## Part 2 — Links & open threads (cap ~50 lines)
+
+### Followups created
 - alignment debt: ...
-- new open question: ...
+- new open question (promoted): ...
+
+### Ephemeral questions (scratch, not promoted)
+- Things we chewed on but answered in-session.
+- Kept here for traceability; not a durable record.
+
+### References
+- Docs touched: ...
+- Related sessions: ...
 ```
 
 ### 4.7 Checkpoint
@@ -371,13 +385,23 @@ Promotion is a deliberate move, not a default.
 
 | File | Role | Cadence |
 |------|------|---------|
-| `SESSION-CHECKPOINT.md` | Replaceable handoff; single active question | End of every session |
+| `SESSION-CHECKPOINT.md` | Current working surface; active topics + focus questions; references OPEN-QUESTIONS items by link with current context | End of every session |
 | `general/WORKFLOW.md` | This doc, once accepted | When workflow conventions change |
 | `general/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
-| `general/OPEN-QUESTIONS.md` | Categorized ledger; strikethrough + link on resolve | When questions open or resolve |
+| `general/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
 | `general/ALIGNMENT-DEBT.md` | Open §7 implications across all topics | Append on doc landing; tick off on alignment pass |
-| `sessions/session-NN.md` | Per-session narrative (append-only) | End of every session |
+| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
 | `<topic>/decisions/NNNN-*.md` | ADRs (per-topic counter) | When a decision settles |
+
+### Three lifetimes, three homes for questions
+
+| Question kind | Lifetime | Home |
+|---|---|---|
+| **Durable** open question | Project lifetime, until resolved | `general/OPEN-QUESTIONS.md` |
+| **Active** topic / focus question | Current session(s) | `SESSION-CHECKPOINT.md` (may link to an OPEN-QUESTIONS item with current context) |
+| **Ephemeral** session question — "wait, do we mean X or Y?" | One conversation; dies on answer | Inline in the draft doc, or scratch in the session note. Promoted to OPEN-QUESTIONS only if it turns out to be durable. |
+
+**Single-source rule still holds.** OPEN-QUESTIONS owns the canonical text. The checkpoint owns the current framing/context. Ephemeral questions never enter OPEN-QUESTIONS unless promoted.
 
 **Single-source rule.** Each piece of state lives in exactly one of these files. The checkpoint *links to* the others; it does not duplicate them.
 
@@ -406,15 +430,15 @@ Promotion is a deliberate move, not a default.
 Resolved in this draft:
 - ~~Numbering scheme inside notes~~ → Per-topic counters, restart at `01` per topic.
 - ~~ADR numbering scheme~~ → Per-topic counters in each `<topic>/decisions/`. Path is the prefix.
+- ~~Open-questions vs checkpoint canonical~~ → Three lifetimes, three homes (see §6). OPEN-QUESTIONS is the durable ledger; checkpoint is the working surface; ephemeral questions stay in-session.
+- ~~Session-note length~~ → Two parts, each capped ~one screen (~50 lines). See §4.6.
 
 Still open:
 
-1. Is `general/OPEN-QUESTIONS.md` the canonical ledger, or is `SESSION-CHECKPOINT.md`? (Proposal: canonical is OPEN-QUESTIONS; checkpoint links to a hot-list view.)
-2. When is a sample game `locked` vs `draft`? Define the bar.
-3. Do session notes need a max length cap (e.g., one screen)?
-4. Do we backfill ADRs for major past decisions, or only forward from now?
-5. Topic boundaries for the initial migration — do we accept the proposed split (foundations / entities / zones / actions / triggers-effects / engine / presentation) or refine? Boundaries can shift later via `git mv` + a reference sweep, but starting close to right is cheaper.
-6. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
+1. When is a sample game `locked` vs `draft`? Define the bar.
+2. Do we backfill ADRs for major past decisions, or only forward from now?
+3. Topic boundaries for the initial migration — do we accept the proposed split (foundations / entities / zones / actions / triggers-effects / engine / presentation) or refine? Specifically: split `triggers-effects` or keep merged; does `engine` swallow `gamerules`; does action-availability (current doc 28) live in `presentation/` or `actions/`.
+4. Do we want a top-level `topics/` parent folder, or do topic folders sit directly under `RESEARCH/` next to `general/`? (Proposal: directly under, to keep paths short.)
 
 ---
 
