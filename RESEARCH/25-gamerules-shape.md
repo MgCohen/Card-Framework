@@ -10,6 +10,7 @@ Builds on:
 - [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) — `FilterTriggers`, `ITriggerPipeline`, replacement/prevention semantics
 - [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — the working sample game; drives this contract's shape
 - [27-presentation-loop.md](27-presentation-loop.md) — UI loop, snapshot in state, four validation layers
+- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — service-driven snapshot publication; reshapes `OnQueueDrained` and the rule's dependencies
 
 ---
 
@@ -43,44 +44,69 @@ It is **not** a place for command-specific legality, action handlers, ability lo
 
 ## 2. The Interface
 
+`GameRules` is an abstract class with constructor-injected services. Methods take only what's ephemeral to the call; stable engine handles (state access, intake queue, handlers, snapshot writer) are services held on the rule. See [doc 29 §5](29-snapshot-production-pipeline.md) for the rationale.
+
 ```csharp
-public interface GameRules
+public abstract class GameRules
 {
+    protected IGameStateProvider State    { get; }
+    protected IAvailableActions  Actions  { get; }
+    protected IIntakeQueue       Pending  { get; }
+    protected IHandlerRegistry   Handlers { get; }
+
+    protected GameRules(
+        IGameStateProvider state,
+        IAvailableActions  actions,
+        IIntakeQueue       pending,
+        IHandlerRegistry   handlers)
+    {
+        State    = state;
+        Actions  = actions;
+        Pending  = pending;
+        Handlers = handlers;
+    }
+
     // 1. Intake. Pure flow: paused/ended gating + routing the command into
     //    the right structure (queue, internal stash, etc.). Never reads
     //    the command body — command-specific legality is the handler's job.
-    IntakeResult OnIncomingCommand(
-        GameCommand   command,
-        IntakeContext context);
+    public abstract IntakeResult OnIncomingCommand(
+        GameCommand    command,
+        DispatchOrigin origin);
 
     // 2. Trigger availability. Filters registered candidates for a given command and phase.
-    IReadOnlyList<TriggerMatch> FilterTriggers(
+    public abstract IReadOnlyList<TriggerMatch> FilterTriggers(
         IReadOnlyList<TriggerMatch> candidates,
         GameCommand                 command,
-        TriggerPhase                phase,
-        GameState                   state);
+        TriggerPhase                phase);
 
     // 3. Evaluator. Reads state after each action; returns follow-up commands.
-    IReadOnlyList<GameAction> Evaluate(
+    public abstract IReadOnlyList<GameAction> Evaluate(
         GameAction     justExecuted,
-        CommandResult  result,
-        GameState      state);
+        CommandResult  result);
 
-    // 4. Idle hook. Returns the available-actions snapshot and any follow-up
-    //    commands to dispatch. The engine handles publication and dispatch;
-    //    the rule never side-effects.
-    DrainResult OnQueueDrained(GameState state, IHandlerRegistry handlers);
+    // 4. Idle hook. Writes the snapshot through `Actions` (when it wants to)
+    //    and returns any follow-up commands the engine should dispatch.
+    public abstract DrainResult OnQueueDrained();
 }
 ```
+
+### Injected services
+
+| Service | Purpose |
+|---|---|
+| `IGameStateProvider State` | `State.Current` returns the immutable `GameState` of right now. Read fresh per access. |
+| `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The rule (and effects) call this to publish; the engine never auto-publishes. See [doc 29 §2](29-snapshot-production-pipeline.md). |
+| `IIntakeQueue Pending` | The live engine queue. Same operations the old `IntakeContext.Pending` exposed: `AddFirst` / `AddLast` / `Remove` / iterate. |
+| `IHandlerRegistry Handlers` | Read-only handler lookup. The rule may call `Validate` on demand (e.g., to prune templates whose every binding fails); never invokes `Handle`. |
 
 ### Contract guarantees
 
 - **All four methods are synchronous.** No `Task`, no awaits. `GameRules` is a pure decision layer; async work belongs to handlers, effects, and `ITriggerPipeline`.
-- **All four methods are observer-shaped — return data, never side-effect.** Intake returns an `IntakeResult` and may mutate the live queue handed to it via `IntakeContext.Pending` (the rule's only authority over engine state). `Evaluate` and `OnQueueDrained` return commands as data; the engine dispatches them. `FilterTriggers` returns a filtered list. **The rule never holds `GameEngine`.**
-- **`GameRules` never mutates `GameState` directly.** State changes happen through dispatched `GameAction`s and the state-mutator pipeline (see [doc 26 §9.5](26-pile-counter-sample-game.md)).
-- **`GameRules` holds zero game-affecting state.** This is a contract guarantee, not a suggestion. The rule may hold *configuration* — rule modules, cached evaluators, lookup tables — never gameplay memory. Anything game-affecting (last-move, phase, stash buffers, etc.) lives in `GameState`. (Stash routing in intake uses `IntakeContext.Pending` directly, not internal rule storage.)
+- **Side effects flow through narrow capability services.** `OnIncomingCommand` mutates `Pending`. `OnQueueDrained` writes through `Actions`. `Evaluate` and `FilterTriggers` remain pure observer (return data, never side-effect). **The rule never holds `GameEngine`** — only the four narrow services above. (This relaxes the "all four methods observer-shaped" framing of earlier drafts; see [doc 29 §5](29-snapshot-production-pipeline.md).)
+- **`GameRules` never mutates `GameState` directly.** State changes happen through dispatched `GameAction`s and the state-mutator pipeline (see [doc 26 §9.5](26-pile-counter-sample-game.md)). `Actions.Set` writes the `AvailableActions` slot through an internal mutator — that's the only state slot the rule writes, and it goes through the same pipeline.
+- **`GameRules` holds zero game-affecting state.** This is a contract guarantee, not a suggestion. Services are *configuration*, not gameplay memory. The rule may hold service handles, lookup tables, cached evaluators — never gameplay memory. Anything game-affecting (last-move, phase, stash buffers, etc.) lives in `GameState`.
 - **Command-specific legality is not the rule's concern.** Each `ICommandHandler<TCommand,TResult>.Validate` owns the legality of its own command. The rule is generic across game logic.
-- **No method holds onto its arguments.** `GameState`, `IntakeContext`, `TriggerMatch` lists, and the `IHandlerRegistry` reference are valid only for the call. Caching them across calls is undefined.
+- **No method holds onto its arguments.** `TriggerMatch` lists and `command` / `result` parameters are valid only for the call. Caching them across calls is undefined. (Injected services *are* held — that's their purpose.)
 - **Methods may be called concurrently from different drain cycles only if the engine guarantees it.** Today the engine serializes drain cycles, so `GameRules` does not need to be thread-safe.
 
 ---
@@ -103,26 +129,23 @@ public sealed record IntakeResult(bool Accepted, string? Reason = null)
     public static IntakeResult Reject(string reason) => new(false, reason);
 }
 
-public sealed record IntakeContext(
-    LinkedList<GameCommand>  Pending,             // live engine queue; rule may mutate
-    GameCommand?             CurrentlyExecuting,  // null when engine is idle
-    DispatchOrigin           Origin);             // PlayerIntent | TriggerReaction | Timer | Internal
-
 public enum DispatchOrigin { PlayerIntent, TriggerReaction, Timer, Internal }
 ```
 
+The intake queue is the injected `IIntakeQueue Pending` service. `CurrentlyExecuting` lives on the queue (or on the state provider — pin during engine implementation). `Origin` is the only ephemeral input and is passed as a parameter.
+
 ### Why the live queue (no scheduler wrapper)
 
-`IntakeContext.Pending` is the actual engine queue, exposed as a `LinkedList<GameCommand>` so the rule has full read+write access — `AddFirst`, `AddLast`, `Remove`, iteration. This mirrors the trust pattern in `FilterTriggers` (give the rule the full data, no sandbox). An earlier draft used an `ICommandScheduler` wrapper to gate the API; we dropped it because there's no other API gating in `GameRules`, and stashing isn't a framework primitive — a rule that wants stashing just keeps an internal list (or its own state slot) and `AddFirst`/`AddLast`s on whatever signal releases it.
+`Pending` is the actual engine queue, with full read+write access — `AddFirst`, `AddLast`, `Remove`, iteration. This mirrors the trust pattern in `FilterTriggers` (give the rule the full data, no sandbox). An earlier draft used an `ICommandScheduler` wrapper to gate the API; we dropped it because there's no other API gating in `GameRules`, and stashing isn't a framework primitive — a rule that wants stashing just keeps an internal list (or its own state slot) and `AddFirst`/`AddLast`s on whatever signal releases it.
 
 ### How to express common behaviors
 
 | Behavior | How the rule implements it |
 |---|---|
-| Append to queue (default) | `ctx.Pending.AddLast(command); return IntakeResult.Ok;` |
-| Run before pending (instant-speed) | `ctx.Pending.AddFirst(command); return IntakeResult.Ok;` |
+| Append to queue (default) | `Pending.AddLast(command); return IntakeResult.Ok;` |
+| Run before pending (instant-speed) | `Pending.AddFirst(command); return IntakeResult.Ok;` |
 | Stash for later | Rule (or a state slot) keeps `command` in a side collection; release path adds it back to `Pending` from a signal handler or `OnQueueDrained` follow-up. Returns `IntakeResult.Ok` from intake. |
-| Cancel a queued sibling | `ctx.Pending.Remove(otherCommand)` then add the new one. Allowed; rule's prerogative. |
+| Cancel a queued sibling | `Pending.Remove(otherCommand)` then add the new one. Allowed; rule's prerogative. |
 | Reject | Don't touch `Pending`. `return IntakeResult.Reject("game paused");` |
 
 The engine treats `Accepted = true` as "the rule took ownership" — whether the command is on the queue, stashed elsewhere, or routed via a custom structure is opaque. `Accepted = false` means "drop this command and surface `Reason` to the gateway/UI."
@@ -184,17 +207,16 @@ Return the candidates unchanged. Games that have no eligibility logic — most s
 
 ## 5. `Evaluate` — State-Based Follow-Up
 
-Called after every `GameAction` finishes executing. Reads current state, returns 0..N actions to enqueue next.
+Called after every `GameAction` finishes executing. Reads current state via `State.Current`, returns 0..N actions to enqueue next.
 
 The single most important point about `Evaluate`: **it reads state, not the just-executed command type.** If the rule is "any card sitting in PlayArea must be executed," that rule fires the same way whether the card got there via `PlayCardCommand`, a copy effect, an opponent's trigger, or a token spawn. State-based evaluation handles all sources uniformly.
 
 ```csharp
-public IReadOnlyList<GameAction> Evaluate(
+public override IReadOnlyList<GameAction> Evaluate(
     GameAction justExecuted,
-    CommandResult result,
-    GameState state)
+    CommandResult result)
 {
-    var playArea = state.GetZone(WellKnownZones.PlayArea);
+    var playArea = State.Current.GetZone(WellKnownZones.PlayArea);
     if (playArea.HasCards)
         return new[] { new ExecuteCardCommand { Source = playArea.TopCard, ... } };
 
@@ -221,33 +243,43 @@ So in the framework, after-triggers fire *on the originating action* before `Eva
 
 ## 6. `OnQueueDrained` — Idle Hook
 
-Called once after a drain cycle completes with the queue empty. Returns a `DrainResult` carrying two outputs: the available-actions snapshot for the player, and any follow-up commands the engine should dispatch (phase advance, end-of-game check, etc.).
+Called once after a drain cycle completes with the queue empty. Returns a `DrainResult` carrying any follow-up commands the engine should dispatch (phase advance, end-of-game check, etc.). The available-actions snapshot is **not** returned here — the rule writes it through the injected `Actions` service whenever it wants to publish (typically once per drain). See [doc 29](29-snapshot-production-pipeline.md) for the full snapshot-production model.
 
 ```csharp
-public sealed record DrainResult(
-    IReadOnlyList<GameCommand> Snapshot,    // legal player actions; written to GameState.AvailableActions
-    IReadOnlyList<GameCommand> Dispatch);   // follow-ups to enqueue
+public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch)
+{
+    public static readonly DrainResult Empty = new(Array.Empty<GameCommand>());
+}
 ```
 
-The engine processes the result:
-- Writes `Snapshot` into `GameState.AvailableActions` via an internal mutator. The presentation layer reads it from there (see [doc 27](27-presentation-loop.md)).
-- Dispatches each `Dispatch` command. If any are accepted, the drain re-enters and continues; idle is not a special exit path.
+The engine processes the result by dispatching each `Dispatch` command. If any are accepted, the drain re-enters and continues; idle is not a special exit path.
 
-### Why return data instead of holding `GameEngine`
+The rule typically writes the snapshot before returning:
 
-An earlier draft handed `OnQueueDrained` a `GameEngine` reference so it could call `engine.Dispatch(...)` and `engine.PublishAvailableActions(...)` directly. That made `OnQueueDrained` the only side-effecting method on the interface, and split snapshot publication across two output channels (the engine vs. the rule). Returning `DrainResult` keeps the rule purely observer-shaped — every method returns data, the engine handles all side effects — and unifies snapshot + dispatch into one structured return.
+```csharp
+public override DrainResult OnQueueDrained()
+{
+    var templates = EnumerateLegalActions(State.Current);
+    Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+    return DrainResult.Empty;
+}
+```
+
+### Why a service, not a return value
+
+An earlier draft returned `DrainResult { Snapshot, Dispatch }` and let the engine write the snapshot. That broke down once we wanted *effects* (mid-execution) to publish their own snapshots — target pickers, choose-one prompts, mid-resolution priority grants. A single write path through `IAvailableActions` lets the rule and effects share the same publication mechanism. The engine never auto-publishes; if nobody calls `Actions.Set`, `AvailableActions` does not change.
 
 ### Typical responsibilities
 
-- **Snapshot computation** — enumerate candidate commands, run `handler.Validate` against each, return the legal subset.
+- **Snapshot publication** — enumerate templates, call `Actions.Set(snapshot)`. May filter at the per-template level (e.g., suppress "twice in a row"). May call `Handlers.Validate` on demand to prune templates whose every binding fails — that's an opt-in, not a default.
 - **Phase advance** — emit `new AdvancePhaseCommand()` in `Dispatch`.
 - **Priority grant** — emit `new GrantPriorityCommand(activePlayer)` in `Dispatch`.
 - **End-of-game check** — emit `new EndGameCommand(...)` in `Dispatch` if the game is over.
-- **No-op idle** — return `new DrainResult(snapshot, [])` and just wait for input.
+- **One-shot games** — never publish past bootstrap; `OnQueueDrained` is a no-op (`return DrainResult.Empty;`).
 
-### Why the rule needs `IHandlerRegistry`
+### `IHandlerRegistry`
 
-The snapshot builder walks candidate commands and calls `handler.Validate` for each. The handler registry is the lookup that finds the right `Validate` implementation per command type (typically keyed by `Type`). It is **read-only** here — the rule never invokes `Handle` directly.
+The handler registry is the lookup that finds the right `Validate` implementation per command type. It is **read-only** — the rule never invokes `Handle` directly.
 
 ```csharp
 public interface IHandlerRegistry
@@ -255,6 +287,8 @@ public interface IHandlerRegistry
     bool Validate(GameCommand command, GameState state, out string? reason);
 }
 ```
+
+The rule uses it only when it explicitly chooses to pre-validate bindings (e.g., to prune templates with no legal bindings). The default flow does not call `Validate` during snapshot construction — per-binding legality is enforced at dispatch.
 
 (The full handler-dispatch shape is the subject of a forthcoming action-pipeline doc; see open items.)
 
@@ -286,7 +320,7 @@ The engine runs `Handler.Validate` first (cheap, content-specific, catches malfo
 
 ### Single source of truth
 
-`Handler.Validate` is the *authoritative* legality check. The snapshot is built by running `Validate` against every candidate; the UI's `AffordanceMap` is a projection of the same answers. There is no duplicated legality logic across layers — each layer either calls `Validate` or projects its results.
+`Handler.Validate` is the *authoritative* legality check, run at dispatch. The snapshot is the rule's best-effort approximation built from per-template eligibility; per-binding `Validate` may be called on demand by the rule, but it is not the default. The UI's `AffordanceMap` is a projection of the snapshot. The authoritative check happens at dispatch — if the snapshot is approximate, dispatch catches stale bindings and surfaces the rejection (toast). See [doc 29 §2](29-snapshot-production-pipeline.md) for the on-demand validation posture.
 
 ---
 
@@ -319,48 +353,32 @@ The rule may hold *configuration* — rule modules, lookup tables, cached evalua
 
 A real game's `GameRules` will grow large — phase rules, SBAs, ordering rules, available-actions computation. The interface intentionally does not bake composition in; that's an authoring concern, not a framework primitive.
 
-Recommended pattern (helper, not interface):
+The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [doc 29 §2](29-snapshot-production-pipeline.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it.
 
-```csharp
-public sealed class CompositeGameRules : GameRules
-{
-    private readonly IReadOnlyList<IRuleModule> modules;
-
-    public IReadOnlyList<GameAction> Evaluate(GameAction action, CommandResult result, GameState state)
-        => modules.SelectMany(m => m.Evaluate(action, result, state)).ToList();
-
-    public DrainResult OnQueueDrained(GameState state, IHandlerRegistry handlers)
-    {
-        var snapshot = modules.SelectMany(m => m.OnQueueDrained(state, handlers).Snapshot).ToList();
-        var dispatch = modules.SelectMany(m => m.OnQueueDrained(state, handlers).Dispatch).ToList();
-        return new DrainResult(snapshot, dispatch);
-    }
-
-    // FilterTriggers chains each module's filter
-    // OnIncomingCommand walks modules; first one that mutates the queue or rejects wins
-}
-```
-
-This is a future authoring helper; the framework ships only the single `GameRules` interface. Games with one rule module implement it directly.
+For games with one rule module, implement `GameRules` directly. The constructor takes the four injected services; the four methods do the work.
 
 ---
 
 ## 10. Open Items
 
 - **`GameState` contract** — read-only boundary `GameRules` operates against. Likely Scaffold State package; blocked on canonical state decision (doc 06).
-- **State-pattern decision** — does `OnIncomingCommand` receive `GameState` as a parameter (consistent with the other methods) or does the rule hold a constructor-injected reference? Drives the final shape of `IntakeContext`. (Doc 26 Q1.)
+- **`IGameStateProvider` shape** — `State.Current` returns the immutable state. Subscriptions probably live on the Store (presentation), not the provider. Confirm at engine implementation. ([Doc 29 §9](29-snapshot-production-pipeline.md).)
+- **`IIntakeQueue` shape** — same operations the old `LinkedList<GameCommand>` exposed. `CurrentlyExecuting` lives on the queue or on the state provider. Pin at engine implementation. ([Doc 29 §9](29-snapshot-production-pipeline.md).)
 - **Action pipeline cleanup** — handler lookup, validate, execute, trigger folds need to be drawn explicitly in one place rather than scattered across docs 18/19/22/25. (Doc 26 Q2.)
 - **`IHandlerRegistry` shape** — sketched here as `Validate(command, state, out reason)`. Final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc. (Doc 26 Q9.)
-- **`IntakeContext.Pending` type** — currently `LinkedList<GameCommand>`. Confirm at engine implementation. (Doc 26 Q10.)
 - **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces the choice. (Doc 26 Q11.)
-- **`FilterTriggers` default impl** — identity for trigger-less games. Probably means `GameRules` becomes an abstract base class with virtuals rather than a pure interface. Revisit at final rule shape. (Doc 26 Q13.)
+- **`FilterTriggers` default impl** — identity for trigger-less games. Now possible since `GameRules` is an abstract class — provide a virtual default. (Doc 26 Q13.)
+- **Effect-side service symmetry** — effects mid-execution need the same `IAvailableActions` (and possibly `IGameStateProvider`) the rule has. Likely through `IHandlerContext`. Needs an effect-flow doc covering the full lifecycle. ([Doc 29 §7](29-snapshot-production-pipeline.md).)
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing).
-- **`CompositeGameRules` helper** — design when the first composed-rules game needs it.
+- **`GameRules` composition** — module composition contract (provider/policy ordering, enable-disable). Service surface supports it mechanically; pin when first composed game forces it.
 
-### Resolved by docs 26 / 27 (no longer open)
+### Resolved
 
-- ~~`AvailableActionsSnapshot` ownership~~ — lives in `GameState.AvailableActions: IReadOnlyList<GameCommand>`; engine writes via internal mutator after each drain. (Doc 27 §11.)
-- ~~Intake telemetry / scheduler observability~~ — moot; the rule mutates `IntakeContext.Pending` directly, no scheduler wrapper to observe. The queue itself is the trace.
+- ~~`AvailableActionsSnapshot` ownership~~ — lives in `GameState.AvailableActions`; rule writes through `Actions.Set` (doc 29 §2). Engine never auto-publishes.
+- ~~Intake telemetry / scheduler observability~~ — moot; the rule mutates `Pending` directly, no scheduler wrapper to observe. The queue itself is the trace.
+- ~~State-pattern decision~~ — services injected at construction; methods take only ephemeral data. State is read via `State.Current` ([doc 29 §5](29-snapshot-production-pipeline.md)).
+- ~~`IntakeContext.Pending` type~~ — collapsed into the injected `IIntakeQueue` service ([doc 29 §5](29-snapshot-production-pipeline.md)).
+- ~~Snapshot element type~~ — typed `ActionTemplate` per command type; carries `CommandType` and `Source` on the base ([doc 29 §3](29-snapshot-production-pipeline.md)).
 
 ---
 
@@ -371,5 +389,7 @@ This is a future authoring helper; the framework ships only the single `GameRule
 - [22-async-decisions-and-suspension.md](22-async-decisions-and-suspension.md) — async layer hierarchy
 - [23-replacement-prevention-effects.md](23-replacement-prevention-effects.md) — `FilterTriggers`, replacement semantics
 - [26-pile-counter-sample-game.md](26-pile-counter-sample-game.md) — sample game; concrete `GameRules` implementation against this contract
-- [27-presentation-loop.md](27-presentation-loop.md) — UI loop, snapshot-in-state, four validation layers, `DrainResult`
+- [27-presentation-loop.md](27-presentation-loop.md) — UI loop, snapshot-in-state, four validation layers
+- [28-action-availability-and-mapping.md](28-action-availability-and-mapping.md) — snapshot shape (typed templates)
+- [29-snapshot-production-pipeline.md](29-snapshot-production-pipeline.md) — service-driven snapshot publication; reshapes this doc's `OnQueueDrained` and rule dependencies
 - [06-open-questions.md](06-open-questions.md) — global open questions tracker
