@@ -1,0 +1,51 @@
+name: Auto debt-pass
+
+# Threshold-driven discharge of `Product/ledgers/ALIGNMENT-DEBT.md`. Fires on
+# push to main when the ledger changes and ≥5 entries are open. The unattended
+# agent edits docs, opens a PR, and stops — human review at the PR is the only
+# gate. See PLANS/auto-debt-pass.md for the full spec.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Product/ledgers/ALIGNMENT-DEBT.md
+  workflow_dispatch:
+
+jobs:
+  debt-pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Threshold check
+        id: check
+        run: |
+          count=$(awk '/^## Open/,/^## Resolved/' Product/ledgers/ALIGNMENT-DEBT.md | grep -c '| open$' || true)
+          count=${count:-0}
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -ge 5 ]; then
+            echo "fire=true" >> "$GITHUB_OUTPUT"
+            echo "Threshold tripped: $count open entries (>= 5)."
+          else
+            echo "fire=false" >> "$GITHUB_OUTPUT"
+            echo "Below threshold: $count open entries (< 5). Skipping."
+          fi
+
+      - name: Run debt-pass
+        if: steps.check.outputs.fire == 'true'
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "/builder:debt-pass"
+          claude_args: |
+            --max-turns 30
+            --model claude-opus-4-7
