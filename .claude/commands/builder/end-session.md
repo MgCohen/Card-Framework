@@ -39,21 +39,28 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.
 
-7. **Suggest a commit message and PR title.** Format:
-   - Commit: `Session NN — <short summary, ≤72 chars>` plus a body listing deltas.
-   - PR title (if this session opens a PR): `Session NN: <active-question-going-out summary>`.
+7. **Commit and push.** Auto-run after the checkpoint is approved/applied and the session-note status is flipped.
+   - Stage all `Product/` changes (created + modified). Use explicit paths from the deltas in step 4 — never `git add -A`. Skip anything outside `Product/` unless the user explicitly added it during the session.
+   - Commit format:
+     - Subject: `Session NN — <short summary, ≤72 chars>`
+     - Body: bulleted deltas (docs created, models edited, ADRs landed, debt opened/closed, ledger updates).
+     - Co-author trailer per the harness convention.
+   - Push to the current branch (`git push`). If no upstream is set, use `-u origin <branch>`.
+   - If a PR is already open for this branch, no further action — push updates it. If no PR exists and the user has been opening PRs per session, suggest opening one (don't auto-create unless explicitly requested).
+   - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
 8. **Print the one-screen summary.** Concise. Five lines max:
    - `Session NN closed. <docs> created, <models> models edited, <adrs> ADRs.`
    - `Debt opened/closed: N / M.`
    - `Active question going out: <one line>.`
-   - `Checkpoint refresh: <pending approval | applied>.`
-   - `Commit suggested: "<message>".`
+   - `Checkpoint refresh: applied.`
+   - `Committed <sha>; pushed to <branch>` (+ PR URL if applicable).
 
 ## Notes
 
-- Never auto-write the checkpoint. Always diff-and-confirm.
+- Never auto-write the checkpoint. Always diff-and-confirm before applying.
 - If the cascade-discipline check fails, surface, don't silently fix.
 - If session-note caps are blown (>50 lines per part), trim suggestions go to the user; don't trim automatically.
-- Don't auto-commit or push. Suggest the commit message; the user runs the commit.
+- Auto-commit and push are part of the close — run them once the checkpoint diff is approved. Never `--force`, never `--no-verify`. If a pre-commit hook fails, surface the failure; do not bypass.
+- Stage only `Product/` paths from the session deltas. If the workspace has unrelated dirty files (out-of-session work the user was holding), surface them before staging and ask.
 - If `ledgers/ALIGNMENT-DEBT.md` has more than 5 open entries after this session closes, flag it loudly — the next session is forced into pass-mode (§5.8).
