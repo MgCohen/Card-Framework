@@ -31,7 +31,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
       Move resolved entries from `## Open` to `## Resolved`.
 
 5. **Hygiene scan.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). For each:
-   a. `grep -r '<term>' Product/` to find stragglers the original cascade walk missed.
+   a. `grep -r '<term>' Product/ --exclude='ledgers/ALIGNMENT-DEBT.md'` to find stragglers the original cascade walk missed. (The ledger itself is excluded — its strikethrough resolution-note format always echoes the retired term verbatim, which would false-positive every pass.)
    b. For each straggler hit, apply the same mechanical replacement.
    c. Open a new ledger entry **and immediately strike it through** (opened-and-closed in this same pass), recording it for the PR body's `## Stragglers caught` section.
 
@@ -57,7 +57,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
 
    *Note:* when `/builder:end-session` gains a headless mode (see `BACKLOG.md` entry `/builder:end-session headless mode`), this step delegates to it and the local fill rules above delete.
 
-8. **Write the session note.** `Product/sessions/session-NN.md` (where `NN` is the new session number from step 7) using `Product/_workflow/_templates/session.md`. Front matter:
+8. **Write the session note.** Target path: `Product/sessions/session-NN.md` (where `NN` is the new session number from step 7). **If the file already exists** (e.g. a `/builder:start-session` resume left an in-progress stub), refuse with `session-NN already exists, refusing to overwrite — resolve manually` and stop. Otherwise, scaffold from `Product/_workflow/_templates/session.md`. Front matter:
    ```yaml
    ---
    type: session
@@ -130,7 +130,7 @@ Apply these to populate the PR body sections:
 - **`## Review carefully — large diffs`** — any single file with `>50` lines changed (sum of additions + deletions).
 - **`## Review carefully — non-mechanical edits`** — any discharged entry whose `reason` contains any of: `rewrite`, `redesign`, `reshape`, `restructure`. Inline the entry text.
 - **`## Stragglers caught`** — any new debt entries opened-and-closed during step 5 (hygiene scan).
-- **`## Status changes`** — any doc whose `status:` front-matter field changed (e.g. sample `locked → draft`, model `settled → draft`).
+- **`## Status changes`** — any doc with `type: sample | model | decision` whose `status:` front-matter field changed (e.g. sample `locked → draft`, model `settled → draft`). Session notes and other types are excluded — only lockbar-managed docs trigger this flag.
 - **`## Skipped — needs a session`** — entries left open per step 4c.
 - **`## Mechanical discharge`** — everything else (the quiet bulk).
 
@@ -155,3 +155,4 @@ If any rule would be violated, stop and surface — never silently bypass.
 - The threshold gate lives in the GHA workflow (count ≥ 5 from awk/grep on the ledger). Step 2 in this command is a defensive secondary check — it should rarely fire on its own.
 - If `/builder:end-session` later exposes a headless mode (see `BACKLOG.md`), step 7's local fill rules can delete and that step delegates instead. The active question is the only piece that meaningfully carries forward; everything else is mechanical bookkeeping.
 - Manual run for debugging: `claude -p "/builder:debt-pass"` from a clean working tree on `main` with `gh` authenticated. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
+- Layer 2 local validation: see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md) for the pre-seeded fixture, override prompt, six-watchpoint checklist, and cleanup sequence — re-run after any change to this command.

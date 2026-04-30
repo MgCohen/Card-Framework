@@ -51,6 +51,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
   Status: open
 
+- **Migrate automation auth from API key to subscription OAuth** — `/builder:debt-pass` GHA currently uses `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` (Console API spend). Audit whether the secret is even set in the repo (as of 2026-04-30, `gh secret list` returned empty), then swap to `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` so runs bill against the subscription instead of API credits. Mint the token via `claude setup-token`; set as a repo secret with `gh secret set`.
+  Trigger: before the first GHA workflow_dispatch / Layer 3 validation run, otherwise auth fails or bills the wrong account.
+  References: `.github/workflows/debt-pass.yml:47`, `anthropics/claude-code-action@v1` README.
+  Status: open
+
 - **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
