@@ -49,10 +49,32 @@ model: claude-opus-4-5
 
 # System prompt body
 
-You are an expert at X. When given a task, do Y, then Z…
+You are an expert at <your specialty>. When given a task, do <step 1>, then <step 2>…
 ```
 
+> The angle-bracket placeholders above are just prose for you to fill in — there's no templating or variable substitution. Whatever you write in the markdown body becomes the agent's literal system prompt.
+
 The **description** is the most important field — Claude uses it to auto-delegate matching tasks.
+
+### System prompt vs. invocation prompt
+
+A subagent sees **two** things on every call:
+
+1. **System prompt** — the markdown body of the `.md` file. Set once, defines the agent's persistent role.
+2. **Invocation prompt** — the task brief passed at call time (the `prompt` argument to the Agent tool). This is where you inject per-task data/context.
+
+```
+System prompt (in code-reviewer.md):
+  "You are an expert reviewer. For each task, identify
+   Critical/High/Medium issues with file:line citations…"
+
+Invocation prompt (passed when calling the agent):
+  "Review this diff for security issues:
+   <paste diff here>
+   Focus on auth changes in lines 40–80. Ignore test files."
+```
+
+You can pass file paths, snippets, URLs, prior decisions — anything the agent needs. The only constraint is the agent's tool allowlist (e.g. without `Read` it can't open files you reference, only reason about pasted content).
 
 ### Managing them
 - `/agents` in a session — interactive UI to list, create, edit, run
