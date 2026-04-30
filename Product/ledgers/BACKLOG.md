@@ -56,6 +56,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `.github/workflows/debt-pass.yml:47`, `anthropics/claude-code-action@v1` README.
   Status: open
 
+- **Upgrade `actions/checkout@v4` → `@v5`** — surfaced by Layer 3 dispatch run on 2026-04-30: `actions/checkout@v4` runs on Node.js 20, which GitHub Actions deprecates as default on 2026-06-02 (~5 weeks out) and removes from runners on 2026-09-16. `@v5` runs on Node.js 24. One-line bump in `.github/workflows/debt-pass.yml`. Worth checking other workflows we might add later for the same pin.
+  Trigger: before 2026-06-02 to avoid the forced-upgrade behavior; or sooner if a new workflow lands first.
+  References: [github.blog/changelog/2025-09-19-deprecation-of-node-20](https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/), `.github/workflows/debt-pass.yml`.
+  Status: open
+
 - **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
