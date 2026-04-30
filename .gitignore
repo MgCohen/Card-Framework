@@ -105,3 +105,10 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+# Product Builder — session-note skeletons.
+# `/builder:start-session` pre-creates these as in-progress skeletons; they
+# stay ignored so they don't trip stop hooks or `git status` noise during the
+# session. `/builder:end-session` force-tracks (`git add -f`) when committing
+# the completed note. Already-tracked session files are unaffected.
+Product/sessions/session-*.md
