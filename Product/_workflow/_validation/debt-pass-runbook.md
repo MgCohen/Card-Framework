@@ -16,7 +16,7 @@ How to dry-run `/builder:debt-pass` locally after any change to `.claude/command
 
 ## Pre-state
 
-- Clean working tree on `main`, in sync with `origin/main`.
+- Clean working tree on `main`, in sync with `origin/main`. (Step 1 of the command no longer does `git checkout main` — it expects you to already be there. The runbook seed below commits onto whatever branch you're on, so being on `main` first matters.)
 - `Product/ledgers/ALIGNMENT-DEBT.md` has zero entries under `## Open` (or you accept that real entries will be discharged alongside the seed — usually you don't, so wait for a drained ledger).
 - `gh` authenticated; you are NOT going to push or open a PR, but the command's step 3 calls `gh pr list` defensively.
 - The fixture file [`debt-pass-sandbox.md`](debt-pass-sandbox.md) exists in this folder and contains the five retiring terms (`OldFooBar`, `LegacyBaz`, `StaleQux`, `DeprecatedZed`, `RetireWidget`).
