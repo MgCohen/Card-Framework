@@ -57,7 +57,6 @@ Product/
 
   general/                   # project orientation
     VISION.md                # project goal, non-goals, principles
-    CAPABILITY-MAP.md        # systems the design will need
     ARCHITECTURE.md          # high-level architecture direction
     ROADMAP.md               # phases and sequencing
     RECOMMENDATIONS.md       # current synthesis
@@ -446,7 +445,7 @@ Once-per-project phase before §5.1 applies. Output is a working `Product/` skel
 1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledgers: `ledgers/OPEN-QUESTIONS.md`, `ledgers/ALIGNMENT-DEBT.md`, `ledgers/BACKLOG.md`, `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
-4. **Write `general/CAPABILITY-MAP.md`.** What systems will need to exist to deliver the vision? This justifies the feature list from step 3.
+4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
 6. **Seed `ledgers/OPEN-QUESTIONS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
 7. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
@@ -601,7 +600,7 @@ When a new feature is requested or designed:
 1. **Create the feature folder.** `features/<feature>/` with `models/` and `decisions/` subfolders.
 2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
 3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `builds-on:` pointing at upstream Models (or `root` if genuinely foundational).
-4. **Update orientation.** Patch `general/CAPABILITY-MAP.md` (new system identified), `ledgers/FEATURE-MAP.md` (new node + edges), `general/ROADMAP.md` if scheduling shifts.
+4. **Update orientation.** Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new row + dependency edges. Patch `general/ROADMAP.md` if scheduling shifts.
 5. **Record in session note.** Content section: `feature: <name> created` — visible event in the trail.
 6. **Begin design.** From this point, the feature's evolution follows the standard per-session flow (§5.1+).
 

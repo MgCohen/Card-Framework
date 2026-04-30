@@ -22,8 +22,8 @@ tags: [#workflow, #simulation]
 
 **Under the new workflow.**
 
-- The orientation block (vision, archetypes, capability map, architecture, roadmap, open-questions, recommendations) lands in `general/`:
-  - `general/VISION.md`, `general/SCOPE.md`, `general/CAPABILITY-MAP.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `ledgers/OPEN-QUESTIONS.md`, `general/RECOMMENDATIONS.md`, `ledgers/GLOSSARY.md`.
+- The orientation block (vision, archetypes, architecture, roadmap, open-questions, recommendations) lands in `general/`:
+  - `general/VISION.md`, `general/SCOPE.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `ledgers/OPEN-QUESTIONS.md`, `general/RECOMMENDATIONS.md`, `ledgers/GLOSSARY.md`. Candidate features go to `ledgers/FEATURE-MAP.md` as `considered` rows.
 - The scaffold-fit investigation (doc 04) is recognized as a **spike** — pre-design exploration of an external package. Lands as `spikes/scaffold-state-fit.md` with status `active` → `concluded`.
 - The core-model docs (10, 11, 12) land as **Models** in feature folders:
   - `features/entities/models/01-definition-instance-model.md` (model)
@@ -256,7 +256,6 @@ The premise: 12 sessions to land the same design surface as the historical run, 
 **Files added.**
 - `general/VISION.md`
 - `general/SCOPE.md`
-- `general/CAPABILITY-MAP.md`
 - `general/ROADMAP.md`
 - `ledgers/GLOSSARY.md` (skeleton)
 - `ledgers/OPEN-QUESTIONS.md` (seeded)

@@ -114,7 +114,7 @@ Each is a `.claude/commands/<name>.md` file the user can invoke as `/builder:<na
 1. Create folder structure: `features/<name>/`, `features/<name>/models/`, `features/<name>/decisions/`.
 2. Generate `features/<name>/<name>.md` stub from `_templates/feature.md`. Status `draft`. Prompt user for: Purpose blurb, Boundaries blurb. Other sections empty (thicken later).
 3. Prompt for dependencies: which existing features does this build on? Generate suggested `builds-on:` candidates for the first Model.
-4. Surface orientation files for review: `general/CAPABILITY-MAP.md`, `ledgers/FEATURE-MAP.md`, `general/ROADMAP.md`. Show the spots where edits make sense (don't auto-edit; suggest with diff).
+4. Surface orientation files for review: `ledgers/FEATURE-MAP.md`, `general/ROADMAP.md`. Show the spots where edits make sense (don't auto-edit; suggest with diff).
 5. Patch the current `sessions/session-NN.md` content section: `feature: <name> created`.
 6. Report: feature scaffold ready; first design session can begin.
 

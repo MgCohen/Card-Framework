@@ -46,6 +46,46 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
   Status: open
 
+- **Definition Editor** — authoring tool for cards, zones, game templates, effects, visuals.
+  Trigger: `authoring` feature reaches `settled`.
+  References: ARCHITECTURE §"Authoring", FEATURE-MAP `authoring` (considered).
+  Status: open
+
+- **Simulation Debugger** — inspector for state, history, pending tasks, triggers, decisions.
+  Trigger: first feature reaches `implemented` (debugger needs a real running simulation to inspect).
+  References: ARCHITECTURE §"Tooling".
+  Status: open
+
+- **Scenario Runner** — load a known state and exercise a command/effect for fast iteration.
+  Trigger: first feature reaches `implemented`.
+  References: ARCHITECTURE §"Tooling".
+  Status: open
+
+- **Replay Viewer** — step through history and inspect state transitions.
+  Trigger: history pipeline (`engine/03-snapshot-pipeline`) reaches `implemented`.
+  References: features/engine/models/03-snapshot-pipeline.md, ARCHITECTURE §"Tooling".
+  Status: open
+
+- **Rule Trace** — explain why an action was legal/illegal and which effects modified it.
+  Trigger: first feature reaches `implemented`.
+  References: ARCHITECTURE §"Tooling".
+  Status: open
+
+- **Validation Reports** — detect broken card definitions, missing assets, bad IDs, invalid references.
+  Trigger: `authoring` feature reaches `draft` (needs a definition surface to validate).
+  References: FEATURE-MAP `authoring` (considered).
+  Status: open
+
+- **Versioned Definitions** — definition versioning/hashing for client-server agreement.
+  Trigger: `networking` feature begins; or save/load arrives, whichever first.
+  References: FEATURE-MAP `networking` (considered).
+  Status: open
+
+- **Presets package** — preset rule templates (TCG, deckbuilder, spatial sim) as compositions of framework primitives.
+  Trigger: post-v1, after at least 2 features reach `implemented` and the framework primitive surface is stable.
+  References: ARCHITECTURE §"Preset Direction", RECOMMENDATIONS §"Recommendation 7".
+  Status: open
+
 ## Done
 
 _(none yet)_

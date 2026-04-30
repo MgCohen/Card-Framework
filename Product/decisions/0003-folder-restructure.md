@@ -37,7 +37,7 @@ Adopt the three-way split. Concretely:
 - `Product/_workflow/` holds `PRODUCT-BUILDER.md` and `_templates/`. The `_` prefix sorts the folder above letter-prefixed siblings naturally; the name signals "workflow infrastructure, rarely opened."
 - `Product/ledgers/` holds `OPEN-QUESTIONS.md`, `ALIGNMENT-DEBT.md`, `BACKLOG.md`, `GLOSSARY.md`, `FEATURE-MAP.md`. Glossary and feature-map are honorary ledgers (workflow-shaped files); the folder name is the closest single-word fit.
 - `Product/decisions/` (top-level, lifted from `general/decisions/`) holds project-wide ADRs.
-- `Product/general/` keeps only project orientation: `VISION`, `GAME-ARCHETYPES`, `CAPABILITY-MAP`, `ARCHITECTURE`, `ROADMAP`, `RECOMMENDATIONS`.
+- `Product/general/` keeps only project orientation: `VISION`, `GAME-ARCHETYPES`, `ARCHITECTURE`, `ROADMAP`, `RECOMMENDATIONS`.
 - `Product/features/<f>/notes/` → `Product/features/<f>/models/` for every feature. Folder name now matches the only doc type that lives there.
 
 The migration was carried out in this same commit: `git mv` of folders and files, sed pass for path references across all `.md` files in scope (AGENTS.md, Product/, ProductBuilder/, .claude/commands/builder/), surgical prose updates to `_workflow/PRODUCT-BUILDER.md` §1 + cross-cutting prose, and updates to the operating manual at `Product/README.md`.

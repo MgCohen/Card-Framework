@@ -155,7 +155,7 @@ Mid-project (not bootstrap), a new feature is a deliberate event with a five-ste
 1. Create `features/<feature>/` with `models/` and `decisions/` subfolders.
 2. Write the feature root stub (`<feature>.md`) — `Purpose` + `Boundaries` is enough to start.
 3. Identify upstream features. The first Model under this feature carries `builds-on:` pointing at upstream Models or the literal `root`.
-4. Patch `general/CAPABILITY-MAP.md` (new system identified), `ledgers/FEATURE-MAP.md` (new node + edges), `general/ROADMAP.md` if scheduling shifts.
+4. Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new feature row + edges. Patch `general/ROADMAP.md` if scheduling shifts.
 5. Record `feature: <name> created` in the session note.
 
 ---
@@ -185,7 +185,7 @@ Product/
   sessions/session-NN.md     # one per session, two-part, ~1 screen each
   general/
     PRODUCT-BUILDER.md       # the formal spec — workflow rules + rationale
-    VISION / GAME-ARCHETYPES / CAPABILITY-MAP / ARCHITECTURE / ROADMAP /
+    VISION / GAME-ARCHETYPES / ARCHITECTURE / ROADMAP /
     RECOMMENDATIONS / GLOSSARY / OPEN-QUESTIONS               # orientation
     ALIGNMENT-DEBT / BACKLOG / FEATURE-MAP                    # the three ledgers
     _templates/              # 7 doc-type templates
