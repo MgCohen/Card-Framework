@@ -23,7 +23,11 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ## Open
 
-_(none — discharged in session 14)_
+- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace OldFooBar with NewFooBar | open
+- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace LegacyBaz with ModernBaz | open
+- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace DeprecatedZed with ActiveZed | open
+- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace RetireWidget with ShipWidget | open
+- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: redesign §3 of _validation-sandbox.md | open
 
 ### Cascade — Scaffold State/Store types audit
 
