@@ -41,6 +41,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 7. **Commit and push.** Auto-run after the checkpoint is approved/applied and the session-note status is flipped.
    - Stage all `Product/` changes (created + modified). Use explicit paths from the deltas in step 4 — never `git add -A`. Skip anything outside `Product/` unless the user explicitly added it during the session.
+   - **The session note itself requires `git add -f`** — `Product/sessions/session-*.md` is gitignored (see `.gitignore`) so the in-progress skeleton stays quiet during the session. Only the deliberate end-of-session add force-tracks it. Already-tracked session files (from before this convention) re-stage normally; the `-f` is harmless either way.
    - Commit format:
      - Subject: `Session NN — <short summary, ≤72 chars>`
      - Body: bulleted deltas (docs created, models edited, ADRs landed, debt opened/closed, ledger updates).
