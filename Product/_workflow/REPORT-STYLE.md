@@ -118,6 +118,12 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 
 **Adaptation rule:** the skeleton is fixed and renders the same regardless of session-type. Sections adapt to *data* (counts, gate state), never to inferred session-type — start-session does not classify the session.
 
+**Rendering constraints:**
+
+- **No prose preamble.** Output begins at the H1. No "All inputs read…" / "Now creating the session note…" narration before or between sections.
+- **No inline code or file paths in the 🎯 H2.** H2 line-height enlarges around `backtick spans` inconsistently, so file paths and identifiers in the focus statement render as visual jitter. Keep the H2 to plain prose; if a path needs to be named, drop it into the body of the briefing or the 📝 strip below.
+- **🕐 Last session is hard one-line.** When the prior session has multiple threads, pick the headline outcome — don't pack three clauses joined by semicolons. Detail belongs in the carry-over table or the prior session note, not on this strip.
+
 ### 3.2 end-session
 
 **Render order:**
@@ -239,3 +245,4 @@ Uses the §2.7 result-strip pattern.
 - **2026-04-30** — promote-glossary template locked (three modes: add / update / rename).
 - **2026-04-30** — `new` template locked. Added §2.7 *Result strip* primitive for light skills with single-operation output; reused by `new`.
 - **2026-04-30** — bootstrap deferred (§3.5 placeholder); will be captured in a future iteration.
+- **2026-04-30** — start-session §3.1 rendering constraints added: no prose preamble, no inline code in the 🎯 H2, 🕐 Last session is hard one-line.

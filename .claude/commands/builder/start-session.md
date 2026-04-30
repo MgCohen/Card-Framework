@@ -45,5 +45,7 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 ## Notes
 
 - Don't auto-edit the checkpoint or any ledger here. This command opens the session; the session itself does the work; `/builder:end-session` closes it.
+- **No remote effects.** The skill creates `session-NN.md` locally and renders the briefing — nothing else. Do not `git add`, `git commit`, `git push`, or open a PR. The skeleton stays untracked until `/builder:end-session` commits the filled-in session note alongside the rest of the work. The stop-hook ignores untracked `Product/sessions/session-*.md` so this won't trip a push prompt.
+- **No prose preamble in the rendered briefing.** Output goes straight to the H1 — no "All inputs read…" / "Now creating the session…" narration before or between sections.
 - If the checkpoint is more than one session old (its `last-updated` doesn't match the previous session's date), warn in the briefing — the active question may be stale.
 - If `Product/sessions/session-NN.md` already exists, do not overwrite — surface that and ask the user what to do.
