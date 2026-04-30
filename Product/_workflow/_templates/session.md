@@ -4,7 +4,7 @@
 
 ## Part 1 — Content (cap ~50 lines)
 
-### Active question coming in
+### 🎯 Active question coming in
 One line.
 
 ### Work done
@@ -15,7 +15,7 @@ One line.
 ### Decisions settled
 - ADR-NNNN: <one line>
 
-### Active question going out
+### 🎯 Active question going out
 One line — what the next session opens with.
 
 ## Part 2 — Links & open threads (cap ~50 lines)

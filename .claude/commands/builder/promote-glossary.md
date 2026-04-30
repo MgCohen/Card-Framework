@@ -35,6 +35,8 @@ If the form is ambiguous, ask. Don't guess.
 
 5. **Show the diffs**, get confirmation, then write.
 
+6. **Render the result per `Product/_workflow/REPORT-STYLE.md` §3.3 (Mode A — Add term, or Mode B — Update term).** Title encodes the action and term; include the new definition as a blockquote and the section as bold prose. End with the 📝 session-note strip.
+
 ### Mode: Rename
 
 1. **Verify source.** Confirm `<old-term>` exists in `GLOSSARY.md`. If it doesn't, ask whether the user meant *add* or whether the rename is for a term that was never glossary-tracked.
@@ -57,6 +59,8 @@ If the form is ambiguous, ask. Don't guess.
    - **Do not auto-edit the affected files.** That's `builder-rename-cascade` skill (Tier 2).
 
 6. **Patch the session note.** Append to Part 1 "Work done": `- glossary: renamed <old> → <new> (<N> files affected)`.
+
+7. **Render the result per `Product/_workflow/REPORT-STYLE.md` §3.3 (Mode C — Rename term).** Title encodes the rename; render the `📊 Cascade:` stat strip with the file count and the `· ⚠️ pass-mode trigger (threshold N)` clause when count > 5. Render the `### 📋 Debt opened` table when scaffolding was confirmed; switch the heading to `### 📊 Affected files` and add a `⏳ Debt scaffolding declined` strip otherwise. Apply the empty-state strips per the template's edge-state table.
 
 ## Notes
 

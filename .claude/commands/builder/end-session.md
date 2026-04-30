@@ -49,12 +49,18 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - If a PR is already open for this branch, no further action — push updates it. If no PR exists and the user has been opening PRs per session, suggest opening one (don't auto-create unless explicitly requested).
    - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
-8. **Print the one-screen summary.** Concise. Five lines max:
-   - `Session NN closed. <docs> created, <models> models edited, <adrs> ADRs.`
-   - `Debt opened/closed: N / M.`
-   - `Active question going out: <one line>.`
-   - `Checkpoint refresh: applied.`
-   - `Committed <sha>; pushed to <branch>` (+ PR URL if applicable).
+8. **Render the closing report per `Product/_workflow/REPORT-STYLE.md` §3.2 (end-session template).** Follow the locked render order, anchor headings, and empty-state strips exactly.
+
+   **Data sources for each section:**
+   - **Title** — `# Closed Session NN`.
+   - **🕐 Outcome** — table (`Topic | What was done`) of work-units finished this session. Derive from the session note's Part 1 "Work done" + git diff. If no doc deltas, render the empty-state strip: `🕐 Outcome: no doc deltas this session`.
+   - **📊 Deltas** — counts from step 4 (docs created, models edited, ADRs landed, debt +N/−M, glossary updates).
+   - **📝 Session note** — `📝 Session note: \`session-NN.md\` → completed`.
+   - **📤 Commit** — `📤 Commit: \`<sha>\` → \`<branch>\``, plus `· PR: [#NN](<url>)` when a PR exists; drop the PR clause otherwise.
+   - **⚠️ Pass-mode warning** — render only when post-close debt count > 5 (per §5.8): `⚠️ Pass-mode required next session — debt <N> / threshold <T>`.
+   - **🎯 Next steps** — bullet list, derived from the session note's Part 1 "Active question going out" + the checkpoint's "Suggested next steps" section.
+
+9. **Update the checkpoint's "Where we stopped" section** with the same one-line bridge content used as the seed for next session's `🕐 Last session:` line. This must happen as part of the checkpoint refresh in step 5 (re-stating here so the data flow is explicit).
 
 ## Notes
 

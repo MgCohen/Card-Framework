@@ -1,5 +1,5 @@
 ---
-description: Open a new session — read checkpoint + ledgers, brief in 5 lines, pre-create the session note.
+description: Open a new session — read checkpoint + ledgers, render the briefing per REPORT-STYLE.md §3.1, pre-create the session note.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -29,12 +29,16 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 
 4. **Threshold check.** Count open entries in `ledgers/ALIGNMENT-DEBT.md` (entries that are not struck through and are marked `open`). If the count is **> 5**, this session is forced into pass-mode per `PRODUCT-BUILDER.md` §5.8 — surface this loudly in the briefing.
 
-5. **Briefing — print exactly 5 lines, in this shape, no preamble:**
-   - Line 1: `Session NN opening. Active question: <one-sentence summary from checkpoint>.`
-   - Line 2: `Top alignment-debt: <up to 3 entries, comma-separated, or "none">.`
-   - Line 3: `Top open questions: <up to 3 from OPEN-QUESTIONS.md, comma-separated>.`
-   - Line 4: `Pass-mode required: <yes (>5 open debt entries) | no>.`
-   - Line 5: `Session note pre-created at Product/sessions/session-NN.md. Confirm, or pivot the active question.`
+5. **Render the briefing per `Product/_workflow/REPORT-STYLE.md` §3.1 (start-session template).** Follow the locked render order, anchor headings, and empty-state strips exactly — do not invent extra sections, do not collapse or reorder.
+
+   **Data sources for each section:**
+   - **Title focus phrase** — derived from the active question (concise noun phrase).
+   - **🎯 Suggested focus** — the checkpoint's "active open question" line, verbatim or lightly rewritten as a single sentence.
+   - **🕐 Last session** — read the checkpoint's "Where we stopped" content. If the checkpoint doesn't carry a one-line bridge yet (older format), grep the prior session note's Part 2 outcome section. For session 01, render `🕐 First session — no carry-in context`.
+   - **❓ Carry-over** — top entries from `OPEN-QUESTIONS.md` (table form: `Topic | Since`, where `Since` is the session number the entry was opened). If 0 open, render `❓ No open questions`.
+   - **📊 Debt** — count from step 4. Append `· ⚠️ pass-mode` when count > 5. If 0 debt, render `📊 0 debt · clean slate`.
+   - **📝 Session doc** — the path of the session note pre-created in step 3.
+   - **Closing prompt** — `_Confirm or pivot._` (italic, no emoji).
 
 6. **Wait for the user's confirm-or-pivot.** Do not begin the session work in this command — that's a follow-up turn.
 
