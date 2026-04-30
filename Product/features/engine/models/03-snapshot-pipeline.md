@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
@@ -130,10 +130,10 @@ public sealed record AvailableActionsSnapshot(
 
 public abstract record SnapshotScope;
 public sealed record FreeInput                       : SnapshotScope;
-public sealed record DecisionPrompt(DecisionId Id)   : SnapshotScope;
+public sealed record DecisionPrompt(CommandId Id)    : SnapshotScope;
 ```
 
-`FreeInput` — main-phase snapshot; the player is free to pick any template. `DecisionPrompt` — the engine is paused waiting for a specific decision (target picker, choose-one). The UI renders a different mode.
+`FreeInput` — main-phase snapshot; the player is free to pick any template. `DecisionPrompt` — the engine is paused waiting for a specific decision (target picker, choose-one); `Id` is the `CommandId` of the action that opened the decision (no separate `DecisionId` type — see [04-effect-flow §5.1](features/effects/models/04-effect-flow.md)). The UI renders a different mode.
 
 This is **transitional.** A richer model — a typed game-state machine where `PickACardState` / `ResolveStackState` / `MainPhaseState` each own their own validation surface — is the eventual direction. We've used FSM-shaped state in other games; the simple scope flag here is enough for the floor and ceiling cases doc 28 sketched. Revisit when async decisions force the issue (see [§9](#9-open-items)).
 
@@ -146,13 +146,13 @@ Methods take only what's ephemeral to the call. Everything that's a stable engin
 ```csharp
 public abstract class GameRules
 {
-    protected IGameStateProvider State    { get; }
+    protected IStateScope        State    { get; }   // Scaffold; read-only
     protected IAvailableActions  Actions  { get; }
     protected IIntakeQueue       Pending  { get; }
     protected IHandlerRegistry   Handlers { get; }
 
     protected GameRules(
-        IGameStateProvider state,
+        IStateScope        state,
         IAvailableActions  actions,
         IIntakeQueue       pending,
         IHandlerRegistry   handlers)
@@ -184,7 +184,7 @@ public abstract class GameRules
 
 | Was a parameter | Now an injected service |
 |---|---|
-| `GameState state` | `IGameStateProvider.Current` |
+| `GameState state` | Scaffold `IStateScope` (read sliced state via `State.Get<TState>()`) |
 | `IntakeContext.Pending` (live queue) | `IIntakeQueue` |
 | `IHandlerRegistry handlers` | `IHandlerRegistry` |
 | (new) snapshot write | `IAvailableActions` |
@@ -213,7 +213,7 @@ Three reasons:
 
 1. **Effect-side symmetry.** Effects mid-execution also need to write the snapshot ([§7](#7-effect-side-symmetry-deferred)). Services give us one write path the rule and effects share. Parameter-passing would force the engine to build a different surface for effects.
 2. **Method signatures shrink to "what's ephemeral."** Cleaner reading; method intent is obvious.
-3. **Resolves [doc 26 Q1](support/samples/pile-counter.md) (state-pattern decision).** No method takes `state`; all read it from the provider. The asymmetry between `OnIncomingCommand` (no state) and the others (state passed) goes away.
+3. **Resolves [doc 26 Q1](support/samples/pile-counter.md) (state-pattern decision).** No method takes `state`; all read it through the injected `IStateScope` via `State.Get<TState>()`. The asymmetry between `OnIncomingCommand` (no state) and the others (state passed) goes away.
 
 ---
 
@@ -223,7 +223,7 @@ Three reasons:
 public sealed class PileCounterRules : GameRules
 {
     public PileCounterRules(
-        IGameStateProvider state,
+        IStateScope        state,
         IAvailableActions  actions,
         IIntakeQueue       pending,
         IHandlerRegistry   handlers)
@@ -242,21 +242,22 @@ public sealed class PileCounterRules : GameRules
         => candidates;
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
-        => State.Current.Piles.All(p => p.Score == p.Target)
+        => State.Get<PilesState>().Piles.Values.All(p => p.Score == p.Target)
             ? new[] { new EndGameCommand(Outcome.Win) }
             : Array.Empty<GameAction>();
 
     public override DrainResult OnQueueDrained()
     {
-        var s = State.Current;
+        var piles    = State.Get<PilesState>().Piles.Values;
+        var lastMove = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
 
-        foreach (var pile in s.Piles.Where(p => p.Cards.Count > 0))
+        foreach (var pile in piles.Where(p => p.Cards.Count > 0))
         {
             var top = pile.TopCard;
-            if (s.LastMove?.Card == top.Id) continue;   // per-template suppression
+            if (lastMove?.Card == top.Id) continue;   // per-template suppression
 
-            var destinations = s.Piles
+            var destinations = piles
                 .Where(p => p.Id != pile.Id)
                 .Select(p => (EntityId)p.Id)
                 .ToList();
@@ -270,28 +271,35 @@ public sealed class PileCounterRules : GameRules
 }
 ```
 
-The rule visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch.
+The rule visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>()`; slice types (`PilesState`, `LastMoveState`) live in [support/samples/pile-counter.md §9.1](support/samples/pile-counter.md).
 
 ---
 
-## 7. Effect-Side Symmetry (Deferred)
+## 7. Effect-Side Symmetry (Resolved)
 
-Effects mid-execution must write the snapshot the same way the rule does — a target picker shows different actions than free input. The clean shape: effects receive the same `IAvailableActions` service the rule has, probably through `IHandlerContext`:
+Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. The full contract — `IHandlerContext` shape, decision-id threading, await semantics — is settled in [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate`, no decision-id field — the action's `CommandId` *is* the decision id); decision handlers `await ctx.Resolver.Await(action.Id)`.
+
+A target-picker decision handler under that model:
 
 ```csharp
-public async Task<EntityId> PickTarget(IHandlerContext ctx, IReadOnlyList<EntityId> legal)
+public sealed class RequestTargetHandler
+    : ICommandHandler<RequestTargetAction, RequestTargetResult>
 {
-    ctx.Actions.Set(new AvailableActionsSnapshot(
-        Scope:     new DecisionPrompt(ctx.DecisionId),
-        Templates: new[] { new ChooseTargetTemplate(legal) }));
+    public async Task<RequestTargetResult> Handle(RequestTargetAction action, IHandlerContext ctx)
+    {
+        var legal = ComputeLegalTargets(ctx.Store, action.Filter);
 
-    var choice = await ctx.AwaitPlayerChoice();
-    // next drain's OnQueueDrained overwrites back to FreeInput
-    return choice.Targets[0];
+        ctx.Actions.Set(new AvailableActionsSnapshot(
+            Scope:     new DecisionPrompt(action.Id),
+            Templates: new[] { new ChooseTargetTemplate(legal) }));
+
+        var choice = await ctx.Resolver.Await(action.Id);
+        return new RequestTargetResult { Target = choice.Targets[0] };
+    }
 }
 ```
 
-The full effect-flow contract — context shape, decision-id threading, await semantics, suspension model — is not designed in one place yet. Tracked as an explicit follow-up; see [§9](#9-open-items).
+`DecisionPrompt(action.Id)` carries the action's `CommandId` directly (per [§4](#4-snapshot-scope) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The next drain's `OnQueueDrained` overwrites back to `FreeInput`.
 
 ---
 
@@ -324,10 +332,11 @@ Mechanical follow-up edits, not done in this doc.
 
 ## 9. Open Items
 
-- **`IGameStateProvider` shape.** `State.Current` returns the immutable `GameState` of right now. Subscriptions probably live on the Store (presentation), not the provider. Confirm at engine implementation.
-- **`IIntakeQueue` shape.** Same operations as the old `LinkedList<GameCommand>` Pending: `AddFirst` / `AddLast` / `Remove` / iterate. `CurrentlyExecuting` lives here as a property, or on the state provider. Pin during engine implementation.
-- **Effect-side symmetry.** Effects need `IAvailableActions` mid-execution. Likely through `IHandlerContext.Actions`. Needs a dedicated effect-flow doc that walks the full lifecycle (decision id threading, await semantics, suspension). Tracked as task #20.
-- **Snapshot scope as a state machine.** Current `FreeInput` / `DecisionPrompt` discriminator is transitional. The richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation) is the eventual direction. Revisit when the first async-decision-heavy game arrives.
+- ~~**`IGameStateProvider` shape.**~~ Folded away — `GameRules` (and effect/handler contexts) bind directly to Scaffold `IStateScope` (read) / `Store` (read + execute mutators); see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md).
+- **`GameState` slice catalog.** With the Scaffold State binding, "what slices exist" is concrete: turn, phase, piles, available-actions, decisions, last-move, etc. Tracked as checkpoint task #2.
+- **`IIntakeQueue` shape.** Same operations as the old `LinkedList<GameCommand>` Pending: `AddFirst` / `AddLast` / `Remove` / iterate. `CurrentlyExecuting` lives here as a property, or on a sibling slice. Pin during engine implementation.
+- ~~**Effect-side symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md). `IHandlerContext` exposes `Store` + `Actions` + `Resolver`; decision id ≡ action's `CommandId`; await/resume via `Resolver.Await(id)` / `TryResolve(id, choice)`. Documented in [§7](#7-effect-side-symmetry-resolved) above.
+- **Snapshot scope as a state machine.** Current `FreeInput` / `DecisionPrompt(CommandId)` discriminator is transitional. The richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation) is the eventual direction. Revisit when the first async-decision-heavy game arrives.
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
 - **Bootstrap wiring.** Engine builder constructs services and the rule. Sketched in [doc 26 §9.8](support/samples/pile-counter.md); expand there to show service-injection wiring. Not blocking; cosmetic.
 - **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([doc 28 §8](features/actions/models/02-availability-snapshot.md)).

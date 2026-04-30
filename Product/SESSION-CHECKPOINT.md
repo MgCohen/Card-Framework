@@ -6,41 +6,36 @@ tags: [#checkpoint]
 
 # Session Checkpoint
 
-**Last updated:** 2026-04-30 (session 13)
+**Last updated:** 2026-04-30 (session 14)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
 ---
 
 ## Where we stopped
 
-- **Effect-flow Model landed.** `features/effects/models/04-effect-flow.md` (`status: settled`, builds-on `effects/01`, `engine/03`) pins: `Effect` as opaque per-instance abstract type; `IEffectScope` exposing Scaffold `IStateScope` + `Dispatch` + `Cancel` (no mutate); `IHandlerContext` exposing concrete Scaffold `Store` + `IAvailableActions` + `IDecisionResolver` (no `Mutate`, no `CurrentDecisionId`); writes via `Store.Execute<TPayload>(payload)` fan out to all mutators registered for that payload type; mutators are Scaffold `Mutator<TState, TPayload>`; `DecisionId` retired in favour of the action's `CommandId`; uniform boundary via `DecisionResponseCommand`; `ICommandHandler.Handle` returns `Task<TResult>`. Eight invariants in §10. **§6 (uniform boundary) carries an unresolved review**, see active question. (PR #17, session 13)
-- **Bound to Scaffold State.** Read/write surfaces are not invented — they reference `com.scaffold.states` types directly (`IStateScope`, `IStoreScope`, `Store`, `Mutator<TState, TPayload>`). State is sliced; there is no single-record `GameState`.
-- **Open-question struck.** "Effect-side service symmetry" resolved — link in `OPEN-QUESTIONS.md`.
-- **12 alignment-debt entries open**: 6 from the new Model (pile-counter §9.4 / §9.5 / Q8, snapshot-pipeline §4 / §7, command-pipeline `Handle`), 6 in the "Scaffold State/Store types audit" cascade (engine/02, engine/03, both engine ADRs, sample, OPEN-QUESTIONS). Discharge before re-locking pile-counter.
-- **Migration complete (sessions 11–12).** All 8 phases of `ProductBuilder/MIGRATION-GUIDE.md` landed; flat 28-doc `RESEARCH/` migrated into `Product/`. Legacy folder retired; pre-migration content in `RESEARCH_BACKUP/`.
-- **Workflow accepted.** `_workflow/PRODUCT-BUILDER.md` is canonical (`status: accepted`); adoption is `decisions/0001-adopt-workflow.md`.
-- **20 ADRs landed.** No further backfill — future ADRs are forward-going.
-- **Pile Counter sample status `locked`** at end of session 12; this session opened debt against §9.4–9.5 and Q8, so re-lock is contingent on debt discharge.
+- **Alignment-debt ledger drained.** All 12 open entries from session 13 discharged in pass-mode (§5.5 / §5.8). Direct round (pile-counter §9.4 / §9.5 / Q8, snapshot-pipeline §4 / §7, command-pipeline `Handle`) + Scaffold State/Store cascade (engine/02, engine/03, ADRs 0001/0002, sample, OPEN-QUESTIONS) all resolved. Zero open entries; below the §5.8 threshold of 5.
+- **Scaffold State/Store binding propagated.** `GameRules` constructor takes Scaffold `IStateScope` (no invented `IGameStateProvider`); reads go through `State.Get<TState>()`. Mutation routes through Scaffold `Mutator<TState, TPayload>` registered per payload type, fired by handlers via `ctx.Store.Execute(payload)`. `IStateMutator<TCommand>` retired.
+- **`ICommandHandler.Handle` returns `Task<TResult>`.** Synchronous handlers wrap with `Task.FromResult(...)`; decision handlers genuinely await `ctx.Resolver.Await(id)`. Updated in command-pipeline.md and the canonical interface in 04-effect-flow.md §6.
+- **`DecisionPrompt(CommandId Id)`.** Snapshot scope's prompt id is the action's `CommandId`; the parallel `DecisionId` type is gone (per `04-effect-flow §5.1`).
+- **Pile Counter sample status: `draft`.** Downgraded from `locked` to absorb the §9 rewrite onto sliced state + payload-keyed mutators. Re-lock candidate after one stable session per §4.4 cooldown.
+- **OPEN-QUESTIONS rebalance.** `IGameStateProvider shape` folded; promoted "**`GameState` slice catalog**" as the load-bearing item (concrete slice catalog — `PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice — on top of the Scaffold `Store`).
 
 ---
 
 ## The active open question (singular)
 
-**Alignment-debt discharge (forced by §5.8 threshold).** `ALIGNMENT-DEBT.md` carries 12 open entries — well past the 5-entry threshold that forces the next session into pass-mode (§5.5 alignment-debt discharge). The §6 boundary redesign is the architecturally interesting next step but is **deferred** until the ledger drains.
+**§6 boundary redesign in `features/effects/models/04-effect-flow.md`.** The current §6 sketch has `IIntentMapper` branching on snapshot scope to pick between `MapFreeInput` and `DecisionResponseCommand`. User flagged this wrong-batch in session 13: the routing concern likely belongs to a different layer than the mapper, but no counter-shape was pinned. Settle the alternative shape and patch §6 (with cascade-aware edits to anywhere downstream that mirrors the current sketch).
 
-The 12 entries split into two batches: 6 from the new effect-flow Model edits (pile-counter §9.4 / §9.5 / Q8, snapshot-pipeline §4 / §7, command-pipeline `Handle` signature) and 6 in the "Scaffold State/Store types audit" cascade (engine/02, engine/03, both engine ADRs, sample-wide, OPEN-QUESTIONS). All mechanical text edits — no architectural decisions. After discharge: re-lock pile-counter, then resume with §6.
-
-**Deferred next-after:** §6 boundary redesign in `04-effect-flow.md`. The `IIntentMapper`-branches-on-snapshot-scope shape was flagged wrong-batch by user but no counter-shape pinned yet — likely the routing concern belongs to a different layer than the mapper.
+Architecturally interesting; mechanical-only edits unlikely. Sample re-lock and the slice-catalog work are the next two candidates after this lands.
 
 ---
 
 ## Other still-open
 
-Carried forward from pre-migration `ledgers/OPEN-QUESTIONS.md`. See that file for the canonical durable list; the items below are the ones the next few sessions are likely to touch.
+Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions are likely to touch.
 
-- **`IGameStateProvider` shape** — pin at engine implementation.
+- **`GameState` slice catalog** — concrete catalog of slices (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice, etc.) on top of Scaffold `Store`. Load-bearing for engine wiring.
 - **`IIntakeQueue` shape** — pin at engine implementation.
-- **`GameState` contract** — concrete slice catalog (turn, phase, decisions, zones, available actions) on top of Store. Entity slices use `EntityVariableState` via the `com.scaffold.entities.states` bridge.
 - **Game lifecycle design** — session start, turn structure, phase transitions, end conditions. Prerequisite for trigger subscription lifecycle.
 - **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions. Depends on game lifecycle.
 - **`EndGameCommand` semantics** — bleeds into session lifecycle.
@@ -50,18 +45,15 @@ Carried forward from pre-migration `ledgers/OPEN-QUESTIONS.md`. See that file fo
 
 ## Suggested next steps
 
-The active question is design work (task #20). The other tracked items are workflow infrastructure to make future sessions cheaper, then forward-going design.
-
 | # | Task | Notes |
 |---|------|-------|
-| **20-fu** | **Cascade debt discharge** | Active question (forced by §5.8 — 12 open entries, threshold 5). 12 entries in `ALIGNMENT-DEBT.md` covering pile-counter, snapshot-pipeline, command-pipeline, and the Scaffold-types cascade (engine/02, engine/03, ADRs, OPEN-QUESTIONS). Mechanical, none architectural. Then re-lock pile-counter. |
-| **20-§6** | **Effect-flow §6 boundary redesign** | Deferred next-after. The `IIntentMapper`-branches-on-snapshot-scope shape in `04-effect-flow.md` §6 was flagged wrong-batch — user wants the routing concern moved out of the mapper. Settle the alternative shape, patch §6. |
-| ~~20~~ | ~~Effect-flow canonical Model~~ | Landed in session 13 — `features/effects/models/04-effect-flow.md`. §6 still open per row above. |
-| **WF-1** | **Tier 1 slash commands** | Per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 Tier 1: `/builder:start-session`, `/builder:new`, `/builder:end-session`, `/builder:promote-glossary`. Land under `.claude/commands/` per-project. Cheap leverage on every session. |
-| 12 | **Game lifecycle design** | Best unblocked task after #20. Likely lives in a new feature folder (`features/lifecycle/`?) or in `engine/`; decide on session start. |
-| 2 | **`GameState` contract** | Concrete slice catalog. Folds task #9 (`StateChange` revisit, unblocked by the bridge decision). |
-| 7 | **`PLANS/` — first implementation slice** | Pull after #20/#12/#2 land and at least one feature is ready for build-gate consideration. |
-| 15 | **MTG-strict SBA ordering** | Defer until a game needs it. Captured as `features/engine/decisions/0006-mtg-sba-known-difference.md`. |
+| **20-§6** | **Effect-flow §6 boundary redesign** | Active question. Move the `FreeInput`/`DecisionPrompt` routing concern out of `IIntentMapper`. Settle the alternative shape, patch §6 + downstream mirrors. |
+| **20-relock** | **Re-lock pile-counter** | Status `draft` after session 14's §9 rewrite. Re-lock per §4.4 lockbar after one stable session with no further contract edits. |
+| **2** | **`GameState` slice catalog** | Now load-bearing in `OPEN-QUESTIONS.md`. Concrete slice list + ownership model. Likely needs a dedicated Model under `features/engine/` or `features/state/`. |
+| **WF-1** | **Tier 1 slash commands** | Per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 Tier 1. Cheap leverage on every session. |
+| **12** | **Game lifecycle design** | Best unblocked task after §6 + slice catalog. New feature folder (`features/lifecycle/`?) or in `engine/`. |
+| **7** | **`PLANS/` — first implementation slice** | Pull after §6, slice catalog, and lifecycle land and at least one feature is ready for build-gate consideration. |
+| **15** | **MTG-strict SBA ordering** | Defer until a game needs it. Captured as `features/engine/decisions/0006-mtg-sba-known-difference.md`. |
 
 ---
 
@@ -69,15 +61,15 @@ The active question is design work (task #20). The other tracked items are workf
 
 | File | Why |
 |------|-----|
-| [_workflow/PRODUCT-BUILDER.md](_workflow/PRODUCT-BUILDER.md) | The workflow itself. Read this if you haven't lately. |
+| [_workflow/PRODUCT-BUILDER.md](_workflow/PRODUCT-BUILDER.md) | The workflow itself. |
 | [ledgers/FEATURE-MAP.md](ledgers/FEATURE-MAP.md) | Bird's-eye view of features, Models, ADRs. |
-| [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) | 12 open entries from session 13 (over §5.8 threshold of 5). Direct round + Scaffold State/Store cascade. Next session is forced pass-mode. |
-| [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) | New canonical effect-flow contract from session 13. Read §10 (invariants) for the headline pins. |
+| [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) | 0 open entries. Resolved section grew by 12 in session 14. |
+| [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) | Canonical effect-flow contract. §6 is the active question. Read §10 (invariants) for the headline pins. |
 | [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) | Durable design questions ledger. |
-| [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) | Layer hierarchy, two dispatch paths — feeds task #20. |
-| [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) | Snapshot production; §7 has effect-side symmetry — feeds task #20. |
-| [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) | `GameRules` interface — services injected, four methods. |
-| [support/samples/pile-counter.md](support/samples/pile-counter.md) | Floor sample; rule sketched against the current shape. |
+| [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) | Layer hierarchy, two dispatch paths. |
+| [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) | Snapshot production; refreshed in session 14 against Scaffold State. |
+| [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) | `GameRules` interface — services injected, four methods. Refreshed in session 14. |
+| [support/samples/pile-counter.md](support/samples/pile-counter.md) | Floor sample. **Status: `draft`** after session 14 rewrite. Re-lock candidate. |
 
 For the Tier 1 commands (WF-1):
 

@@ -40,7 +40,7 @@ Three layers participate in mid-execution game logic. Each has exactly one surfa
 |---|---|---|---|---|
 | **`Effect`** | Yes (via `scope.State`) | **No** | Yes (`scope.Dispatch`) | No (only by dispatching a decision action) |
 | **`ICommandHandler`** | Yes (via `ctx.Store`) | Yes — by invoking mutators | No | Yes (decision handlers only) |
-| **`IStateMutator<TPayload>`** | Yes (current state in) | **Yes — only producer of new state** | No | No |
+| **`Mutator<TState, TPayload>`** | Yes (current state in; sibling slices via `IStateScope`) | **Yes — only producer of new state** | No | No |
 
 Three principles fall out of this table and are framework invariants:
 

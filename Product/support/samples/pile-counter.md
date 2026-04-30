@@ -1,14 +1,14 @@
 ---
 type: sample
-status: locked
-last-updated: 2026-04-29
-builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md]
+status: draft
+last-updated: 2026-04-30
+builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
 tags: [#sample, #pile-counter]
 ---
 
 # Pile Counter — Reference Sample Game
 
-> **Status: locked.** Re-checked against `features/engine/models/02-gamerules-contract.md` during migration phase 5 — the four-part lock-bar (§4.4 of PRODUCT-BUILDER-PROPOSAL) holds: (1) Subject and Projection are coherent; (2) projection covers the contracts the GameRules class exposes; (3) "what this does not exercise" remains honest; (4) no breaking renames since session 9 lock. If a future Model edit invalidates the projection, downgrade to `draft` and re-lock.
+> **Status: draft.** Downgraded from `locked` in session 14 to absorb the cascade from `features/effects/models/04-effect-flow.md` (Scaffold State/Store binding: slice-based reads, `Mutator<TState, TPayload>` with payload-keyed registration, `IStateScope`-typed `Validate`, `Task<TResult>`-returning `Handle`). Re-lock candidate once §9.x stabilises for one session with no further contract edits and the §4.1–§4.2 surface in `04-effect-flow.md` settles.
 
 This document defines a small, deliberately simple game we use as a working reference while shaping the framework. Whenever a framework concept feels under- or over-specified, we sketch its implementation in **Pile Counter** and see where the seams are.
 
@@ -139,31 +139,41 @@ This is the working sketch of Pile Counter against the framework as of this writ
 
 ### 9.1 State shape
 
+State lives as Scaffold `BaseState` slices, each owning one concern. There is no single-record `GameState`; reads go through `IStateScope.Get<TState>()`. See [features/effects/models/04-effect-flow.md §4.1](features/effects/models/04-effect-flow.md) for the binding.
+
 ```csharp
-public sealed class GameState
+public sealed record PilesState(
+    IReadOnlyDictionary<PileId, Pile> Piles) : BaseState
 {
-    public IReadOnlyList<Pile>        Piles            { get; }
-    public LastMove?                  LastMove         { get; }   // null at game start
-    public AvailableActionsSnapshot   AvailableActions { get; }   // typed templates + scope
+    public PilesState WithCardMoved(InstanceId card, PileId from, PileId to)
+    {
+        var src = Piles[from];
+        var dst = Piles[to];
+        var moved = src.Cards[^1];
+        var next = new Dictionary<PileId, Pile>(Piles)
+        {
+            [from] = src with { Cards = src.Cards.Take(src.Cards.Count - 1).ToList() },
+            [to]   = dst with { Cards = dst.Cards.Append(moved).ToList()             },
+        };
+        return this with { Piles = next };
+    }
 }
 
+public sealed record LastMoveState(LastMove? Move) : BaseState;
 public sealed record LastMove(InstanceId Card, PileId From, PileId To);
 
-public sealed class Pile
+public sealed record Pile(PileId Id, int Target, IReadOnlyList<Card> Cards)
 {
-    public PileId               Id     { get; }
-    public int                  Target { get; }
-    public IReadOnlyList<Card>  Cards  { get; }   // top of stack at end
-    public Card                 TopCard => Cards[^1];
-    public int                  Score   => Cards.Sum(c => c.Number);
+    public Card TopCard => Cards[^1];
+    public int  Score   => Cards.Sum(c => c.Number);
 }
 ```
 
-`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list — see [doc 29 §3–§4](features/engine/models/03-snapshot-pipeline.md).
+`AvailableActionsSnapshot` is its own slice (`AvailableActionsState`) written via the `IAvailableActions` service ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)); it carries `Scope` + typed `ActionTemplate` list ([doc 29 §3–§4](features/engine/models/03-snapshot-pipeline.md)).
 
-State is immutable, redux-like. All game-affecting memory lives here — the rule holds none.
+Slices are immutable. All game-affecting memory lives in slices — the rule holds none. The catalog of slices the Pile Counter needs is fixed: `PilesState`, `LastMoveState`, `AvailableActionsState`.
 
-### 9.2 Commands, intents, results
+### 9.2 Commands, intents, results, payloads
 
 ```csharp
 // Player intent (UI emits this on drop)
@@ -176,6 +186,11 @@ public sealed record EndGameCommand(Outcome Outcome) : GameCommand;
 // Result
 public sealed record MoveCardResult(InstanceId MovedCard) : CommandResult;
 
+// Mutator payload — dedicated framework-owned type, never the command itself.
+// Per [04-effect-flow §4.2](features/effects/models/04-effect-flow.md): one payload
+// fans out to every mutator registered for that payload type.
+public sealed record MoveCardPayload(InstanceId Card, PileId From, PileId To);
+
 public enum Outcome { Win }
 ```
 
@@ -186,76 +201,88 @@ Note the framework primitive is **generic** `MoveCardCommand` — not `MoveTopCa
 ```csharp
 public sealed class PileCounterIntentMapper : IIntentMapper
 {
-    private readonly IGameStateProvider state;
-    public PileCounterIntentMapper(IGameStateProvider state) => this.state = state;
+    private readonly IStateScope state;
+    public PileCounterIntentMapper(IStateScope state) => this.state = state;
 
     public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
     {
         MoveCardTemplate m => new MoveCardCommand(
             Card: m.Card,
-            From: state.Current.LocateCard(m.Card),
+            From: LocateCard(state.Get<PilesState>(), m.Card),
             To:   (PileId)choice.Targets[0]),
         _ => throw new InvalidOperationException($"unknown template: {template}")
     };
+
+    private static PileId LocateCard(PilesState piles, InstanceId card)
+        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.Id == card)).Key;
 }
 ```
 
-The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading current state. See [doc 29 §3](features/engine/models/03-snapshot-pipeline.md) for the typed-template binding pattern.
+The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading the `PilesState` slice through Scaffold's `IStateScope`. See [doc 29 §3](features/engine/models/03-snapshot-pipeline.md) for the typed-template binding pattern, [04-effect-flow §4.1](features/effects/models/04-effect-flow.md) for `IStateScope`.
 
 ### 9.4 Handler (validate + handle)
 
-Handlers own command-specific legality and the state mutation.
+Handlers own command-specific legality and dispatch the mutator payload that drives state change. `Validate` reads slices through Scaffold `IStateScope`; `Handle` returns `Task<TResult>` (most handlers complete synchronously). See [04-effect-flow §6](features/effects/models/04-effect-flow.md) for the handler signature, §4.4 for `IHandlerContext`.
 
 ```csharp
 public interface ICommandHandler<TCommand, TResult>
     where TCommand : GameCommand
     where TResult : CommandResult
 {
-    bool Validate(TCommand command, GameState state, out string? reason);
-    TResult Handle(TCommand command, IHandlerContext ctx);
+    bool Validate(TCommand command, IStateScope state, out string? reason);
+    Task<TResult> Handle(TCommand command, IHandlerContext ctx);
 }
 
 public sealed class MoveCardHandler : ICommandHandler<MoveCardCommand, MoveCardResult>
 {
-    public bool Validate(MoveCardCommand move, GameState state, out string? reason)
+    public bool Validate(MoveCardCommand move, IStateScope state, out string? reason)
     {
         if (move.From == move.To)
         { reason = "source and destination must differ"; return false; }
 
-        var source = state.Piles[move.From];
+        var piles  = state.Get<PilesState>();
+        var source = piles.Piles[move.From];
         if (source.Cards.Count == 0)
         { reason = "source pile is empty"; return false; }
 
         if (source.TopCard.Id != move.Card)
         { reason = "only the top card of a pile can be moved"; return false; }
 
-        if (state.LastMove?.Card == move.Card)
+        if (state.Get<LastMoveState>().Move?.Card == move.Card)
         { reason = "can't move the same card twice in a row"; return false; }
 
         reason = null; return true;
     }
 
-    public MoveCardResult Handle(MoveCardCommand move, IHandlerContext ctx)
+    public Task<MoveCardResult> Handle(MoveCardCommand move, IHandlerContext ctx)
     {
-        ctx.Mutate.MoveCardBetweenPiles(move.Card, move.From, move.To);
-        return new MoveCardResult(move.Card);
+        ctx.Store.Execute(new MoveCardPayload(move.Card, move.From, move.To));
+        return Task.FromResult(new MoveCardResult(move.Card));
     }
 }
 ```
 
+The handler issues exactly one `Store.Execute` call. Scaffold's payload-keyed registry runs every mutator registered for `MoveCardPayload` and commits them atomically. See [04-effect-flow §4.4](features/effects/models/04-effect-flow.md) for `IHandlerContext`'s shape (Store / Actions / Resolver, no `Mutate` surface) — Q8 below.
+
 ### 9.5 State mutators
 
-The Scaffold State package wires command-reactive mutators that produce new immutable state.
+Scaffold ships `Mutator<TState, TPayload>` with `Change(state, payload, IStateScope scope)`. Each mutator owns one slice; multiple mutators can register against the same payload type so one `Execute` fans out to every reactive slice. Mutator type parameters are the **payload**, never the command.
 
 ```csharp
-public sealed class LastMoveMutator : IStateMutator<MoveCardCommand>
+public sealed class PileMoveMutator : Mutator<PilesState, MoveCardPayload>
 {
-    public GameState Reduce(GameState state, MoveCardCommand cmd)
-        => state with { LastMove = new LastMove(cmd.Card, cmd.From, cmd.To) };
+    public override PilesState Change(PilesState state, MoveCardPayload payload, IStateScope scope)
+        => state.WithCardMoved(payload.Card, payload.From, payload.To);
+}
+
+public sealed class LastMoveMutator : Mutator<LastMoveState, MoveCardPayload>
+{
+    public override LastMoveState Change(LastMoveState state, MoveCardPayload payload, IStateScope scope)
+        => new LastMoveState(new LastMove(payload.Card, payload.From, payload.To));
 }
 ```
 
-The handler doesn't have to know about `LastMove`; `LastMoveMutator` reacts to `MoveCardCommand` automatically.
+Both mutators fire from one `Store.Execute(payload)`. The handler does not enumerate them; the Scaffold registry routes by payload type. Adding a third reactive slice (a move counter, an undo log) is a new `Mutator<TState, MoveCardPayload>` plus a `RegisterMutator` line at bootstrap — the handler does not change. See [04-effect-flow §4.2](features/effects/models/04-effect-flow.md) for the registry semantics.
 
 ### 9.6 The rule
 
@@ -263,7 +290,7 @@ The handler doesn't have to know about `LastMove`; `LastMoveMutator` reacts to `
 public sealed class PileCounterRules : GameRules
 {
     public PileCounterRules(
-        IGameStateProvider state,
+        IStateScope        state,
         IAvailableActions  actions,
         IIntakeQueue       pending,
         IHandlerRegistry   handlers)
@@ -283,22 +310,24 @@ public sealed class PileCounterRules : GameRules
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
     {
-        if (State.Current.Piles.All(p => p.Score == p.Target))
+        var piles = State.Get<PilesState>().Piles.Values;
+        if (piles.All(p => p.Score == p.Target))
             return new[] { new EndGameCommand(Outcome.Win) };
         return Array.Empty<GameAction>();
     }
 
     public override DrainResult OnQueueDrained()
     {
-        var s = State.Current;
+        var piles    = State.Get<PilesState>().Piles.Values;
+        var lastMove = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
 
-        foreach (var pile in s.Piles.Where(p => p.Cards.Count > 0))
+        foreach (var pile in piles.Where(p => p.Cards.Count > 0))
         {
             var top = pile.TopCard;
-            if (s.LastMove?.Card == top.Id) continue;   // per-template suppression
+            if (lastMove?.Card == top.Id) continue;   // per-template suppression
 
-            var destinations = s.Piles
+            var destinations = piles
                 .Where(p => p.Id != pile.Id)
                 .Select(p => (EntityId)p.Id)
                 .ToList();
@@ -312,6 +341,8 @@ public sealed class PileCounterRules : GameRules
 }
 ```
 
+The constructor takes Scaffold's `IStateScope` (read-only). `State.Get<TState>()` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case.
+
 The rule constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the rule does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](features/engine/models/03-snapshot-pipeline.md).
 
 Almost everything else Pile Counter cares about lives elsewhere — handler `Validate` for legality, mutators for state changes, presentation layer for affordances.
@@ -321,11 +352,11 @@ Almost everything else Pile Counter cares about lives elsewhere — handler `Val
 ```csharp
 public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
 {
-    // 1. Command-specific legality (handler).
+    // 1. Command-specific legality (handler). Validate reads slices through IStateScope.
     if (!handlers.Validate(command, state, out var reason))
         return IntakeResult.Reject(reason);
 
-    // 2. Flow gating + routing (rule). Rule reads state via its injected provider
+    // 2. Flow gating + routing (rule). Rule reads state via its injected IStateScope
     //    and mutates the queue via its injected IIntakeQueue.
     var result = rules.OnIncomingCommand(command, origin);
 
@@ -336,7 +367,7 @@ public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
 }
 ```
 
-Validate first (catches malformed commands cheaply), then rule's flow check. Both can reject; both produce the same `IntakeResult` shape. `IntakeContext` is gone — `Pending` is the rule's injected service, `Origin` is the only ephemeral input.
+Validate first (catches malformed commands cheaply), then rule's flow check. Both can reject; both produce the same `IntakeResult` shape. `IntakeContext` is gone — `Pending` is the rule's injected service, `Origin` is the only ephemeral input. `state` here is the engine's `IStateScope` over the `Store`.
 
 ### 9.8 Bootstrap
 
@@ -352,14 +383,17 @@ public static class PileCounterBootstrap
 {
     public static GameEngine Create(IPuzzleFactory factory)
     {
-        var puzzle       = factory.Create();
-        var initialState = BuildInitialState(puzzle);
+        var puzzle = factory.Create();
 
-        // Engine constructs the four services and injects them into the rule.
+        // Engine constructs the canonical services and injects them into the rule.
+        // Initial slices are seeded into the Store; mutators are registered per
+        // payload type so Store.Execute(payload) fans out correctly.
         var builder = new GameEngineBuilder()
-            .WithInitialState(initialState)
+            .WithInitialSlices(BuildInitialSlices(puzzle))
             .WithHandlers(new MoveCardHandler())
-            .WithMutators(new LastMoveMutator())
+            .WithMutators(
+                new PileMoveMutator(),     // Mutator<PilesState,    MoveCardPayload>
+                new LastMoveMutator())     // Mutator<LastMoveState, MoveCardPayload>
             .WithRule(services => new PileCounterRules(
                 services.State,
                 services.Actions,
@@ -370,23 +404,23 @@ public static class PileCounterBootstrap
         return builder.Build();
     }
 
-    private static GameState BuildInitialState(Puzzle p)
+    private static IEnumerable<BaseState> BuildInitialSlices(Puzzle p)
     {
-        var piles = p.Deal.Select(kv => new Pile(
-            id:     kv.Key,
-            target: p.Targets[kv.Key],
-            cards:  kv.Value.Select(id => p.Deck.First(c => c.Id == id)).ToList()
-        )).ToList();
+        var piles = p.Deal.ToDictionary(
+            kv => kv.Key,
+            kv => new Pile(
+                Id:     kv.Key,
+                Target: p.Targets[kv.Key],
+                Cards:  kv.Value.Select(id => p.Deck.First(c => c.Id == id)).ToList()));
 
-        return new GameState(
-            piles,
-            lastMove:         null,
-            availableActions: AvailableActionsSnapshot.Empty);
+        yield return new PilesState(piles);
+        yield return new LastMoveState(Move: null);
+        yield return new AvailableActionsState(AvailableActionsSnapshot.Empty);
     }
 }
 ```
 
-The engine builder constructs the four canonical services (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the service-injection rationale.
+The engine builder constructs the canonical services (`IStateScope` over the Scaffold `Store`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the service-injection rationale.
 
 ---
 
@@ -397,17 +431,17 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **Generic primitive + rule-enforced constraint.** Framework ships generic `MoveCardCommand`; "top only" is enforced in `Validate`. No `MoveTopCardCommand` primitive.
 - **Validation belongs to the handler.** `ICommandHandler.Validate(cmd, state, out reason)`. The rule never switches on command types.
 - **`Validate` signature is Try-pattern.** `bool Validate(..., out string? reason)`.
-- **Rule holds zero game-affecting state.** `LastMove` lives in `GameState`, written by a mutator. Locked as contract.
-- **State mutators react to commands** (Scaffold State pattern). Handlers don't have to know about ancillary state slots.
+- **Rule holds zero game-affecting state.** `LastMove` lives in its own `LastMoveState` slice, written by a registered `Mutator<LastMoveState, MoveCardPayload>`. Locked as contract.
+- **State mutators are payload-keyed, not command-keyed** (Scaffold State pattern). Handlers issue one `Store.Execute(payload)`; every `Mutator<TState, TPayload>` registered for that payload type runs and commits atomically. Handlers don't enumerate ancillary state slots.
 - **Player input layer is three-tier:** `PlayerIntent` (UI) → `IIntentMapper` → `GameCommand` (engine).
 - **`OnIncomingCommand` is purely flow.** Pause/lockout/stash routing only. Never inspects command body.
-- **Snapshot lives in `GameState.AvailableActions: AvailableActionsSnapshot`.** Typed templates with scope discriminator. The rule writes through `IAvailableActions.Set` ([doc 29](features/engine/models/03-snapshot-pipeline.md)).
+- **Snapshot lives in an `AvailableActionsState` slice carrying `AvailableActionsSnapshot`.** Typed templates with scope discriminator. The rule writes through `IAvailableActions.Set` ([doc 29](features/engine/models/03-snapshot-pipeline.md)).
 - **`AffordanceMap` is game-specific** and lives in the UI/gateway layer. Computed from snapshot. Framework doesn't define it.
 - **`OnQueueDrained` returns `DrainResult { Dispatch }` only.** Snapshot publication moved to the injected `IAvailableActions` service. Supersedes earlier `DrainResult { Snapshot, Dispatch }`.
 - **Four rejection paths:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect).
 - **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the rule + intent mapper through them.
 - **Engine intake order:** `handler.Validate` first, then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
-- **`GameRules` is service-injected.** `IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry` all on the constructor; methods take only ephemeral data ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
+- **`GameRules` is service-injected.** Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry` all on the constructor; methods take only ephemeral data ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
 
 ---
 
@@ -417,9 +451,12 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 
 ### Resolved (in subsequent docs)
 
-- ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read via `State.Current`.
+- ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>()`.
+- ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [04-effect-flow §4.4](features/effects/models/04-effect-flow.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
 - ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
 - ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRules` is now an abstract class ([doc 25 §2](features/engine/models/02-gamerules-contract.md), [doc 29 §5](features/engine/models/03-snapshot-pipeline.md)); virtual default is straightforward.
+- ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md). No invented provider type.
+- ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
 
 ### Deferred (need decisions, not blocked)
 
@@ -432,12 +469,9 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 - **Q5 — `AvailableActions` mutator implementation.** Framework-shipped — the `IAvailableActions` service writes the slot through an internal mutator ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)). Confirm at engine implementation.
 - **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [doc 29 §3](features/engine/models/03-snapshot-pipeline.md)). `PlayerChoice` shape pin during implementation.
 - **Q7 — `IGameStore` final shape.** Sketched as a presentation-side wrapper exposing `State`, `OnStateChanged`, `SubmitIntent`. Final shape depends on the chosen state library.
-- **Q8 — `IHandlerContext` shape.** Used as `ctx.Mutate.MoveCardBetweenPiles(...)` — purely placeholder. Will likely also expose `ctx.Actions` (effect-side `IAvailableActions`) per [doc 29 §7](features/engine/models/03-snapshot-pipeline.md). Resolves with action pipeline cleanup (Q2).
 - **Q9 — `IHandlerRegistry` shape.** Sketched as `handlers.Validate(command, state, out reason)` — needs a typed lookup mechanism (probably keyed by `Type`). Resolves with Q2.
 - **Q11 — `IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
 - **Q12 — Re-validation at dequeue.** Validate at intake plus a second time before handler runs (state may have changed). Currently OK as double-validate.
-- **Q17 — `IGameStateProvider` shape.** `State.Current` returns the immutable state; subscriptions probably live on the Store. Pin at engine implementation ([doc 29 §9](features/engine/models/03-snapshot-pipeline.md)).
-- **Q18 — Effect-side service symmetry.** Effects need `IAvailableActions` (and possibly `IGameStateProvider`) mid-execution. Likely through `IHandlerContext`. Needs a dedicated effect-flow doc ([doc 29 §7](features/engine/models/03-snapshot-pipeline.md)).
 
 ### Out of scope for Pile Counter (will surface in richer games)
 

@@ -1,7 +1,7 @@
 ---
 type: adr
 status: accepted
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 tags: [#adr, #engine, #gamerules]
 ---
 
@@ -17,7 +17,7 @@ The rules brain originally drifted between "interface returning rich shapes" and
 ## Options considered
 - A: Pure interface (`IGameRules`) — rejected because callers had to thread services through every method, bloating signatures and making evolution painful.
 - B: Static class with global services — rejected because it makes per-game state impossible and breaks composition for multi-rule scenarios.
-- C: Abstract class with constructor-injected services (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`); methods take only ephemeral data. Chosen.
+- C: Abstract class with constructor-injected services (Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`); methods take only ephemeral data. Chosen.
 
 ## Decision
 `GameRules` is an abstract class. Services are injected at construction. Public methods take only the ephemeral data needed to do their job. Composition (multi-rule games) is supported mechanically because services are passed through, not held statically.

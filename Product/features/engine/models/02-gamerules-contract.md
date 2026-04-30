@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 builds-on: [features/engine/models/01-evaluation-loop.md]
 tags: [#engine, #gamerules, #contract]
 ---
@@ -43,7 +43,7 @@ It is **not** a place for command-specific legality, action handlers, ability lo
 | **Command-specific legality** + state mutation | **Per-action** | **`ICommandHandler.Validate` / `Handle`** |
 | Trigger reaction logic | Per-ability | `AbilityDefinition.Register` |
 | **Game-wide decisions** | **Game** | **`GameRules`** |
-| State mutators (react to commands, update state slots) | Per-action | `IStateMutator<TCommand>` |
+| State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Player input → command resolution | Game | `IIntentMapper` |
 | UI affordance projection | Game (presentation) | `AffordanceMap` (see doc 27) |
 | Game session lifecycle (start, end, pause) | Game | Separate `IGameSession` (out of scope here) |
@@ -57,13 +57,13 @@ It is **not** a place for command-specific legality, action handlers, ability lo
 ```csharp
 public abstract class GameRules
 {
-    protected IGameStateProvider State    { get; }
+    protected IStateScope        State    { get; }   // Scaffold; read-only
     protected IAvailableActions  Actions  { get; }
     protected IIntakeQueue       Pending  { get; }
     protected IHandlerRegistry   Handlers { get; }
 
     protected GameRules(
-        IGameStateProvider state,
+        IStateScope        state,
         IAvailableActions  actions,
         IIntakeQueue       pending,
         IHandlerRegistry   handlers)
@@ -102,7 +102,7 @@ public abstract class GameRules
 
 | Service | Purpose |
 |---|---|
-| `IGameStateProvider State` | `State.Current` returns the immutable `GameState` of right now. Read fresh per access. |
+| `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [04-effect-flow §4.1](features/effects/models/04-effect-flow.md). |
 | `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The rule (and effects) call this to publish; the engine never auto-publishes. See [doc 29 §2](features/engine/models/03-snapshot-pipeline.md). |
 | `IIntakeQueue Pending` | The live engine queue. Same operations the old `IntakeContext.Pending` exposed: `AddFirst` / `AddLast` / `Remove` / iterate. |
 | `IHandlerRegistry Handlers` | Read-only handler lookup. The rule may call `Validate` on demand (e.g., to prune templates whose every binding fails); never invokes `Handle`. |
@@ -111,8 +111,8 @@ public abstract class GameRules
 
 - **All four methods are synchronous.** No `Task`, no awaits. `GameRules` is a pure decision layer; async work belongs to handlers, effects, and `ITriggerPipeline`.
 - **Side effects flow through narrow capability services.** `OnIncomingCommand` mutates `Pending`. `OnQueueDrained` writes through `Actions`. `Evaluate` and `FilterTriggers` remain pure observer (return data, never side-effect). **The rule never holds `GameEngine`** — only the four narrow services above. (This relaxes the "all four methods observer-shaped" framing of earlier drafts; see [doc 29 §5](features/engine/models/03-snapshot-pipeline.md).)
-- **`GameRules` never mutates `GameState` directly.** State changes happen through dispatched `GameAction`s and the state-mutator pipeline (see [doc 26 §9.5](support/samples/pile-counter.md)). `Actions.Set` writes the `AvailableActions` slot through an internal mutator — that's the only state slot the rule writes, and it goes through the same pipeline.
-- **`GameRules` holds zero game-affecting state.** This is a contract guarantee, not a suggestion. Services are *configuration*, not gameplay memory. The rule may hold service handles, lookup tables, cached evaluators — never gameplay memory. Anything game-affecting (last-move, phase, stash buffers, etc.) lives in `GameState`.
+- **`GameRules` never mutates state slices directly.** State changes happen through dispatched `GameAction`s whose handlers call `ctx.Store.Execute(payload)`, which fans out to the registered Scaffold `Mutator<TState, TPayload>`s ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md), [doc 26 §9.5](support/samples/pile-counter.md)). `Actions.Set` writes the `AvailableActionsState` slice through an internal mutator — that's the only slice the rule writes, and it goes through the same pipeline.
+- **`GameRules` holds zero game-affecting state.** This is a contract guarantee, not a suggestion. Services are *configuration*, not gameplay memory. The rule may hold service handles, lookup tables, cached evaluators — never gameplay memory. Anything game-affecting (last-move, phase, stash buffers, etc.) lives as a state slice in the Scaffold `Store`.
 - **Command-specific legality is not the rule's concern.** Each `ICommandHandler<TCommand,TResult>.Validate` owns the legality of its own command. The rule is generic across game logic.
 - **No method holds onto its arguments.** `TriggerMatch` lists and `command` / `result` parameters are valid only for the call. Caching them across calls is undefined. (Injected services *are* held — that's their purpose.)
 - **Methods may be called concurrently from different drain cycles only if the engine guarantees it.** Today the engine serializes drain cycles, so `GameRules` does not need to be thread-safe.
@@ -215,7 +215,7 @@ Return the candidates unchanged. Games that have no eligibility logic — most s
 
 ## 5. `Evaluate` — State-Based Follow-Up
 
-Called after every `GameAction` finishes executing. Reads current state via `State.Current`, returns 0..N actions to enqueue next.
+Called after every `GameAction` finishes executing. Reads current state through Scaffold `State.Get<TState>()`, returns 0..N actions to enqueue next.
 
 The single most important point about `Evaluate`: **it reads state, not the just-executed command type.** If the rule is "any card sitting in PlayArea must be executed," that rule fires the same way whether the card got there via `PlayCardCommand`, a copy effect, an opponent's trigger, or a token spawn. State-based evaluation handles all sources uniformly.
 
@@ -224,7 +224,7 @@ public override IReadOnlyList<GameAction> Evaluate(
     GameAction justExecuted,
     CommandResult result)
 {
-    var playArea = State.Current.GetZone(WellKnownZones.PlayArea);
+    var playArea = State.Get<ZonesState>().GetZone(WellKnownZones.PlayArea);
     if (playArea.HasCards)
         return new[] { new ExecuteCardCommand { Source = playArea.TopCard, ... } };
 
@@ -267,7 +267,7 @@ The rule typically writes the snapshot before returning:
 ```csharp
 public override DrainResult OnQueueDrained()
 {
-    var templates = EnumerateLegalActions(State.Current);
+    var templates = EnumerateLegalActions(State);
     Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
     return DrainResult.Empty;
 }
@@ -339,9 +339,9 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRules`, look 
 | Don't put here | Put it in |
 |---|---|
 | **Command-specific legality** ("can this `MoveCard` run right now?") | `ICommandHandler<TCommand,_>.Validate` |
-| **Game-affecting state** (last-move memory, stash buffers, phase counters) | `GameState` (rule holds zero gameplay memory — locked contract) |
+| **Game-affecting state** (last-move memory, stash buffers, phase counters) | Scaffold state slices in the `Store` (rule holds zero gameplay memory — locked contract) |
 | Action handler logic ("how does damage actually resolve") | `ICommandHandler<TCommand,_>.Handle` |
-| State mutation reacting to a command | `IStateMutator<TCommand>` (Scaffold State) |
+| State mutation reacting to a command | Scaffold `Mutator<TState, TPayload>` registered against the payload the handler dispatches via `ctx.Store.Execute(payload)` |
 | Trigger reaction logic ("when this card is damaged, draw") | `AbilityDefinition.Register` on the card |
 | Async / awaits / player-input prompts | Effects (orchestrators) and decision actions |
 | Game session lifecycle (start, end, pause, concede, disconnect) | Separate `IGameSession` layer (out of scope) |
@@ -369,14 +369,12 @@ For games with one rule module, implement `GameRules` directly. The constructor 
 
 ## 10. Open Items
 
-- **`GameState` contract** — read-only boundary `GameRules` operates against. Likely Scaffold State package; blocked on canonical state decision (doc 06).
-- **`IGameStateProvider` shape** — `State.Current` returns the immutable state. Subscriptions probably live on the Store (presentation), not the provider. Confirm at engine implementation. ([Doc 29 §9](features/engine/models/03-snapshot-pipeline.md).)
-- **`IIntakeQueue` shape** — same operations the old `LinkedList<GameCommand>` exposed. `CurrentlyExecuting` lives on the queue or on the state provider. Pin at engine implementation. ([Doc 29 §9](features/engine/models/03-snapshot-pipeline.md).)
+- **`GameState` slice catalog** — concrete catalog of slices (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, etc.) the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal.
+- **`IIntakeQueue` shape** — same operations the old `LinkedList<GameCommand>` exposed. `CurrentlyExecuting` lives on the queue or as a sibling slice. Pin at engine implementation. ([Doc 29 §9](features/engine/models/03-snapshot-pipeline.md).)
 - **Action pipeline cleanup** — handler lookup, validate, execute, trigger folds need to be drawn explicitly in one place rather than scattered across docs 18/19/22/25. (Doc 26 Q2.)
 - **`IHandlerRegistry` shape** — sketched here as `Validate(command, state, out reason)`. Final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc. (Doc 26 Q9.)
 - **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces the choice. (Doc 26 Q11.)
 - **`FilterTriggers` default impl** — identity for trigger-less games. Now possible since `GameRules` is an abstract class — provide a virtual default. (Doc 26 Q13.)
-- **Effect-side service symmetry** — effects mid-execution need the same `IAvailableActions` (and possibly `IGameStateProvider`) the rule has. Likely through `IHandlerContext`. Needs an effect-flow doc covering the full lifecycle. ([Doc 29 §7](features/engine/models/03-snapshot-pipeline.md).)
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing).
 - **`GameRules` composition** — module composition contract (provider/policy ordering, enable-disable). Service surface supports it mechanically; pin when first composed game forces it.
 
@@ -384,7 +382,9 @@ For games with one rule module, implement `GameRules` directly. The constructor 
 
 - ~~`AvailableActionsSnapshot` ownership~~ — lives in `GameState.AvailableActions`; rule writes through `Actions.Set` (doc 29 §2). Engine never auto-publishes.
 - ~~Intake telemetry / scheduler observability~~ — moot; the rule mutates `Pending` directly, no scheduler wrapper to observe. The queue itself is the trace.
-- ~~State-pattern decision~~ — services injected at construction; methods take only ephemeral data. State is read via `State.Current` ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
+- ~~State-pattern decision~~ — services injected at construction; methods take only ephemeral data. State is read through Scaffold `IStateScope.Get<TState>()` ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
+- ~~`IGameStateProvider` shape~~ — folded away. Bound directly to Scaffold `IStateScope` ([04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
+- ~~Effect-side service symmetry~~ — resolved by [04-effect-flow](features/effects/models/04-effect-flow.md). `IHandlerContext` carries `Store` + `Actions` + `Resolver`; `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`.
 - ~~`IntakeContext.Pending` type~~ — collapsed into the injected `IIntakeQueue` service ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
 - ~~Snapshot element type~~ — typed `ActionTemplate` per command type; carries `CommandType` and `Source` on the base ([doc 29 §3](features/engine/models/03-snapshot-pipeline.md)).
 

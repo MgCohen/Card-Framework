@@ -260,7 +260,7 @@ A player makes a move in Pile Counter:
    1. `handler.Validate(command, state, out reason)` — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
    2. `rule.OnIncomingCommand(command, origin)` — Pile Counter's rule trivially `Pending.AddLast(command)`, returns `Ok`.
 9. **Drain begins.** Pipeline runs: before-fold (no triggers) → `MoveCardHandler.Handle` → after-fold (no triggers) → envelope published.
-10. **State mutators fire.** `MoveCardBetweenPiles` mutator updates pile contents; `LastMoveMutator` writes `state.LastMove`.
+10. **State mutators fire.** Handler called `ctx.Store.Execute(new MoveCardPayload(...))`; Scaffold's payload-keyed registry fans out to `PileMoveMutator` (writes `PilesState`) and `LastMoveMutator` (writes `LastMoveState`); both commit atomically.
 11. **`rule.Evaluate`** runs — checks if all piles match targets. If yes, returns `[EndGameCommand]`; engine dispatches it next.
 12. **Queue drains.** `rule.OnQueueDrained` runs, enumerates new templates, calls `Actions.Set(...)`. The `IAvailableActions` mutator writes to `state.AvailableActions`.
 13. **Store fires `OnStateChanged`.** Loop returns to step 2.

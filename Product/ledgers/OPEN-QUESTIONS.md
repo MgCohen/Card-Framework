@@ -5,6 +5,7 @@ last-updated: 2026-04-30
 tags: [#general, #questions]
 ---
 
+
 # Open Questions
 
 These are unresolved design questions worth answering before implementation or during small focused spikes.
@@ -42,7 +43,7 @@ Resolved:
 - ~~**Available actions ownership**~~ → Snapshot lives in `GameState.AvailableActions: AvailableActionsSnapshot`. Rule writes through the injected `IAvailableActions` service (default in `OnQueueDrained`); effects can override mid-execution. Engine never auto-publishes. (docs 25, 27, 29)
 - ~~**Snapshot element type**~~ → Typed `ActionTemplate` subtypes per command type, with shared abstract base (`CommandType`, `Source`). Templates carry per-action fields (slots, modes, parameters as needed). (doc 29 §3)
 - ~~**Eager vs lazy binding validation**~~ → On-demand by the rule, not automatic. Per-template eligibility filters during snapshot build; per-binding `Validate` runs at dispatch (authoritative) and on-demand if the rule opts in. (doc 29 §2)
-- ~~**`GameRules` state pattern (stateless vs stateful)**~~ → Services injected at construction (`IGameStateProvider`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`); methods take only ephemeral data. State read via `State.Current`. The "zero game-affecting state" contract is preserved — services are configuration, not gameplay memory. (doc 29 §5)
+- ~~**`GameRules` state pattern (stateless vs stateful)**~~ → Services injected at construction (Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`); methods take only ephemeral data. State read through `State.Get<TState>()`. The "zero game-affecting state" contract is preserved — services are configuration, not gameplay memory. (doc 29 §5; [04-effect-flow §4.1](features/effects/models/04-effect-flow.md))
 - ~~**`IntakeContext.Pending` type**~~ → `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` service with the same operations as the original `LinkedList<GameCommand>` (`AddFirst`/`AddLast`/`Remove`/iterate). (doc 29 §5)
 - ~~**Command chain correlation**~~ → `OriginCommandId` is stamped on the first command by the gateway and threaded by the engine onto all evaluator follow-ups. The first envelope also carries `OriginIntent` for UI correlation. Follow-up envelopes carry `OriginCommandId` only. (docs 18, 20)
 
@@ -54,11 +55,11 @@ Still open:
 - **Stash release mechanics** — MTG-style scheduling uses `Stash` to hold commands until priority resolves, but the release mechanism (`Release(key)`, ordering rules on release, LIFO ordering) is not designed. (doc 21 §8)
 - **Queue ordering shape** — a simple FIFO queue is shown; whether priority queues, interrupt injection, or stack semantics for MTG-like resolution order are built into the engine queue or handled entirely via `GameRules` is unresolved. (doc 20 §11)
 - **`GameRules` composition** — a single `GameRules` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. The composition contract (provider/policy ordering, enable/disable) is deliberately undesigned for now. (doc 29 §9)
-- **`IGameStateProvider` shape** — `State.Current` returns the immutable state. Subscriptions probably live on the Store (presentation), not the provider. Pin at engine implementation. (doc 29 §9)
-- **`IIntakeQueue` shape** — same operations as the original `LinkedList`-typed `Pending`. `CurrentlyExecuting` lives on the queue or on the state provider. Pin at engine implementation. (doc 29 §9)
-- ~~**Effect-side service symmetry**~~ → Resolved. `IEffectScope` carries `IGameStateProvider` (read-only) + `Dispatch` + `Cancel`. `IHandlerContext` carries `IStore` (read + execute mutators), `IAvailableActions`, `IDecisionResolver`. Decision id ≡ `CommandId` of the opening action; routing stays uniform (intent → mapper → command → dispatch); `DecisionResponseCommand` + handler invokes `Resolver.TryResolve`. Mutation only through `IStateMutator<TPayload>` invoked by handlers via `Store.Execute`. (`features/effects/models/04-effect-flow.md`)
-- **Snapshot scope as state machine** — current `FreeInput`/`DecisionPrompt` discriminator is transitional. Richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation surface) is the eventual direction. Revisit when the first async-decision-heavy game arrives. (doc 29 §4)
-- **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the `GameState` contract. (doc 21 §3, §8)
+- **`GameState` slice catalog** — concrete catalog of state slices the engine and games need (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice, etc.) on top of the Scaffold `Store`. Each slice owns one concern; entity slices use `EntityVariableState` via the `com.scaffold.entities.states` bridge. Promoted from "GameState contract" (resolved at the bridge layer; the catalog is the still-open piece). ([04-effect-flow §4.1](features/effects/models/04-effect-flow.md), checkpoint task #2)
+- **`IIntakeQueue` shape** — same operations as the original `LinkedList`-typed `Pending`. `CurrentlyExecuting` lives on the queue or on a sibling slice. Pin at engine implementation. (doc 29 §9)
+- ~~**Effect-side service symmetry**~~ → Resolved. `IEffectScope` carries Scaffold `IStateScope` (read-only) + `Dispatch` + `Cancel`. `IHandlerContext` carries concrete Scaffold `Store` (read + execute mutators), `IAvailableActions`, `IDecisionResolver`. Decision id ≡ `CommandId` of the opening action; routing stays uniform (intent → mapper → command → dispatch); `DecisionResponseCommand` + handler invokes `Resolver.TryResolve`. Mutation only through Scaffold `Mutator<TState, TPayload>` invoked by handlers via `Store.Execute(payload)`. (`features/effects/models/04-effect-flow.md`)
+- **Snapshot scope as state machine** — current `FreeInput`/`DecisionPrompt(CommandId)` discriminator is transitional. Richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation surface) is the eventual direction. Revisit when the first async-decision-heavy game arrives. (doc 29 §4; [04-effect-flow §5.2](features/effects/models/04-effect-flow.md))
+- **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the slice catalog above. (doc 21 §3, §8)
 - **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else. (doc 21 §8)
 
 ## Authoring

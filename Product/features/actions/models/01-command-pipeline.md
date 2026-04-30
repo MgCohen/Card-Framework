@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 builds-on: root
 tags: [#actions, #model, #command-pipeline]
 ---
@@ -1512,7 +1512,7 @@ Can a pre-hook mutate state? My recommendation: not initially. It should return 
 
 Definition:
 
-> A `CommandHandler` is the main resolver for one `GameCommand` type.
+> A `CommandHandler` is the main resolver for one `GameCommand` type. The interface signature is `Task<TResult> Handle(TCommand, IHandlerContext)` — handlers are async-capable so decision handlers can `await ctx.Resolver.Await(id)`. Synchronous handlers wrap their result in `Task.FromResult(...)`. See [features/effects/models/04-effect-flow.md §6](features/effects/models/04-effect-flow.md).
 
 Responsibilities:
 
@@ -1520,7 +1520,7 @@ Responsibilities:
 - Interpret the command.
 - Decide actual outcome.
 - Apply `StateMutation`s.
-- Return `CommandResult`.
+- Return `Task<CommandResult>`.
 - Emit history entries through the current envelope.
 
 Example:
@@ -1921,7 +1921,7 @@ Per-instance effects (card abilities that modify or prevent actions) register th
 ```csharp
 public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardResult>
 {
-    public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
+    public Task<PlayCardResult> Handle(PlayCardCommand command, ResolutionScope scope)
     {
         scope.Emit(new CardPlayStartedSignal(
             actor: command.Actor,
@@ -1939,11 +1939,11 @@ public sealed class PlayCardHandler : ICommandHandler<PlayCardCommand, PlayCardR
 
         scope.Emit(new PlayCardResolvedSignal(command.Actor, command.Source, command.PlayZone));
 
-        return new PlayCardResult
+        return Task.FromResult(new PlayCardResult
         {
             Status = CommandStatus.Success,
             PlayedCard = command.Source
-        };
+        });
     }
 }
 ```
@@ -2055,7 +2055,7 @@ public sealed record HealActorCommand : GameAction
 
 public sealed class HealActorHandler : ICommandHandler<HealActorCommand, HealResult>
 {
-    public HealResult Handle(HealActorCommand command, ResolutionScope scope)
+    public Task<HealResult> Handle(HealActorCommand command, ResolutionScope scope)
     {
         var current = scope.GetVariable<int>(command.Target, "life");
         var max = scope.GetVariable<int>(command.Target, "max_life");
@@ -2072,13 +2072,13 @@ public sealed class HealActorHandler : ICommandHandler<HealActorCommand, HealRes
             key: "life",
             value: next));
 
-        return new HealResult
+        return Task.FromResult(new HealResult
         {
             Status = CommandStatus.Success,
             Target = command.Target,
             RequestedAmount = command.Amount,
             ActualAmount = actual
-        };
+        });
     }
 }
 ```
@@ -2562,7 +2562,7 @@ triggerSystem.OnBefore<MoveCardComposite>(
 
 **`PlayCardHandler`**:
 ```csharp
-public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
+public Task<PlayCardResult> Handle(PlayCardCommand command, ResolutionScope scope)
 {
     scope.Emit(new CardPlayStartedSignal(
         actor: command.Actor,
@@ -2574,7 +2574,7 @@ public PlayCardResult Handle(PlayCardCommand command, ResolutionScope scope)
 
     scope.Emit(new PlayCardResolvedSignal(command.Actor, command.Source, command.PlayZone));
 
-    return new PlayCardResult { Status = CommandStatus.Success, PlayedCard = command.Source };
+    return Task.FromResult(new PlayCardResult { Status = CommandStatus.Success, PlayedCard = command.Source });
 }
 ```
 
