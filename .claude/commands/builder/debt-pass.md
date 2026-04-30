@@ -31,7 +31,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
       Move resolved entries from `## Open` to `## Resolved`.
 
 5. **Hygiene scan.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). For each:
-   a. `grep -r '<term>' Product/ --exclude='ledgers/ALIGNMENT-DEBT.md'` to find stragglers the original cascade walk missed. (The ledger itself is excluded — its strikethrough resolution-note format always echoes the retired term verbatim, which would false-positive every pass.)
+   a. `grep -r '<term>' Product/ --exclude='ledgers/ALIGNMENT-DEBT.md' --exclude-dir='_workflow/_validation'` to find stragglers the original cascade walk missed. (Two exclusions: the ledger itself, because its strikethrough resolution-note format echoes the retired term verbatim and would false-positive every pass; and the validation harness directory, which deliberately documents fixture term names — `OldFooBar`, `LegacyBaz`, etc. — and must remain stable across debt-pass runs. Without the harness exclusion, the hygiene scan progressively destroys its own test fixture.)
    b. For each straggler hit, apply the same mechanical replacement.
    c. Open a new ledger entry **and immediately strike it through** (opened-and-closed in this same pass), recording it for the PR body's `## Stragglers caught` section.
 

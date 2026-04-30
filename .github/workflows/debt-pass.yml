@@ -49,5 +49,5 @@ jobs:
           prompt: "/builder:debt-pass"
           show_full_output: true
           claude_args: |
-            --max-turns 30
+            --max-turns 60
             --model claude-opus-4-7

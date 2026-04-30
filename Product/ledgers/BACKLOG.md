@@ -61,6 +61,16 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: [github.blog/changelog/2025-09-19-deprecation-of-node-20](https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/), `.github/workflows/debt-pass.yml`.
   Status: open
 
+- **Optimize `/builder:debt-pass` turn count via parallel tool use** — Layer 3 fifth dispatch on 2026-04-30 hit `--max-turns 30` after 31 turns ($1.49) discharging 5 entries. Workaround was bumping to `--max-turns 60`, but the agent was running tool calls serially when many were independent. Rewrite step 4 (discharge loop) and step 5 (hygiene scan) to direct the agent toward batched/parallel tool calls — e.g., read sandbox + ledger + checkpoint in one turn, edit all sandbox term replacements in one turn, grep all retired terms in a single bash invocation. Target: discharge 5 entries in ≤ 20 turns instead of 30+, halving cost per real fire.
+  Trigger: when subscription cost per organic fire becomes a concern, or before a campaign of larger discharges (≥10 entries).
+  References: `.claude/commands/builder/debt-pass.md` §4–§5, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092).
+  Status: open
+
+- **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
+  Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.
+  References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
+  Status: open
+
 - **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
