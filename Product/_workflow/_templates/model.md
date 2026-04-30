@@ -17,7 +17,7 @@ What must always be true.
 ## Examples
 At minimum, walked through against the floor sample.
 
-## Open follow-ups
+## ❓ Open follow-ups
 Unresolved threads.
 
 ---
