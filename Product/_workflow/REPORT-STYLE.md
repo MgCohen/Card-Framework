@@ -31,6 +31,7 @@ Chat reports MAY add **chat-only extensions** — emoji that have a stable role 
 |---|---|---|
 | 🕐 | session outcome / carry-over summary (the bridge line between sessions) | start-session, end-session |
 | 📤 | commit/push action | end-session |
+| 🔄 | resume signal (re-entering a pre-created skeleton that was never closed) | start-session |
 
 ---
 
@@ -95,6 +96,7 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 **Render order:**
 
 1. **Title** (H1) — `# Starting Session NN — <focus>`
+1a. **Resume strip** (conditional, directly under H1) — `🔄 Resuming session NN — prior skeleton was never closed`. Rendered only when the skill enters resume mode (per `start-session.md` step 2). Omitted in the normal case.
 2. **Suggested focus** (H2 anchor heading) — `## 🎯 Suggested focus: <one-sentence focus statement>`
 3. **Last session** (strip) — `🕐 Last session: <one-line summary of prior session's outcome>`
 4. **Carry-over** (H3 anchor heading + table) —
@@ -246,3 +248,4 @@ Uses the §2.7 result-strip pattern.
 - **2026-04-30** — `new` template locked. Added §2.7 *Result strip* primitive for light skills with single-operation output; reused by `new`.
 - **2026-04-30** — bootstrap deferred (§3.5 placeholder); will be captured in a future iteration.
 - **2026-04-30** — start-session §3.1 rendering constraints added: no prose preamble, no inline code in the 🎯 H2, 🕐 Last session is hard one-line.
+- **2026-04-30** — start-session resume mode: 🔄 added as chat-only extension; §3.1 grew a step 1a resume strip rendered when the skill detects a dangling pre-created skeleton (per `start-session.md` step 2).

@@ -13,9 +13,18 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
    - `Product/ledgers/ALIGNMENT-DEBT.md`
    - `Product/ledgers/BACKLOG.md`
 
-2. **Identify session number.** `ls Product/sessions/session-*.md | sort | tail -1` gives the latest. Increment by one. Pad to two digits (`session-13.md`, not `session-013.md`).
+2. **Identify session number.** `ls Product/sessions/session-*.md | sort | tail -1` gives the latest existing file (call it `session-LL.md`).
 
-3. **Pre-create `Product/sessions/session-NN.md`** from `Product/_workflow/_templates/session.md`. Front matter:
+   **Resume detection.** If **all** of the following are true, this is a dangling pre-created skeleton — *resume* it instead of bumping:
+   - `session-LL.md` front matter has `status: in-progress`.
+   - `SESSION-CHECKPOINT.md` `Last updated:` line still cites session `LL−1` (i.e., the checkpoint hasn't advanced to cover `LL`).
+   - `session-LL.md` has empty `### Work done` and `### Decisions settled` sections (no real work landed in the skeleton).
+
+   In resume mode: set `NN = LL`, **skip step 3** (the skeleton already exists; do not overwrite), and add a `🔄 Resuming session NN — prior skeleton was never closed` strip directly under the H1 in the rendered briefing (step 5).
+
+   Otherwise (normal case): set `NN = LL + 1`, pad to two digits (`session-13.md`, not `session-013.md`), and proceed to step 3.
+
+3. **Pre-create `Product/sessions/session-NN.md`** from `Product/_workflow/_templates/session.md`. (Skipped in resume mode.) Front matter:
    ```yaml
    ---
    type: session
@@ -48,4 +57,4 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 - **No remote effects.** The skill creates `session-NN.md` locally and renders the briefing — nothing else. Do not `git add`, `git commit`, `git push`, or open a PR. The skeleton stays gitignored until `/builder:end-session` force-adds and commits the filled-in session note alongside the rest of the work (`Product/sessions/session-*.md` is in `.gitignore`; end-session uses `git add -f`). This keeps stop hooks and `git status` quiet during the session without depending on per-user hook config.
 - **No prose preamble in the rendered briefing.** Output goes straight to the H1 — no "All inputs read…" / "Now creating the session…" narration before or between sections.
 - If the checkpoint is more than one session old (its `last-updated` doesn't match the previous session's date), warn in the briefing — the active question may be stale.
-- If `Product/sessions/session-NN.md` already exists, do not overwrite — surface that and ask the user what to do.
+- If `Product/sessions/session-NN.md` already exists *and* doesn't match the resume-detection signature in step 2 (e.g., it has real content, or the checkpoint already advanced past it), do not overwrite — surface that and ask the user what to do.
