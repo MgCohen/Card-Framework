@@ -1,32 +1,17 @@
-# Agent instructions — Card Framework
+# Card Framework — repo guide
 
-Use this file as the project anchor for AI-assisted work. Keep it factual and short; move detail into `DOCS/` or `RESEARCH/`.
+Two things you might be doing here as an AI agent:
 
-## Folders
+- **Designing or refining the framework.** This project uses the Product Builder workflow. Your operating manual is [`Product/README.md`](Product/README.md). On any new conversation, read it on first contact, then `Product/SESSION-CHECKPOINT.md` and the most recent `Product/sessions/session-NN.md`, then act. Don't read the workflow spec (`Product/_workflow/PRODUCT-BUILDER.md`) for daily operation — the operating manual is sufficient.
+- **Working on Unity code under `Assets/`.** Respect Unity conventions (scenes, prefabs, ScriptableObjects). Prefer small, reviewable changes; avoid drive-by refactors. The code under `Assets/` is the artifact `implemented` Models in `Product/` point at — don't change it without knowing which contract it satisfies.
 
-| Path | Use |
-|------|-----|
-| `PLANS/` | Active plans, milestones, task breakdowns, and decisions-in-progress. |
-| `DOCS/` | Durable project docs: architecture, conventions, APIs, onboarding. |
-| `RESEARCH/` | Notes, spikes, comparisons, links, and scratch investigation — promote stable findings into `DOCS/`. |
+`RESEARCH_BACKUP/` is a pre-migration snapshot. Read-only, never edit.
 
 ## Scaffold (packages and tooling)
 
-When searching for internal packages or wiring UPM entries, **Scaffold** is the source of truth—not random third-party guesses.
+When wiring UPM entries or pulling internal packages, **Scaffold** is the source of truth — not third-party guesses.
 
-- **Details and paths:** `DOCS/scaffold.md` (local clone, GitHub, `Assets/Packages/com.scaffold.*`, manifest URL shape, Gear-Engine as reference).
-- **Quick refs:** local `C:\Unity\Scaffold`, remote https://github.com/MgCohen/Scaffold, example consumer `C:\Unity\Gear-Engine`.
+- Details and paths: `DOCS/scaffold.md`.
+- Quick refs: local `C:\Unity\Scaffold`, remote https://github.com/MgCohen/Scaffold, example consumer `C:\Unity\Gear-Engine`.
 
-If the user asks to “check Scaffold” or “get X from Scaffold”, follow that doc: browse local `Assets/Packages/` first, then GitHub; mirror Gear-Engine’s `manifest.json` pattern for new dependencies.
-
-## Unity
-
-- Game code and assets live under `Assets/`. Respect Unity conventions (scenes, prefabs, ScriptableObjects).
-- Prefer small, reviewable changes; avoid drive-by refactors unrelated to the task.
-
-## Optional setup (not created by default)
-
-- **`.cursor/rules/`** — Persistent editor/agent rules (coding standards, file patterns).
-- **`README.md`** — Human-facing repo overview if you open-source or onboard others.
-
-When starting a large feature, add a short plan under `PLANS/` and link it here if it should always be considered.
+If asked to "check Scaffold" or "get X from Scaffold," browse local `Assets/Packages/` first, then GitHub; mirror Gear-Engine's `manifest.json` pattern for new dependencies.
