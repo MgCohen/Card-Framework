@@ -1,7 +1,7 @@
 ---
 type: ledger
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 tags: [#general, #questions]
 ---
 
@@ -56,7 +56,7 @@ Still open:
 - **`GameRules` composition** — a single `GameRules` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. The composition contract (provider/policy ordering, enable/disable) is deliberately undesigned for now. (doc 29 §9)
 - **`IGameStateProvider` shape** — `State.Current` returns the immutable state. Subscriptions probably live on the Store (presentation), not the provider. Pin at engine implementation. (doc 29 §9)
 - **`IIntakeQueue` shape** — same operations as the original `LinkedList`-typed `Pending`. `CurrentlyExecuting` lives on the queue or on the state provider. Pin at engine implementation. (doc 29 §9)
-- **Effect-side service symmetry** — effects mid-execution need the same `IAvailableActions` (and possibly `IGameStateProvider`) the rule has. Likely through `IHandlerContext`. Needs a dedicated effect-flow doc covering the full lifecycle (decision-id threading, await semantics, suspension). (doc 29 §7, §9)
+- ~~**Effect-side service symmetry**~~ → Resolved. `IEffectScope` carries `IGameStateProvider` (read-only) + `Dispatch` + `Cancel`. `IHandlerContext` carries `IStore` (read + execute mutators), `IAvailableActions`, `IDecisionResolver`. Decision id ≡ `CommandId` of the opening action; routing stays uniform (intent → mapper → command → dispatch); `DecisionResponseCommand` + handler invokes `Resolver.TryResolve`. Mutation only through `IStateMutator<TPayload>` invoked by handlers via `Store.Execute`. (`features/effects/models/04-effect-flow.md`)
 - **Snapshot scope as state machine** — current `FreeInput`/`DecisionPrompt` discriminator is transitional. Richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation surface) is the eventual direction. Revisit when the first async-decision-heavy game arrives. (doc 29 §4)
 - **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the `GameState` contract. (doc 21 §3, §8)
 - **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else. (doc 21 §8)
