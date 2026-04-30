@@ -1,6 +1,6 @@
 ---
 type: ledger
-last-updated: 2026-04-29
+last-updated: 2026-04-30
 ---
 
 # Backlog
@@ -41,7 +41,17 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §5, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §5.12.
   Status: open
 
-- **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers.
+- **`/builder:debt-pass` command** — threshold-driven auto-discharge of `ALIGNMENT-DEBT.md`. Slash command at `.claude/commands/builder/debt-pass.md`; GHA workflow on push-to-main with `paths: [Product/ledgers/ALIGNMENT-DEBT.md]` and a 5-entry threshold gate; opens a PR for human review per §5.5/§5.8. Promoted out of the Tier 2/3 umbrella below.
+  Trigger: ready to build now (plan in `PLANS/auto-debt-pass.md`, gaps 1–9 resolved).
+  References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8.
+  Status: open
+
+- **`/builder:end-session` headless mode** — extend with flags `--auto-confirm-checkpoint`, `--auto-pr`, and `--steps=close-only` so it can be composed by unattended automation (specifically `/builder:debt-pass`'s checkpoint-refresh step). Currently end-session has a hard human-approval gate on the checkpoint diff (step 5) and "suggest, don't auto-create" PR default (step 7) — both load-bearing for interactive use, but block headless composition.
+  Trigger: after `/builder:debt-pass` lands and accumulates evidence on what end-session needs to expose. Blocks: migrating debt-pass step 7 from local fill rules to delegation.
+  References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
+  Status: open
+
+- **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
   Status: open
