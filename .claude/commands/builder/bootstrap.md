@@ -15,25 +15,24 @@ User input: `$ARGUMENTS`
 
 ## Steps
 
-Walk the user interactively through the §5.0 8-step bootstrap from `PRODUCT-BUILDER.md`. Don't dump the whole tree at once — confirm each step.
+Bootstrap is the **structural half** of `PRODUCT-BUILDER.md` §5.0 — skeleton, templates, ledger stubs, ADR-0001, session-01 stub. The **orientation half** (VISION, ROADMAP, ARCHITECTURE, candidate features, seeding FEATURE-MAP and OPEN-QUESTIONS) is `/builder:setup`'s responsibility. Don't dump the whole tree at once — confirm each step.
 
 ### 1. Gather project info
 
 Ask:
 - Project name (`$ARGUMENTS` if supplied).
-- One-paragraph vision blurb.
-- Candidate features (5–12 likely). Comma-separated. Examples: `entities, zones, actions, triggers, effects, engine, presentation`.
+
+That's all. **Do not ask for a vision blurb or candidate features here** — those are `/builder:setup`'s responsibility. Bootstrap is purely structural scaffolding; the orientation pass happens after.
 
 ### 2. Create skeleton
 
 ```
 Product/
+  _workflow/_templates/
   general/
-    _templates/
-    decisions/
-  features/<feature>/
-    notes/
-    decisions/
+  decisions/
+  ledgers/
+  features/
   spikes/
   support/
     samples/
@@ -41,7 +40,7 @@ Product/
   sessions/
 ```
 
-Drop `.gitkeep` in every empty leaf so git tracks the structure.
+Drop `.gitkeep` in every empty leaf so git tracks the structure. **Don't create per-feature folders here** — `/builder:setup` step 4 does that once the user names the candidate features.
 
 ### 3. Drop templates into `_workflow/_templates/`
 
@@ -50,40 +49,38 @@ Seven files extracted from `PRODUCT-BUILDER.md` §4.1–§4.7:
 
 (§4.8 Plan and §6 ledger entry shapes are spec-only — no template files.)
 
-### 4. Initialize ledgers
+### 4. Initialize ledger stubs
 
-- `Product/ledgers/ALIGNMENT-DEBT.md` — empty, headers + entry-shape doc.
-- `Product/ledgers/BACKLOG.md` — empty, seeded with two known deferred items: "Tier 2 commands per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8" and "Tier 3 / hooks / skills as triggered."
-- `Product/ledgers/FEATURE-MAP.md` — initial table with one row per feature (status `draft`, model count `0`), plus an empty mermaid block.
-- `Product/ledgers/GLOSSARY.md` — minimal frame with `## Changelog` section ready.
-- `Product/ledgers/OPEN-QUESTIONS.md` — empty.
+All five ledgers land as empty stubs with headers + entry-shape comments. **Don't seed content here** — `/builder:setup` populates `FEATURE-MAP.md` and `OPEN-QUESTIONS.md` once the user names candidates. `BACKLOG.md`, `GLOSSARY.md`, and `ALIGNMENT-DEBT.md` are append-only during sessions.
+
+- `Product/ledgers/ALIGNMENT-DEBT.md` — empty, headers + entry-shape comment.
+- `Product/ledgers/BACKLOG.md` — empty, headers + entry-shape comment.
+- `Product/ledgers/FEATURE-MAP.md` — stub with placeholder text "No features yet — run `/builder:setup` to seed candidates."
+- `Product/ledgers/GLOSSARY.md` — minimal frame with empty `## Changelog` section.
+- `Product/ledgers/OPEN-QUESTIONS.md` — empty, headers + entry-shape comment.
 
 ### 5. Project-wide ADR scaffold
 
 Create `Product/decisions/0001-adopt-workflow.md` from a project template. The Card Framework ADR at `Product/decisions/0001-adopt-workflow.md` is the reference shape. Status `accepted`. Body should cite the new project's `_workflow/PRODUCT-BUILDER.md`.
 
-### 6. Write VISION.md
+### 6. Open session 01
 
-`Product/general/VISION.md` from the supplied blurb. Front matter `type: reference`, `status: settled`. Don't elaborate — let the first session expand it.
+`Product/sessions/session-01.md` from the session template. Status `in-progress`. Active question coming in: *"what is this project?"*. Date: today. Leave the rest of the template empty — `/builder:setup` fills "Work done" as it walks the orientation pass.
 
-### 7. Open session 01
-
-`Product/sessions/session-01.md` from the session template. Status `in-progress`. Active question coming in: *"what is this project?"*. Date: today.
-
-### 8. Drop README
+### 7. Drop README
 
 `Product/README.md` as the index pointing at the new structure. Mirror the Card Framework version.
 
-### 9. Copy AGENTS.md instructions
+### 8. Copy AGENTS.md instructions
 
 If the user wants — and if there's no existing `AGENTS.md` at repo root — drop one with the Workflow section from the Card Framework `AGENTS.md`. If `AGENTS.md` exists, suggest the additions but don't auto-merge.
 
-### 10. Report
+### 9. Report
 
 Print:
-- `Filesystem ready. <N> features scaffolded.`
-- `Workflow doc: Product/_workflow/PRODUCT-BUILDER.md needs to be authored or copied — bootstrap doesn't ship it.`
-- `Next step: copy or write PRODUCT-BUILDER.md, then begin session 01.`
+- `Skeleton ready. Workflow doc: Product/_workflow/PRODUCT-BUILDER.md still needs to be authored or copied — bootstrap doesn't ship it.`
+- `Next step: copy or write PRODUCT-BUILDER.md, then run /builder:setup to walk the orientation pass (VISION, ROADMAP, ARCHITECTURE, candidate features, FEATURE-MAP, OPEN-QUESTIONS).`
+- `/builder:start-session will refuse to open session-02+ until /builder:setup completes.`
 
 ## Notes
 
