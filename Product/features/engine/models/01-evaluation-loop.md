@@ -55,7 +55,7 @@ public sealed class GameEngine
     private readonly Queue<GameAction> pending = new();
     private readonly ICommandPipeline pipeline;
     private readonly GameRules rules;
-    private readonly GameState state;
+    private readonly Store store;   // Scaffold Store; framework slices auto-seeded at Build()
     private bool running;
 
     // Single entry point for all sources — player input, timers, trigger reactions.

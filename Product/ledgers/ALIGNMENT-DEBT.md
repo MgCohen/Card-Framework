@@ -25,9 +25,9 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ### Cascade — S19 slice catalog + Effect/Trigger unification
 
-- 2026-05-01 | source: features/engine/models/04-gamestate-slices.md | target: support/samples/pile-counter.md | reason: §9.8 `BuildInitialSlices` explicitly yields `AvailableActionsState`; engine now auto-seeds framework slices at `Build()` — remove from `BuildInitialSlices` | open
-- 2026-05-01 | source: features/engine/models/04-gamestate-slices.md | target: features/engine/models/01-evaluation-loop.md | reason: §3 `GameEngine` sketch holds `private readonly GameState state` field; no single-record `GameState` exists — field should reference `IStateScope` or `Store` | open
-- 2026-05-01 | source: features/triggers/models/01-trigger-fold.md | target: features/effects/models/02-replacement-prevention.md | reason: `FoldResult` was defined here as the public `Keep/Cancel/Replace` discriminated union returned by react functions; it is now pipeline-internal only — update to reflect that game authors use `scope.Cancel()`/`scope.Replace()` instead | open
+- ~~2026-05-01 | source: features/engine/models/04-gamestate-slices.md | target: support/samples/pile-counter.md | reason: §9.8 `BuildInitialSlices` explicitly yields `AvailableActionsState`; engine now auto-seeds framework slices at `Build()` — remove from `BuildInitialSlices` | open~~ → resolved 2026-05-01 (AvailableActionsState removed; comment added pointing to 04-gamestate-slices §4)
+- ~~2026-05-01 | source: features/engine/models/04-gamestate-slices.md | target: features/engine/models/01-evaluation-loop.md | reason: §3 `GameEngine` sketch holds `private readonly GameState state` field; no single-record `GameState` exists — field should reference `IStateScope` or `Store` | open~~ → resolved 2026-05-01 (`GameState state` replaced with `Store store`)
+- ~~2026-05-01 | source: features/triggers/models/01-trigger-fold.md | target: features/effects/models/02-replacement-prevention.md | reason: `FoldResult` was defined here as the public `Keep/Cancel/Replace` discriminated union returned by react functions; it is now pipeline-internal only — update to reflect that game authors use `scope.Cancel()`/`scope.Replace()` instead | open~~ → resolved 2026-05-01 (§1 updated to Trigger<T>/scope API; §3 TriggerMatch delegates use IEffectScope; §4 GameRules shape aligned; §6 prevention example rewritten)
 
 ## Resolved
 

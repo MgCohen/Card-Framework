@@ -413,12 +413,14 @@ public static class PileCounterBootstrap
 
         yield return new PilesState(piles);
         yield return new LastMoveState(Move: null);
-        yield return new AvailableActionsState(AvailableActionsSnapshot.Empty);
+        // AvailableActionsState, EngineState, and HistoryState are framework-owned slices
+        // auto-seeded by GameEngineBuilder.Build() — game authors never yield them here.
+        // See features/engine/models/04-gamestate-slices.md §4.
     }
 }
 ```
 
-The engine builder constructs the canonical services (`IStateScope` over the Scaffold `Store`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the service-injection rationale.
+The engine builder constructs the canonical services (`IStateScope` over the Scaffold `Store`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build()`. After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the service-injection rationale.
 
 ---
 
