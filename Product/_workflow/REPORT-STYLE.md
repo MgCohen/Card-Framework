@@ -99,7 +99,14 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 1. **Title** (H1) — `# Starting Session NN — <focus>`
 1a. **Resume strip** (conditional, directly under H1) — `🔄 Resuming session NN — prior skeleton was never closed`. Rendered only when the skill enters resume mode (per `start-session.md` step 2). Omitted in the normal case.
 2. **Suggested focus** (H2 anchor heading) — `## 🎯 Suggested focus: <one-sentence focus statement>`
-3. **Last session** (strip) — `🕐 Last session: <one-line summary of prior session's outcome>`
+3. **Last session** — two forms depending on checkpoint state:
+   - Single prior session → strip: `🕐 Last session: <one-line summary>`
+   - Parallel batch (multiple bullets in checkpoint's `## Where we stopped`) → H3 heading + bullet list:
+     ```
+     ### 🕐 Last session
+     - S(<slug> <date>): <work-summary>
+     - S(<slug> <date>): <work-summary>
+     ```
 4. **Carry-over** (H3 anchor heading + table) —
    ```
    ### ❓ Carry-over
@@ -108,8 +115,17 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
    | <topic> | S<NN> |
    ```
 5. **Debt** (stat strip) — `📊 <N> debt · threshold <T>` (plus `· ⚠️ pass-mode` when gate fired)
+5a. **Backlog** (H3 anchor heading + table, conditional) —
+   ```
+   ### 📦 Backlog
+   | Title | Trigger |
+   |---|---|
+   | <title> | <trigger, ≤8 words> |
+   ```
+   Cap at 5 entries. Omit entirely if 0 open entries (replaced by empty-state strip).
 6. **Session doc** (strip) — `` 📝 Current session doc: `Product/sessions/session-NN.md` ``
-7. **Closing prompt** (italic) — `_Confirm or pivot._`
+7. **Parallel info** (strip, v2 only, omit when on `main`) — `🔀 Branch: <branch> · parent: <head> · Parallel-safe — merge-pass will reconcile.`
+8. **Closing prompt** (italic) — `_Confirm or pivot._`
 
 **Empty-state strips** (replace the corresponding section):
 
@@ -118,6 +134,7 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 | Last session (S01) | `🕐 First session — no carry-in context` |
 | Carry-over (0 open) | `❓ No open questions` |
 | Debt (0 entries) | `📊 0 debt · clean slate` |
+| Backlog (0 open) | `📦 No backlog items` |
 
 **Adaptation rule:** the skeleton is fixed and renders the same regardless of session-type. Sections adapt to *data* (counts, gate state), never to inferred session-type — start-session does not classify the session.
 
@@ -125,7 +142,7 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 
 - **No prose preamble.** Output begins at the H1. No "All inputs read…" / "Now creating the session note…" narration before or between sections.
 - **No inline code or file paths in the 🎯 H2.** H2 line-height enlarges around `backtick spans` inconsistently, so file paths and identifiers in the focus statement render as visual jitter. Keep the H2 to plain prose; if a path needs to be named, drop it into the body of the briefing or the 📝 strip below.
-- **🕐 Last session is hard one-line.** When the prior session has multiple threads, pick the headline outcome — don't pack three clauses joined by semicolons. Detail belongs in the carry-over table or the prior session note, not on this strip.
+- **🕐 Last session — single session: hard one-line.** When a single prior session has multiple threads, pick the headline outcome — don't pack three clauses joined by semicolons. Detail belongs in the carry-over table or the prior session note, not on this strip. **Parallel batch: use bullet list** (see §3 above) — never collapse multiple sessions to one line.
 
 ### 3.2 end-session
 
@@ -343,3 +360,4 @@ Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-w
 - **2026-05-01** — design-pass template added (§3.6). 🔒 added as chat-only extension for locked design decisions.
 - **2026-05-01** — lint template added (§3.7). Archive convention documented in §3.7 note (see `PRODUCT-BUILDER.md §5.14` for full convention).
 - **2026-05-01** — archive skill template added (§3.8). Pre-confirmation prompt + post-confirmation result strip + abort strip.
+- **2026-05-01** — start-session §3.1 updated: `📦 Backlog` table added (step 5a) between Debt and Session doc; `🕐 Last session` rule extended to bullet-list form for parallel batches; `🔀 Parallel info` and `📦 No backlog items` empty-state added. 🔀 promoted from start-session.md note to explicit render step.

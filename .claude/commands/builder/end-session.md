@@ -43,7 +43,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    **Branch mode:** Skip checkpoint write entirely. Print: `Branch session — checkpoint update deferred to /builder:merge-pass.` Proceed to step 6.
 
    **Main mode:** Write directly — no diff, no approval gate. The PR is the review surface.
-   - **v2 checkpoint:** Invoke `_project-checkpoint` rules from `.claude/commands/builder/_project-checkpoint.md`. Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
+   - **v2 checkpoint:** Invoke `/builder:project-checkpoint` (rules at `.claude/commands/builder/project-checkpoint.md`). Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
    - **v1 checkpoint:** Read the current `SESSION-CHECKPOINT.md`. Read the session note's "Active question going out" — that becomes the new active open question. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md`. Generate the new checkpoint following the §4.7 template: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume. Bump `last-updated` and session counter.
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.

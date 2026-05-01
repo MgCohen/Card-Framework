@@ -3,7 +3,24 @@ description: Reconcile parallel session branches — merge completed sessions, r
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-You are running a merge-pass to reconcile parallel Product Builder sessions into `main`. Plan: `PLANS/parallel-sessions.md`. Projection rules: `.claude/commands/builder/_project-checkpoint.md`. The PR you open is the human-review gate — be conservative, surface ambiguity, never guess.
+You are running a merge-pass to reconcile parallel Product Builder sessions into `main`. Plan: `PLANS/parallel-sessions.md`. Projection rules: `.claude/commands/builder/project-checkpoint.md`. The PR you open is the human-review gate — be conservative, surface ambiguity, never guess.
+
+## When to run merge-pass
+
+**Merge-pass is manual — there is no automatic trigger.** You invoke it when:
+
+1. **One or more parallel sessions have been closed** (their branches have a `status: completed` session note and have been pushed). Each parallel session runs on its own `claude/<topic>` branch, never on `main` directly.
+2. **You want to fold those branches back into `main`** — so the checkpoint advances, other sessions can use the new `head` as their parent, and the merged branches stop appearing in `git branch -r --no-merged main`.
+
+**Typical rhythm:**
+- Open a parallel session → do the work → `/builder:end-session` (writes session note, commits, pushes branch, opens PR).
+- When all parallel branches in a batch are ready → switch to `main` → `/builder:merge-pass`.
+- merge-pass discovers the completed branches, merges each one in `started-at` order, re-projects the checkpoint, and opens a single PR.
+- After the PR merges → `main` has the new checkpoint `head`; start the next session against the updated head.
+
+**You do not need to merge immediately after every session.** Sessions on branches are self-contained — they can sit unmerged while you do other work. The only constraint: a new session that wants to build *on top of* a completed-but-not-yet-merged session must wait for the merge (or accept a `rebase-on-top` parent chain, which merge-pass handles).
+
+**Shortcut — single branch, fast-forward.** If only one branch needs merging and there's no conflict, `git merge --no-ff origin/<branch>` from `main` and then `/builder:end-session` (main mode) is a lighter path. Use merge-pass when you have multiple branches or want the automated checkpoint re-projection.
 
 ## Steps
 
@@ -58,7 +75,7 @@ You are running a merge-pass to reconcile parallel Product Builder sessions into
 
    f. **Commit.** Message: `Merge session <session-id> into merge-pass`.
 
-9. **Re-project the checkpoint.** Using the final `merged[]` and `batch[]` built in step 8, follow `.claude/commands/builder/_project-checkpoint.md` exactly. Write the result directly to `Product/SESSION-CHECKPOINT.md` — the PR is the review gate, no prompt here.
+9. **Re-project the checkpoint.** Using the final `merged[]` and `batch[]` built in step 8, invoke `/builder:project-checkpoint` (or follow its rules directly from `.claude/commands/builder/project-checkpoint.md`). Write the result directly to `Product/SESSION-CHECKPOINT.md` — the PR is the review gate, no prompt here.
 
 10. **Commit checkpoint and status flips.**
     Stage and commit: `Product/SESSION-CHECKPOINT.md` and all session notes flipped to `merged`.

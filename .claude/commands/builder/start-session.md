@@ -32,6 +32,8 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 
    Read `head` from checkpoint frontmatter. This is the `parent` for the new session.
 
+   **Argument check.** If the skill was invoked with a `--new` argument (e.g., `/builder:start-session --new`), skip resume detection entirely and proceed directly to **Normal start (v2)** below. The `--new` flag is the explicit user signal: "I want a fresh parallel session, not a resume."
+
    **Resume detection (v2).** Scan `Product/sessions/` for any file with `status: in-progress`:
    - Found, and its `parent` == `checkpoint.head` → resume mode. Use this session as-is, skip step 3. Add `🔄 Resuming <session-id> — prior skeleton was never closed` under the H1 in step 5.
    - Found, and its `parent` ∈ `checkpoint.merged[]` but ≠ `checkpoint.head` → a merge occurred since this session started. Surface: `⚠️ In-progress session <id> has parent <X> but checkpoint.head is now <Y> — a merge landed mid-session. Options: (a) close this session on its branch (end-session will skip checkpoint; merge-pass reconciles later), or (b) discard the skeleton and start fresh with the updated parent.` Wait for user decision before continuing.
@@ -84,9 +86,14 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
    **Data sources for each section:**
    - **Title focus phrase** — derived from the active question (concise noun phrase).
    - **🎯 Suggested focus** — checkpoint's "active open question," verbatim or lightly rewritten as one sentence.
-   - **🕐 Last session** — checkpoint's "Where we stopped." If no one-line bridge exists, grep the prior session note's outcome section. For session 01, render `🕐 First session — no carry-in context`.
+   - **🕐 Last session** — derived from checkpoint's `## Where we stopped`:
+     - Single bullet → one-line strip: `🕐 Last session: <text>`.
+     - Multiple bullets (parallel batch) → H3 heading + bullet list: `### 🕐 Last session` with one bullet per entry, verbatim.
+     - No bullets → grep the prior session note's outcome section for a bridge line.
+     - Session 01 → render `🕐 First session — no carry-in context`.
    - **❓ Carry-over** — top entries from `OPEN-QUESTIONS.md` (table: `Topic | Since`, where `Since` is the session number / session-id the entry was opened). If 0 open, render `❓ No open questions`.
    - **📊 Debt** — count from step 4. Append `· ⚠️ pass-mode` when count > 5. If 0, render `📊 0 debt · clean slate`.
+   - **📦 Backlog** — top open entries from `BACKLOG.md` (table: `Title | Trigger`, where `Title` is the item title without id prefix, and `Trigger` is the trigger condition truncated to ≤8 words). Cap at 5 entries. If 0 open, render `📦 No backlog items`.
    - **📝 Session doc** — path of the pre-created session note.
    - **🔀 Parallel info** (v2 only, omit when on `main`) — `Branch: <current-branch> · parent: <checkpoint.head> · Parallel-safe — merge-pass will reconcile.`
    - **Closing prompt** — `_Confirm or pivot._`
