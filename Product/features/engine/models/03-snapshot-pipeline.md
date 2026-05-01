@@ -142,7 +142,7 @@ The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., eac
 
 ## 5. `GameRules` Shape Change — Services Injected
 
-Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, queue, handlers, snapshot writer) is a constructor-injected service.
+Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, queue, and snapshot writer) is a constructor-injected service.
 
 ```csharp
 public abstract class GameRules
@@ -150,18 +150,15 @@ public abstract class GameRules
     protected IStateScope        State    { get; }   // Scaffold; read-only
     protected IAvailableActions  Actions  { get; }
     protected IIntakeQueue       Pending  { get; }
-    protected IHandlerRegistry   Handlers { get; }
 
     protected GameRules(
         IStateScope        state,
         IAvailableActions  actions,
-        IIntakeQueue       pending,
-        IHandlerRegistry   handlers)
+        IIntakeQueue       pending)
     {
         State    = state;
         Actions  = actions;
         Pending  = pending;
-        Handlers = handlers;
     }
 
     public abstract IntakeResult OnIncomingCommand(
@@ -187,7 +184,6 @@ public abstract class GameRules
 |---|---|
 | `GameState state` | Scaffold `IStateScope` (read sliced state via `State.Get<TState>()`) |
 | `IntakeContext.Pending` (live queue) | `IIntakeQueue` |
-| `IHandlerRegistry handlers` | `IHandlerRegistry` |
 | (new) snapshot write | `IAvailableActions` |
 
 ### What stays as a parameter
@@ -226,9 +222,8 @@ public sealed class PileCounterRules : GameRules
     public PileCounterRules(
         IStateScope        state,
         IAvailableActions  actions,
-        IIntakeQueue       pending,
-        IHandlerRegistry   handlers)
-        : base(state, actions, pending, handlers) { }
+        IIntakeQueue       pending)
+        : base(state, actions, pending) { }
 
     public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
     {

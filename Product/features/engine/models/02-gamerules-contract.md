@@ -379,7 +379,7 @@ A real game's `GameRules` will grow large — phase rules, SBAs, ordering rules,
 
 The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [doc 29 §2](features/engine/models/03-snapshot-pipeline.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it.
 
-For games with one rule module, implement `GameRules` directly. The constructor takes the four injected services; the four methods do the work.
+For games with one rule module, implement `GameRules` directly. The constructor takes three injected services; the four methods do the work.
 
 ---
 
