@@ -16,13 +16,48 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 1b. **Author `work-summary` (v2 sessions only).** If the session note has `schema-version: 2` in its frontmatter:
    - Read the "Active question going out" line from Part 1.
    - Pre-fill `work-summary:` as a one-line synthesis (e.g., `Drafted <X>; resolved <Y>; surfaced <Z>.`).
-   - Show the pre-fill and ask the user to confirm or edit. Write the confirmed value into the session frontmatter's `work-summary:` field before proceeding.
+   - If `work-summary` is already non-empty in the frontmatter, skip the prompt — treat the existing value as confirmed and proceed.
+   - Otherwise, show the pre-fill and ask the user to confirm or edit. Write the confirmed value into the session frontmatter's `work-summary:` field before proceeding.
 
 2. **Verify session-note hygiene.**
    - Both parts cap ~50 lines each. Warn if Part 1 or Part 2 exceeds 50 (don't block).
    - Part 1 has an "Active question coming in" — must be non-empty.
    - Part 1 "Work done" — list non-empty *or* a single line saying "no doc deltas this session" if nothing was created.
    - Part 1 "Active question going out" — required. Empty signals an unfinished session note; warn.
+
+2a. **Unsaved-body check.** (Skipped when invoked with `--auto-pr`.)
+
+   Read the conversation history of this session. Identify every artifact that has a concrete shape in the conversation — interfaces, protocols, records, model decisions, pseudocode, named contract shapes, ADR-worthy choices.
+
+   For each artifact, classify it:
+   - **Accepted** — the user gave an explicit positive verdict on the shape, or it was used/referenced as authoritative in subsequent turns.
+   - **Not accepted** — the shape was proposed but rejected, or explicitly set aside.
+   - **Uncertain** — discussed but no clear verdict; or left open by design.
+
+   Then, for each Accepted artifact, check its canonical `Product/` file (if one exists) and determine whether the shape is already captured accurately.
+
+   Render a review table and **wait for the user to confirm before writing anything:**
+
+   ```
+   ### 🔍 Sketches found this session
+
+   | Artifact | Verdict | File match |
+   |---|---|---|
+   | `IHandlerRegistry` interface | ✅ Accepted | ❌ Not in file |
+   | `GameEngineBuilder` builder pattern | ✅ Accepted | ✅ Matches engine/01 §6 |
+   | `ICommandPipeline` stub | ⚠️ Uncertain | ❌ Not in file |
+   | Queue ordering sketch | ❌ Not accepted | — |
+
+   _Review and correct if needed. Accepted + not-in-file items will be written now._
+   ```
+
+   The user may correct any row before confirming. Once confirmed:
+   - **Accepted + not in file** → write the artifact into its canonical `Product/` doc now. If no canonical file exists, create one via `/builder:new` first. Use the exact shape from the conversation — do not paraphrase a typed interface; write the interface.
+   - **Accepted + matches file** → no action.
+   - **Uncertain** → only write if the user explicitly upgraded it to Accepted during review.
+   - **Not accepted** → skip.
+
+   **If no artifacts are found** → proceed directly to step 3. No-op for operational sessions with no design work.
 
 3. **Cascade-discipline check** (per `PRODUCT-BUILDER.md` §5.7).
    - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `Product/features/**/{notes,decisions}/*.md` and `Product/decisions/*.md`.
@@ -56,7 +91,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
      - Body: bulleted deltas (docs created, models edited, ADRs landed, debt opened/closed, ledger updates).
      - Co-author trailer per the harness convention.
    - Push to the current branch (`git push`). If no upstream is set, use `-u origin <branch>`.
-   - If a PR is already open for this branch, no further action — push updates it. If no PR exists and the user has been opening PRs per session, suggest opening one (don't auto-create unless explicitly requested).
+   - If a PR is already open for this branch, no further action — push updates it. If no PR exists: with `--auto-pr`, auto-create it (`gh pr create --base main --head <branch> --title "<session-id> — <work-summary>" --body "<Work-done bullets + step-4 deltas>"`); otherwise, suggest opening one.
    - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
 8. **Render the closing report per `Product/_workflow/REPORT-STYLE.md` §3.2 (end-session template).** Follow the locked render order, anchor headings, and empty-state strips exactly.

@@ -91,7 +91,7 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    schema-version: 2
    session-id: session-<YYYYMMDD>-<HHMM>-debt-pass
    parent: <checkpoint.head>
-   status: completed
+   status: in-progress
    started-at: <today>T<HHMM>:00Z
    last-updated: <today>
    date: <today>
@@ -101,7 +101,7 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    ```
    Title: `# Debt-pass — <today> (auto)`.
    - **Active question coming in** — copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`.
-   - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`.
+   - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones).
    - **Decisions settled** — none (debt-pass is mechanical; debit `none`).
    - **Active question going out** — copy verbatim from the prior checkpoint's active question. Debt-pass does not introduce its own.
    - **Followups created** — none routed beyond the skipped entries (already in the ledger).
@@ -109,72 +109,16 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
 
 10. **Defensive empty-pass check.** Run `git status --porcelain Product/` — if zero changes, exit with `empty pass — nothing to commit, refusing to open PR` and stop. Per §3 of the plan: never open a PR with zero `Product/` changes.
 
-11. **Single commit + push — chained.** Stage, commit, and push in **one bash invocation** to keep this to a single turn:
-    ```bash
-    git add Product/ledgers/ALIGNMENT-DEBT.md \
-            Product/_workflow/retired-tokens.json \
-            <other touched paths from steps 5–6> \
-      && git add -f Product/sessions/session-<YYYYMMDD>-<HHMM>-debt-pass.md \
-      && git commit -m "Auto debt-pass <YYYY-MM-DD> — <N> closed, <M> stragglers, <K> skipped" \
-      && git push -u origin claude/debt-pass-<YYYY-MM-DD-HHMM>
-    ```
-    Note: the session note requires `git add -f` — `Product/sessions/session-*.md` is gitignored; `-f` force-tracks it at commit time.
-    - Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by **explicit paths**. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
-    - Subject: `Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped`
-    - Body: bulleted summary mirroring the PR sections in step 12. Include `https://claude.ai/code/<session>` trailer per harness convention.
-    - The chain (`&&`) means a failure at any link aborts the rest — safer than three independent calls.
+11. **Delegate close to end-session.** Invoke `/builder:end-session --auto-pr`. End-session will:
+    - Find the in-progress session note written in step 9.
+    - Skip the work-summary prompt (`work-summary` is pre-filled in frontmatter).
+    - Detect branch mode → skip checkpoint write.
+    - Run hygiene checks (all sections pre-filled; `debt: none` satisfies the cascade gate).
+    - Flip the session note to `completed`.
+    - Stage all `Product/` changes by explicit paths; `git add -f` the session note.
+    - Commit, push, and auto-create the PR with title `<session-id> — <work-summary>` and body derived from the Work-done bullets and step-4 deltas.
 
-12. **Open the PR.** `gh pr create --base main --head claude/debt-pass-<YYYY-MM-DD-HHMM> --title "Auto debt-pass <YYYY-MM-DD> — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
-
-    ```markdown
-    ## Summary
-    Auto debt-pass: <N> entries closed, <M> stragglers caught, <K> skipped.
-
-    ## Mechanical discharge
-    - <entry one-liner> → <target file>
-    - ...
-
-    ## Stragglers caught
-    - <term> in <file>:<line> → <replacement>
-    - ...
-    _(omit section if empty)_
-
-    ## Review carefully — large diffs
-    - <file> (+X / -Y lines)
-    - ...
-    _(omit section if empty)_
-
-    ## Review carefully — non-mechanical edits
-    - <entry text>
-    - ...
-    _(omit section if empty; flag triggered when reason contains rewrite/redesign/reshape/restructure)_
-
-    ## Status changes
-    - <doc> status moved <from> → <to>
-    - ...
-    _(omit section if empty; e.g. samples bumped locked → draft for re-lock cooldown)_
-
-    ## Skipped — needs a session
-    - <entry text>  (reason: vague / non-mechanical)
-    - ...
-    _(omit section if empty)_
-
-    ## Next session active question
-    <copied verbatim from session note Part 1>
-    ```
-
-    Print the PR URL on completion.
-
-## Auto-flag rules (deterministic — no judgment)
-
-Apply these to populate the PR body sections:
-
-- **`## Review carefully — large diffs`** — any single file with `>50` lines changed (sum of additions + deletions).
-- **`## Review carefully — non-mechanical edits`** — any discharged entry whose `reason` contains any of: `rewrite`, `redesign`, `reshape`, `restructure`. Inline the entry text.
-- **`## Stragglers caught`** — any new debt entries opened-and-closed during step 5 (hygiene scan).
-- **`## Status changes`** — any doc with `type: sample | model | decision` whose `status:` front-matter field changed (e.g. sample `locked → draft`, model `settled → draft`). Session notes and other types are excluded — only lockbar-managed docs trigger this flag.
-- **`## Skipped — needs a session`** — entries left open per step 5c.
-- **`## Mechanical discharge`** — everything else (the quiet bulk).
+    Print the commit SHA and PR URL on completion.
 
 ## Safety rails (hard refusals)
 
@@ -188,7 +132,7 @@ The agent **will not**:
 - Use `git push --force`, `git commit --amend`, or any `--no-verify` flag.
 - Run if the working tree is dirty on entry (step 1).
 - Run if a prior debt-pass PR is open (step 4c).
-- Run if any session file has `status: in-progress` at pre-flight (step 3) — refuse early to avoid running alongside an active session.
+- Run if any session file has `status: in-progress` at pre-flight (step 3) — refuse early to avoid running alongside an active session. (The in-progress note written in step 9 is exempt — it is created after this check passes.)
 
 If any rule would be violated, stop and surface — never silently bypass.
 
@@ -196,6 +140,5 @@ If any rule would be violated, stop and surface — never silently bypass.
 
 - This command is invoked unattended from `.github/workflows/debt-pass.yml` via `anthropics/claude-code-action@v1`. The PR is the human-review surface; the command itself has no interactive prompts.
 - The threshold gate lives in the GHA workflow (count ≥ 5 from awk/grep on the ledger). Step 2 in this command is a defensive secondary check — it should rarely fire on its own.
-- If `/builder:end-session` later exposes a headless mode (see `BACKLOG.md`), step 7's local fill rules can delete and that step delegates instead. The active question is the only piece that meaningfully carries forward; everything else is mechanical bookkeeping.
 - Manual run for debugging: `claude -p "/builder:debt-pass"` from a clean working tree on `main` with `gh` authenticated. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
 - Layer 2 local validation: see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md) for the pre-seeded fixture, override prompt, six-watchpoint checklist, and cleanup sequence — re-run after any change to this command.
