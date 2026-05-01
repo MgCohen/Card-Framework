@@ -1,0 +1,26 @@
+[
+  {
+    "term": "OldFooBar",
+    "retired": "2026-05-01",
+    "replaced_by": "NewFooBar",
+    "source_entry": "session-15 / _workflow/_validation-sandbox.md §1"
+  },
+  {
+    "term": "LegacyBaz",
+    "retired": "2026-05-01",
+    "replaced_by": "ModernBaz",
+    "source_entry": "session-15 / _workflow/_validation-sandbox.md §2"
+  },
+  {
+    "term": "DeprecatedZed",
+    "retired": "2026-05-01",
+    "replaced_by": "ActiveZed",
+    "source_entry": "session-15 / _workflow/_validation-sandbox.md §4"
+  },
+  {
+    "term": "RetireWidget",
+    "retired": "2026-05-01",
+    "replaced_by": "ShipWidget",
+    "source_entry": "session-15 / _workflow/_validation-sandbox.md §5"
+  }
+]

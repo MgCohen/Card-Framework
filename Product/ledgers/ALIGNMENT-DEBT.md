@@ -1,6 +1,6 @@
 ---
 type: ledger
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 ---
 
 # Alignment Debt
@@ -23,10 +23,6 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ## Open
 
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace OldFooBar with NewFooBar | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace LegacyBaz with ModernBaz | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace DeprecatedZed with ActiveZed | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace RetireWidget with ShipWidget | open
 - 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: redesign §3 of _validation-sandbox.md | open
 
 ### Cascade — Scaffold State/Store types audit
@@ -37,6 +33,10 @@ _All entries discharged in session 14._
 
 ## Resolved
 
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace OldFooBar with NewFooBar | open~~ → resolved 2026-05-01 (auto debt-pass: term replaced in §1 heading, prose, and intro list)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace LegacyBaz with ModernBaz | open~~ → resolved 2026-05-01 (auto debt-pass: term replaced in §2 heading, prose, and intro list)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace DeprecatedZed with ActiveZed | open~~ → resolved 2026-05-01 (auto debt-pass: term replaced in §4 heading, prose, and intro list)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace RetireWidget with ShipWidget | open~~ → resolved 2026-05-01 (auto debt-pass: term replaced in §5 heading, prose, and intro list)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md | target: support/samples/pile-counter.md §9.4 | reason: handler uses `ctx.Mutate.MoveCardBetweenPiles(...)`; new model removes `Mutate` from `IHandlerContext` — replace with `ctx.Store.Execute<TMutator, TPayload>(payload)` calls | open~~ → resolved 2026-04-30 (session 14: handler now does single `ctx.Store.Execute(new MoveCardPayload(...))`)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md | target: support/samples/pile-counter.md §9.5 | reason: `LastMoveMutator : IStateMutator<MoveCardCommand>` uses the command as payload; new model requires dedicated payload types — switch to `IStateMutator<LastMovePayload>` (and add `PileMoveMutator` invocation in handler) | open~~ → resolved 2026-04-30 (session 14: `PileMoveMutator` and `LastMoveMutator` both `Mutator<TState, MoveCardPayload>`; payload-keyed fanout)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md | target: support/samples/pile-counter.md Q8 | reason: `IHandlerContext` shape resolved (Store / Actions / Resolver, no Mutate); update Q8 from "placeholder" to resolved with link to 04-effect-flow §4.4 | open~~ → resolved 2026-04-30 (session 14: Q8 struck through with link to 04-effect-flow §4.4)

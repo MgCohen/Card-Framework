@@ -8,24 +8,24 @@ tags: [#validation]
 
 This file is a fixture for `/builder:debt-pass` Layer 2 dry runs. It contains five retiring terms in prose form so the discharge loop has real text to edit. Do not link to or reference this file from real Product/ docs — it exists only to be used (and rewritten) by the validation runbook.
 
-The sandbox terms (`OldFooBar`, `LegacyBaz`, `StaleQux`, `DeprecatedZed`, `RetireWidget`) are deliberately weird so they cannot collide with any real cascade entry.
+The sandbox terms (`NewFooBar`, `ModernBaz`, `StaleQux`, `ActiveZed`, `ShipWidget`) are deliberately weird so they cannot collide with any real cascade entry.
 
-## §1 OldFooBar overview
+## §1 NewFooBar overview
 
-The `OldFooBar` component handles the foo path. When `OldFooBar` receives a request, it routes through the legacy adapter and emits a `OldFooBar.Resolved` event downstream.
+The `NewFooBar` component handles the foo path. When `NewFooBar` receives a request, it routes through the legacy adapter and emits a `NewFooBar.Resolved` event downstream.
 
-## §2 LegacyBaz integration
+## §2 ModernBaz integration
 
-`LegacyBaz` wires into the `OldFooBar` pipeline at the seam. Callers reference `LegacyBaz` directly today; the contract has not yet been re-shaped.
+`ModernBaz` wires into the `NewFooBar` pipeline at the seam. Callers reference `ModernBaz` directly today; the contract has not yet been re-shaped.
 
 ## §3 StaleQux semantics
 
 `StaleQux` is the read-side accessor. Its shape needs reconsidering in light of the §1 changes — the slice boundary it implies no longer maps cleanly onto the new model.
 
-## §4 DeprecatedZed lifecycle
+## §4 ActiveZed lifecycle
 
-`DeprecatedZed` manages the lifecycle hooks. Three phases: init, run, teardown. The init phase fires before any `DeprecatedZed`-owned scope is established.
+`ActiveZed` manages the lifecycle hooks. Three phases: init, run, teardown. The init phase fires before any `ActiveZed`-owned scope is established.
 
-## §5 RetireWidget surface
+## §5 ShipWidget surface
 
-`RetireWidget` exposes the public API surface. Used by the §2 integration code and indirectly by §4 during teardown.
+`ShipWidget` exposes the public API surface. Used by the §2 integration code and indirectly by §4 during teardown.
