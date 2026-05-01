@@ -27,17 +27,28 @@ The design rule is **precision over parsimony**. Add slots for any concept that 
 
 ## 2. The legend
 
-| Emoji | Concept | Notes |
-|---|---|---|
-| 🎯 | active question | singular per session/report |
-| 📋 | alignment-debt entry/list | the `ALIGNMENT-DEBT` ledger concept |
-| ❓ | open-questions entry | the `OPEN-QUESTIONS` ledger concept |
-| ⚠️ | workflow gate fired | pass-mode required, threshold crossed, validation gate triggered |
-| ✅ | locked | doc/section sealed against further changes |
-| 🛑 | blocker | work halted, awaiting decision/intervention |
-| ⏳ | deferred | parked for later — explicitly *not* doing now |
-| 📝 | session note reference | path or mention of `sessions/session-NN.md` |
-| 📊 | stat line / counts | numeric summary (`12/5`, `6 entries`) |
+| Emoji | Concept | Scope | Notes |
+|---|---|---|---|
+| 🎯 | active question | both | singular per session/report |
+| 📋 | alignment-debt entry/list | both | the `ALIGNMENT-DEBT` ledger concept |
+| ❓ | open-questions entry | both | the `OPEN-QUESTIONS` ledger concept |
+| ⚠️ | workflow gate fired | both | threshold crossed, validation gate triggered |
+| ✅ | locked | both | doc/section sealed against further changes |
+| 🛑 | blocker | both | work halted, awaiting decision/intervention |
+| ⏳ | deferred / awaiting | both | parked for later, or awaiting external action (e.g., automated discharge) |
+| 📝 | session note reference | both | path or mention of `sessions/<session-id>.md` |
+| 📊 | stat line / counts | both | numeric summary (`12/5`, `6 entries`) |
+| 🕐 | session outcome / carry-over | chat only | the bridge line between sessions (start-session 🕐 Last session, end-session 🕐 Outcome) |
+| 📤 | commit/push action | chat only | end-session commit/push report line |
+| 🔄 | resume signal | chat only | re-entering a pre-created skeleton that was never closed (start-session) |
+| 🔒 | locked design decision | chat only | settled verdict from a design-pass walk |
+| 🧹 | cleanup action | chat only | start-session orphan-skeleton sweep surfacing |
+| 🔀 | branch / parallel-session info | chat only | start-session and end-session branch-mode strip |
+| 📦 | backlog reference | chat only | start-session backlog table heading |
+
+**Scope:**
+- **Both** — the emoji appears in committed `.md` artifacts (session notes, doc-type templates, etc.) AND in chat reports. Strict 1:1 across both.
+- **Chat only** — the emoji appears only in chat reports rendered by skills. Never written into committed files. Same 1:1 rule applies — no overlap with any "both" entry.
 
 All entries are single-codepoint or codepoint+VS16; token cost is ~1–2 tokens per use.
 
@@ -60,7 +71,6 @@ Documented to make drift visible. If you find yourself reaching for one of these
 - 📚 glossary — bold prose (`**GLOSSARY**`).
 - 📐 ADR / decision record — bold prose (`**ADR-0003**`).
 - 🧭 scope / scaffold boundary — bold prose.
-- 🔒 — visually conflicts with ✅ (locked); deliberately unused to avoid drift.
 - ☑️ / ✔️ — visual collision with ✅.
 - 👉 / ✋ — italic `_Confirm or pivot._` line carries the prompt without an emoji.
 - Multi-codepoint / ZWJ emoji (👨‍💻, 🏳️‍🌈) — tokenize unpredictably (5+ tokens), rendering varies.
@@ -94,3 +104,4 @@ If any test fails, use bold prose anchors instead.
 ## 6. Changelog
 
 - **2026-04-30** — initial legend (9 entries: 🎯 📋 ❓ ⚠️ ✅ 🛑 ⏳ 📝 📊).
+- **2026-05-01** — absorbed chat-only extensions from retired `REPORT-STYLE.md`. Added 🕐 📤 🔄 🔒 🧹 🔀 📦 with a `Scope: chat only` tag. 🔒 moved from §4 (excluded) to §2 — design-pass legitimized its use. ⏳ broadened from "deferred" to "deferred / awaiting" to cover the awaiting-automated-discharge case.

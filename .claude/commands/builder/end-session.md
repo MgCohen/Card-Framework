@@ -92,7 +92,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - If a PR is already open for this branch, no further action — push updates it. If no PR exists: with `--auto-pr`, auto-create it (`gh pr create --base main --head <branch> --title "<session-id> — <work-summary>" --body "<Work-done bullets + step-4 deltas>"`); otherwise, suggest opening one.
    - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
-8. **Render the closing report.** Output begins now. Render order is fixed — follow exactly. (This template is the canonical source for end-session; `REPORT-STYLE.md §3.2` mirrors it. Keep both in sync if either changes.)
+8. **Render the closing report.** Output begins now. Render order is fixed — follow exactly.
 
    **1. Title** (H1) — `# Closed <session-id>`.
 

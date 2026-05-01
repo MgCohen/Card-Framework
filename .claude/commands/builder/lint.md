@@ -137,8 +137,6 @@ Batch all new entries into a **single Edit call**.
 
 ### 8. Render the report
 
-(This template is the canonical source for lint; `REPORT-STYLE.md §3.7` mirrors it. Keep in sync.)
-
 **Render order:**
 
 1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed)

@@ -70,7 +70,7 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 
    Informational only — GHA debt-pass handles discharge automatically. If cascade count ≥ 5, the debt strip in step 5 gets `⏳ awaiting automated discharge` appended (linter alone never trips the gate). **Never** auto-invoke `/builder:debt-pass` and **never** gate the session.
 
-5. **Render the briefing.** Output begins now. Render order is fixed — follow exactly. (This template is the canonical source for start-session; `REPORT-STYLE.md §3.1` mirrors it. Keep both in sync if either changes.)
+5. **Render the briefing.** Output begins now. Render order is fixed — follow exactly.
 
    **1. Title** (H1) — `# Starting <session-id> — <focus>`. `<focus>` is a concise noun phrase derived from the active question. **No backticks or file paths in the H1** (line-height jitter).
 
