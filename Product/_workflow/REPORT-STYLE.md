@@ -239,6 +239,29 @@ Uses the §2.7 result-strip pattern.
 
 *Deferred — once-per-project skill, lower priority. Will be captured in a future iteration when the bootstrap shape is designed.*
 
+### 3.7 lint
+
+Uses the §2.4 stat strip plus a per-rule findings table. No H2 focus heading — the H1 title carries the action.
+
+**Render order:**
+
+1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed)
+2. **Summary stat strip** — `📊 <N> new findings · <M> already in ledger · <K> rules checked`
+3. **Findings** (H3 anchor heading + table, omitted if zero findings) —
+   ```
+   ### ⚠️ Findings
+   | Rule | Doc | Detail |
+   |---|---|---|
+   | A1 | features/engine/archive/01-old.md | superseded_by path missing |
+   ```
+4. **Debt opened** (strip, omitted if zero) — `📋 Debt opened: <N> new entries in ALIGNMENT-DEBT.md`
+5. **Pass-mode warning** (strip, conditional) — `⚠️ Pass-mode required — debt <N> / threshold <T>`
+6. **Clean strip** (replaces §3–§5 when zero findings) — `✅ Clean — no findings`
+
+**Empty-state behavior:** when the linter finds nothing, the entire §3–§5 block collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
+
+**Archive-convention note.** Docs in `archive/` and the convention they carry (`superseded_by`, `archived_on`, `reason`) are documented in `PRODUCT-BUILDER.md §5.14`. The linter is the enforcement layer; this report template is the output layer. No `Supersedes:` field lives on active docs — the back-reference is synthesized by the linter from `archive/*.md → superseded_by` pointers.
+
 ### 3.6 design-pass
 
 Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-walk.
@@ -284,3 +307,4 @@ Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-w
 - **2026-04-30** — start-session §3.1 rendering constraints added: no prose preamble, no inline code in the 🎯 H2, 🕐 Last session is hard one-line.
 - **2026-04-30** — start-session resume mode: 🔄 added as chat-only extension; §3.1 grew a step 1a resume strip rendered when the skill detects a dangling pre-created skeleton (per `start-session.md` step 2).
 - **2026-05-01** — design-pass template added (§3.6). 🔒 added as chat-only extension for locked design decisions.
+- **2026-05-01** — lint template added (§3.7). Archive convention documented in §3.7 note (see `PRODUCT-BUILDER.md §5.14` for full convention).

@@ -32,8 +32,9 @@ Product/
     _templates/
     decisions/
   features/<feature>/
-    notes/
+    models/
     decisions/
+    archive/
   spikes/
   support/
     samples/
@@ -41,7 +42,7 @@ Product/
   sessions/
 ```
 
-Drop `.gitkeep` in every empty leaf so git tracks the structure.
+Drop `.gitkeep` in every empty leaf so git tracks the structure. For each feature, `archive/` gets its own `.gitkeep` — it starts empty and receives docs only when a status flips to `Superseded` or `Cancelled` (§5.14).
 
 ### 3. Drop templates into `_workflow/_templates/`
 

@@ -41,9 +41,16 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §6, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §6.
   Status: open
 
-- **`/builder:lint` skill** — reference-staleness linter (broken paths, terms missing from glossary, Models pointing at superseded ADRs without acknowledgment, missing/invalid `builds-on:`, Sample edits without cooldown commit-message marker).
-  Trigger: post-migration, after Tier 1 commands settle.
-  References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §3, §5.10 of proposal.
+- ~~**`/builder:lint` skill** — reference-staleness linter (broken paths, terms missing from glossary, Models pointing at superseded ADRs without acknowledgment, missing/invalid `builds-on:`, Sample edits without cooldown commit-message marker). Trigger: post-migration, after Tier 1 commands settle. References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §3, §5.10 of proposal. Status: open~~ → done 2026-05-01 (skill spec at `.claude/commands/builder/lint.md`; archive integrity rules A1–A4 wired in; report template at `Product/_workflow/REPORT-STYLE.md` §3.7)
+
+- **Migrate existing superseded/cancelled docs into archive/ (PR 2)** — grep `Product/features/` for any docs with `status: Superseded` or `status: Cancelled` (or the older `abandoned` equivalent per §4.2–§4.3), move each into its feature's `archive/` folder, add the four front-matter fields (`status`, `superseded_by`, `archived_on`, `reason`), run `/builder:lint`, fix any inbound-link warnings the lint flags. One PR per feature or one combined PR if the count is small. Must not be bundled with the convention-introducing PR so reviewers can see the rule and migration separately.
+  Trigger: immediately after the archive-convention PR (0004-archive-convention.md) merges.
+  References: `Product/_workflow/PRODUCT-BUILDER.md §5.14`, `Product/decisions/0004-archive-convention.md`.
+  Status: open
+
+- **`/builder:archive` skill (PR 3, optional)** — helper that automates archiving a doc: flips `status` to `Superseded` or `Cancelled`, writes `superseded_by` / `archived_on` / `reason`, `git mv`s the file into the feature's `archive/` folder (creating it with `.gitkeep` if absent), runs `/builder:lint`, opens a single-commit PR. One commit, mechanical. Extends or parallels `/builder:debt-pass` harness.
+  Trigger: after PR 2 migration lands and the archive convention is validated in practice.
+  References: `Product/_workflow/PRODUCT-BUILDER.md §5.14`, `.claude/commands/builder/lint.md`.
   Status: open
 
 - **`builder-drift-detection` skill** — session-mode + CI-mode drift detection between code in `Assets/` and `settled`/`implemented` Features/Models in `Product/`.
