@@ -64,9 +64,13 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 
    Title: `# <session-id>`. In Part 1 "Active question coming in," paste the checkpoint's active open question verbatim. Leave the rest empty.
 
-4. **Debt count.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` — lines starting with `- id: ad-` (unresolved entries; resolved are struck through with `~~`). Informational only — GHA debt-pass handles discharge automatically. If ≥ 5, the debt strip in step 5 gets `⏳ awaiting automated discharge` appended. **Never** auto-invoke `/builder:debt-pass` and **never** gate the session.
+4. **Debt count.** From `Product/ledgers/ALIGNMENT-DEBT.md`, count two numbers — both informational, both rendered in step 5:
+   - **Cascade open** — lines starting with `- id: ad-` AND not containing `source: linter`. This is the threshold-relevant count.
+   - **Linter open** — lines starting with `- id: ad-` AND containing `source: linter` (or `source: linter/archive`). Reported separately so the user sees noise debt as noise.
 
-5. **Render the briefing.** Output begins now. Render order is fixed — follow exactly. (This template is the canonical source for start-session; `REPORT-STYLE.md §3.1` mirrors it. Keep both in sync if either changes.)
+   Informational only — GHA debt-pass handles discharge automatically. If cascade count ≥ 5, the debt strip in step 5 gets `⏳ awaiting automated discharge` appended (linter alone never trips the gate). **Never** auto-invoke `/builder:debt-pass` and **never** gate the session.
+
+5. **Render the briefing.** Output begins now. Render order is fixed — follow exactly.
 
    **1. Title** (H1) — `# Starting <session-id> — <focus>`. `<focus>` is a concise noun phrase derived from the active question. **No backticks or file paths in the H1** (line-height jitter).
 
@@ -96,7 +100,7 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
    ```
    `Since` = the session that opened the entry. Empty state (replaces the table): `❓ No open questions`.
 
-   **5. Debt** (strip) — `📊 <N> debt`. Append ` · ⏳ awaiting automated discharge` when N ≥ 5. Empty state: `📊 0 debt · clean slate`.
+   **5. Debt** (strip) — `📊 <cascade> cascade · <linter> linter` (drop the ` · <linter> linter` clause if linter count is 0). Append ` · ⏳ awaiting automated discharge` when cascade ≥ 5. Empty state (both 0): `📊 0 debt · clean slate`.
 
    **5a. Backlog** (H3 + table, conditional) — top open entries from `BACKLOG.md`:
    ```
@@ -120,6 +124,7 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
 ## Notes
 
 - Don't auto-edit the checkpoint or any ledger here.
+- **Session-note writes** are scoped to two operations: pre-creating the new skeleton (step 3), and flipping orphan skeletons to `status: discarded` during the orphan-cleanup pass (step 2). Both are local-only edits. No other file writes.
 - **No remote effects.** Creates the session note locally only. Do not `git add`, commit, or push. The session note stays gitignored until `/builder:end-session` force-adds it with `git add -f`.
 - If the checkpoint is more than one session old (its `last-updated` doesn't match the previous session's date), warn in the briefing — the active question may be stale.
 - If `Product/sessions/<session-id>.md` already exists and doesn't match the resume-detection signature, do not overwrite — surface that and ask the user what to do.
