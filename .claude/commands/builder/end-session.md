@@ -16,7 +16,8 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 1b. **Author `work-summary` (v2 sessions only).** If the session note has `schema-version: 2` in its frontmatter:
    - Read the "Active question going out" line from Part 1.
    - Pre-fill `work-summary:` as a one-line synthesis (e.g., `Drafted <X>; resolved <Y>; surfaced <Z>.`).
-   - Show the pre-fill and ask the user to confirm or edit. Write the confirmed value into the session frontmatter's `work-summary:` field before proceeding.
+   - If `work-summary` is already non-empty in the frontmatter, skip the prompt — treat the existing value as confirmed and proceed.
+   - Otherwise, show the pre-fill and ask the user to confirm or edit. Write the confirmed value into the session frontmatter's `work-summary:` field before proceeding.
 
 2. **Verify session-note hygiene.**
    - Both parts cap ~50 lines each. Warn if Part 1 or Part 2 exceeds 50 (don't block).
@@ -56,7 +57,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
      - Body: bulleted deltas (docs created, models edited, ADRs landed, debt opened/closed, ledger updates).
      - Co-author trailer per the harness convention.
    - Push to the current branch (`git push`). If no upstream is set, use `-u origin <branch>`.
-   - If a PR is already open for this branch, no further action — push updates it. If no PR exists and the user has been opening PRs per session, suggest opening one (don't auto-create unless explicitly requested).
+   - If a PR is already open for this branch, no further action — push updates it. If no PR exists: with `--auto-pr`, auto-create it (`gh pr create --base main --head <branch> --title "<session-id> — <work-summary>" --body "<Work-done bullets + step-4 deltas>"`); otherwise, suggest opening one.
    - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
 8. **Render the closing report per `Product/_workflow/REPORT-STYLE.md` §3.2 (end-session template).** Follow the locked render order, anchor headings, and empty-state strips exactly.
