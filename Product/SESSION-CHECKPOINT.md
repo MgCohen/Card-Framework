@@ -1,24 +1,19 @@
 ---
 type: checkpoint
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 tags: [#checkpoint]
 ---
 
 # Session Checkpoint
 
-**Last updated:** 2026-04-30 (session 14)
+**Last updated:** 2026-05-01 (session 15)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
 ---
 
 ## Where we stopped
 
-- **Alignment-debt ledger drained.** All 12 open entries from session 13 discharged in pass-mode (§5.5 / §5.8). Direct round (pile-counter §9.4 / §9.5 / Q8, snapshot-pipeline §4 / §7, command-pipeline `Handle`) + Scaffold State/Store cascade (engine/02, engine/03, ADRs 0001/0002, sample, OPEN-QUESTIONS) all resolved. Zero open entries; below the §5.8 threshold of 5.
-- **Scaffold State/Store binding propagated.** `GameRules` constructor takes Scaffold `IStateScope` (no invented `IGameStateProvider`); reads go through `State.Get<TState>()`. Mutation routes through Scaffold `Mutator<TState, TPayload>` registered per payload type, fired by handlers via `ctx.Store.Execute(payload)`. `IStateMutator<TCommand>` retired.
-- **`ICommandHandler.Handle` returns `Task<TResult>`.** Synchronous handlers wrap with `Task.FromResult(...)`; decision handlers genuinely await `ctx.Resolver.Await(id)`. Updated in command-pipeline.md and the canonical interface in 04-effect-flow.md §6.
-- **`DecisionPrompt(CommandId Id)`.** Snapshot scope's prompt id is the action's `CommandId`; the parallel `DecisionId` type is gone (per `04-effect-flow §5.1`).
-- **Pile Counter sample status: `draft`.** Downgraded from `locked` to absorb the §9 rewrite onto sliced state + payload-keyed mutators. Re-lock candidate after one stable session per §4.4 cooldown.
-- **OPEN-QUESTIONS rebalance.** `IGameStateProvider shape` folded; promoted "**`GameState` slice catalog**" as the load-bearing item (concrete slice catalog — `PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice — on top of the Scaffold `Store`).
+Auto debt-pass: 4 entries discharged, 0 stragglers caught, 1 skipped.
 
 ---
 

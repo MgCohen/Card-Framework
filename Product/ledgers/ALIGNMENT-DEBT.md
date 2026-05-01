@@ -1,6 +1,6 @@
 ---
 type: ledger
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 ---
 
 # Alignment Debt
@@ -23,10 +23,6 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ## Open
 
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace OldFooBar with NewFooBar | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace LegacyBaz with ModernBaz | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace DeprecatedZed with ActiveZed | open
-- 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace RetireWidget with ShipWidget | open
 - 2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: redesign §3 of _validation-sandbox.md | open
 
 ### Cascade — Scaffold State/Store types audit
@@ -50,3 +46,7 @@ _All entries discharged in session 14._
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md §4 | target: support/samples/pile-counter.md | reason: Heavy usage of single-record `GameState` (`state.Piles`, `state.LastMove`, `state with { ... }`), an invented `IStateMutator<MoveCardCommand>`, and `LastMoveMutator : IStateMutator<MoveCardCommand>`. Switch to: slice-based reads (`scope.Get<PileState>(pileRef)`, `scope.Get<LastMoveState>()`); Scaffold `Mutator<TState, TPayload>` with payload-keyed registration; handler does one `ctx.Store.Execute(new MoveCardPayload(...))` and the registered `PileMoveMutator` and `LastMoveMutator` both fan out from that payload. Discharges in lockstep with the §9.4–§9.5 + Q8 entries above. | open~~ → resolved 2026-04-30 (session 14: §9.1–§9.8 rewritten on slice/payload model; sample status downgraded to `draft` for re-lock cooldown)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md §4 | target: ledgers/OPEN-QUESTIONS.md | reason: Three `IGameStateProvider` mentions (in resolved-but-still-listed items and the snapshot-scope follow-up); replace with `IStateScope`. The `GameState` contract / slice catalog open item is the load-bearing one — promote to track the slice catalog explicitly. | open~~ → resolved 2026-04-30 (session 14: `IGameStateProvider` mentions purged; new "GameState slice catalog" entry promoted)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md §4 | target: features/presentation/models/01-presentation-loop.md §10 | reason: end-to-end trace step 10 says `MoveCardBetweenPiles mutator … LastMoveMutator writes state.LastMove` — pre-cascade language. Missed in the session-13 cascade walk. Update to payload-keyed Scaffold mutators writing slices. | open~~ → resolved 2026-04-30 (session 14: step 10 rewritten; opened-and-closed in same pass-mode session)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace OldFooBar with NewFooBar | open~~ → resolved 2026-05-01 (auto debt-pass: OldFooBar → NewFooBar across sandbox)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace LegacyBaz with ModernBaz | open~~ → resolved 2026-05-01 (auto debt-pass: LegacyBaz → ModernBaz across sandbox)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace DeprecatedZed with ActiveZed | open~~ → resolved 2026-05-01 (auto debt-pass: DeprecatedZed → ActiveZed across sandbox)
+- ~~2026-04-30 | source: _workflow/_validation-sandbox.md | target: _workflow/_validation-sandbox.md | reason: replace RetireWidget with ShipWidget | open~~ → resolved 2026-05-01 (auto debt-pass: RetireWidget → ShipWidget across sandbox)
