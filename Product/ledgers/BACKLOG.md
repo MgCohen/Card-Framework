@@ -46,6 +46,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8.
   Status: open
 
+- **`/builder:design-pass` skill** — structured Q-by-Q design walk for non-mechanical Model edits. Pattern: enumerate questions in dependency order; for each present options + lean + rationale; wait for verdict; advance. Locks open design space progressively without committing edits until all Qs settle. Session 15 is the canonical example (8 Qs on the §6 boundary redesign).
+  Trigger: when a second design question of similar shape arrives, or post Tier 1 commands.
+  References: `Product/sessions/session-15.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
+  Status: open
+
 - **`/builder:end-session` headless mode** — extend with flags `--auto-confirm-checkpoint`, `--auto-pr`, and `--steps=close-only` so it can be composed by unattended automation (specifically `/builder:debt-pass`'s checkpoint-refresh step). Currently end-session has a hard human-approval gate on the checkpoint diff (step 5) and "suggest, don't auto-create" PR default (step 7) — both load-bearing for interactive use, but block headless composition.
   Trigger: after `/builder:debt-pass` lands and accumulates evidence on what end-session needs to expose. Blocks: migrating debt-pass step 7 from local fill rules to delegation.
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
