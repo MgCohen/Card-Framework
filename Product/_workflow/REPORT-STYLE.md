@@ -262,6 +262,40 @@ Uses the §2.4 stat strip plus a per-rule findings table. No H2 focus heading �
 
 **Archive-convention note.** Docs in `archive/` and the convention they carry (`superseded_by`, `archived_on`, `reason`) are documented in `PRODUCT-BUILDER.md §5.14`. The linter is the enforcement layer; this report template is the output layer. No `Supersedes:` field lives on active docs — the back-reference is synthesized by the linter from `archive/*.md → superseded_by` pointers.
 
+### 3.8 archive
+
+Uses the §2.7 result-strip pattern plus a confirmation gate before any mutation.
+
+**Pre-confirmation prompt** (shown in step 7 of the skill — user must confirm before writes happen):
+```
+git mv <source> → <feature>/archive/<filename>
+
+Front-matter changes:
+  status: <old> → <Superseded|Cancelled>
+  + superseded_by: <path>   (if Superseded)
+  + archived_on: <date>
+  + reason: <text>
+
+Confirm? [y/n]
+```
+
+**Post-confirmation result strip:**
+```
+**Archived:** `<feature>/archive/<filename>` (status: <Superseded|Cancelled>)
+📋 Lint: <zero findings | N findings — ALIGNMENT-DEBT.md updated>
+📝 Session note: Part 1 "Work done" updated  (omit if no in-progress session)
+📤 PR: <url>
+```
+
+**Abort strip** (lint findings + user chose abort):
+```
+⚠️ Aborted — staged changes reset. Lint findings:
+| Rule | Doc | Detail |
+|---|---|---|
+| A2 | <path> | stale inbound link |
+Fix the links above, then re-run /builder:archive.
+```
+
 ### 3.6 design-pass
 
 Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-walk.
@@ -308,3 +342,4 @@ Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-w
 - **2026-04-30** — start-session resume mode: 🔄 added as chat-only extension; §3.1 grew a step 1a resume strip rendered when the skill detects a dangling pre-created skeleton (per `start-session.md` step 2).
 - **2026-05-01** — design-pass template added (§3.6). 🔒 added as chat-only extension for locked design decisions.
 - **2026-05-01** — lint template added (§3.7). Archive convention documented in §3.7 note (see `PRODUCT-BUILDER.md §5.14` for full convention).
+- **2026-05-01** — archive skill template added (§3.8). Pre-confirmation prompt + post-confirmation result strip + abort strip.
