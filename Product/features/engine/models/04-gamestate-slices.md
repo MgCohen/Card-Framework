@@ -80,7 +80,7 @@ public sealed record HistoryState(
 - **Written by.** Engine-internal history mutator (fires after every `pipeline.Execute` call, appending the closed envelope). Not writable by game authors.
 - **Read by.** Presentation layer (history loop), networking (transport), replay tooling.
 - **Seeded.** `HistoryState(ImmutableList<HistoryEnvelope>.Empty)` at `Build()`.
-- **Note.** `HistoryEnvelope` is currently pseudocode (see [OPEN-QUESTIONS.md — HistoryEnvelope typed definition](../ledgers/OPEN-QUESTIONS.md)). The slice exists and is seeded; its payload type is pinned when that open question resolves.
+- **Note.** `HistoryEnvelope` is currently pseudocode (see [OPEN-QUESTIONS.md — HistoryEnvelope typed definition](ledgers/OPEN-QUESTIONS.md)). The slice exists and is seeded; its payload type is pinned when that open question resolves.
 
 ---
 
@@ -147,7 +147,7 @@ There is no special accessor for framework slices. `IStateScope` is the uniform 
 
 ## 7. Open Follow-Ups
 
-- **`HistoryEnvelope` typed definition** — the concrete C# record for `HistoryEnvelope` (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed. ([OPEN-QUESTIONS.md](../ledgers/OPEN-QUESTIONS.md))
+- **`HistoryEnvelope` typed definition** — the concrete C# record for `HistoryEnvelope` (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed. ([OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md))
 - **`EngineState` surface** — whether `IsRunning`/`CurrentCommand` are the right fields, or whether additional engine-internal state (pending queue snapshot, awaiter state) belongs here, is deferred to the engine implementation pass.
 - **Slice catalog growth** — as features land (lifecycle, zones, entities bridge), new game-authored slice types will emerge. The framework slice count may also change. Update this doc when a new framework-owned slice is formally added.
 
@@ -159,4 +159,4 @@ There is no special accessor for framework slices. `IStateScope` is the uniform 
 - [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `IAvailableActions` service, `GameRules` constructor
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — snapshot production, `IAvailableActions.Set`
 - [support/samples/pile-counter.md](support/samples/pile-counter.md) — working example of game-authored slices (`PilesState`, `LastMoveState`)
-- [ledgers/OPEN-QUESTIONS.md](../ledgers/OPEN-QUESTIONS.md) — `HistoryEnvelope` typed definition
+- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — `HistoryEnvelope` typed definition

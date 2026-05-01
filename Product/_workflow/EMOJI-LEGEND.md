@@ -1,8 +1,8 @@
 ---
 type: model
 status: accepted
-last-updated: 2026-04-30
-builds-on: [PRODUCT-BUILDER.md]
+last-updated: 2026-05-01
+builds-on: [_workflow/PRODUCT-BUILDER.md]
 tags: [#workflow, #meta]
 ---
 

@@ -2,8 +2,8 @@
 name: builder:lint
 description: >
   Reference-staleness and archive-integrity linter for the Product Builder workflow.
-  Scans Product/ docs for broken path references, stale archive links, and
-  status/location mismatches, then appends findings to ledgers/ALIGNMENT-DEBT.md.
+  Scans Product/ docs for broken path references, convention violations, stale archive
+  links, and status/location mismatches, then appends findings to ledgers/ALIGNMENT-DEBT.md.
   Use this skill whenever the user runs /builder:lint, asks to lint the product docs,
   check for stale references, run an integrity check on the archive, audit broken
   paths in the feature docs, or wants to know if there are any reference problems
@@ -15,15 +15,17 @@ allowed-tools: Read, Bash, Glob, Grep, Edit
 
 You are the Product Builder reference-staleness and archive-integrity linter. Your job is to scan `Product/` docs for integrity problems and record them in `ledgers/ALIGNMENT-DEBT.md`. You do not fix problems — you report them so the discharge flow can handle them.
 
-**Why this matters:** the Product Builder workflow maintains a web of cross-references between feature docs, decisions, ledgers, and archived predecessors. When a doc moves, gets archived, or has its path changed, the references pointing to it can silently break. This linter surfaces those breaks before they cause confusion or data loss.
+**Why this matters:** the Product Builder workflow maintains a web of cross-references between feature docs, decisions, ledgers, and archived predecessors. The reference convention (`_workflow/REFERENCE-CONVENTIONS.md`) requires every cross-doc reference to be a `Product/`-rooted absolute path — this keeps grep, sed, and renames mechanical. When a doc moves, gets archived, or someone slips a relative path or encoded filename into a link, the references break silently. This linter surfaces those breaks before they cause confusion or data loss.
+
+Workflow context: `Product/_workflow/PRODUCT-BUILDER.md` §5.10 (path/builds-on rules) and §5.14 (archive integrity rules). `Product/_workflow/REFERENCE-CONVENTIONS.md` (canonical reference format).
 
 ## Arguments
 
 User input: `$ARGUMENTS` (default: `--all`)
 
-- `--all` — run all checks (archive integrity + path resolution + builds-on)
+- `--all` — run all checks (archive integrity + path/convention checks)
 - `--archive-only` — only archive integrity checks (rules A1–A4)
-- `--paths-only` — only path and builds-on checks (rules S1–S2)
+- `--paths-only` — only path-and-convention checks (rules S1–S4)
 
 ## Performance rule
 
@@ -113,51 +115,73 @@ For every `superseded_by: <path>` found in step A1: verify (1) the path exists o
 
 ---
 
-## Step 3 — Path-resolution check (run when `--all` or `--paths-only`)
+## Step 3 — Path-and-convention checks (run when `--all` or `--paths-only`)
+
+Rules S1–S4 enforce the reference convention: every cross-doc reference is a `Product/`-rooted absolute path; filenames are ASCII-clean.
 
 ### S1 — Broken path references
 
-Two categories of reference can break: **markdown links** `[text](path)` and **bare path mentions** in prose. Run both passes and union the results.
+Every absolute path mentioned in a markdown link target or in bare prose must resolve to an existing file under `Product/`.
 
-**Pass 1 — markdown link targets** (catches URL-encoded paths and relative paths):
+**Pass 1 — markdown link targets:**
 
 ```bash
-grep -rnoP '\]\(([^)]*\.md[^)]*)\)' Product/ --include='*.md' \
+grep -rnoP '\]\(([^)]*\.md[^)#]*)' Product/ --include='*.md' \
   --exclude-dir='_workflow/_validation'
 ```
 
-This extracts the `(path)` from every `[text](path.md...)` link. Paths may be:
-- Absolute: `features/engine/models/01-evaluation-loop.md`
-- Relative: `../ledgers/OPEN-QUESTIONS.md`
-- URL-encoded: `spikes/SabberStone%20(1).md`
+For each extracted path (strip any `#anchor` suffix): check that `Product/<path>` exists on disk.
 
-For each extracted path: URL-decode it (replace `%20` → space, `%28` → `(`, `%29` → `)`), then resolve relative to the containing file's directory if it starts with `../`. Then check if the resolved path exists on disk.
-
-**Pass 2 — bare path mentions**:
+**Pass 2 — bare path mentions in prose:**
 
 ```bash
-grep -rnoE 'features/[a-zA-Z0-9_-]+/[a-zA-Z0-9/_. %-]+\.md|Product/[a-zA-Z0-9/_. %-]+\.md' \
+grep -rnoE '\b(features|ledgers|sessions|spikes|support|general|decisions|_workflow)/[a-zA-Z0-9/_.-]+\.md' \
   Product/ --include='*.md' --exclude-dir='_workflow/_validation' \
   | grep -v '/archive/'
 ```
 
-For each unique path: verify it exists on disk.
+For each unique path: verify `Product/<path>` exists on disk.
 
-**Prose/code exclusion:** paths that appear exclusively inside triple-backtick code blocks or inline backtick spans are illustrative examples — do not flag them. Use judgment: if the same path appears both in prose and in a code block, flag it. If it appears *only* inside a code block that is obviously a template or example, skip it.
+**Backtick exclusion:** paths inside inline backticks (`` `path/to.md` ``) or fenced code blocks are illustrative — not flagged. Mechanical rule, no judgment: if the match is wrapped in backticks or sits inside ` ``` ` fences, skip it.
 
 **Finding:** `S1 — broken path reference`
 
 ### S2 — builds-on references
 
-`builds-on:` declares dependency chains between docs. A doc that builds on an archived or missing predecessor is built on a moving target. This check covers **all docs under `Product/`** — not just `features/` — because workflow docs and ledgers also declare dependencies.
+`builds-on:` declares dependency chains. Every entry must resolve to an existing, non-archived file (or be the literal `root`).
 
 ```bash
 grep -rn '^builds-on:' Product/ --include='*.md' | grep -v '/archive/'
 ```
 
-Parse each `builds-on:` list. For each entry that is not the literal `root`: verify the path resolves to an existing, non-archived file. Paths in `builds-on:` are relative to `Product/` root unless they start with `_workflow/` or another explicit prefix — resolve accordingly.
+Parse each `builds-on:` list. Each entry is interpreted as `Product/<entry>` (no relative resolution, no per-location prefix logic). Entries pointing into `archive/` are always findings.
 
 **Finding:** `S2 — builds-on references missing or archived path`
+
+### S3 — Relative path violation
+
+The convention forbids relative paths in markdown links and `builds-on:`. Catch them with a single regex pass:
+
+```bash
+grep -rnE '\]\((\.\./|\./|/)[^)]*\.md|^builds-on:.*\.\./' \
+  Product/ --include='*.md' \
+  --exclude-dir='_workflow/_validation'
+```
+
+Backtick-wrapped relative paths in prose (illustrative shape examples) are not flagged — same rule as S1.
+
+**Finding:** `S3 — relative path reference (must be Product/-rooted absolute)`
+
+### S4 — Filename hygiene
+
+Filenames under `Product/` must be ASCII without spaces, parens, percents, or brackets — this guarantees URL encoding is never needed.
+
+```bash
+find Product/ -name '*.md' -not -path '*/_workflow/_validation/*' \
+  | grep -E '[ ()%\[\]]'
+```
+
+**Finding:** `S4 — filename contains forbidden character (space/paren/percent/bracket)`
 
 ---
 
@@ -172,8 +196,14 @@ Read `Product/ledgers/ALIGNMENT-DEBT.md`. For each finding from steps 2–3, che
 Append all new findings to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Entries` in a single Edit call. Use the v2 entry shape:
 
 ```
-- id: ad-YYYYMMDD-NNN | status: open | source: linter | target: <affected path> | reason: <rule code> — <one-line description>
+- id: ad-YYYYMMDD-NNN | status: open | source: <linter|linter/archive> | target: <affected path> | reason: <rule code> — <one-line description>
 ```
+
+**Source classification:**
+- `source: linter` — for §5.10 path/convention rules (S1, S2, S3, S4).
+- `source: linter/archive` — for §5.14 archive integrity rules (A1, A2, A3a, A3b, A4).
+
+The `linter*` source prefix is what excludes these entries from the §5.8 cascade threshold count — do not invent other source labels.
 
 Use today's date. Batch all new entries into **one Edit call** — never one edit per finding.
 
@@ -183,36 +213,23 @@ The `NNN` sequence continues from the highest existing `ad-YYYYMMDD-NNN` id in t
 
 ## Step 6 — Render the report
 
-Emit a compact lint report:
+**Render order:**
 
-```
-# Lint Report
+1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed).
+2. **Summary stat strip** — `📊 <N> new findings · <M> already in ledger · <K> rules checked`.
+3. **Findings** (H3 + table, omitted if zero findings):
+   ```
+   ### ⚠️ Findings
+   | Rule | Doc | Detail |
+   |---|---|---|
+   | A1 | features/engine/archive/01-old.md | superseded_by path missing |
+   | S3 | ledgers/FEATURE-MAP.md:25 | relative link `../features/...` |
+   ```
+4. **Debt opened** (strip, omitted if zero) — `📋 Debt opened: <N> new entries in ALIGNMENT-DEBT.md (source: linter*)`.
 
-📊 <N> new entries · <M> skipped (already open) · <K> total open
+**Empty-state:** when the linter finds nothing, the §3–§4 block collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
 
-### Findings by rule
-| Rule | New | Description |
-|------|-----|-------------|
-| A1   | N   | Forward-pointer integrity |
-| A2   | N   | Stale inbound links |
-| A3a  | N   | Retired status, active location |
-| A3b  | N   | Active status, archive location |
-| A4   | N   | Missing successor |
-| S1   | N   | Broken path references |
-| S2   | N   | Broken builds-on references |
-```
-
-If total open entries reach ≥ 5 after this run, add a pass-mode strip:
-
-```
-⚠️ Pass-mode: <total> open debt entries — consider a discharge pass before continuing.
-```
-
-If all rules returned zero findings, emit:
-
-```
-✅ Clean: no new findings.
-```
+**Linter findings do not trip the §5.8 threshold** (only cascade entries do — see PRODUCT-BUILDER.md §5.8 / §5.10). No pass-mode strip from this skill.
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 type: feature-map
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 ---
 
 # Feature Map
@@ -22,13 +22,13 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 
 | Feature | Status | Models | Purpose |
 |---|---|---|---|
-| [`entities`](../features/entities/entities.md) | settled | 1 | Definition / Instance / Identifier model. Foundation for every runtime object. |
-| [`zones`](../features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
-| [`actions`](../features/actions/actions.md) | settled | 2 | Command pipeline (intent → command → handler → state) + availability snapshot. |
-| [`triggers`](../features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
-| [`effects`](../features/effects/effects.md) | settled | 4 | Async orchestration of action sequences. Replacement / prevention. Ongoing effects. Effect-flow contract (services, decision threading, mutation discipline). |
-| [`engine`](../features/engine/engine.md) | settled | 4 | Evaluation loop, `GameRules` contract, snapshot pipeline, GameState slice catalog. The simulation core. |
-| [`presentation`](../features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
+| [`entities`](features/entities/entities.md) | settled | 1 | Definition / Instance / Identifier model. Foundation for every runtime object. |
+| [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
+| [`actions`](features/actions/actions.md) | settled | 2 | Command pipeline (intent → command → handler → state) + availability snapshot. |
+| [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
+| [`effects`](features/effects/effects.md) | settled | 4 | Async orchestration of action sequences. Replacement / prevention. Ongoing effects. Effect-flow contract (services, decision threading, mutation discipline). |
+| [`engine`](features/engine/engine.md) | settled | 4 | Evaluation loop, `GameRules` contract, snapshot pipeline, GameState slice catalog. The simulation core. |
+| [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
 | `interaction` | **considered** | — | Input gesture → `PlayerIntent` translation. Drag/drop/click/target. The interaction layer per ARCHITECTURE. |
 | `networking` | **considered** | — | Command/history transport, visibility filter, deterministic RNG, versioned definitions, snapshots for join/reconnect. The networking layer per ARCHITECTURE; post-v1. |
@@ -76,31 +76,31 @@ Solid arrows = current `builds-on` edges between settled features. Dashed arrows
 ## Model-level breakdown
 
 ### `entities` (settled)
-- [`models/01-definition-instance-model.md`](../features/entities/models/01-definition-instance-model.md) — settled, builds-on: `root`
+- [`models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — settled, builds-on: `root`
 
 ### `zones` (settled)
-- [`models/01-zone-model.md`](../features/zones/models/01-zone-model.md) — settled, builds-on: `root`
+- [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, builds-on: `root`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](../features/actions/models/01-command-pipeline.md) — settled, builds-on: `root`
-- [`models/02-availability-snapshot.md`](../features/actions/models/02-availability-snapshot.md) — settled, builds-on: `actions/01`, `engine/03` ⚠️ (see cycle)
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, builds-on: `root`
+- [`models/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) — settled, builds-on: `actions/01`, `engine/03` ⚠️ (see cycle)
 
 ### `triggers` (settled)
-- [`models/01-trigger-fold.md`](../features/triggers/models/01-trigger-fold.md) — settled, builds-on: `engine/01`
+- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, builds-on: `engine/01`
 
 ### `effects` (settled)
-- [`models/01-async-dispatch.md`](../features/effects/models/01-async-dispatch.md) — settled, builds-on: `root`
-- [`models/02-replacement-prevention.md`](../features/effects/models/02-replacement-prevention.md) — settled, builds-on: `effects/01`
-- [`models/03-ongoing-effects.md`](../features/effects/models/03-ongoing-effects.md) — settled, builds-on: `effects/01`
-- [`models/04-effect-flow.md`](../features/effects/models/04-effect-flow.md) — settled, builds-on: `effects/01`, `engine/03`
+- [`models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) — settled, builds-on: `root`
+- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, builds-on: `effects/01`
+- [`models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) — settled, builds-on: `effects/01`
+- [`models/04-effect-flow.md`](features/effects/models/04-effect-flow.md) — settled, builds-on: `effects/01`, `engine/03`
 
 ### `engine` (settled)
-- [`models/01-evaluation-loop.md`](../features/engine/models/01-evaluation-loop.md) — settled, builds-on: `root`
-- [`models/02-gamerules-contract.md`](../features/engine/models/02-gamerules-contract.md) — settled, builds-on: `engine/01`
-- [`models/03-snapshot-pipeline.md`](../features/engine/models/03-snapshot-pipeline.md) — settled, builds-on: `engine/02`, `actions/02` ⚠️ (see cycle)
+- [`models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — settled, builds-on: `root`
+- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, builds-on: `engine/01`
+- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — settled, builds-on: `engine/02`, `actions/02` ⚠️ (see cycle)
 
 ### `presentation` (settled)
-- [`models/01-presentation-loop.md`](../features/presentation/models/01-presentation-loop.md) — settled, builds-on: `actions/02`, `engine/03`
+- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, builds-on: `actions/02`, `engine/03`
 
 ### `authoring` (considered)
 No models yet. Promote when authoring tooling becomes the active thread (likely after first feature reaches `implemented`).
