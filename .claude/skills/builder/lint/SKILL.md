@@ -117,26 +117,45 @@ For every `superseded_by: <path>` found in step A1: verify (1) the path exists o
 
 ### S1 — Broken path references
 
-Bare path references of the form `features/<feature>/...` or `Product/...` in docs must resolve to real files. Broken references mean readers follow links to 404s.
+Two categories of reference can break: **markdown links** `[text](path)` and **bare path mentions** in prose. Run both passes and union the results.
+
+**Pass 1 — markdown link targets** (catches URL-encoded paths and relative paths):
 
 ```bash
-grep -rnoE 'features/[a-z]+/[a-z/._-]+\.md|Product/[a-z/._-]+\.md' \
-  Product/ --include='*.md' | grep -v '/archive/'
+grep -rnoP '\]\(([^)]*\.md[^)]*)\)' Product/ --include='*.md' \
+  --exclude-dir='_workflow/_validation'
 ```
 
-For each unique path: verify it exists on disk. Paths under `archive/` are valid only when the linking doc is the designated successor (already covered by A2).
+This extracts the `(path)` from every `[text](path.md...)` link. Paths may be:
+- Absolute: `features/engine/models/01-evaluation-loop.md`
+- Relative: `../ledgers/OPEN-QUESTIONS.md`
+- URL-encoded: `spikes/SabberStone%20(1).md`
+
+For each extracted path: URL-decode it (replace `%20` → space, `%28` → `(`, `%29` → `)`), then resolve relative to the containing file's directory if it starts with `../`. Then check if the resolved path exists on disk.
+
+**Pass 2 — bare path mentions**:
+
+```bash
+grep -rnoE 'features/[a-zA-Z0-9_-]+/[a-zA-Z0-9/_. %-]+\.md|Product/[a-zA-Z0-9/_. %-]+\.md' \
+  Product/ --include='*.md' --exclude-dir='_workflow/_validation' \
+  | grep -v '/archive/'
+```
+
+For each unique path: verify it exists on disk.
+
+**Prose/code exclusion:** paths that appear exclusively inside triple-backtick code blocks or inline backtick spans are illustrative examples — do not flag them. Use judgment: if the same path appears both in prose and in a code block, flag it. If it appears *only* inside a code block that is obviously a template or example, skip it.
 
 **Finding:** `S1 — broken path reference`
 
 ### S2 — builds-on references
 
-`builds-on:` declares dependency chains between docs. A doc that builds on an archived or missing predecessor is built on a moving target.
+`builds-on:` declares dependency chains between docs. A doc that builds on an archived or missing predecessor is built on a moving target. This check covers **all docs under `Product/`** — not just `features/` — because workflow docs and ledgers also declare dependencies.
 
 ```bash
-grep -rn '^builds-on:' Product/features/ --include='*.md' | grep -v '/archive/'
+grep -rn '^builds-on:' Product/ --include='*.md' | grep -v '/archive/'
 ```
 
-Parse each `builds-on:` list. For each entry that is not the literal `root`: verify the path resolves to an existing, non-archived file.
+Parse each `builds-on:` list. For each entry that is not the literal `root`: verify the path resolves to an existing, non-archived file. Paths in `builds-on:` are relative to `Product/` root unless they start with `_workflow/` or another explicit prefix — resolve accordingly.
 
 **Finding:** `S2 — builds-on references missing or archived path`
 
