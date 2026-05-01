@@ -46,6 +46,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8.
   Status: open
 
+- **`/builder:design-pass` skill** — structured Q-by-Q design walk for non-mechanical Model edits. Pattern: enumerate questions in dependency order; for each present options + lean + rationale; wait for verdict; advance. Locks open design space progressively without committing edits until all Qs settle. Session 15 is the canonical example (8 Qs on the §6 boundary redesign).
+  Trigger: when a second design question of similar shape arrives, or post Tier 1 commands.
+  References: `Product/sessions/session-15.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
+  Status: open
+
 - **`/builder:end-session` headless mode** — extend with flags `--auto-confirm-checkpoint`, `--auto-pr`, and `--steps=close-only` so it can be composed by unattended automation (specifically `/builder:debt-pass`'s checkpoint-refresh step). Currently end-session has a hard human-approval gate on the checkpoint diff (step 5) and "suggest, don't auto-create" PR default (step 7) — both load-bearing for interactive use, but block headless composition.
   Trigger: after `/builder:debt-pass` lands and accumulates evidence on what end-session needs to expose. Blocks: migrating debt-pass step 7 from local fill rules to delegation.
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
@@ -64,6 +69,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 - **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
   Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.
   References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
+  Status: open
+
+- **`/builder:end-session` unsaved-body check** — end-session must detect when a session sketched or approved a Model body / interface / contract / ADR-shape that was *not* written to a canonical file (Model doc, ADR, feature note) and either prompt to save it, refuse to close, or surface it as deferred-with-justification. Today end-session only checks debt + hygiene; sketched-but-unsaved bodies leak into prose-only memory (session note + checkpoint) and require errata commits later. Session 15 is the canonical example: the `ICommandAwaiter` final shape was settled by user verdict but never written into `04-effect-flow.md`; an errata commit (`89c161e`) was needed to capture mapper + gateway invariants the close pass missed. Realistic mechanism: a yes/no/where prompt during step 2 of end-session — "Did this session settle any new interface, contract, or Model body? If yes, where is it saved?" — refuse to close on yes-and-nowhere.
+  Trigger: next end-session skill iteration; or next session that exhibits the same leak.
+  References: `Product/sessions/session-15.md`, errata commit `89c161e`, `.claude/commands/builder/end-session.md` step 2 (hygiene).
   Status: open
 
 - **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
