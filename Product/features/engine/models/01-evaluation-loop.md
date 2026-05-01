@@ -62,17 +62,11 @@ public sealed class GameEngine
     // GameRules.OnIncomingCommand decides scheduling before the command is enqueued.
     public void Dispatch(GameCommand command)
     {
-        var decision = rules.OnIncomingCommand(command, new SchedulingContext(state));
-        switch (decision)
+        var result = rules.OnIncomingCommand(command, DispatchOrigin.PlayerIntent);
+        if (!result.Accepted)
         {
-            case SchedulingDecision.RunNext when command is GameAction a:
-                pending.Prepend(a); break;
-            case SchedulingDecision.Enqueue when command is GameAction a:
-                pending.Enqueue(a); break;
-            case SchedulingDecision.Stash:
-                stash.Add(command); break;
-            case SchedulingDecision.Discard:
-                break;
+            // Rejected by rule
+            return;
         }
         if (!running) Drain();
     }
@@ -87,13 +81,15 @@ public sealed class GameEngine
             var result = pipeline.Execute(action);
 
             // Game-specific: given the state after this action, what actions run next?
-            var followUps = rules.Evaluate(action, result, state);
+            var followUps = rules.Evaluate(action, result);
             foreach (var next in followUps)
                 pending.Enqueue(next with { OriginCommandId = action.OriginCommandId });
         }
 
         // Queue is empty. Game decides what now.
-        rules.OnQueueDrained(this, state);
+        var drainResult = rules.OnQueueDrained();
+        foreach (var cmd in drainResult.Dispatch)
+            Dispatch(cmd);
         running = false;
     }
 }
@@ -163,21 +159,22 @@ public interface GameRules
 {
     // Called when any command enters the dispatch channel.
     // Game decides scheduling: interrupt, queue, stash, or discard.
-    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
+    IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin);
 
     // Called after each GameAction resolves.
     // Reads current state, returns 0..N actions to enqueue next.
     IReadOnlyList<GameAction> Evaluate(
         GameAction justExecuted,
-        CommandResult result,
-        GameState state);
+        CommandResult result);
 
     // Called when a drain has finished: the work queue is empty.
     // Game decides: wait for input, advance phase, end game, etc.
-    void OnQueueDrained(GameEngine engine, GameState state);
+    DrainResult OnQueueDrained();
 }
 
-public enum SchedulingDecision { RunNext, Enqueue, Stash, Discard }
+public sealed record IntakeResult(bool Accepted, string? Reason = null);
+public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch);
+public enum DispatchOrigin { PlayerIntent, TriggerReaction, Timer, Internal }
 ```
 
 `GameState` here is the simulation state — zone contents, actor variables, phase info. It is read-only from the evaluator's perspective. The evaluator observes and returns commands; it never mutates state directly.

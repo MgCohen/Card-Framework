@@ -327,7 +327,7 @@ public sealed class PileCounterRules : GameRules
 
             var destinations = piles
                 .Where(p => p.Id != pile.Id)
-                .Select(p => (EntityId)p.Id)
+                .Select(p => (PileId)p.Id)
                 .ToList();
 
             templates.Add(new MoveCardTemplate(top.Id, destinations));

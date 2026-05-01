@@ -62,14 +62,21 @@ OnAfter(c, result) ← trigger fold; reactions dispatched
 
 ```csharp
 void OnBefore<T>(
-    Func<T, Context, bool> condition,
-    Func<T, Context, T>    react)
+    Func<T, Context, bool>    condition,
+    Func<T, Context, FoldResult> react)
     where T : GameCommand;
 
 void OnAfter<T>(
-    Func<T, Context, bool> condition,
-    Func<T, Context, T>    react)
+    Func<T, Context, bool>    condition,
+    Func<T, Context, FoldResult> react)
     where T : GameCommand;
+
+public abstract record FoldResult
+{
+    public sealed record Keep(GameAction Command) : FoldResult;    // modification or no-op
+    public sealed record Cancel(string Reason)   : FoldResult;    // cancellation
+    public sealed record Replace(GameAction Next): FoldResult;    // substitution
+}
 ```
 
 The `react` function receives the current command and returns the (potentially modified) command. For `CompositeAction` and `GameSignal` the return value is ignored — they are not modifiable.
@@ -120,7 +127,7 @@ triggers.OnAfter<HealActorAction>(
     react: (cmd, ctx) =>
     {
         ctx.Dispatch(new DrawCardAction { Actor = ctx.GetOwner(ctx.Self) });
-        return cmd;
+        return new FoldResult.Keep(cmd);
     });
 ```
 
@@ -129,17 +136,18 @@ The channel receives the dispatched command and calls `GameRules.OnIncomingComma
 ```csharp
 public interface GameRules
 {
-    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
-    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result, GameState state);
-    void OnQueueDrained(GameEngine engine, GameState state);
+    IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin);
+    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result);
+    DrainResult OnQueueDrained();
+    IReadOnlyList<TriggerMatch> FilterTriggers(IReadOnlyList<TriggerMatch> candidates, GameCommand command, TriggerPhase phase);
 }
 
-public enum SchedulingDecision
+public enum DispatchOrigin
 {
-    RunNext,  // interrupt — prepend to queue, runs before current queue resumes
-    Enqueue,  // append to end of current queue
-    Stash,    // hold for later; game releases manually
-    Discard   // silently drop
+    PlayerIntent,      // from player input
+    TriggerReaction,   // from a trigger's react function
+    Timer,            // from a timer service
+    Internal          // from game internals
 }
 ```
 
