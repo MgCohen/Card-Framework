@@ -17,6 +17,7 @@ tags: [#checkpoint]
 - **`DecisionResponseCommand` / `DecisionResponseHandler` / `DecisionPrompt(CommandId)` snapshot scope deleted from the model.** Decision answers are real game commands (`SelectTargetCommand`, `PickOptionCommand`, …) routed by command type alone.
 - **`IDecisionResolver` reshaped to `ICommandAwaiter`.** Final shape: `Task<TCommand> Wait<TCommand>(CancellationToken ct = default)` + `bool TryResolve(GameCommand cmd)`. No `AwaitingFor` id, no `IAwaitResponse` marker. Routing is closure-captured `cmd is T` pattern matching. Single-open per type-hierarchy is a runtime assert.
 - **Engine-level pre-pipeline awaiter check.** Matched commands short-circuit (no envelope, no handler, no triggers); non-matches fall through to the normal pipeline. Cancel-as-command for player path; `CancellationToken` for engine-internal unwinds.
+- **Mapper + gateway both decision-unaware.** `IIntentMapper.Map(template, choice) → GameCommand` switches on template subtype only (ADR-0006 restored). Gateway flow: intent → mapper → `engine.Dispatch` → awaiter check. No scope-reading state injection on the mapper. Snapshot templates carry no awaiter-routing fields — type-only routing means no `AwaitingFor` plumbing.
 - **ADR-0006 + ADR-0007 unchanged.** This restores the §6 contract to ADR-0006's chosen shape rather than mutating it.
 
 ---
