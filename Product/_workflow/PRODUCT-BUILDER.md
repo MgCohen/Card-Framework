@@ -622,7 +622,6 @@ When a new feature is requested or designed:
 5. **Record in session note.** Content section: `feature: <name> created` — visible event in the trail.
 6. **Begin design.** From this point, the feature's evolution follows the standard per-session flow (§5.1+).
 
-These steps are mandatory in spirit, optional in tooling: a `/builder:new-feature <name>` skill (see [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §3) automates 1–5 once built. Until then, follow the steps manually.
 
 **Why this section exists.** Post-v1 work is *recurring* feature addition. Without a canonical shape, each new feature gets invented ad-hoc — different sessions do different subsets, orientation files lag, dependency edges go unnamed. Codifying the ceremony makes the recurring cycle reproducible.
 
@@ -644,7 +643,6 @@ Drift — divergence between code in the implementation directory and the contra
 
 **Why no code-side linkage convention.** Strict per-PR or per-file linkage (header comments, PR-description rules) was rejected: the maintenance overhead exceeds the value once AI agents can map files to features contextually. Workflow stays generic across project layouts; AI does the contextual matching.
 
-**Specifics.** Skill specs in [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) (`builder-drift-detection`, plus session-time `/builder:check-drift <feature>`). Build target: `ledgers/BACKLOG.md` — trigger *"first feature reaches `implemented` status."*
 
 ### 5.13 Lifecycle reference
 
@@ -708,7 +706,6 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | **PR merge to main** | `builder-drift-detection` (CI mode) |
 | **Threshold-driven session shape** | Consistency pass (§5.5/§5.8) when ledger crosses 5 open entries |
 
-Full automation catalog: [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §2.
 
 ### 5.14 Archive convention
 

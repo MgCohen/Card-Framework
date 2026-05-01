@@ -33,7 +33,6 @@ isProject: false
   - Store/Mutator state core: [Assets/Scripts/Game/State/Runtime/Store.cs](Assets/Scripts/Game/State/Runtime/Store.cs), [Assets/Scripts/Game/State/Runtime/Mutators/Mutator.cs](Assets/Scripts/Game/State/Runtime/Mutators/Mutator.cs)
   - Transport edge: [Assets/Scripts/Infra/NetworkMessages/Runtime/Contracts/INetworkMessageDispatcher.cs](Assets/Scripts/Infra/NetworkMessages/Runtime/Contracts/INetworkMessageDispatcher.cs), [Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs](Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs)
   - Serialization generator (current path): [Generators/AutoPacker/src/AutoPackerGenerator/AutoPackerGenerator.cs](Generators/AutoPacker/src/AutoPackerGenerator/AutoPackerGenerator.cs)
-- Follow the existing decoupling direction in [Docs/Architecture/ReactiveNetworkQueue.md](Docs/Architecture/ReactiveNetworkQueue.md).
 
 ## Target Runtime Topology
 
@@ -134,6 +133,4 @@ flowchart LR
 - Transport abstraction exists but still Unity-coupled under implementation:
   - [Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs](Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs)
 - Existing architectural intent is compatible:
-  - [Docs/Architecture/ReactiveNetworkQueue.md](Docs/Architecture/ReactiveNetworkQueue.md)
-  - [Docs/SabberStone-Architecture-Analysis.md](Docs/SabberStone-Architecture-Analysis.md)
 
