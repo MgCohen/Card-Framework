@@ -42,7 +42,7 @@ jobs:
       - name: Threshold check
         id: check
         run: |
-          count=$(awk '/^## Open/,/^## Resolved/' Product/ledgers/ALIGNMENT-DEBT.md | grep -c '| open$' || true)
+          count=$(grep -c '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md || true)
           count=${count:-0}
           echo "count=$count" >> "$GITHUB_OUTPUT"
           if [ "$count" -ge 5 ]; then
