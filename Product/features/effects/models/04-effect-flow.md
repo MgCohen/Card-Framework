@@ -55,6 +55,7 @@ Three principles fall out of this table and are framework invariants:
 ```csharp
 public abstract class Effect
 {
+    public virtual bool Validate(IEffectScope scope) => true;
     public abstract Task Execute(IEffectScope scope);
 }
 ```
@@ -136,13 +137,15 @@ public interface IEffectScope
 {
     IStateScope State { get; }    // Scaffold; read-only
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
-    void Cancel();
+    void Cancel(string? reason = null);
+    void Replace(GameAction next);   // before-fold only: swap the intercepted command
 }
 ```
 
 - **`State`** — Scaffold `IStateScope`. Effects read slices to choose what to dispatch next. They cannot mutate; they have no `Store` reference.
 - **`Dispatch`** — runs the action immediately and inline (before-fold → handler → after-fold → envelope published) per `01-async-dispatch.md` §7. The effect awaits each result before continuing.
-- **`Cancel`** — explicit early-out for the effect itself (the effect has decided it cannot continue, e.g. a precondition no longer holds after a prior dispatch). Distinct from the before-fold cancelling an individual `GameAction`; that case surfaces through the result, [see §7](#7-cancellation).
+- **`Cancel`** — explicit early-out for the effect itself (the effect has decided it cannot continue, e.g. a precondition no longer holds after a prior dispatch). In the trigger context (before-fold), cancels the intercepted command. Distinct from the before-fold cancelling an individual `GameAction` via result; [see §7](#7-cancellation).
+- **`Replace`** — before-fold only: signals the pipeline to discard the intercepted command and dispatch `next` as a fresh command through its own fold. Calling `Replace` in an after-fold trigger is a no-op (the command already executed); the pipeline implementation asserts or warns.
 
 ### 4.4 `IHandlerContext`
 
@@ -417,8 +420,9 @@ Pinned by this Model and referenceable from downstream docs:
 4. **Mutation only through mutators.** Scaffold's `Mutator<TState, TPayload>.Change` is the only producer of new slice state. Only handlers invoke mutators (via `Store.Execute(payload)`); effects cannot mutate.
 5. **Mutator payloads are dedicated types**, not the command. One payload may fan out to N registered mutators; `Store.Execute(payload)` runs every mutator registered for that payload type and commits atomically.
 6. **`IHandlerContext` exposes** Scaffold `Store`, `IAvailableActions`, `ICommandAwaiter`. No mutate-helper surface; no decision-id field.
-7. **`IEffectScope` exposes** Scaffold `IStateScope`, `Dispatch`, `Cancel`. No mutator/store surface; no awaiter surface.
+7. **`IEffectScope` exposes** Scaffold `IStateScope`, `Dispatch`, `Cancel`, `Replace`. No mutator/store surface; no awaiter surface. `Replace` is meaningful only in before-fold triggers; calling it in after-fold or standalone effects is a no-op / runtime warning.
 8. **`ICommandHandler.Handle` returns `Task<TResult>`**. Synchronous handlers return `Task.FromResult(...)`.
+9. **`Effect.Validate` is a pre-execution gate.** `virtual bool Validate(IEffectScope scope) => true`. Returning `false` prevents `Execute` from running. The default always passes — simple effects don't override it.
 
 ---
 
