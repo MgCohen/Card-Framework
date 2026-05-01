@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+      "passed": true,
+      "evidence": "report.md Run 1: 'id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 — builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)'"
+    },
+    {
+      "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+      "passed": true,
+      "evidence": "report.md: 'Valid path: features/engine/models/01-evaluation-loop.md — EXISTS — not flagged'"
+    },
+    {
+      "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+      "passed": true,
+      "evidence": "report.md Run 2: '0 new entries · 0 skipped (already open) · 7 total open'. Fixture absent means no S2 finding generated."
+    },
+    {
+      "text": "Fixture file _test-fixture.md does not exist after the run completes",
+      "passed": true,
+      "evidence": "report.md: 'Fixture: Product/features/engine/models/_test-fixture.md — DELETED before this run [Run 2]'. Confirmed absent."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "claims": [],
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "No suggestions — eval-3 with-skill passed all assertions cleanly."
+  }
+}

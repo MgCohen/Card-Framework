@@ -1,0 +1,39 @@
+{
+  "expectations": [
+    {
+      "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+      "passed": false,
+      "evidence": "The baseline report correctly identified DOES-NOT-EXIST.md as broken, but per the task it did not write ALIGNMENT-DEBT.md entries (no skill guidance to do so). It reported findings but did not persist them to the ledger."
+    },
+    {
+      "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+      "passed": true,
+      "evidence": "Baseline report: '01-evaluation-loop.md — NOT flagged — file exists and resolves correctly'"
+    },
+    {
+      "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+      "passed": false,
+      "evidence": "Baseline did not run a second pass — no idempotency check was performed without skill guidance"
+    },
+    {
+      "text": "Fixture file _test-fixture.md does not exist after the run completes",
+      "passed": true,
+      "evidence": "Baseline report confirms: 'The fixture file has been deleted'"
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 2,
+    "total": 4,
+    "pass_rate": 0.5
+  },
+  "claims": [],
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "reason": "The first two assertions implicitly assume ALIGNMENT-DEBT.md is written — that's a skill-specific behavior. For a fair baseline comparison, the assertions for the baseline run should focus on detection accuracy (did it flag the right references?) rather than ledger writes."
+      }
+    ],
+    "overall": "Two assertions test ledger-write behavior that only makes sense for the skill run. Baseline detection was correct — the failing assertions reflect eval design, not agent failure."
+  }
+}
