@@ -55,7 +55,33 @@ User input: `$ARGUMENTS`
 
 11. **Patch the in-progress session note.** Find the session with `status: in-progress` via `grep -rl 'status: in-progress' Product/sessions/`. If multiple match, use the most recently modified (`ls -t`). Append a line to its Part 1 "Work done" section: `- <type> <relative path> created`. Skip this step for `plan` type — plans don't get session-noted.
 
-12. **Render the result per `Product/_workflow/REPORT-STYLE.md` §3.4 (new template).** Use the §2.7 result-strip pattern: `**Created:**` followed by the path and `(<type>, <status>)` parenthetical (omit the status for `plan` type). Append the `📝 Session note: Part 1 "Work done" updated` strip on the next line, except for `plan` type (no session-note patch).
+12. **Render the result.** (This template is the canonical source for new; `REPORT-STYLE.md §3.4` mirrors it. Keep in sync.)
+
+    Result-strip pattern:
+    - **Verb:** `Created`
+    - **Subject:** the relative target path (in backticks)
+    - **Metadata:** `(<type>, <status>)` for Model / ADR / spike / sample (status omitted for `plan` — no front matter)
+    - **Session-note strip:** always rendered *except* for `plan` type
+
+    **Examples:**
+
+    ```
+    **Created:** `Product/features/engine/models/04-evaluation-loop.md` (Model, draft)
+
+    📝 Session note: Part 1 "Work done" updated
+    ```
+
+    ```
+    **Created:** `Product/decisions/0009-async-snapshot-pipeline.md` (ADR, proposed)
+
+    📝 Session note: Part 1 "Work done" updated
+    ```
+
+    ```
+    **Created:** `PLANS/effect-flow-canonical.md`
+    ```
+
+    Failure / refusal cases (path exists, feature folder missing, etc.) halt before this render and surface the error inline; they don't render this template.
 
 ## Notes
 

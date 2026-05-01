@@ -135,13 +135,26 @@ For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## En
 
 Batch all new entries into a **single Edit call**.
 
-### 8. Render the report per `Product/_workflow/REPORT-STYLE.md` §3.7
+### 8. Render the report
 
-Use the lint report template. Emit:
-- counts by rule (findings per A1/A2/A3a/A3b/A4/S1/S2)
-- total new ledger entries opened
-- total skipped (already in ledger)
-- linter findings do **not** trip the §5.8 threshold — no pass-mode strip from this skill
+(This template is the canonical source for lint; `REPORT-STYLE.md §3.7` mirrors it. Keep in sync.)
+
+**Render order:**
+
+1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed)
+2. **Summary stat strip** — `📊 <N> new findings · <M> already in ledger · <K> rules checked`
+3. **Findings** (H3 + table, omitted if zero findings):
+   ```
+   ### ⚠️ Findings
+   | Rule | Doc | Detail |
+   |---|---|---|
+   | A1 | features/engine/archive/01-old.md | superseded_by path missing |
+   ```
+4. **Debt opened** (strip, omitted if zero) — `📋 Debt opened: <N> new entries in ALIGNMENT-DEBT.md (source: linter*)`
+
+**Empty-state behavior:** when the linter finds nothing, the entire §3–§4 block collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
+
+**Linter findings do not trip the §5.8 threshold** (only cascade entries do — see PRODUCT-BUILDER.md §5.8 / §5.10). No pass-mode strip from this skill.
 
 ## Safety rails
 

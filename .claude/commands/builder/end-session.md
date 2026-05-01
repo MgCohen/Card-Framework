@@ -92,17 +92,39 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - If a PR is already open for this branch, no further action — push updates it. If no PR exists: with `--auto-pr`, auto-create it (`gh pr create --base main --head <branch> --title "<session-id> — <work-summary>" --body "<Work-done bullets + step-4 deltas>"`); otherwise, suggest opening one.
    - Print the commit SHA and the PR URL (or "no PR" + suggestion).
 
-8. **Render the closing report per `Product/_workflow/REPORT-STYLE.md` §3.2 (end-session template).** Follow the locked render order, anchor headings, and empty-state strips exactly.
+8. **Render the closing report.** Output begins now. Render order is fixed — follow exactly. (This template is the canonical source for end-session; `REPORT-STYLE.md §3.2` mirrors it. Keep both in sync if either changes.)
 
-   **Data sources for each section:**
-   - **Title** — `# Closed Session NN`.
-   - **🕐 Outcome** — table (`Topic | What was done`) of work-units finished this session. Derive from the session note's Part 1 "Work done" + git diff. If no doc deltas, render the empty-state strip: `🕐 Outcome: no doc deltas this session`.
-   - **📊 Deltas** — counts from step 4 (docs created, models edited, ADRs landed, debt +N/−M, glossary updates).
-   - **📝 Session note** — `📝 Session note: \`session-NN.md\` → completed`.
-   - **📤 Commit** — `📤 Commit: \`<sha>\` → \`<branch>\``, plus `· PR: [#NN](<url>)` when a PR exists; drop the PR clause otherwise.
-   - **⏳ Debt-pass note** — render only when post-close debt count ≥ 5 (per §5.8): `⏳ Debt ≥ threshold — automated discharge will run on next GHA fire (debt <N> / threshold 5).`
-   - **🎯 Next steps** — bullet list, derived from the session note's Part 1 "Active question going out" + the checkpoint's "Suggested next steps" section.
-   - **🔀 Branch info** (branch mode only) — `Branch: <branch> · session: <session-id> · parent: <parent> · merge: pending → /builder:merge-pass`.
+   **1. Title** (H1) — `# Closed <session-id>`.
+
+   **2. Outcome** (H3 + table) — work-units finished this session. Derive from session note's Part 1 "Work done" + git diff:
+   ```
+   ### 🕐 Outcome
+   | Topic | What was done |
+   |---|---|
+   | <topic> | <what was done> |
+   ```
+   Always rendered as a table when there are entries (even single-row). Empty state (no doc deltas): `🕐 Outcome: no doc deltas this session`.
+
+   **3. Deltas** (stat strip) — counts from step 4: `📊 Deltas: <X> docs · <Y> models · <Z> ADRs · debt +<O>/−<C> · <G> glossary`.
+
+   **4. Session note** (strip) — `` 📝 Session note: `<session-id>.md` → completed ``.
+
+   **5. Commit** (strip) — `` 📤 Commit: `<sha>` → `<branch>` ``. Append ` · PR: [#NN](<url>)` when a PR exists; drop the PR clause otherwise.
+
+   **6. Debt-pass note** (strip, conditional) — render only when post-close debt cascade count ≥ 5 (per §5.8): `⏳ Debt ≥ threshold — automated discharge will run on next GHA fire (cascade <N> / threshold 5).`
+
+   **7. Next steps** (H3 + bullet list) — derived from session note's Part 1 "Active question going out" + the checkpoint's "Suggested next steps":
+   ```
+   ### 🎯 Next steps
+   - <step>
+   - <step>
+   ```
+
+   **8. Branch info** (strip, branch mode only) — `🔀 Branch: <branch> · session: <session-id> · parent: <parent> · merge: pending → /builder:merge-pass`.
+
+   **Symmetry note:** the 🕐 Outcome content seeds next session's start-session `🕐 Last session:` line — same data, different label per POV. End-session generates it; start-session consumes it.
+
+   **Heading-level rationale:** end-session uses H3 for both 🕐 Outcome and 🎯 Next steps. The H1 title carries the headline ("session closed"); supporting sections sit at H3.
 
 9. **Update the checkpoint's "Where we stopped" section** with the same one-line bridge content used as the seed for next session's `🕐 Last session:` line. This must happen as part of the checkpoint refresh in step 5 (re-stating here so the data flow is explicit).
 

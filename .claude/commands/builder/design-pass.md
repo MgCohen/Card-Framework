@@ -64,7 +64,27 @@ Repeat steps 4–6 for each Q in sequence. Do not advance to the next Q until th
 
 ## Phase 3 — Close
 
-7. **Render the closing summary** once all Qs are locked. Follow `Product/_workflow/REPORT-STYLE.md` §3.6 (design-pass template).
+7. **Render the closing summary** once all Qs are locked. (This template is the canonical source for design-pass; `REPORT-STYLE.md §3.6` mirrors it. Keep in sync.)
+
+   **Render order (rendered at end of Phase 3, not mid-walk):**
+
+   1. **Title** (H1) — `# Design Pass — <topic>`
+   2. **Scope** (stat strip) — `📊 <N> questions settled · no doc edits`
+   3. **Locked decisions** (H3 + bullet list):
+      ```
+      ### 🔒 Locked decisions
+      - Q1 = <option> — <implication>
+      - Q2 = <option> — <implication>
+      ```
+   4. **Patch cascade** (H3 + bullet list, omit when no downstream patches):
+      ```
+      ### 🎯 Patch cascade
+      - <Model or ADR path> — <what changes>
+      ```
+   5. **Session note** (strip) — `📝 Session note: Part 1 "Decisions settled" + "Active question going out" updated`. If no in-progress session: `⚠️ No in-progress session note — update manually`.
+   6. **Closing prompt** (italic) — `_Start a fresh session to apply these patches._`
+
+   **No prose preamble** — output begins at the H1.
 
 8. **Update the session note** (the `status: in-progress` file found in step 2). Append to the relevant sections of Part 1:
    - **Decisions settled** — each locked Q in the shape `Q<N> = <option> — <implication>`, one bullet per Q.
