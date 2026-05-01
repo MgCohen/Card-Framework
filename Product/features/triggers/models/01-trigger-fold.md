@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 builds-on: [features/engine/models/01-evaluation-loop.md]
 tags: [#triggers, #reactions, #fold]
 ---
@@ -128,22 +128,32 @@ public interface ITriggerSystem
 
 ### Execution — `ITriggerPipeline`
 
-The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both interfaces.
+The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both interfaces. The authoritative shape is defined in [effects/02 §3](features/effects/models/02-replacement-prevention.md):
 
 ```csharp
 public interface ITriggerPipeline
 {
-    BeforeFoldResult RunBefore(GameAction action, IEffectScope scope);
-    void             RunAfter (GameAction action, CommandResult result, IEffectScope scope);
+    Task<TriggerFoldResult> RunBefore(
+        GameCommand                    command,
+        IReadOnlyList<TriggerMatch>    available,
+        IEffectScope                   scope);
+
+    Task RunAfter(
+        GameCommand                    command,
+        CommandResult                  result,
+        IReadOnlyList<TriggerMatch>    available,
+        IEffectScope                   scope);
 }
 
-public sealed record BeforeFoldResult(
-    bool        IsCancelled,
-    string?     CancelReason,
-    bool        IsReplaced,
-    GameCommand? Replacement,
-    GameAction  Command);   // the (possibly modified) command to pass to the handler
+public sealed record TriggerFoldResult(
+    GameCommand  FinalCommand,
+    bool         IsCancelled,
+    string?      CancelReason,
+    bool         IsReplaced,
+    GameAction?  Replacement);
 ```
+
+The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRules.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`.
 
 ### The fold mechanic
 
@@ -280,11 +290,15 @@ A handler should never dispatch another `GameAction` directly. If sequencing mul
 `RunPreHooks` from doc 18 is replaced by `ITriggerPipeline.RunBefore`. The pipeline holds `ITriggerPipeline` (the execution surface); card abilities hold `ITriggerSystem` (the subscription surface). One `TriggerSystem` class implements both.
 
 ```csharp
-public CommandResult Execute(GameAction action)
+public async Task<CommandResult> Execute(GameAction action)
 {
     using var envelope = history.OpenEnvelope(BuildCause(action));
 
-    var before = triggerPipeline.RunBefore(action, context);
+    var candidates = triggerRegistry.GetMatches(action);
+    var available  = rules.FilterTriggers(candidates, action, TriggerPhase.Before);
+    var scope      = scopeFactory.CreateForTrigger();
+    var before     = await triggerPipeline.RunBefore(action, available, scope);
+
     if (before.IsCancelled)
         return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
 
@@ -295,9 +309,9 @@ public CommandResult Execute(GameAction action)
         return CommandResult.Replaced;
     }
 
-    var result = Handle(before.Command, envelope);
+    var result = Handle(before.FinalCommand, envelope);
 
-    triggerPipeline.RunAfter(before.Command, result, context);
+    await triggerPipeline.RunAfter(before.FinalCommand, result, available, scope);
 
     return history.CloseAndPublish(envelope, result);
 }
@@ -313,7 +327,7 @@ public CommandResult Execute(GameAction action)
 - **Trigger ordering** — what determines sequence within the fold when multiple triggers match the same type. FIFO by registration? Priority weight? Game-configurable?
 - **Async suspension** — triggers that require player input (targeting, choices) still unresolved. Unblocks the broader suspension design.
 - **Stash release mechanics** — MTG-style stash needs a `Release(key)` call and ordering rules. Not designed here.
-- ~~**`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.~~ → resolved session-20260501-1132: split into `ITriggerSystem` (subscription) and `ITriggerPipeline` (execution); one `TriggerSystem` class implements both. Note: `ITriggerPipeline` shape in effects/02 §3 has a different signature — see ad-20260501-025.
+- ~~**`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.~~ → resolved session-20260501-1132: split into `ITriggerSystem` (subscription) and `ITriggerPipeline` (execution); one `TriggerSystem` class implements both. Shape reconciled with effects/02 §3 in session-20260501-1545 (ad-20260501-025 discharged).
 
 ---
 

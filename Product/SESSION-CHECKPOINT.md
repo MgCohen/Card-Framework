@@ -2,7 +2,7 @@
 type: checkpoint
 schema-version: 2
 last-updated: 2026-05-01
-head: session-20260501-1528-debt-pass
+head: session-20260501-1545-trigger-pipeline-shape
 merged:
   - session-20260501-2359-cutover
   - session-20260501-1105-engine-wiring
@@ -10,8 +10,9 @@ merged:
   - session-20260501-1237-engine-wiring-stack
   - session-20260501-1132-engine-wiring
   - session-20260501-1528-debt-pass
+  - session-20260501-1545-trigger-pipeline-shape
 batch:
-  - session-20260501-1528-debt-pass
+  - session-20260501-1545-trigger-pipeline-shape
 tags: [#checkpoint]
 ---
 
@@ -23,27 +24,27 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-- S(debt-pass 2026-05-01 15:28): Auto debt-pass: 14 entries discharged (broken path references removed from 5 docs), 0 stragglers caught, 1 skipped (ITriggerPipeline reconciliation needs session).
+- S(trigger-pipeline-shape 2026-05-01 15:46): Discharged ad-20260501-025: reconciled ITriggerPipeline shape — triggers/01 §2 and §7 patched to match effects/02 §3 authoritative async shape with available parameter and TriggerFoldResult.
 
 ---
 
 ## 🎯 The active open question (singular)
 
-**Discharge `ad-20260501-025`** — reconcile `ITriggerPipeline` shape between `effects/02` and `triggers/01`: `effects/02 §3` has `Task<TriggerFoldResult> RunBefore(GameCommand, IReadOnlyList<TriggerMatch>, IEffectScope)`; `triggers/01 §7` has `BeforeFoldResult RunBefore(GameAction, IEffectScope)`. Pick one authoritative shape and patch the other doc.
-*(From session-20260501-1528-debt-pass.)*
+**Zone model internal opens** (`oq-zone-internal-opens`) — nine questions within `zones/01-zone-model.md` have no follow-up model: zone-as-entity vs lightweight record, membership storage, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, spatial rule attachment. Several (membership storage, visibility API, actor semantics) are blocking for any non-trivial game. Design-pass candidate.
+*(From session-20260501-1545-trigger-pipeline-shape.)*
 
 ---
 
 ## ❓ Other still-open
 
 - id: oq-entity-destruction | **Entity destruction / Cleanup lifecycle** — what "destroyed" means for the Store, when the framework Cleanup hook fires relative to the destruction command envelope, and what happens to in-flight dispatches referencing the destroyed entity. Load-bearing for ongoing effects that self-destruct.
-- id: oq-entity-modifier-api | **Entity modifier mutation API (Scaffold bridge)** — concrete payload shapes for `AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload` through the `com.scaffold.entities.states` bridge.
-- id: oq-zone-internal-opens | **Zone model internal open questions** — nine questions within `zones/01-zone-model.md`: zone-as-entity vs lightweight record, membership storage, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, spatial rule attachment.
-- id: oq-attachment-storage | **Attachment storage location** — whether attachments live in a sub-zone on the host, a global attachment registry, or a dedicated zone.
-- id: oq-stash-release | **Stash release mechanics** — MTG-style scheduling `Stash`; release mechanism, ordering rules, LIFO ordering not designed.
-- id: oq-queue-ordering | **Queue ordering shape** — FIFO queue shown; priority queues, interrupt injection, or stack semantics via engine or `GameRules` unresolved.
-- id: oq-gamerules-composition | **`GameRules` composition** — single implementation shown; composition contract (provider/policy ordering, enable/disable) undesigned.
-- id: oq-intake-queue | **`IIntakeQueue` shape** — same operations as original `LinkedList`-typed `Pending`; `CurrentlyExecuting` placement unresolved.
+- id: oq-entity-modifier-api | **Entity modifier mutation API (Scaffold bridge)** — concrete payload shapes for `AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload` through the `com.scaffold.entities.states` bridge. Needed before any game reads or writes layered modifier values.
+- id: oq-attachment-storage | **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model.
+- id: oq-stash-release | **Stash release mechanics** — MTG-style scheduling uses `Stash` to hold commands until priority resolves, but the release mechanism (`Release(key)`, ordering rules on release, LIFO ordering) is not designed.
+- id: oq-queue-ordering | **Queue ordering shape** — a simple FIFO queue is shown; whether priority queues, interrupt injection, or stack semantics for MTG-like resolution order are built into the engine queue or handled entirely via `GameRules` is unresolved.
+- id: oq-gamerules-composition | **`GameRules` composition** — a single `GameRules` implementation is shown; composition contract (provider/policy ordering, enable/disable) is deliberately undesigned for now.
+- id: oq-intake-queue | **`IIntakeQueue` shape** — same operations as the original `LinkedList`-typed `Pending`. `CurrentlyExecuting` lives on the queue or on a sibling slice. Pin at engine implementation.
+- id: oq-engine-builder | **`GameEngineBuilder` construction protocol** — the builder type used in `pile-counter §9.8` (`WithHandlers`, `WithMutators`, `WithRule`, `WithIntentMapper`, `Build`) and the `services` bag object are undefined anywhere. Load-bearing for any game author.
 
 ---
 
@@ -51,18 +52,17 @@ tags: [#checkpoint]
 
 | # | Task | Notes |
 |---|------|-------|
-| **1** | **Discharge `ad-20260501-025`** | ITriggerPipeline shape conflict — `effects/02 §3` vs `triggers/01 §7`. Design-pass candidate. |
-| **2** | **Zone model internal opens** | Nine sub-questions in `oq-zone-internal-opens` — design-pass candidate. |
-| **3** | **`GameEngineBuilder` construction protocol** | `oq-engine-builder` — load-bearing for any game author. |
-| **4** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
+| **1** | **Zone model internal opens** | `oq-zone-internal-opens` — nine sub-questions in `zones/01-zone-model.md`. Design-pass candidate. |
+| **2** | **`GameEngineBuilder` construction protocol** | `oq-engine-builder` — load-bearing for any game author. |
+| **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
 
 ---
 
 ## Artifacts to read on resume
 
-- [`features/triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — ITriggerPipeline subscription surface (ad-025 source)
-- [`features/effects/models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — ITriggerPipeline execution surface (ad-025 target)
-- [`ledgers/ALIGNMENT-DEBT.md`](ledgers/ALIGNMENT-DEBT.md) — ad-025 still open
+- [`features/triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — ITriggerPipeline shape reconciled (trigger-pipeline-shape)
+- [`ledgers/ALIGNMENT-DEBT.md`](ledgers/ALIGNMENT-DEBT.md) — ad-20260501-025 discharged (trigger-pipeline-shape)
+- [`features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — active question source (oq-zone-internal-opens)
 
 ---
 
