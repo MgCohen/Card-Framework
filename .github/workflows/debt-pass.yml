@@ -1,21 +1,27 @@
 name: Auto debt-pass
 
-# Threshold-driven discharge of `Product/ledgers/ALIGNMENT-DEBT.md`. Fires when a
-# PR that touches the ledger merges into main and ≥5 entries are open. The
-# unattended agent edits docs, opens a PR, and stops — human review at the PR is
-# the only gate. See PLANS/auto-debt-pass.md for the full spec.
+# Threshold-driven discharge of `Product/ledgers/ALIGNMENT-DEBT.md`. Runs the
+# threshold check on every merge to main as a fail-safe backstop; the expensive
+# Claude action only fires when ≥5 entries are open. The unattended agent edits
+# docs, opens a PR, and stops — human review at the PR is the only gate. See
+# PLANS/auto-debt-pass.md for the full spec.
 #
 # Trigger note: `pull_request: types: [closed]` rather than `push` because
 # anthropics/claude-code-action@v1 rejects raw push events ("Unsupported event
 # type: push"). A merged PR is itself a close event, so this captures the same
 # moment with a context the action accepts.
+#
+# No `paths:` filter on purpose: if the workflow ever crashes or is
+# misconfigured (as happened with the original push trigger), debt accumulates
+# silently and a path filter would gate the recovery on someone touching the
+# ledger again. Running the threshold check on every merge means the system
+# self-corrects on the next PR. The check is sub-second; only the action gates
+# on `fire == 'true'`.
 
 on:
   pull_request:
     types: [closed]
     branches: [main]
-    paths:
-      - Product/ledgers/ALIGNMENT-DEBT.md
   workflow_dispatch:
 
 jobs:
