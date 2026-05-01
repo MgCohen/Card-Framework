@@ -20,7 +20,7 @@ If `GameRules` carries game-affecting state, snapshot/restore breaks, replays di
 - C: Zero game-affecting state on rules; gameplay memory lives only in `GameState` (Scaffold States). Chosen.
 
 ## Decision
-The rule may hold injected services and pure configuration only. All gameplay memory lives as Scaffold state slices in the `Store`. The rule reads through Scaffold `IStateScope` (`State.Get<TState>()`) and writes by dispatching commands (whose handlers call `Store.Execute(payload)`) or by calling `IAvailableActions`. See [04-effect-flow §4.1–§4.2](../../effects/models/04-effect-flow.md).
+The rule may hold injected services and pure configuration only. All gameplay memory lives as Scaffold state slices in the `Store`. The rule reads through Scaffold `IStateScope` (`State.Get<TState>()`) and writes by dispatching commands (whose handlers call `Store.Execute(payload)`) or by calling `IAvailableActions`. See [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md).
 
 ## Consequences
 - Enables deterministic replay, snapshot/restore, and trivial per-player view derivation.
