@@ -11,7 +11,9 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
 
 2. **Threshold check.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` (lines under `## Open` ending in `| open` — strikethrough/resolved entries don't count). If **< 5**, exit with `nothing to do (count=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
 
-3. **Branch collision check.**
+3. **Session-note collision pre-check.** Read the prior session number `NN` from `Product/SESSION-CHECKPOINT.md`'s session counter. Verify `Product/sessions/session-NN+1.md` does **not** already exist. If it does (e.g. a `/builder:start-session` resume left an in-progress stub), exit with `session-NN+1 already exists, refusing to overwrite — resolve manually` and stop. **This check fires here, before any expensive discharge work, on purpose** — the same refusal lives at step 9 as a defense-in-depth backstop, but Layer 3 sixth dispatch on 2026-04-30 showed an agent doing 6 steps of discharge + registry edits before discovering the collision and refusing. That run wasted ~$1.50 of subscription credits. Failing fast at pre-flight reuses the same refusal logic without the wasted work.
+
+4. **Branch collision check.**
    a. `git fetch origin --prune`.
    b. Enumerate candidates: `git ls-remote --heads origin 'claude/debt-pass-*'`.
    c. For each match, classify via `gh pr list --head <branch> --state all --json number,state,url`:
@@ -20,7 +22,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
       - **PR merged** or **no PR found** → treat as stale, `git push origin --delete <branch>`, continue.
    d. Once all matches are resolved, `git checkout -b claude/debt-pass-YYYY-MM-DD-01` (always `-01` — collisions are resolved before this step).
 
-4. **Discharge loop.** Walk open entries top to bottom. For each:
+5. **Discharge loop.** Walk open entries top to bottom. For each:
    a. Parse the entry: `source`, `target`, `reason`, date.
    b. Read `source` and `target` paths.
    c. **Confidence check on `reason`.** If the `reason` text is too vague for a confident mechanical edit (e.g. uses "rewrite," "redesign," "reshape," "restructure," "reconsider," or names a non-mechanical change), **leave the entry `open`**, record it for the PR body's `## Skipped — needs a session` section, and continue. Better to discharge 9 of 10 and surface the holdout than to guess.
@@ -30,12 +32,12 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
       ```
       Move resolved entries from `## Open` to `## Resolved`.
 
-5. **Hygiene scan.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). For each:
+6. **Hygiene scan.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). For each:
    a. `grep -r '<term>' Product/ --exclude='ledgers/ALIGNMENT-DEBT.md' --exclude-dir='_workflow/_validation'` to find stragglers the original cascade walk missed. (Two exclusions: the ledger itself, because its strikethrough resolution-note format echoes the retired term verbatim and would false-positive every pass; and the validation harness directory, which deliberately documents fixture term names — `OldFooBar`, `LegacyBaz`, etc. — and must remain stable across debt-pass runs. Without the harness exclusion, the hygiene scan progressively destroys its own test fixture.)
    b. For each straggler hit, apply the same mechanical replacement.
    c. Open a new ledger entry **and immediately strike it through** (opened-and-closed in this same pass), recording it for the PR body's `## Stragglers caught` section.
 
-6. **Update the retired-tokens registry.** For each retired term discovered in this pass, append to `Product/_workflow/retired-tokens.json`:
+7. **Update the retired-tokens registry.** For each retired term discovered in this pass, append to `Product/_workflow/retired-tokens.json`:
    ```json
    {
      "term": "<retired term>",
@@ -46,7 +48,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
    ```
    **Idempotent:** skip terms already present (match on `term` + `retired` date). Create the file as `[]` if it doesn't exist. Debt-pass writes; `builder-lint` reads.
 
-7. **Refresh the checkpoint.** Read `Product/_workflow/_templates/checkpoint.md` for the structural shell. Then read the prior `Product/SESSION-CHECKPOINT.md` to lift forward context. Fill the new checkpoint as follows:
+8. **Refresh the checkpoint.** Read `Product/_workflow/_templates/checkpoint.md` for the structural shell. Then read the prior `Product/SESSION-CHECKPOINT.md` to lift forward context. Fill the new checkpoint as follows:
    - Front matter: bump `last-updated` to today, increment session counter to `NN+1` (where `NN` is the prior session number).
    - `## Where we stopped` — one-liner: `Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped.`
    - `## 🎯 The active open question (singular)` — copy verbatim from the prior checkpoint. Debt-pass does not change the active design thread.
@@ -55,9 +57,9 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
    - `## Artifacts to read on resume` — copy from prior checkpoint.
    Write to `Product/SESSION-CHECKPOINT.md`. **No in-command approval prompt — the PR is the gate.**
 
-   *Note:* when `/builder:end-session` gains a headless mode (see `BACKLOG.md` entry `/builder:end-session headless mode`), this step delegates to it and the local fill rules above delete.
+   *Note:* when `/builder:end-session` gains a headless mode (see `BACKLOG.md` entry `/builder:end-session headless mode`), step 8 delegates to it and the local fill rules above delete.
 
-8. **Write the session note.** Target path: `Product/sessions/session-NN.md` (where `NN` is the new session number from step 7). **If the file already exists** (e.g. a `/builder:start-session` resume left an in-progress stub), refuse with `session-NN already exists, refusing to overwrite — resolve manually` and stop. Otherwise, scaffold from `Product/_workflow/_templates/session.md`. Front matter:
+9. **Write the session note.** Target path: `Product/sessions/session-NN.md` (where `NN` is the new session number from step 8). **Defense-in-depth collision check** (primary check is at step 3): if the file already exists, refuse with `session-NN already exists, refusing to overwrite — resolve manually` and stop. The pre-flight check at step 3 should catch this earlier; this re-check only fires if a parallel process created the file mid-run. Otherwise, scaffold from `Product/_workflow/_templates/session.md`. Front matter:
    ```yaml
    ---
    type: session
@@ -75,14 +77,14 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
    - **Followups created** — none routed beyond the skipped entries (already in the ledger).
    - **References** — list of touched docs (from the discharge + hygiene loops).
 
-9. **Defensive empty-pass check.** Run `git status --porcelain Product/` — if zero changes, exit with `empty pass — nothing to commit, refusing to open PR` and stop. Per §3 of the plan: never open a PR with zero `Product/` changes.
+10. **Defensive empty-pass check.** Run `git status --porcelain Product/` — if zero changes, exit with `empty pass — nothing to commit, refusing to open PR` and stop. Per §3 of the plan: never open a PR with zero `Product/` changes.
 
-10. **Single commit + push.** Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by explicit paths. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
+11. **Single commit + push.** Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by explicit paths. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
     - Subject: `Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped`
-    - Body: bulleted summary mirroring the PR sections in step 11. Include `https://claude.ai/code/<session>` trailer per harness convention.
+    - Body: bulleted summary mirroring the PR sections in step 12. Include `https://claude.ai/code/<session>` trailer per harness convention.
     - Push: `git push -u origin claude/debt-pass-YYYY-MM-DD-01`.
 
-11. **Open the PR.** `gh pr create --base main --head claude/debt-pass-YYYY-MM-DD-01 --title "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
+12. **Open the PR.** `gh pr create --base main --head claude/debt-pass-YYYY-MM-DD-01 --title "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
 
     ```markdown
     ## Summary
@@ -131,7 +133,7 @@ Apply these to populate the PR body sections:
 - **`## Review carefully — non-mechanical edits`** — any discharged entry whose `reason` contains any of: `rewrite`, `redesign`, `reshape`, `restructure`. Inline the entry text.
 - **`## Stragglers caught`** — any new debt entries opened-and-closed during step 5 (hygiene scan).
 - **`## Status changes`** — any doc with `type: sample | model | decision` whose `status:` front-matter field changed (e.g. sample `locked → draft`, model `settled → draft`). Session notes and other types are excluded — only lockbar-managed docs trigger this flag.
-- **`## Skipped — needs a session`** — entries left open per step 4c.
+- **`## Skipped — needs a session`** — entries left open per step 5c.
 - **`## Mechanical discharge`** — everything else (the quiet bulk).
 
 ## Safety rails (hard refusals)
@@ -142,10 +144,11 @@ The agent **will not**:
 - Flip `status: draft → settled` or `settled → implemented` on any doc.
 - Promote a `proposed` ADR to `accepted`.
 - Strike entries in `OPEN-QUESTIONS.md` that weren't named in a ledger entry.
-- Open a PR if `git status --porcelain Product/` shows zero changes (defensive empty-pass guard, step 9).
+- Open a PR if `git status --porcelain Product/` shows zero changes (defensive empty-pass guard, step 10).
 - Use `git push --force`, `git commit --amend`, or any `--no-verify` flag.
 - Run if the working tree is dirty on entry (step 1).
-- Run if a prior debt-pass PR is open (step 3c).
+- Run if a prior debt-pass PR is open (step 4c).
+- Run if `Product/sessions/session-NN+1.md` already exists at pre-flight (step 3) — refuse early to avoid wasted discharge work.
 
 If any rule would be violated, stop and surface — never silently bypass.
 
