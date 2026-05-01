@@ -25,6 +25,22 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - Part 1 "Work done" — list non-empty *or* a single line saying "no doc deltas this session" if nothing was created.
    - Part 1 "Active question going out" — required. Empty signals an unfinished session note; warn.
 
+2a. **Unsaved-body check.** (Skipped when invoked with `--auto-pr`.)
+
+   Ask the user: *"Did this session settle any new interface, contract, or Model body (e.g. a typed C# interface, a named protocol shape, an ADR-worthy decision)? If yes, where is it saved in `Product/`?"*
+
+   - **No** → proceed.
+   - **Yes, saved at `<path>`** → verify the path exists (`Read` or `ls`). If it does, proceed. If it doesn't, treat as yes-and-nowhere.
+   - **Yes, not saved anywhere** (yes-and-nowhere) → **refuse to close**. Print:
+     ```
+     ⚠️ Unsaved body detected — refusing to close.
+     This session settled a design artifact that has no canonical home in Product/.
+     Options:
+       (a) Write it now — create or edit the target Model/ADR/feature doc, then re-run /builder:end-session.
+       (b) Defer explicitly — add a backlog entry via /builder:add-to-backlog describing what was settled and where it should land, then re-run.
+     ```
+     Stop. Do not proceed to step 3.
+
 3. **Cascade-discipline check** (per `PRODUCT-BUILDER.md` §5.7).
    - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `Product/features/**/{notes,decisions}/*.md` and `Product/decisions/*.md`.
    - For each touched Model edit, the session note's Part 1 must contain either `debt: N opened` or `debt: none`. Empty signal is forbidden.
