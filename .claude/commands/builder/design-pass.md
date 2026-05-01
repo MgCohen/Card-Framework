@@ -64,7 +64,7 @@ Repeat steps 4–6 for each Q in sequence. Do not advance to the next Q until th
 
 ## Phase 3 — Close
 
-7. **Render the closing summary** once all Qs are locked. (This template is the canonical source for design-pass; `REPORT-STYLE.md §3.6` mirrors it. Keep in sync.)
+7. **Render the closing summary** once all Qs are locked.
 
    **Render order (rendered at end of Phase 3, not mid-walk):**
 

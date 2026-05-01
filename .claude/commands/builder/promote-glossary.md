@@ -35,7 +35,7 @@ If the form is ambiguous, ask. Don't guess.
 
 5. **Show the diffs**, get confirmation, then write.
 
-6. **Render the result.** (This template is the canonical source for promote-glossary Add/Update; `REPORT-STYLE.md §3.3 Mode A/B` mirrors it. Keep in sync.)
+6. **Render the result.**
 
    **Mode A — Add term:**
 
@@ -73,7 +73,7 @@ If the form is ambiguous, ask. Don't guess.
 
 6. **Patch the session note.** Append to Part 1 "Work done": `- glossary: renamed <old> → <new> (<N> files affected)`.
 
-7. **Render the result.** (This template is the canonical source for promote-glossary Rename; `REPORT-STYLE.md §3.3 Mode C` mirrors it. Keep in sync.)
+7. **Render the result.**
 
    **Mode C — Rename term:**
 

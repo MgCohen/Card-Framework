@@ -55,7 +55,7 @@ User input: `$ARGUMENTS`
 
 11. **Patch the in-progress session note.** Find the session with `status: in-progress` via `grep -rl 'status: in-progress' Product/sessions/`. If multiple match, use the most recently modified (`ls -t`). Append a line to its Part 1 "Work done" section: `- <type> <relative path> created`. Skip this step for `plan` type — plans don't get session-noted.
 
-12. **Render the result.** (This template is the canonical source for new; `REPORT-STYLE.md §3.4` mirrors it. Keep in sync.)
+12. **Render the result.**
 
     Result-strip pattern:
     - **Verb:** `Created`

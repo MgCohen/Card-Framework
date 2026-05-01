@@ -27,7 +27,6 @@ In one bash call:
 ```bash
 # All markdown docs under Product/ (excluding _validation fixtures)
 find Product/ -name '*.md' \
-  --exclude-dir='_workflow/_validation' \
   -not -path '*/_workflow/_validation/*' \
   | sort
 ```
@@ -136,8 +135,6 @@ For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## En
 Batch all new entries into a **single Edit call**.
 
 ### 8. Render the report
-
-(This template is the canonical source for lint; `REPORT-STYLE.md §3.7` mirrors it. Keep in sync.)
 
 **Render order:**
 
