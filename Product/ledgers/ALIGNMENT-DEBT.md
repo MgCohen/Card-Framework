@@ -24,6 +24,10 @@ Resolved entries get strikethrough plus resolution note:
 
 ## Entries
 
+### Linter findings — 2026-05-01
+
+- id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 — builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)
+
 ### Cascade — engine wiring stack design pass + patches (session-20260501-1132)
 
 - id: ad-20260501-022 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/03-snapshot-pipeline.md | reason: GameRules sketch still shows 4-service constructor with `IHandlerRegistry Handlers`; Q2 verdict removed it — update to 3 services
