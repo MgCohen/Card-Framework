@@ -38,18 +38,17 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - Glossary updates: `<terms>` (grep changelog section of `ledgers/GLOSSARY.md`).
    - Backlog entries opened: `<titles>`.
 
-5. **Draft the refreshed checkpoint.**
+5. **Write the refreshed checkpoint.**
 
    **Branch mode:** Skip checkpoint write entirely. Print: `Branch session — checkpoint update deferred to /builder:merge-pass.` Proceed to step 6.
 
-   **Main mode:** Do not overwrite `Product/SESSION-CHECKPOINT.md` directly. Build a draft and surface it for human approval first.
+   **Main mode:** Write directly — no diff, no approval gate. The PR is the review surface.
    - **v2 checkpoint:** Invoke `_project-checkpoint` rules from `.claude/commands/builder/_project-checkpoint.md`. Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
-   - **v1 checkpoint:** Read the current `SESSION-CHECKPOINT.md`. Read the session note's "Active question going out" — that becomes the new active open question. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md`. Generate the draft following the §4.7 template: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume. Bump `last-updated` and session counter.
-   - Show the diff against the current checkpoint. **Wait for the user's approval** before writing.
+   - **v1 checkpoint:** Read the current `SESSION-CHECKPOINT.md`. Read the session note's "Active question going out" — that becomes the new active open question. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md`. Generate the new checkpoint following the §4.7 template: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume. Bump `last-updated` and session counter.
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.
 
-7. **Commit and push.** Auto-run after the checkpoint is approved/applied and the session-note status is flipped.
+7. **Commit and push.** Auto-run after the checkpoint is written and the session-note status is flipped.
    - Stage all `Product/` changes (created + modified). Use explicit paths from the deltas in step 4 — never `git add -A`. Skip anything outside `Product/` unless the user explicitly added it during the session.
    - **The session note itself requires `git add -f`** — `Product/sessions/session-*.md` is gitignored (see `.gitignore`) so the in-progress skeleton stays quiet during the session. Only the deliberate end-of-session add force-tracks it. Already-tracked session files (from before this convention) re-stage normally; the `-f` is harmless either way.
    - Commit format:
@@ -78,7 +77,6 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 ## Notes
 
-- Never auto-write the checkpoint. Always diff-and-confirm before applying.
 - If the cascade-discipline check fails, surface, don't silently fix.
 - If session-note caps are blown (>50 lines per part), trim suggestions go to the user; don't trim automatically.
 - Auto-commit and push are part of the close — run them once the checkpoint diff is approved. Never `--force`, never `--no-verify`. If a pre-commit hook fails, surface the failure; do not bypass.

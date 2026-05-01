@@ -20,7 +20,7 @@ User input: `$ARGUMENTS`
 
    If the user-supplied form doesn't match, print the expected forms and ask. Do not guess.
 
-2. **Validate feature** (Model / feature ADR only). The folder `Product/features/<feature>/` must exist. If it doesn't, print the available features and ask. Do not create new feature folders here — that's `/builder:new-feature` (Tier 2).
+2. **Validate feature** (Model / feature ADR only). The folder `Product/features/<feature>/` must exist. If it doesn't, print the available features and ask. Do not create new feature folders here — that's `/builder:new-feature` (Tier 2). If `Product/features/<feature>/archive/` does not exist, create it with a `.gitkeep` before writing the new doc (silent, no user prompt needed).
 
 3. **Pick the counter** (Model and ADR only).
    - For Models: `ls Product/features/<feature>/models/` → find max `NN-` prefix → increment, pad to 2 digits.

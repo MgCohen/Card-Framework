@@ -69,10 +69,12 @@ Product/
       <feature-a>.md         # feature root — top-level summary, indexes Models + ADRs
       models/                # Models (NN-<slug>.md, per-feature counter)
       decisions/             # ADRs (NNNN-<slug>.md, per-feature counter)
+      archive/               # superseded and cancelled docs (see §5.14)
     <feature-b>/
       <feature-b>.md
       models/
       decisions/
+      archive/
     ...                      # one folder per major system in the project
 
   spikes/                    # flat — most spikes are single docs
@@ -598,6 +600,7 @@ Automation, not a session shape. A linter (run as `/builder:lint` skill or CI st
 - Every term in a doc has a `ledgers/GLOSSARY.md` entry.
 - No Model points at a `superseded` ADR without acknowledging.
 - No `builds-on:` references missing or pointing at non-existent paths.
+- Archive integrity rules (see §5.14): forward-pointer integrity, no stale inbound links, status/location agreement, successor presence.
 
 **Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter`, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow, with the §5.8 threshold catching accumulation.
 
@@ -694,14 +697,63 @@ A feature progresses through these phases. Each phase corresponds to one or more
 |---------|-------------|
 | **Project start (once)** | `/builder:bootstrap` |
 | **Every session start** | `/builder:start-session` |
-| **Mid-session, on demand** | `/builder:new`, `/builder:new-feature`, `/builder:settle-decision`, `/builder:open-debt`, `/builder:close-debt`, `/builder:add-to-backlog`, `/builder:promote-glossary`, `/builder:abandon-model`, `/builder:supersede-cascade`, `/builder:check-drift` |
+| **Mid-session, on demand** | `/builder:new`, `/builder:new-feature`, `/builder:settle-decision`, `/builder:open-debt`, `/builder:close-debt`, `/builder:add-to-backlog`, `/builder:promote-glossary`, `/builder:abandon-model`, `/builder:supersede-cascade`, `/builder:check-drift`, `/builder:archive` (retire a doc to `archive/`) |
 | **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
-| **Periodic / on demand** | `/builder:lint` (reference staleness), `/builder:rebuild-feature-map` |
+| **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity), `/builder:rebuild-feature-map` |
 | **Every session end** | `/builder:end-session` |
 | **PR merge to main** | `builder-drift-detection` (CI mode) |
 | **Threshold-driven session shape** | Consistency pass (§5.5/§5.8) when ledger crosses 5 open entries |
 
 Full automation catalog: [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §2.
+
+### 5.14 Archive convention
+
+Superseded and cancelled docs move into a sibling `archive/` folder inside the feature directory — co-located with the active docs so the old and new contracts sit beside each other, but visually demoted out of the active reading path.
+
+**Target structure per feature:**
+
+```
+features/<feature>/
+  <feature>.md
+  models/
+  decisions/
+  archive/         # retired docs only; same depth as models/ and decisions/
+```
+
+#### Move trigger (explicit, not vibes)
+
+A doc moves into `archive/` when **exactly one** of these is true — and only as part of the same commit that flips the status. Never move a doc just because it feels old.
+
+| Trigger | Status value |
+|---------|-------------|
+| A successor doc exists and this doc's contract is replaced | `Superseded` |
+| The work was dropped with no successor | `Cancelled` |
+
+#### Front-matter on an archived doc
+
+Four fields, all mandatory on archived docs:
+
+```yaml
+status: Superseded | Cancelled
+superseded_by: <relative path to successor>   # required iff status=Superseded
+archived_on: YYYY-MM-DD
+reason: <one-line why>
+```
+
+No `supersedes:` field on the active doc. The back-reference is derived on demand by `/builder:lint` scanning `archive/*.md` for `superseded_by` pointing at the active doc. Single source of truth — the archived doc owns the pointer.
+
+#### Lint rules (enforced by `/builder:lint`)
+
+Four rules are checked on every lint run. Findings become ledger entries (source = `linter/archive`); the §5.8 threshold drives resolution.
+
+1. **Forward-pointer integrity** — every `archive/*.md` with `status: Superseded` has a `superseded_by` that resolves to an existing non-archived file.
+2. **No stale inbound links** — all non-archived docs are scanned for links into any `archive/` path. The only legitimate inbound link is from the successor doc named in `superseded_by`. Anything else is a stale reference to fix or remove.
+3. **Status/location agreement** — a doc with `status: Superseded` or `status: Cancelled` must live in `archive/`; a doc *in* `archive/` must have one of those statuses. Disagreement is an error in both directions.
+4. **Successor presence** — if doc A declares `superseded_by: B`, then B must exist and must not itself be archived.
+
+#### Archive helper skill
+
+`/builder:archive` automates the mechanical move: flips status, writes the four front-matter fields, `git mv`s the file into `archive/`, runs `/builder:lint`, and opens a single-commit PR. If `archive/` doesn't exist yet, it creates it with a `.gitkeep` before the move. See `.claude/commands/builder/archive.md` for the skill spec.
 
 ---
 
@@ -720,6 +772,7 @@ Full automation catalog: [`AI-FIRST-AUTOMATION.md`](AI-FIRST-AUTOMATION.md) §2.
 | `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled, debt opened/closed; (2) links + ephemeral/followup questions | End of every session |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
 | `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
+| `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
 ### Three lifetimes, three homes for questions
