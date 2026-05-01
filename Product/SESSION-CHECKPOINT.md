@@ -1,32 +1,31 @@
 ---
 type: checkpoint
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 tags: [#checkpoint]
 ---
 
 # Session Checkpoint
 
-**Last updated:** 2026-04-30 (session 14)
+**Last updated:** 2026-05-01 (session 15)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
 ---
 
 ## Where we stopped
 
-- **Alignment-debt ledger drained.** All 12 open entries from session 13 discharged in pass-mode (§5.5 / §5.8). Direct round (pile-counter §9.4 / §9.5 / Q8, snapshot-pipeline §4 / §7, command-pipeline `Handle`) + Scaffold State/Store cascade (engine/02, engine/03, ADRs 0001/0002, sample, OPEN-QUESTIONS) all resolved. Zero open entries; below the §5.8 threshold of 5.
-- **Scaffold State/Store binding propagated.** `GameRules` constructor takes Scaffold `IStateScope` (no invented `IGameStateProvider`); reads go through `State.Get<TState>()`. Mutation routes through Scaffold `Mutator<TState, TPayload>` registered per payload type, fired by handlers via `ctx.Store.Execute(payload)`. `IStateMutator<TCommand>` retired.
-- **`ICommandHandler.Handle` returns `Task<TResult>`.** Synchronous handlers wrap with `Task.FromResult(...)`; decision handlers genuinely await `ctx.Resolver.Await(id)`. Updated in command-pipeline.md and the canonical interface in 04-effect-flow.md §6.
-- **`DecisionPrompt(CommandId Id)`.** Snapshot scope's prompt id is the action's `CommandId`; the parallel `DecisionId` type is gone (per `04-effect-flow §5.1`).
-- **Pile Counter sample status: `draft`.** Downgraded from `locked` to absorb the §9 rewrite onto sliced state + payload-keyed mutators. Re-lock candidate after one stable session per §4.4 cooldown.
-- **OPEN-QUESTIONS rebalance.** `IGameStateProvider shape` folded; promoted "**`GameState` slice catalog**" as the load-bearing item (concrete slice catalog — `PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice — on top of the Scaffold `Store`).
+- **§6 boundary redesigned (design pass; no doc edits yet).** Eight design questions walked Q-by-Q. Architectural reframe: input layer is decision-unaware. Mapping is state-driven for normal reasons (game phase, narrowing); decisions are just one source of `AvailableActions` narrowing. `IIntentMapper` scope branching is gone for good.
+- **`DecisionResponseCommand` / `DecisionResponseHandler` / `DecisionPrompt(CommandId)` snapshot scope deleted from the model.** Decision answers are real game commands (`SelectTargetCommand`, `PickOptionCommand`, …) routed by command type alone.
+- **`IDecisionResolver` reshaped to `ICommandAwaiter`.** Final shape: `Task<TCommand> Wait<TCommand>(CancellationToken ct = default)` + `bool TryResolve(GameCommand cmd)`. No `AwaitingFor` id, no `IAwaitResponse` marker. Routing is closure-captured `cmd is T` pattern matching. Single-open per type-hierarchy is a runtime assert.
+- **Engine-level pre-pipeline awaiter check.** Matched commands short-circuit (no envelope, no handler, no triggers); non-matches fall through to the normal pipeline. Cancel-as-command for player path; `CancellationToken` for engine-internal unwinds.
+- **ADR-0006 + ADR-0007 unchanged.** This restores the §6 contract to ADR-0006's chosen shape rather than mutating it.
 
 ---
 
 ## The active open question (singular)
 
-**§6 boundary redesign in `features/effects/models/04-effect-flow.md`.** The current §6 sketch has `IIntentMapper` branching on snapshot scope to pick between `MapFreeInput` and `DecisionResponseCommand`. User flagged this wrong-batch in session 13: the routing concern likely belongs to a different layer than the mapper, but no counter-shape was pinned. Settle the alternative shape and patch §6 (with cascade-aware edits to anywhere downstream that mirrors the current sketch).
+**§6 patch + cascade.** Design fully settled in S15; this is the mechanical execution session. Open one alignment-debt entry per cascade target and discharge in the same session per §5.5. Targets: `04-effect-flow §4.5 / §5 / §6 / §10 / §11`, `03-snapshot-pipeline §4 / §7 / §9`, `01-command-pipeline §3`, `02-availability-snapshot`, `01-presentation-loop`, `pile-counter` mapper constructor, `OPEN-QUESTIONS` snapshot-scope-as-FSM reframe.
 
-Architecturally interesting; mechanical-only edits unlikely. Sample re-lock and the slice-catalog work are the next two candidates after this lands.
+Mostly mechanical edits + a clean cascade. Sample re-lock and the slice-catalog work are the next two candidates after this lands.
 
 ---
 
@@ -39,7 +38,8 @@ Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions ar
 - **Game lifecycle design** — session start, turn structure, phase transitions, end conditions. Prerequisite for trigger subscription lifecycle.
 - **Trigger subscription lifecycle** — Register/Unregister timing relative to zone transitions. Depends on game lifecycle.
 - **`EndGameCommand` semantics** — bleeds into session lifecycle.
-- **Snapshot scope as state machine** — revisit with the effect-flow doc.
+- **Snapshot scope as state machine (reframed).** Now sits *behind* the awaiter rather than in front of it — the FSM-shaped state model is the eventual successor to the type-only routing the awaiter does today. Lower urgency.
+- **Multi-actor / multi-open awaits.** Today single-open is a runtime assert. Type-only routing is structurally tractable for distinct types; pin when an async-decision-heavy game arrives.
 
 ---
 
@@ -47,10 +47,11 @@ Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions ar
 
 | # | Task | Notes |
 |---|------|-------|
-| **20-§6** | **Effect-flow §6 boundary redesign** | Active question. Move the `FreeInput`/`DecisionPrompt` routing concern out of `IIntentMapper`. Settle the alternative shape, patch §6 + downstream mirrors. |
+| **20-§6-patch** | **§6 patch + cascade** | Active question. Mechanical execution of the S15 design pass. ~7 cascade sites. Open + discharge alignment-debt in a single pass per §5.5. |
 | **20-relock** | **Re-lock pile-counter** | Status `draft` after session 14's §9 rewrite. Re-lock per §4.4 lockbar after one stable session with no further contract edits. |
 | **2** | **`GameState` slice catalog** | Now load-bearing in `OPEN-QUESTIONS.md`. Concrete slice list + ownership model. Likely needs a dedicated Model under `features/engine/` or `features/state/`. |
 | **WF-1** | **Tier 1 slash commands** | Per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 Tier 1. Cheap leverage on every session. |
+| **WF-2** | **`/builder:design-pass` skill** | Q-by-Q with options + lean + verdict. S15 is the canonical example. |
 | **12** | **Game lifecycle design** | Best unblocked task after §6 + slice catalog. New feature folder (`features/lifecycle/`?) or in `engine/`. |
 | **7** | **`PLANS/` — first implementation slice** | Pull after §6, slice catalog, and lifecycle land and at least one feature is ready for build-gate consideration. |
 | **15** | **MTG-strict SBA ordering** | Defer until a game needs it. Captured as `features/engine/decisions/0006-mtg-sba-known-difference.md`. |
@@ -63,12 +64,13 @@ Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions ar
 |------|-----|
 | [_workflow/PRODUCT-BUILDER.md](_workflow/PRODUCT-BUILDER.md) | The workflow itself. |
 | [ledgers/FEATURE-MAP.md](ledgers/FEATURE-MAP.md) | Bird's-eye view of features, Models, ADRs. |
-| [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) | 0 open entries. Resolved section grew by 12 in session 14. |
-| [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) | Canonical effect-flow contract. §6 is the active question. Read §10 (invariants) for the headline pins. |
+| [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) | 0 open entries. Patch session opens the next batch. |
+| [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) | Canonical effect-flow contract. **§6 is the patch target;** §4.5 (`IDecisionResolver` → `ICommandAwaiter`), §5 (decision-id-≡-command-id collapse, simplifies under type-only routing), §10 invariants. |
+| [sessions/session-15.md](sessions/session-15.md) | Design-pass record. Q1–Q8 verdicts + final `ICommandAwaiter` shape. **Read before patching.** |
 | [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) | Durable design questions ledger. |
 | [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) | Layer hierarchy, two dispatch paths. |
-| [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) | Snapshot production; refreshed in session 14 against Scaffold State. |
-| [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) | `GameRules` interface — services injected, four methods. Refreshed in session 14. |
+| [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) | Snapshot production; cascade target (§4 Scope drop, §7 handler example update). |
+| [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) | `GameRules` interface — services injected, four methods. |
 | [support/samples/pile-counter.md](support/samples/pile-counter.md) | Floor sample. **Status: `draft`** after session 14 rewrite. Re-lock candidate. |
 
 For the Tier 1 commands (WF-1):

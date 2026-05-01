@@ -1,6 +1,6 @@
 ---
 type: session
-status: in-progress
+status: completed
 last-updated: 2026-05-01
 date: 2026-04-30
 tags: [#session]
@@ -12,47 +12,55 @@ tags: [#session]
 
 ### 🎯 Active question coming in
 
-**§6 boundary redesign in `features/effects/models/04-effect-flow.md`.** The current §6 sketch has `IIntentMapper` branching on snapshot scope to pick between `MapFreeInput` and `DecisionResponseCommand`. User flagged this wrong-batch in session 13: the routing concern likely belongs to a different layer than the mapper, but no counter-shape was pinned. Settle the alternative shape and patch §6 (with cascade-aware edits to anywhere downstream that mirrors the current sketch).
+**§6 boundary redesign in `features/effects/models/04-effect-flow.md`.** `IIntentMapper`-branches-on-snapshot-scope flagged wrong-batch in S13. Settle alternative shape and patch §6 + downstream mirrors.
 
 ### Work done
 
-- **First proposal: gateway-routes.** Move scope-branch from mapper to gateway; keep `DecisionResponseCommand`. Mapper restored to ADR-0006 vanilla.
-- **User reframed one level up.** The branch shouldn't exist anywhere — input layer should be decision-unaware. Mapping is state-driven for normal reasons; decisions are just one source of `AvailableActions` narrowing.
-- **Locked architectural shape.** No `FreeInput`/`DecisionPrompt` distinction at the input layer. `DecisionResponseCommand` and `DecisionResponseHandler` deleted from the model. `DecisionPrompt(CommandId)` snapshot scope dropped — snapshot contents speak for themselves. Decision answers are real game commands (`SelectTargetCommand`, `PickOptionCommand`, etc.).
-- **Walked Q-by-Q design pass.** 8 questions sketched; 3 verdicted; awaiter shape sketched and locked.
-- **No doc edits yet** — design pass mid-flight; patches deferred until Q3–Q8 settle.
+- Design pass only — **no doc deltas this session** (zero Models/ADRs touched). Patches deferred to a fresh session per "design unit ≠ patch unit."
+- Walked 8 design questions (Q1–Q8) one-by-one, options + lean + verdict.
+- Architectural reframe over the original §6 sketch: input layer is decision-unaware; mapping is state-driven for normal reasons (game phase, narrowing); decisions are just one source of `AvailableActions` narrowing.
+- Locked the `ICommandAwaiter` final shape after a misstep where I over-rotated on a critique and proposed dropping the id check entirely. User course-corrected; we landed on type-only routing with no id and no marker interface.
+- `debt: none`
 
 ### Decisions settled
 
-- **Q1 = A** — `RequestTargetAction` stays as a real `GameAction`. Effects always go through `scope.Dispatch`; the request envelope captures both question and answer.
-- **Q2 = type + `AwaitingFor` id** — primary routing by command type via `Wait<TCommand>`; `AwaitingFor` id stamped through snapshot template → mapper → command for correctness check and future multi-await disambiguation.
-- **Q7 = engine-level pre-pipeline** — engine asks awaiter "consume this?" before routing to the pipeline. Awaiter sits next to the pipeline, not inside.
-- **`IDecisionResolver` → `ICommandAwaiter`.** Surface: `Task<TCommand> Wait<TCommand>(CommandId awaitingFor)` (handler-side) + `bool TryResolve(GameCommand cmd)` (engine-side). Resolution flow drafted (handler narrows actions + registers await; pipeline returns pending Task; engine yields; on response, awaiter matches → tcs completes → handler resumes; response command never opens its own envelope).
+- **Q1 = A** — `RequestTargetAction` stays as a real `GameAction`. Effects always `scope.Dispatch`; the request envelope captures both question and answer.
+- **Q2 = type-only** — no `AwaitingFor` id, no `IAwaitResponse` marker. Routing is `cmd is T` pattern matching alone. Single-open per type-hierarchy is a runtime assert.
+- **Q3 = C** — polymorphism via assignability; `Wait<TBase>` matches concrete subtypes through pattern matching. Game owns the hierarchy.
+- **Q4 = A** — matched commands short-circuit; no envelope, no handler, no triggers for the response. One logical event = one envelope (the request's).
+- **Q5 = B** — non-matches fall through to the normal pipeline; existing five-validation-layers gate them via `AvailableActions`. Awaiter only siphons matches.
+- **Q6 = A** — drop `Scope` discriminator entirely. Snapshot is `AvailableActionsSnapshot { Templates }`. Anyone needing "is an await open?" asks the awaiter.
+- **Q7 = A** — engine-level pre-pipeline awaiter check. Awaiter sibling to pipeline, not nested.
+- **Q8 = A + B** — cancel-as-command for the player path (game declares cancel as part of the awaitable hierarchy); `CancellationToken` for engine-internal unwinds (game ends, scope.Cancel).
+- **Architectural deletes:** `DecisionResponseCommand` · `DecisionResponseHandler` · `DecisionPrompt(CommandId)` snapshot scope · `IDecisionResolver` (renamed/reshaped to `ICommandAwaiter`) · mapper-side scope branching. ADR-0006 + ADR-0007 unchanged (this restores them).
+- **Final `ICommandAwaiter` surface:** `Task<TCommand> Wait<TCommand>(CancellationToken ct = default) where TCommand : GameCommand` + `bool TryResolve(GameCommand cmd)`. Impl: closure-captured `cmd is T` pattern matching.
 
 ### 🎯 Active question going out
 
-Continue Q-walk: pending verdict on **X (shared id) vs Y (`IAwaitResponse` marker interface, lean Y)** for how response commands carry the awaitingFor key → Q3 polymorphism on `Wait<T>` (lean assignability) → Q4 replace vs alongside (lean replace) → Q5 non-match handling (lean normal-pipeline) → Q6 confirm dropping snapshot Scope (lean drop) → Q8 cancellation of open await (lean cancel-as-command). Then patch §6 + cascade.
+Patch §6 of `04-effect-flow.md` and cascade. Open one alignment-debt entry per cascade target and discharge in the same session per §5.5: `04-effect-flow §4.5 / §5 / §6 / §10 / §11`, `03-snapshot-pipeline §4 / §7 / §9`, `01-command-pipeline §3`, `02-availability-snapshot`, `01-presentation-loop`, `pile-counter` mapper constructor, `OPEN-QUESTIONS` snapshot-scope-as-FSM reframe.
 
 ## Part 2 — Links & open threads (cap ~50 lines)
 
 ### Followups created
 
-- **`/builder:design-pass` skill** — captured in `BACKLOG.md`. Pattern: present design Qs one at a time with options + lean, wait for verdict, advance. This session is the canonical example.
-- **Multi-actor / multi-open awaits.** Today single-open is behavioural (engine pauses during effects). With id-based routing it's structurally tractable. Worth pinning when an async-decision-heavy game arrives.
+- **`/builder:design-pass` skill** — captured in `BACKLOG.md`. Pattern: Q-by-Q with options + lean + verdict, advance once locked. Session 15 is the canonical example.
+- **Multi-actor / multi-open awaits.** Today single-open is a runtime assert in the awaiter. With type-only routing, structurally tractable for distinct types. Pin when an async-decision-heavy game arrives.
 
 ### Ephemeral questions (scratch, not promoted)
 
-- Whether the awaiter should also support timeouts. Out of scope; handler-level concern if ever needed.
-- Whether `RequestTargetAction` should collapse to an effect-internal service call (no envelope). Considered and rejected (Q1 = A).
-- Whether `DecisionPrompt(CommandId)` should survive as an informational flag for UI/debug. Considered; lean drop entirely — UI infers from snapshot contents; rule asks awaiter directly if needed.
+- X (shared id) vs Y (`IAwaitResponse` marker) — both rejected. X breaks command-id uniqueness; Y forces a class-level commitment to "always a response" that doesn't hold semantically. Settled by dropping the id entirely.
+- Reuse `OriginCommandId` for await routing — rejected. Wrong semantics (intent-chain-ancestor vs response-to); would require decision-aware gateway.
+- W (id on awaitable, dropped from command) — superseded. We went one step further: drop the id everywhere; type alone is the routing key.
+- `IsAssignableFrom` vs pattern matching — pattern matching wins (closure-captured `cmd is T` per registration; JIT can specialise; idiomatic).
 
 ### References
 
-- `features/effects/models/04-effect-flow.md` §6 — target of redesign
-- `features/effects/models/04-effect-flow.md` §4.5 — today's `IDecisionResolver`, to be replaced by `ICommandAwaiter`
-- `features/actions/decisions/0006-player-intent-mapper.md` — mapper contract; redesign restores its chosen shape (no scope branch)
-- `features/actions/models/01-command-pipeline.md` §3 — gateway location; pre-pipeline awaiter check lands here
-- `features/engine/models/03-snapshot-pipeline.md` §4, §7 — snapshot scope discriminator (to drop), effect-side handler example (to update)
-- `features/presentation/models/01-presentation-loop.md` — IntentMapper boundary prose; cascade target
-- `support/samples/pile-counter.md` — `PileCounterIntentMapper(IStateScope)` constructor; loses state injection under new mapper contract
-- Related sessions: 13 (effect-flow Model + scope-branch flagged), 14 (alignment-debt drained, scaffold cascade)
+- `features/effects/models/04-effect-flow.md` §4.5–§6, §10–§11 — primary patch target
+- `features/engine/models/03-snapshot-pipeline.md` §4, §7, §9 — Scope drop, handler example update
+- `features/actions/models/01-command-pipeline.md` §3 — gateway stays decision-unaware
+- `features/actions/models/02-availability-snapshot.md` — snapshot shape (Scope removal)
+- `features/actions/decisions/0006-player-intent-mapper.md` — restored, not mutated
+- `features/actions/decisions/0007-five-validation-layers.md` — restored, not mutated
+- `features/presentation/models/01-presentation-loop.md` — boundary prose
+- `support/samples/pile-counter.md` — mapper constructor cleanup
+- Related sessions: 13 (effect-flow Model + scope-branch flagged), 14 (alignment-debt drained), 15 (this session)
