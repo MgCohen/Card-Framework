@@ -54,7 +54,7 @@ tags: [#checkpoint]
 |---|------|-------|
 | **1** | **Zone model internal opens** | `oq-zone-internal-opens` — nine sub-questions in `zones/01-zone-model.md`. Design-pass candidate. |
 | **2** | **`GameEngineBuilder` construction protocol** | `oq-engine-builder` — load-bearing for any game author. |
-| **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
+| **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` with parallel-session model and merge-pass cadence. (REPORT-STYLE.md retired — render templates live inline in each skill.) |
 
 ---
 

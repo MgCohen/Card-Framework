@@ -27,7 +27,6 @@ In one bash call:
 ```bash
 # All markdown docs under Product/ (excluding _validation fixtures)
 find Product/ -name '*.md' \
-  --exclude-dir='_workflow/_validation' \
   -not -path '*/_workflow/_validation/*' \
   | sort
 ```
@@ -124,21 +123,35 @@ Read `Product/ledgers/ALIGNMENT-DEBT.md`. For each finding from steps 3–5, che
 
 ### 7. Write new ledger entries
 
-For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Open`:
+For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Entries` (or whatever the most recent date-stamped subsection is — group same-day findings together). Use the v2 entry format:
 
 ```markdown
-- YYYY-MM-DD | source: linter/archive | target: <affected path> | reason: <rule code> — <one-line description> | open
+- id: ad-YYYYMMDD-NNN | status: open | source: linter | target: <affected path> | reason: <rule code> — <one-line description>
 ```
 
-Use today's date. Batch all new entries into a **single Edit call** (append to `## Open`).
+- `source:` is `linter` for §5.10 rules (S1, S2) and `linter/archive` for §5.14 rules (A1–A4). The `linter*` prefix is what excludes these from the §5.8 threshold count — do not invent other source labels.
+- `id:` uses today's date (`YYYYMMDD`) and an incrementing 3-digit suffix that doesn't collide with existing entries on that date. Read the ledger first to find the next free NNN.
 
-### 8. Render the report per `Product/_workflow/REPORT-STYLE.md` §3.7
+Batch all new entries into a **single Edit call**.
 
-Use the lint report template. Emit:
-- counts by rule (findings per A1/A2/A3a/A3b/A4/S1/S2)
-- total new ledger entries opened
-- total skipped (already in ledger)
-- ⚠️ pass-mode strip if new entries push total open count ≥ 5
+### 8. Render the report
+
+**Render order:**
+
+1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed)
+2. **Summary stat strip** — `📊 <N> new findings · <M> already in ledger · <K> rules checked`
+3. **Findings** (H3 + table, omitted if zero findings):
+   ```
+   ### ⚠️ Findings
+   | Rule | Doc | Detail |
+   |---|---|---|
+   | A1 | features/engine/archive/01-old.md | superseded_by path missing |
+   ```
+4. **Debt opened** (strip, omitted if zero) — `📋 Debt opened: <N> new entries in ALIGNMENT-DEBT.md (source: linter*)`
+
+**Empty-state behavior:** when the linter finds nothing, the entire §3–§4 block collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
+
+**Linter findings do not trip the §5.8 threshold** (only cascade entries do — see PRODUCT-BUILDER.md §5.8 / §5.10). No pass-mode strip from this skill.
 
 ## Safety rails
 

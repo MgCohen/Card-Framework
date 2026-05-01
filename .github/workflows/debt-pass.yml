@@ -37,13 +37,21 @@ jobs:
 
       - name: Threshold check
         run: |
-          count=$(grep -c '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md || true)
-          count=${count:-0}
-          if [ "$count" -ge 5 ]; then
-            echo "Threshold tripped: $count open entries (>= 5). Dispatching debt-pass."
+          # Threshold counts only cascade entries (open entries NOT from linter).
+          # Linter findings (source: linter or source: linter/archive) are
+          # mechanical link-cleanup; they get discharged in the same pass when
+          # cascade tips the threshold, but they never trigger a pass on their
+          # own. See Product/_workflow/PRODUCT-BUILDER.md §5.8 / §5.10.
+          cascade_count=$(grep '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md 2>/dev/null \
+            | grep -vc 'source: linter' || true)
+          cascade_count=${cascade_count:-0}
+          total_count=$(grep -c '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md || true)
+          total_count=${total_count:-0}
+          if [ "$cascade_count" -ge 5 ]; then
+            echo "Threshold tripped: $cascade_count cascade entries (>= 5; total open: $total_count). Dispatching debt-pass."
             gh workflow run debt-pass.yml
           else
-            echo "Below threshold: $count open entries (< 5). Skipping."
+            echo "Below threshold: $cascade_count cascade entries (< 5; total open: $total_count). Skipping."
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
