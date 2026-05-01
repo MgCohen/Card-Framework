@@ -7,7 +7,16 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 ## Steps
 
-1. **Identify the session note.** Find the most recent `Product/sessions/session-NN.md` with `status: in-progress`. If none, surface that and stop. If multiple, surface and ask which one.
+1. **Identify the session note.** Find `Product/sessions/session-*.md` with `status: in-progress`. If none, surface that and stop. If multiple, surface and ask which one.
+
+1a. **Detect branch mode.** Run `git rev-parse --abbrev-ref HEAD`.
+   - Result is `main` or `master` → **main mode**: full single-writer flow (checkpoint written inline).
+   - Any other branch → **branch mode**: checkpoint write is deferred to `/builder:merge-pass`. Steps 5 and 9 behave differently (see below).
+
+1b. **Author `work-summary` (v2 sessions only).** If the session note has `schema-version: 2` in its frontmatter:
+   - Read the "Active question going out" line from Part 1.
+   - Pre-fill `work-summary:` as a one-line synthesis (e.g., `Drafted <X>; resolved <Y>; surfaced <Z>.`).
+   - Show the pre-fill and ask the user to confirm or edit. Write the confirmed value into the session frontmatter's `work-summary:` field before proceeding.
 
 2. **Verify session-note hygiene.**
    - Both parts cap ~50 lines each. Warn if Part 1 or Part 2 exceeds 50 (don't block).
@@ -30,12 +39,12 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - Backlog entries opened: `<titles>`.
 
 5. **Write the refreshed checkpoint.**
-   - Read the current `SESSION-CHECKPOINT.md`.
-   - Read the session note's Part 1 "Active question going out" — that becomes the new "active open question" in the checkpoint.
-   - Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md` for items to surface.
-   - Generate and write the new checkpoint following the §4.7 template structure: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume.
-   - Bump the `last-updated` and the session counter line.
-   - Write directly — no diff, no approval gate. The PR is the review surface.
+
+   **Branch mode:** Skip checkpoint write entirely. Print: `Branch session — checkpoint update deferred to /builder:merge-pass.` Proceed to step 6.
+
+   **Main mode:** Write directly — no diff, no approval gate. The PR is the review surface.
+   - **v2 checkpoint:** Invoke `_project-checkpoint` rules from `.claude/commands/builder/_project-checkpoint.md`. Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
+   - **v1 checkpoint:** Read the current `SESSION-CHECKPOINT.md`. Read the session note's "Active question going out" — that becomes the new active open question. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md`. Generate the new checkpoint following the §4.7 template: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume. Bump `last-updated` and session counter.
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.
 
@@ -60,8 +69,11 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - **📤 Commit** — `📤 Commit: \`<sha>\` → \`<branch>\``, plus `· PR: [#NN](<url>)` when a PR exists; drop the PR clause otherwise.
    - **⚠️ Pass-mode warning** — render only when post-close debt count > 5 (per §5.8): `⚠️ Pass-mode required next session — debt <N> / threshold <T>`.
    - **🎯 Next steps** — bullet list, derived from the session note's Part 1 "Active question going out" + the checkpoint's "Suggested next steps" section.
+   - **🔀 Branch info** (branch mode only) — `Branch: <branch> · session: <session-id> · parent: <parent> · merge: pending → /builder:merge-pass`.
 
 9. **Update the checkpoint's "Where we stopped" section** with the same one-line bridge content used as the seed for next session's `🕐 Last session:` line. This must happen as part of the checkpoint refresh in step 5 (re-stating here so the data flow is explicit).
+
+   **Branch mode:** This step is skipped — the checkpoint is not written in branch mode. The `work-summary` on the session note (step 1b) serves the same purpose for merge-pass.
 
 ## Notes
 

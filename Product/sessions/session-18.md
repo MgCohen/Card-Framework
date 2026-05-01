@@ -1,5 +1,6 @@
 ---
 type: session
+schema-version: 1
 status: completed
 last-updated: 2026-05-01
 date: 2026-05-01

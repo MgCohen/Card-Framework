@@ -19,9 +19,9 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
 
 1. **Sync.** `git fetch origin && git pull --ff-only`. **Refuse to start if the working tree is dirty** — exit with `working tree dirty, refusing to run` and stop. The agent runs from whatever ref the trigger placed us on: `main` for organic GHA fires (the `push: branches: [main]` trigger), the dispatched ref for `workflow_dispatch` (used by Layer 3 validation), and the developer's chosen branch for local runs (the runbook says to be on `main` before invoking — see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md)). Do not `git checkout main`; that would silently switch the dev away from a feature branch on accidental local invocation, and would break Layer 3 dispatch tests by switching away from the seeded branch.
 
-2. **Threshold check.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` (lines under `## Open` ending in `| open` — strikethrough/resolved entries don't count). If **< 5**, exit with `nothing to do (count=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
+2. **Threshold check.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` (lines matching `^- id: ad-` — unresolved entries start with `- id:`, resolved entries start with `- ~~`). If **< 5**, exit with `nothing to do (count=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
 
-3. **Session-note collision pre-check.** Read the prior session number `NN` from `Product/SESSION-CHECKPOINT.md`'s session counter. Verify `Product/sessions/session-NN+1.md` does **not** already exist. If it does (e.g. a `/builder:start-session` resume left an in-progress stub), exit with `session-NN+1 already exists, refusing to overwrite — resolve manually` and stop. **This check fires here, before any expensive discharge work, on purpose** — the same refusal lives at step 9 as a defense-in-depth backstop, but Layer 3 sixth dispatch on 2026-04-30 showed an agent doing 6 steps of discharge + registry edits before discovering the collision and refusing. That run wasted ~$1.50 of subscription credits. Failing fast at pre-flight reuses the same refusal logic without the wasted work.
+3. **In-progress session pre-check.** Run `grep -rl 'status: in-progress' Product/sessions/`. If any file matches, exit with `session in progress (<filename>), refusing to run — close or discard it first` and stop. **This check fires here, before any expensive discharge work, on purpose** — a concurrent in-progress session means the workspace is not in a clean state for an unattended pass.
 
 4. **Branch collision check.**
    a. `git fetch origin --prune`.
@@ -30,7 +30,7 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
       - **PR open** → exit with `prior pass in PR #X awaiting review, skipping` and stop.
       - **PR closed without merging** → `git push origin --delete <branch>`, continue.
       - **PR merged** or **no PR found** → treat as stale, `git push origin --delete <branch>`, continue.
-   d. Once all matches are resolved, `git checkout -b claude/debt-pass-YYYY-MM-DD-01` (always `-01` — collisions are resolved before this step).
+   d. Once all matches are resolved, derive the timestamp with `date -u +%Y-%m-%d-%H%M` and `git checkout -b claude/debt-pass-<YYYY-MM-DD-HHMM>`. Timestamp-based names don't collide; the branch-collision check above handles any prior-run branches.
 
 5. **Discharge loop — batched.** Optimize for low turn count (each tool call is one turn; max-turns is bounded). The discharge is a deterministic transformation once you have the data, so batch everything.
 
@@ -51,11 +51,11 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
         Use `\b` word boundaries to avoid partial matches. One bash invocation per target file (parallel across files where the agent can run multiple bash calls in one turn).
       - **Section-specific edits** (less common — e.g. `update §6 to ...`): single `Edit` tool call per change. Acceptable when batching doesn't help because the edit isn't a global replace.
 
-   e. **Ledger strikethrough batch.** Apply all strikethroughs + Resolved-section moves in a single `Edit` tool call (replace_all=false, with one large old_string → new_string spanning the affected `## Open` lines and the `## Resolved` insertion point) — or one `awk`/`python` pass if the entry count is large enough that a single Edit's old_string would be unwieldy. Strikethrough format unchanged:
+   e. **Ledger strikethrough batch.** Apply all strikethroughs in a single `Edit` tool call (replace_all=false, with one large old_string → new_string spanning the affected entries) — or one `awk`/`python` pass if the entry count is large enough that a single Edit's old_string would be unwieldy. Strikethrough format (v2):
       ```markdown
-      - ~~YYYY-MM-DD | source: ... | target: ... | reason: ... | open~~ → resolved YYYY-MM-DD (auto debt-pass: <one-line note>)
+      - ~~id: ad-YYYYMMDD-NNN | status: open | source: ... | target: ... | reason: ...~~ → resolved YYYY-MM-DD (auto debt-pass: <one-line note>)
       ```
-      Resolved entries move from `## Open` to `## Resolved` in the same edit.
+      All entries live in `## Entries` — no section move required.
 
 6. **Hygiene scan — batched.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). Then:
 
@@ -82,28 +82,24 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    ```
    **Idempotent:** skip terms already present (match on `term` + `retired` date). Create the file as `[]` if it doesn't exist. Debt-pass writes; `builder-lint` reads.
 
-8. **Refresh the checkpoint.** Read `Product/_workflow/_templates/checkpoint.md` (structural shell) and prior `Product/SESSION-CHECKPOINT.md` (forward context) **in parallel** — single turn, two `Read` tool calls. Fill the new checkpoint as follows:
-   - Front matter: bump `last-updated` to today, increment session counter to `NN+1` (where `NN` is the prior session number).
-   - `## Where we stopped` — one-liner: `Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped.`
-   - `## 🎯 The active open question (singular)` — copy verbatim from the prior checkpoint. Debt-pass does not change the active design thread.
-   - `## ❓ Other still-open` — copy from prior checkpoint.
-   - `## Suggested next steps` — copy from prior checkpoint.
-   - `## Artifacts to read on resume` — copy from prior checkpoint.
-   Write to `Product/SESSION-CHECKPOINT.md`. **No in-command approval prompt — the PR is the gate.**
+8. **Checkpoint — branch mode, skip.** Debt-pass runs on a feature branch. Do not write `SESSION-CHECKPOINT.md`. The checkpoint will be reprojected by `/builder:merge-pass` when this branch merges, using `_project-checkpoint` with the session note written in step 9 as input. Print: `Checkpoint update deferred to /builder:merge-pass.`
 
-   *Note:* when `/builder:end-session` gains a headless mode (see `BACKLOG.md` entry `/builder:end-session headless mode`), step 8 delegates to it and the local fill rules above delete.
-
-9. **Write the session note.** Target path: `Product/sessions/session-NN.md` (where `NN` is the new session number from step 8). **Defense-in-depth collision check** (primary check is at step 3): if the file already exists, refuse with `session-NN already exists, refusing to overwrite — resolve manually` and stop. The pre-flight check at step 3 should catch this earlier; this re-check only fires if a parallel process created the file mid-run. Otherwise, scaffold from `Product/_workflow/_templates/session.md`. Front matter:
+9. **Write the session note (v2).** Derive timestamp from `date -u +%Y%m%d-%H%M`. Target path: `Product/sessions/session-<YYYYMMDD>-<HHMM>-debt-pass.md`. Read `checkpoint.head` from `Product/SESSION-CHECKPOINT.md` for the `parent:` field. Scaffold front matter:
    ```yaml
    ---
    type: session
+   schema-version: 2
+   session-id: session-<YYYYMMDD>-<HHMM>-debt-pass
+   parent: <checkpoint.head>
    status: completed
+   started-at: <today>T<HHMM>:00Z
    last-updated: <today>
    date: <today>
+   work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."
    tags: [#session, #debt-pass]
    ---
    ```
-   Title: `# Session NN — <today> (auto debt-pass)`.
+   Title: `# Debt-pass — <today> (auto)`.
    - **Active question coming in** — copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`.
    - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`.
    - **Decisions settled** — none (debt-pass is mechanical; debit `none`).
@@ -117,18 +113,18 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
     ```bash
     git add Product/ledgers/ALIGNMENT-DEBT.md \
             Product/_workflow/retired-tokens.json \
-            Product/SESSION-CHECKPOINT.md \
-            Product/sessions/session-NN.md \
             <other touched paths from steps 5–6> \
-      && git commit -m "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" \
-      && git push -u origin claude/debt-pass-YYYY-MM-DD-01
+      && git add -f Product/sessions/session-<YYYYMMDD>-<HHMM>-debt-pass.md \
+      && git commit -m "Auto debt-pass <YYYY-MM-DD> — <N> closed, <M> stragglers, <K> skipped" \
+      && git push -u origin claude/debt-pass-<YYYY-MM-DD-HHMM>
     ```
+    Note: the session note requires `git add -f` — `Product/sessions/session-*.md` is gitignored; `-f` force-tracks it at commit time.
     - Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by **explicit paths**. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
     - Subject: `Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped`
     - Body: bulleted summary mirroring the PR sections in step 12. Include `https://claude.ai/code/<session>` trailer per harness convention.
     - The chain (`&&`) means a failure at any link aborts the rest — safer than three independent calls.
 
-12. **Open the PR.** `gh pr create --base main --head claude/debt-pass-YYYY-MM-DD-01 --title "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
+12. **Open the PR.** `gh pr create --base main --head claude/debt-pass-<YYYY-MM-DD-HHMM> --title "Auto debt-pass <YYYY-MM-DD> — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
 
     ```markdown
     ## Summary
@@ -192,7 +188,7 @@ The agent **will not**:
 - Use `git push --force`, `git commit --amend`, or any `--no-verify` flag.
 - Run if the working tree is dirty on entry (step 1).
 - Run if a prior debt-pass PR is open (step 4c).
-- Run if `Product/sessions/session-NN+1.md` already exists at pre-flight (step 3) — refuse early to avoid wasted discharge work.
+- Run if any session file has `status: in-progress` at pre-flight (step 3) — refuse early to avoid running alongside an active session.
 
 If any rule would be violated, stop and surface — never silently bypass.
 

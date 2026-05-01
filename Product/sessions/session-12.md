@@ -1,6 +1,7 @@
 ---
 type: session
-status: in-progress
+schema-version: 1
+status: completed
 last-updated: 2026-04-29
 date: 2026-04-29
 tags: [#session, #migration]
