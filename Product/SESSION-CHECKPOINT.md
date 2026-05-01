@@ -6,20 +6,20 @@ tags: [#checkpoint]
 
 # Session Checkpoint
 
-**Last updated:** 2026-05-01 (session 17)
+**Last updated:** 2026-05-01 (session 18)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
 ---
 
 ## Where we stopped
 
-**Comprehensive doc audit + workflow patch (S17).** Audit across 13 Models / 7 feature roots / 3 ADRs surfaced 41 findings; 26 genuinely new (8 already tracked, 7 partial). Triaged into ledgers: **7 alignment-debt entries** across 5 cascade groups (forces pass-mode per §5.8), 11 new open-questions, 2 backlog (interaction + authoring feature folders). Root-caused the drift to a cascade-walk gap and patched `PRODUCT-BUILDER.md` §3/§4.3/§5.4/§5.7/§5.9: §5.7 now has 3 mandatory substeps (1a `builds-on:` / 1b retired-token grep / 1c shadow-check), §4.3 has a `superseded` status convention parallel to `abandoned`, §5.4 extends to ADR-or-Model.
+**Auto debt-pass: 7 alignment entries discharged (S18).** S17 audit forced a pass-mode discharge per §5.8 threshold. All 7 entries were mechanical cascades from already-settled decisions: engine/02 contract (4-method GameRules, IntakeResult/DispatchOrigin/DrainResult), effects/02 FoldResult, S15 Scope deletion, S14 Scaffold IStateScope. Cascade walk completed; no stragglers found. No status changes (all targets were models, none have lockbar status). Ready to return to `GameState` slice catalog design.
 
 ---
 
 ## The active open question (singular)
 
-**Pass-mode discharge of 7 alignment-debt entries.** Forced by §5.8 threshold. All 7 are mechanical cascades from already-settled decisions (engine/02 contract, effects/02 FoldResult, S15 awaiter, S14 Scaffold types, S15-16 Scope deletion). Run `/builder:debt-pass` or shape S18 as an alignment pass per §5.5. After clearance, return to `GameState` slice catalog.
+**`GameState` slice catalog** — load-bearing for engine wiring. Concrete slice list + ownership model. Likely a dedicated Model under `features/engine/` or `features/state/`. (Deferred from S17; pass-mode discharge now clear.)
 
 ---
 

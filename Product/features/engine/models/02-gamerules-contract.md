@@ -292,7 +292,7 @@ The handler registry is the lookup that finds the right `Validate` implementatio
 ```csharp
 public interface IHandlerRegistry
 {
-    bool Validate(GameCommand command, GameState state, out string? reason);
+    bool Validate(GameCommand command, IStateScope state, out string? reason);
 }
 ```
 
