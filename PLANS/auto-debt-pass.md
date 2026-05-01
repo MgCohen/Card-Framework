@@ -1,7 +1,7 @@
 ---
 type: plan
-status: active
-last-updated: 2026-04-30 (review pass — gaps 1–9 resolved)
+status: complete
+last-updated: 2026-05-01
 tags: [#automation, #builder, #debt-pass]
 ---
 

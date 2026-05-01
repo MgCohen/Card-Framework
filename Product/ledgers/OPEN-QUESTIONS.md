@@ -1,7 +1,7 @@
 ---
 type: ledger
 status: settled
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 tags: [#general, #questions]
 ---
 
@@ -58,7 +58,7 @@ Still open:
 - **`GameState` slice catalog** — concrete catalog of state slices the engine and games need (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, decisions slice, etc.) on top of the Scaffold `Store`. Each slice owns one concern; entity slices use `EntityVariableState` via the `com.scaffold.entities.states` bridge. Promoted from "GameState contract" (resolved at the bridge layer; the catalog is the still-open piece). ([04-effect-flow §4.1](features/effects/models/04-effect-flow.md), checkpoint task #2)
 - **`IIntakeQueue` shape** — same operations as the original `LinkedList`-typed `Pending`. `CurrentlyExecuting` lives on the queue or on a sibling slice. Pin at engine implementation. (doc 29 §9)
 - ~~**Effect-side service symmetry**~~ → Resolved. `IEffectScope` carries Scaffold `IStateScope` (read-only) + `Dispatch` + `Cancel`. `IHandlerContext` carries concrete Scaffold `Store` (read + execute mutators), `IAvailableActions`, `IDecisionResolver`. Decision id ≡ `CommandId` of the opening action; routing stays uniform (intent → mapper → command → dispatch); `DecisionResponseCommand` + handler invokes `Resolver.TryResolve`. Mutation only through Scaffold `Mutator<TState, TPayload>` invoked by handlers via `Store.Execute(payload)`. (`features/effects/models/04-effect-flow.md`)
-- **Snapshot scope as state machine** — current `FreeInput`/`DecisionPrompt(CommandId)` discriminator is transitional. Richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation surface) is the eventual direction. Revisit when the first async-decision-heavy game arrives. (doc 29 §4; [04-effect-flow §5.2](features/effects/models/04-effect-flow.md))
+- **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were deleted (S15 Q6); snapshot carries templates only. Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. (doc 29 §9; [04-effect-flow §9](features/effects/models/04-effect-flow.md))
 - **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the slice catalog above. (doc 21 §3, §8)
 - **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else. (doc 21 §8)
 

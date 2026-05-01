@@ -1,6 +1,6 @@
 ---
 type: ledger
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 ---
 
 # Backlog
@@ -41,10 +41,7 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §5, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §5.12.
   Status: open
 
-- **`/builder:debt-pass` command** — threshold-driven auto-discharge of `ALIGNMENT-DEBT.md`. Slash command at `.claude/commands/builder/debt-pass.md`; GHA workflow on push-to-main with `paths: [Product/ledgers/ALIGNMENT-DEBT.md]` and a 5-entry threshold gate; opens a PR for human review per §5.5/§5.8. Promoted out of the Tier 2/3 umbrella below.
-  Trigger: ready to build now (plan in `PLANS/auto-debt-pass.md`, gaps 1–9 resolved).
-  References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8.
-  Status: open
+- ~~**`/builder:debt-pass` command** — threshold-driven auto-discharge of `ALIGNMENT-DEBT.md`. Slash command at `.claude/commands/builder/debt-pass.md`; GHA workflow on push-to-main with `paths: [Product/ledgers/ALIGNMENT-DEBT.md]` and a 5-entry threshold gate; opens a PR for human review per §5.5/§5.8. Promoted out of the Tier 2/3 umbrella below. Trigger: ready to build now (plan in `PLANS/auto-debt-pass.md`, gaps 1–9 resolved). References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8. Status: open~~ → done 2026-05-01 (command spec at `.claude/commands/builder/debt-pass.md`, GHA workflow at `.github/workflows/debt-pass.yml`, runbook at `Product/_workflow/_validation/debt-pass-runbook.md`, retired-tokens registry seeded at `Product/_workflow/retired-tokens.json`)
 
 - **`/builder:design-pass` skill** — structured Q-by-Q design walk for non-mechanical Model edits. Pattern: enumerate questions in dependency order; for each present options + lean + rationale; wait for verdict; advance. Locks open design space progressively without committing edits until all Qs settle. Session 15 is the canonical example (8 Qs on the §6 boundary redesign).
   Trigger: when a second design question of similar shape arrives, or post Tier 1 commands.
@@ -56,15 +53,9 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
   Status: open
 
-- **Migrate automation auth from API key to subscription OAuth** — `/builder:debt-pass` GHA currently uses `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` (Console API spend). Audit whether the secret is even set in the repo (as of 2026-04-30, `gh secret list` returned empty), then swap to `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` so runs bill against the subscription instead of API credits. Mint the token via `claude setup-token`; set as a repo secret with `gh secret set`.
-  Trigger: before the first GHA workflow_dispatch / Layer 3 validation run, otherwise auth fails or bills the wrong account.
-  References: `.github/workflows/debt-pass.yml:47`, `anthropics/claude-code-action@v1` README.
-  Status: open
+- ~~**Migrate automation auth from API key to subscription OAuth** — swap to `claude_code_oauth_token`. Trigger: before first GHA run. References: `.github/workflows/debt-pass.yml`, `anthropics/claude-code-action@v1` README. Status: open~~ → done 2026-05-01 (workflow already using `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`; migration completed in a prior pass)
 
-- **Upgrade `actions/checkout@v4` → `@v5`** — surfaced by Layer 3 dispatch run on 2026-04-30: `actions/checkout@v4` runs on Node.js 20, which GitHub Actions deprecates as default on 2026-06-02 (~5 weeks out) and removes from runners on 2026-09-16. `@v5` runs on Node.js 24. One-line bump in `.github/workflows/debt-pass.yml`. Worth checking other workflows we might add later for the same pin.
-  Trigger: before 2026-06-02 to avoid the forced-upgrade behavior; or sooner if a new workflow lands first.
-  References: [github.blog/changelog/2025-09-19-deprecation-of-node-20](https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/), `.github/workflows/debt-pass.yml`.
-  Status: open
+- ~~**Upgrade `actions/checkout@v4` → `@v5`** — Node.js 20 deprecated 2026-06-02. One-line bump in `.github/workflows/debt-pass.yml`. Trigger: before 2026-06-02. References: `.github/workflows/debt-pass.yml`. Status: open~~ → done 2026-05-01 (bumped to `actions/checkout@v5`)
 
 - **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
   Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.

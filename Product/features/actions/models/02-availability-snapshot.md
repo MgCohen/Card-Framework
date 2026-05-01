@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 builds-on: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md]
 tags: [#actions, #snapshot, #availability]
 ---
@@ -134,7 +134,7 @@ public override DrainResult OnQueueDrained()
         templates.Add(new MoveCardTemplate(top.Id, destinations));
     }
 
-    Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+    Actions.Set(new AvailableActionsSnapshot(templates));
     return DrainResult.Empty;
 }
 ```

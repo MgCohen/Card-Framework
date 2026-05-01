@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
@@ -100,18 +100,24 @@ Two simplifications from doc 28's draft:
 ```csharp
 public sealed class PileCounterIntentMapper : IIntentMapper
 {
+    private readonly IStateScope state;
+    public PileCounterIntentMapper(IStateScope state) => this.state = state;
+
     public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
     {
         MoveCardTemplate m => new MoveCardCommand(
             Card: m.Card,
-            From: state.LocateCard(m.Card),
+            From: LocateCard(state.Get<PilesState>(), m.Card),
             To:   (PileId)choice.Targets[0]),
         _ => throw new InvalidOperationException($"unknown template: {template}")
     };
+
+    private static PileId LocateCard(PilesState piles, InstanceId card)
+        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.Id == card)).Key;
 }
 ```
 
-No string-keyed slot lookup; the template's fields name themselves.
+No string-keyed slot lookup; the template's fields name themselves. `IStateScope` is injected for normal state-driven mapping (locating the card's current pile), not for decision awareness — the mapper is decision-unaware (S15).
 
 ### Authoring cost
 
@@ -119,23 +125,18 @@ Each new action shape adds a template type. That's incremental — same curve as
 
 ---
 
-## 4. Snapshot Scope
+## 4. Snapshot Shape
 
-The snapshot carries a scope discriminator so the presentation layer knows whether the player is responding to free input or a specific prompt:
+The snapshot carries only the available templates:
 
 ```csharp
 public sealed record AvailableActionsSnapshot(
-    SnapshotScope                 Scope,
     IReadOnlyList<ActionTemplate> Templates);
-
-public abstract record SnapshotScope;
-public sealed record FreeInput                       : SnapshotScope;
-public sealed record DecisionPrompt(CommandId Id)    : SnapshotScope;
 ```
 
-`FreeInput` — main-phase snapshot; the player is free to pick any template. `DecisionPrompt` — the engine is paused waiting for a specific decision (target picker, choose-one); `Id` is the `CommandId` of the action that opened the decision (no separate `DecisionId` type — see [04-effect-flow §5.1](features/effects/models/04-effect-flow.md)). The UI renders a different mode.
+There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted — S15 Q6). "Is an await open?" is answered by `ICommandAwaiter`, not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
 
-This is **transitional.** A richer model — a typed game-state machine where `PickACardState` / `ResolveStackState` / `MainPhaseState` each own their own validation surface — is the eventual direction. We've used FSM-shaped state in other games; the simple scope flag here is enough for the floor and ceiling cases doc 28 sketched. Revisit when async decisions force the issue (see [§9](#9-open-items)).
+The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor to type-only routing. See [§9](#9-open-items).
 
 ---
 
@@ -265,7 +266,7 @@ public sealed class PileCounterRules : GameRules
             templates.Add(new MoveCardTemplate(top.Id, destinations));
         }
 
-        Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+        Actions.Set(new AvailableActionsSnapshot(templates));
         return DrainResult.Empty;
     }
 }
@@ -290,16 +291,15 @@ public sealed class RequestTargetHandler
         var legal = ComputeLegalTargets(ctx.Store, action.Filter);
 
         ctx.Actions.Set(new AvailableActionsSnapshot(
-            Scope:     new DecisionPrompt(action.Id),
-            Templates: new[] { new ChooseTargetTemplate(legal) }));
+            new[] { new ChooseTargetTemplate(legal) }));
 
-        var choice = await ctx.Resolver.Await(action.Id);
-        return new RequestTargetResult { Target = choice.Targets[0] };
+        var cmd = await ctx.Resolver.Wait<SelectTargetCommand>();
+        return new RequestTargetResult { Target = cmd.Target };
     }
 }
 ```
 
-`DecisionPrompt(action.Id)` carries the action's `CommandId` directly (per [§4](#4-snapshot-scope) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The next drain's `OnQueueDrained` overwrites back to `FreeInput`.
+No `Scope` on the snapshot (per [§4](#4-snapshot-shape) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The mapper is decision-unaware; the engine-level awaiter check intercepts `SelectTargetCommand` before it reaches the pipeline. The next drain's `OnQueueDrained` publishes a fresh template set.
 
 ---
 
@@ -336,7 +336,7 @@ Mechanical follow-up edits, not done in this doc.
 - **`GameState` slice catalog.** With the Scaffold State binding, "what slices exist" is concrete: turn, phase, piles, available-actions, decisions, last-move, etc. Tracked as checkpoint task #2.
 - **`IIntakeQueue` shape.** Same operations as the old `LinkedList<GameCommand>` Pending: `AddFirst` / `AddLast` / `Remove` / iterate. `CurrentlyExecuting` lives here as a property, or on a sibling slice. Pin during engine implementation.
 - ~~**Effect-side symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md). `IHandlerContext` exposes `Store` + `Actions` + `Resolver`; decision id ≡ action's `CommandId`; await/resume via `Resolver.Await(id)` / `TryResolve(id, choice)`. Documented in [§7](#7-effect-side-symmetry-resolved) above.
-- **Snapshot scope as a state machine.** Current `FreeInput` / `DecisionPrompt(CommandId)` discriminator is transitional. The richer FSM-shaped game-state model (typed `PickACardState`, `ResolveStackState`, etc., each owning its own validation) is the eventual direction. Revisit when the first async-decision-heavy game arrives.
+- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped (S15 Q6). Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [04-effect-flow §9](features/effects/models/04-effect-flow.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
 - **Bootstrap wiring.** Engine builder constructs services and the rule. Sketched in [doc 26 §9.8](support/samples/pile-counter.md); expand there to show service-injection wiring. Not blocking; cosmetic.
 - **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([doc 28 §8](features/actions/models/02-availability-snapshot.md)).
