@@ -56,6 +56,21 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
   Status: open
 
+- **Migrate automation auth from API key to subscription OAuth** — `/builder:debt-pass` GHA currently uses `anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}` (Console API spend). Audit whether the secret is even set in the repo (as of 2026-04-30, `gh secret list` returned empty), then swap to `claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}` so runs bill against the subscription instead of API credits. Mint the token via `claude setup-token`; set as a repo secret with `gh secret set`.
+  Trigger: before the first GHA workflow_dispatch / Layer 3 validation run, otherwise auth fails or bills the wrong account.
+  References: `.github/workflows/debt-pass.yml:47`, `anthropics/claude-code-action@v1` README.
+  Status: open
+
+- **Upgrade `actions/checkout@v4` → `@v5`** — surfaced by Layer 3 dispatch run on 2026-04-30: `actions/checkout@v4` runs on Node.js 20, which GitHub Actions deprecates as default on 2026-06-02 (~5 weeks out) and removes from runners on 2026-09-16. `@v5` runs on Node.js 24. One-line bump in `.github/workflows/debt-pass.yml`. Worth checking other workflows we might add later for the same pin.
+  Trigger: before 2026-06-02 to avoid the forced-upgrade behavior; or sooner if a new workflow lands first.
+  References: [github.blog/changelog/2025-09-19-deprecation-of-node-20](https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/), `.github/workflows/debt-pass.yml`.
+  Status: open
+
+- **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
+  Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.
+  References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
+  Status: open
+
 - **`/builder:end-session` unsaved-body check** — end-session must detect when a session sketched or approved a Model body / interface / contract / ADR-shape that was *not* written to a canonical file (Model doc, ADR, feature note) and either prompt to save it, refuse to close, or surface it as deferred-with-justification. Today end-session only checks debt + hygiene; sketched-but-unsaved bodies leak into prose-only memory (session note + checkpoint) and require errata commits later. Session 15 is the canonical example: the `ICommandAwaiter` final shape was settled by user verdict but never written into `04-effect-flow.md`; an errata commit (`89c161e`) was needed to capture mapper + gateway invariants the close pass missed. Realistic mechanism: a yes/no/where prompt during step 2 of end-session — "Did this session settle any new interface, contract, or Model body? If yes, where is it saved?" — refuse to close on yes-and-nowhere.
   Trigger: next end-session skill iteration; or next session that exhibits the same leak.
   References: `Product/sessions/session-15.md`, errata commit `89c161e`, `.claude/commands/builder/end-session.md` step 2 (hygiene).
@@ -108,4 +123,4 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 ## Done
 
-_(none yet)_
+- ~~**Optimize `/builder:debt-pass` turn count via parallel tool use** — Layer 3 fifth dispatch on 2026-04-30 hit `--max-turns 30` after 31 turns ($1.49) discharging 5 entries. Rewrite step 4 (discharge loop) and step 5 (hygiene scan) to direct the agent toward batched/parallel tool calls. Target: discharge 5 entries in ≤ 20 turns instead of 30+, halving cost per real fire.~~ → done 2026-05-01 (spec rewritten with batched bash for term-replace/grep/git, parallel reads, top-level performance directive; baseline Fire-B was 45 turns / $1.89, post-rewrite Fire-C will measure the actual delta).
