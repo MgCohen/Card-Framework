@@ -454,8 +454,9 @@ Once-per-project phase before §5.1 applies. Output is a working `Product/` skel
 4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
 6. **Seed `ledgers/OPEN-QUESTIONS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
-7. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
-8. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
+7. **Install the pre-push hook.** `.githooks/pre-push` is tracked in the repo. Run `git config core.hooksPath .githooks` once after cloning. The hook checkpoints any in-progress session note (see §5.3) into a small commit before every push — so a broken conversation can always be resumed via `/builder:start-session`.
+8. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
+9. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
 
 A bootstrap session usually fits in one sitting. If it sprawls, the project is too big or the vision isn't clear yet — pause and split.
 
@@ -492,6 +493,8 @@ The session note records the **trail**, not a linear narrative: what was created
 3. Update `ledgers/OPEN-QUESTIONS.md` — strikethrough resolved with link to resolving doc; add new opens.
 4. Update `ledgers/GLOSSARY.md` changelog if vocabulary changed.
 5. Commit + PR on `claude/<topic>` branch.
+
+**Session note lifecycle.** Session notes are gitignored while in-progress (avoids noise on main). `/builder:end-session` force-adds them at close. The `pre-push` hook (§5.0 step 7) additionally checkpoints the in-progress note into a small commit before every push — so if a conversation crashes before end-session runs, `/builder:start-session` can still detect and resume the dangling skeleton.
 
 ### 5.4 Reopening a settled decision
 

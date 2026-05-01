@@ -1,0 +1,13 @@
+#!/bin/bash
+# Checkpoint the in-progress session note before any push.
+# Bundles it as a separate commit so a broken session can always be resumed.
+
+note=$(grep -rl "^status: in-progress" Product/sessions/ 2>/dev/null | head -1)
+
+[ -z "$note" ] && exit 0
+
+git add -f "$note" 2>/dev/null
+
+git diff --cached --quiet "$note" && exit 0
+
+git commit -m "chore: checkpoint session note $(basename "$note" .md)"
