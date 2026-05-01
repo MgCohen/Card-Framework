@@ -41,10 +41,7 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §5, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §5.12.
   Status: open
 
-- **`/builder:debt-pass` command** — threshold-driven auto-discharge of `ALIGNMENT-DEBT.md`. Slash command at `.claude/commands/builder/debt-pass.md`; GHA workflow on push-to-main with `paths: [Product/ledgers/ALIGNMENT-DEBT.md]` and a 5-entry threshold gate; opens a PR for human review per §5.5/§5.8. Promoted out of the Tier 2/3 umbrella below.
-  Trigger: ready to build now (plan in `PLANS/auto-debt-pass.md`, gaps 1–9 resolved).
-  References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8.
-  Status: open
+- ~~**`/builder:debt-pass` command** — threshold-driven auto-discharge of `ALIGNMENT-DEBT.md`. Slash command at `.claude/commands/builder/debt-pass.md`; GHA workflow on push-to-main with `paths: [Product/ledgers/ALIGNMENT-DEBT.md]` and a 5-entry threshold gate; opens a PR for human review per §5.5/§5.8. Promoted out of the Tier 2/3 umbrella below. Trigger: ready to build now (plan in `PLANS/auto-debt-pass.md`, gaps 1–9 resolved). References: `PLANS/auto-debt-pass.md`, `_workflow/PRODUCT-BUILDER.md` §5.5, §5.7, §5.8. Status: open~~ → done 2026-05-01 (command spec at `.claude/commands/builder/debt-pass.md`, GHA workflow at `.github/workflows/debt-pass.yml`, runbook at `Product/_workflow/_validation/debt-pass-runbook.md`, retired-tokens registry seeded at `Product/_workflow/retired-tokens.json`)
 
 - **`/builder:design-pass` skill** — structured Q-by-Q design walk for non-mechanical Model edits. Pattern: enumerate questions in dependency order; for each present options + lean + rationale; wait for verdict; advance. Locks open design space progressively without committing edits until all Qs settle. Session 15 is the canonical example (8 Qs on the §6 boundary redesign).
   Trigger: when a second design question of similar shape arrives, or post Tier 1 commands.
