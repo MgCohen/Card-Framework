@@ -1,14 +1,12 @@
 ---
 type: sample
-status: draft
+status: locked
 last-updated: 2026-05-01
 builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
 tags: [#sample, #pile-counter]
 ---
 
 # Pile Counter — Reference Sample Game
-
-> **Status: draft.** Downgraded from `locked` in session 14 to absorb the cascade from `features/effects/models/04-effect-flow.md` (Scaffold State/Store binding: slice-based reads, `Mutator<TState, TPayload>` with payload-keyed registration, `IStateScope`-typed `Validate`, `Task<TResult>`-returning `Handle`). Re-lock candidate once §9.x stabilises for one session with no further contract edits and the §4.1–§4.2 surface in `04-effect-flow.md` settles.
 
 This document defines a small, deliberately simple game we use as a working reference while shaping the framework. Whenever a framework concept feels under- or over-specified, we sketch its implementation in **Pile Counter** and see where the seams are.
 
