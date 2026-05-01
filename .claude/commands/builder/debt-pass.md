@@ -1,5 +1,6 @@
 ---
-description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review.
+description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review. Automation-only (CI or `--force`).
+argument-hint: [--force]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -52,6 +53,8 @@ Otherwise, exit immediately with: `debt-pass is automation-only — the GHA work
    b. **Read all source + target paths in parallel.** Single turn with multiple `Read` tool calls (one per unique path). Cache the contents — do not re-read inside the per-entry loop.
 
    c. **Confidence-check pass.** For each entry, classify as `mechanical` or `skipped` (if `reason` contains `rewrite`, `redesign`, `reshape`, `restructure`, or `reconsider`). Build two lists in memory. Skipped entries stay `open` in the ledger and feed the PR body's `## Skipped — needs a session` section.
+
+   For each `mechanical` entry, also tag its **category** by its `source:` field — `linter` if `source:` starts with `linter` (i.e. `linter` or `linter/archive`), otherwise `cascade`. Track these counts (`<C>` cascade discharged, `<L>` linter discharged) — they feed the work-summary in step 9 so the PR title surfaces the discharge shape.
 
    d. **Mechanical edit batch.** Group mechanical entries by target file. For each target file:
       - **Term replacements** (most common — e.g. `replace OldFooBar with NewFooBar`): apply *all* replacements for that file in a single `sed -i -E` bash call:
@@ -110,14 +113,14 @@ Otherwise, exit immediately with: `debt-pass is automation-only — the GHA work
    started-at: <today>T<HHMM>:00Z
    last-updated: <today>
    date: <today>
-   work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."
+   work-summary: "Auto debt-pass: <C> cascade + <L> linter discharged, <M> stragglers caught, <K> skipped."
    tags: [#session, #debt-pass]
    ---
    ```
-   Title: `# Debt-pass — <today> (auto)`.
+   Title: `# Debt-pass — <today> (auto)`. Use the cascade/linter counts from step 5c. If either count is 0, still render both terms (e.g. `0 cascade + 13 linter discharged`) — the explicit zero is informative, not noise.
 
    **Path B — adopted empty skeleton (`ADOPTED_SKELETON` set in step 3).** Update the existing file in-place. Do not rename or move it. Patch the frontmatter:
-   - Set `work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."`
+   - Set `work-summary: "Auto debt-pass: <C> cascade + <L> linter discharged, <M> stragglers caught, <K> skipped."` (always render both `<C>` and `<L>` even when one is 0).
    - Add `#debt-pass` to `tags` if not already present.
    - Set `last-updated: <today>`.
    - Leave `session-id`, `parent`, `started-at`, `status` unchanged.
@@ -126,7 +129,7 @@ Otherwise, exit immediately with: `debt-pass is automation-only — the GHA work
 
    **Both paths — body sections to fill:**
    - **Active question coming in** — (Path A only) copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`. Path B already has this.
-   - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones).
+   - **Work done** — bullets: `<C> cascade entries discharged`, `<L> linter entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones). Render both cascade and linter bullets even when one is 0.
    - **Decisions settled** — none (debt-pass is mechanical; write `none`).
    - **Active question going out** — copy verbatim from the prior checkpoint's active question. Debt-pass does not introduce its own.
    - **Followups created** — none routed beyond the skipped entries (already in the ledger).
