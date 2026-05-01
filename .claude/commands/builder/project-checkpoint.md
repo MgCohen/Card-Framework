@@ -3,11 +3,11 @@ description: Internal helper — re-project SESSION-CHECKPOINT.md from session n
 allowed-tools: Read, Write, Bash, Grep
 ---
 
-# `_project-checkpoint` — Internal Projection Helper
+# `project-checkpoint` — Internal Projection Helper
 
 Called by `/builder:merge-pass` (step 8) and `/builder:end-session` when on `main`. Produces a complete new `Product/SESSION-CHECKPOINT.md` from inputs. Pure function — idempotent, re-runnable.
 
-**Do not invoke directly** unless diagnosing a corrupted checkpoint. The caller controls the review gate (merge-pass: the PR; end-session: the step 5 diff-and-confirm).
+**Internal helper — not for direct user invocation** (unless diagnosing a corrupted checkpoint). The caller controls the review gate (merge-pass: the PR; end-session: the step 5 diff-and-confirm).
 
 ## Inputs (provided by the caller's earlier steps)
 

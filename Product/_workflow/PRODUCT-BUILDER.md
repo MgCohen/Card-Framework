@@ -701,6 +701,7 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
 | **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity), `/builder:rebuild-feature-map` |
 | **Every session end** | `/builder:end-session` |
+| **After parallel sessions complete** (manual) | `/builder:merge-pass` — merges completed `claude/<topic>` branches into `main`, re-projects checkpoint. Run from `main`. See `merge-pass.md §When to run merge-pass`. |
 | **PR merge to main** | `builder-drift-detection` (CI mode) |
 | **Threshold-driven session shape** | Consistency pass (§5.5/§5.8) when ledger crosses 5 open entries |
 
