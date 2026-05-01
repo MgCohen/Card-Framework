@@ -2,48 +2,53 @@
 type: checkpoint
 schema-version: 2
 last-updated: 2026-05-01
-head: session-20260501-2359-cutover
+head: session-20260501-1107-zone-topology
 merged:
   - session-20260501-2359-cutover
+  - session-20260501-1105-engine-wiring
+  - session-20260501-1107-zone-topology
 batch:
-  - session-20260501-2359-cutover
+  - session-20260501-1105-engine-wiring
+  - session-20260501-1107-zone-topology
 tags: [#checkpoint]
 ---
 
 # Session Checkpoint
 
-**Last updated:** 2026-05-01 (session 19)
 **Replaceable.** History lives in `sessions/`. Never append here.
 
 ---
 
 ## Where we stopped
 
-**S19 settled the GameState slice catalog and triggered an Effect/Trigger unification.** Two-tier slice model landed: framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) auto-seeded at `Build()`; game-authored slices registered via builder. `Context` deleted — triggers now receive `IEffectScope` directly, `Self` closure-captured. `Trigger<T>` introduced (`Validate` + `Execute`). `FoldResult` demoted to pipeline-internal; `scope.Cancel()`/`scope.Replace()` are the public API. `Effect.Validate` added. Debt net-zero (3 opened, 3 closed same session). Ready for engine wiring design pass.
+- S(engine-wiring 2026-05-01 11:05): Live test of v2 start-session + end-session branch mode on test/parallel-A — no content work; schema validation only.
+- S(zone-topology 2026-05-01 11:07): Live test of v2 start-session + end-session branch mode on test/parallel-B — no content work; schema validation only.
 
 ---
 
-## The active open question (singular)
+## 🎯 The active open question (singular)
 
 **Engine wiring stack** — `IHandlerRegistry` interface, `GameEngineBuilder` construction protocol, `ICommandPipeline` interface, engine startup / first `OnQueueDrained` trigger, `GameRules` service wiring. Cluster of 5 — one design-pass session.
+*(From session-20260501-1107-zone-topology.)*
 
 ---
 
-## Other still-open
+## Recent exit questions (parallel batch)
 
-Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions are likely to touch.
+- **Engine wiring stack** — `IHandlerRegistry` interface, `GameEngineBuilder` construction protocol, `ICommandPipeline` interface, engine startup / first `OnQueueDrained` trigger, `GameRules` service wiring. — from `session-20260501-1105-engine-wiring`.
 
-- **Engine wiring stack** — `IHandlerRegistry` + `GameEngineBuilder` + `ICommandPipeline` + startup. Active question for S20.
-- **`ITriggerSystem` vs `ITriggerPipeline` unification (S17/S19)** — subscription surface updated in S19 (`OnBefore/OnAfter` now take `Trigger<T>`); two-type vs one-type question still unresolved.
-- **`IIntakeQueue` shape** — pin at engine implementation.
-- **Game lifecycle design / `EndGameCommand` semantics** — session start, turn structure, end conditions. Prerequisite for trigger subscription lifecycle.
-- **Trigger subscription lifecycle** — Register/Unregister timing for regular cards (not just attachments). Depends on game lifecycle.
-- **Zone model internal opens (S17)** — 9 questions in `zones/01-zone-model.md`; membership storage / visibility / actor semantics blocking.
-- **Entity destruction / Cleanup lifecycle (S17)** — what "destroyed" means for the Store; ongoing-effects depend on it.
-- **`HistoryEnvelope` typed definition (S17)** — `HistoryState` slice exists; payload is pseudocode. Load-bearing for replay + multiplayer.
-- **Intent → template lookup (S17)** — gateway side of `IIntentMapper.Map(template, choice)`.
-- **FSM-shaped game state (S16).** Awaiter succession. Lower urgency.
-- **Multi-actor / multi-open awaits.** Pin when an async-decision-heavy game arrives.
+---
+
+## ❓ Other still-open
+
+- id: oq-entity-destruction | **Entity destruction / Cleanup lifecycle** — what "destroyed" means for the Store, when the framework Cleanup hook fires relative to the destruction command envelope, and what happens to in-flight dispatches referencing the destroyed entity. Load-bearing for ongoing effects that self-destruct.
+- id: oq-entity-modifier-api | **Entity modifier mutation API (Scaffold bridge)** — concrete payload shapes for `AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload` through the `com.scaffold.entities.states` bridge.
+- id: oq-zone-internal-opens | **Zone model internal open questions** — nine questions within `zones/01-zone-model.md`: zone-as-entity vs lightweight record, membership storage, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, spatial rule attachment.
+- id: oq-attachment-storage | **Attachment storage location** — whether attachments live in a sub-zone on the host, a global attachment registry, or a dedicated zone.
+- id: oq-stash-release | **Stash release mechanics** — MTG-style scheduling `Stash`; release mechanism, ordering rules, LIFO ordering not designed.
+- id: oq-queue-ordering | **Queue ordering shape** — FIFO queue shown; priority queues, interrupt injection, or stack semantics via engine or `GameRules` unresolved.
+- id: oq-gamerules-composition | **`GameRules` composition** — single implementation shown; composition contract (provider/policy ordering, enable/disable) undesigned.
+- id: oq-intake-queue | **`IIntakeQueue` shape** — same operations as original `LinkedList`-typed `Pending`; `CurrentlyExecuting` placement unresolved.
 
 ---
 
@@ -52,28 +57,14 @@ Carried forward from `ledgers/OPEN-QUESTIONS.md`. Items the next few sessions ar
 | # | Task | Notes |
 |---|------|-------|
 | **1** | **Engine wiring design pass** | `IHandlerRegistry` + `GameEngineBuilder` + `ICommandPipeline` + `ITriggerSystem`/`ITriggerPipeline` unification + startup. Cluster of 5 — one design-pass session. |
-| **WF-1** | **Tier 1 slash commands** | Per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 Tier 1. Cheap leverage on every session. |
-| **12** | **Game lifecycle design** | Best unblocked task after engine wiring. New feature folder (`features/lifecycle/`?) or in `engine/`. |
-| **7** | **`PLANS/` — first implementation slice** | Pull after engine wiring and lifecycle land. |
-| **15** | **MTG-strict SBA ordering** | Defer until a game needs it. Captured as `features/engine/decisions/0006-mtg-sba-known-difference.md`. |
+| **2** | **Merge test branches** | `test/parallel-A` and `test/parallel-B` served their purpose — clean up after merge-pass PR merges. |
+| **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
 
 ---
 
 ## Artifacts to read on resume
 
-| File | Why |
-|------|-----|
-| [_workflow/PRODUCT-BUILDER.md](_workflow/PRODUCT-BUILDER.md) | The workflow itself. |
-| [ledgers/FEATURE-MAP.md](ledgers/FEATURE-MAP.md) | Bird's-eye view of features, Models, ADRs. |
-| [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) | **Clean after S19.** |
-| [features/engine/models/04-gamestate-slices.md](features/engine/models/04-gamestate-slices.md) | S19: slice catalog. Two-tier model, 3 framework slices, invariants. |
-| [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) | S19: `Trigger<T>` defined; `Context` deleted; `FoldResult` internal; subscription surface updated. |
-| [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) | S19: `Effect.Validate` + `IEffectScope.Replace` added. Canonical effect-flow contract. |
-| [features/effects/models/02-replacement-prevention.md](features/effects/models/02-replacement-prevention.md) | S19 cascade: `FoldResult` demoted; `TriggerMatch` uses `IEffectScope`; prevention example updated. |
-| [sessions/session-19.md](sessions/session-19.md) | S19 execution record. |
-| [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) | Durable design questions ledger. Slice catalog resolved S19. |
-| [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) | `GameRules` interface — services injected, four methods. Load-bearing for engine wiring. |
-| [support/samples/pile-counter.md](support/samples/pile-counter.md) | Floor sample. Status: `locked`. |
+_(none — test sessions had no Product/features or Product/ledgers changes)_
 
 ---
 

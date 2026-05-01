@@ -3,7 +3,8 @@ type: session
 schema-version: 2
 session-id: session-20260501-1107-zone-topology
 parent: session-20260501-2359-cutover
-status: completed
+status: merged
+merged-at: 2026-05-01
 started-at: 2026-05-01T11:07:00Z
 last-updated: 2026-05-01
 work-summary: "Live test of v2 start-session + end-session branch mode on test/parallel-B — no content work; schema validation only."
