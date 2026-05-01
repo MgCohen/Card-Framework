@@ -30,22 +30,19 @@ Every `OnBefore<T>` trigger produces one of three outcomes:
 
 Modification and cancellation were implicit in the fold design (doc 21). Substitution is the replacement case.
 
-All three go through the same `OnBefore<T>` react signature — no separate API for each:
+All three go through the same `OnBefore<T>` surface — no separate API for each. Triggers communicate their outcome through `IEffectScope` rather than a return value:
 
 ```csharp
-void OnBefore<T>(
-    Func<T, Context, bool>    condition,
-    Func<T, Context, FoldResult> react,
-    InstanceId owner)
-    where T : GameAction;
+// Subscription — takes a Trigger<T>
+void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameAction;
 
-public abstract record FoldResult
-{
-    public sealed record Keep(GameAction Command) : FoldResult;    // modification or no-op
-    public sealed record Cancel(string Reason)   : FoldResult;    // cancellation
-    public sealed record Replace(GameAction Next): FoldResult;    // substitution
-}
+// Inside Trigger<T>.Execute:
+scope.Cancel("shield absorbed");           // cancellation
+scope.Replace(new ShieldAbsorbAction(…));  // substitution
+// (returning without a scope call) = modification or no-op
 ```
+
+`FoldResult` (`Keep`/`Cancel`/`Replace`) is a pipeline-internal discriminator — it is not part of the game-author API. The pipeline reads scope state after `Execute` returns to determine which outcome occurred.
 
 ---
 
@@ -81,13 +78,13 @@ public interface ITriggerPipeline
     Task<TriggerFoldResult> RunBefore(
         GameCommand command,
         IReadOnlyList<TriggerMatch> available,
-        Context ctx);
+        IEffectScope scope);
 
     Task RunAfter(
         GameCommand command,
         CommandResult result,
         IReadOnlyList<TriggerMatch> available,
-        Context ctx);
+        IEffectScope scope);
 }
 
 public sealed record TriggerFoldResult(
@@ -97,12 +94,12 @@ public sealed record TriggerFoldResult(
     bool           IsReplaced,
     GameAction?    Replacement);
 
-// Each registration is an independent match entry — priority is per-registration, not per-ability.
+// Each registration wraps a Trigger<T> as non-generic delegates for pipeline dispatch.
 public sealed record TriggerMatch(
-    InstanceId                        Owner,
-    int                               Priority,    // lower runs first; default 0
-    Func<GameCommand, Context, bool>  Condition,
-    Func<GameCommand, Context, FoldResult> React);
+    InstanceId                             Owner,
+    int                                    Priority,    // lower runs first; default 0
+    Func<GameCommand, IEffectScope, bool>  Condition,
+    Func<GameCommand, IEffectScope, Task>  Execute);
 ```
 
 The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRules` before the pipeline receives it (see §4).
@@ -144,12 +141,12 @@ public interface GameRules
     IReadOnlyList<TriggerMatch> FilterTriggers(
         IReadOnlyList<TriggerMatch> candidates,
         GameCommand command,
-        GameState state);
+        TriggerPhase phase);
 
-    // ... existing methods unchanged
-    SchedulingDecision OnIncomingCommand(GameCommand command, SchedulingContext context);
-    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result, GameState state);
-    void OnQueueDrained(GameEngine engine, GameState state);
+    // ... settled 4-method shape (see engine/02-gamerules-contract.md)
+    IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin);
+    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result);
+    DrainResult OnQueueDrained();
 }
 ```
 
@@ -189,7 +186,8 @@ public async Task<CommandResult> Execute(GameAction action)
     var available = rules.FilterTriggers(candidates, action, state);
 
     // 3. ITriggerPipeline orders and runs the before-fold
-    var before = await triggerPipeline.RunBefore(action, available, context);
+    var scope  = scopeFactory.CreateForTrigger();
+    var before = await triggerPipeline.RunBefore(action, available, scope);
 
     if (before.IsCancelled)
         return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
@@ -204,7 +202,7 @@ public async Task<CommandResult> Execute(GameAction action)
     var result = Handle(before.FinalCommand, envelope);
 
     // 4. ITriggerPipeline runs the after-fold
-    await triggerPipeline.RunAfter(before.FinalCommand, result, available, context);
+    await triggerPipeline.RunAfter(before.FinalCommand, result, available, scope);
 
     return history.CloseAndPublish(envelope, result);
 }
@@ -218,12 +216,16 @@ Simple prevention is modification with a zero floor:
 
 ```csharp
 triggers.OnBefore<DamageAction>(
-    condition: (cmd, ctx) => cmd.Target == ctx.Self,
-    react: (cmd, ctx) =>
-    {
-        var reduced = cmd with { Amount = Math.Max(0, cmd.Amount - shieldValue) };
-        return new FoldResult.Keep(reduced);
-    },
+    new Trigger<DamageAction>(
+        validate: (cmd, scope) => cmd.Target == self,
+        execute: (cmd, scope) =>
+        {
+            // Modification: return without calling Cancel/Replace — fold continues with mutated cmd.
+            // (Mutating cmd in place isn't possible on a record; use scope.Replace with modified copy.)
+            var reduced = cmd with { Amount = Math.Max(0, cmd.Amount - shieldValue) };
+            scope.Replace(reduced);
+            return Task.CompletedTask;
+        }),
     owner: self);
 ```
 

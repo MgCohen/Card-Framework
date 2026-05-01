@@ -27,7 +27,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`actions`](../features/actions/actions.md) | settled | 2 | Command pipeline (intent → command → handler → state) + availability snapshot. |
 | [`triggers`](../features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
 | [`effects`](../features/effects/effects.md) | settled | 4 | Async orchestration of action sequences. Replacement / prevention. Ongoing effects. Effect-flow contract (services, decision threading, mutation discipline). |
-| [`engine`](../features/engine/engine.md) | settled | 3 | Evaluation loop, `GameRules` contract, snapshot pipeline. The simulation core. |
+| [`engine`](../features/engine/engine.md) | settled | 4 | Evaluation loop, `GameRules` contract, snapshot pipeline, GameState slice catalog. The simulation core. |
 | [`presentation`](../features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
 | `interaction` | **considered** | — | Input gesture → `PlayerIntent` translation. Drag/drop/click/target. The interaction layer per ARCHITECTURE. |

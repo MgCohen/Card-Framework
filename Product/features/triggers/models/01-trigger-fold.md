@@ -58,61 +58,90 @@ execute(c)         ← handler (GameAction only; CompositeAction inline; GameSig
 OnAfter(c, result) ← trigger fold; reactions dispatched
 ```
 
-### Signatures
+### `Trigger<T>` — the base type
+
+A trigger is an effect that reacts to a specific command type. It shares the same execution surface as `Effect` (`IEffectScope`), typed to the command it intercepts.
 
 ```csharp
-void OnBefore<T>(
-    Func<T, Context, bool>    condition,
-    Func<T, Context, FoldResult> react)
-    where T : GameCommand;
-
-void OnAfter<T>(
-    Func<T, Context, bool>    condition,
-    Func<T, Context, FoldResult> react)
-    where T : GameCommand;
-
-public abstract record FoldResult
+public abstract class Trigger<T> where T : GameCommand
 {
-    public sealed record Keep(GameAction Command) : FoldResult;    // modification or no-op
-    public sealed record Cancel(string Reason)   : FoldResult;    // cancellation
-    public sealed record Replace(GameAction Next): FoldResult;    // substitution
+    public virtual bool Validate(T command, IEffectScope scope) => true;
+    public abstract Task Execute(T command, IEffectScope scope);
 }
 ```
 
-The `react` function receives the current command and returns the (potentially modified) command. For `CompositeAction` and `GameSignal` the return value is ignored — they are not modifiable.
+`Validate` is the condition check — return `false` to skip this trigger for the current command. `Execute` is the reaction body. Both receive the intercepted command and an `IEffectScope`; `Self` and any other per-instance data are closure-captured at registration.
+
+Cancel and replace are communicated through the scope — no return value needed:
+
+```csharp
+// Before-fold: cancel the intercepted command
+scope.Cancel("shield absorbed");
+
+// Before-fold: swap in a different command
+scope.Replace(new ShieldAbsorbAction(target));
+```
+
+Calling `scope.Cancel()` or `scope.Replace()` in an **after-fold** trigger is a no-op (the command already executed). The default (no call) is pass-through — the command continues unchanged.
+
+**Inline construction:**
+```csharp
+new Trigger<HealActorAction>(
+    validate: (cmd, scope) => cmd.Target != self,
+    execute: async (cmd, scope) =>
+    {
+        await scope.Dispatch(new DrawCardAction { Actor = myActorId });
+    });
+```
+
+**Subclassed:**
+```csharp
+public sealed class DrawOnHeal : Trigger<HealActorAction>
+{
+    private readonly InstanceId _self;
+    private readonly ActorId    _actor;
+
+    public DrawOnHeal(InstanceId self, ActorId actor) { _self = self; _actor = actor; }
+
+    public override bool Validate(HealActorAction cmd, IEffectScope scope)
+        => cmd.Target != _self;
+
+    public override async Task Execute(HealActorAction cmd, IEffectScope scope)
+        => await scope.Dispatch(new DrawCardAction { Actor = _actor });
+}
+```
+
+### Subscription
+
+```csharp
+void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameCommand;
+void OnAfter<T>(Trigger<T> trigger, InstanceId owner)  where T : GameCommand;
+void RemoveAll(InstanceId owner);
+```
+
+`owner` is the entity that registered the trigger — used by `RemoveAll` to unsubscribe all triggers belonging to that instance at once.
 
 ### The fold mechanic
 
-All triggers registered for type `T` run in sequence. Each sees the output of the previous:
+All triggers registered for type `T` run in sequence. Each sees the output of the previous (or the scope state left by the previous):
 
 ```
 c0 = original command
-c1 = trigger1.react(c0, ctx)   // only if trigger1.condition(c0) == true
-c2 = trigger2.react(c1, ctx)   // only if trigger2.condition(c1) == true
+trigger1.Validate(c0, scope) → true → trigger1.Execute(c0, scope)  // may call scope.Cancel/Replace
+trigger2.Validate(c1, scope) → true → trigger2.Execute(c1, scope)
 ...
-cN = command passed to handler
+cN = command passed to handler (unless scope.Cancel was called)
 ```
 
-**Cancel or replace (`GameAction` only):** A trigger can cancel the command or return a different `GameAction` type. Either stops the fold. The original command does not execute. A replacement is dispatched as a fresh command through the channel — it goes through its own full trigger fold from scratch.
+**Cancel or replace (`GameAction` only):** A trigger calls `scope.Cancel()` or `scope.Replace(next)` during `Execute`. Either stops the fold. The original command does not execute. A replacement dispatches as a fresh command through the channel — it goes through its own full trigger fold from scratch.
 
 ---
 
-## 3. Context
+## 3. Context — Deleted
 
-`Context` is passed to both the condition and react functions. It provides a read view of game state at the moment the trigger fires, plus a reference to the subscribing instance.
+`Context` is deleted (S19). Triggers receive `IEffectScope` directly — the same surface effects use. The subscribing entity's identity (`Self`) and any per-instance data are closure-captured at registration, not carried on a context type. State reads go through `scope.State.Get<TState>()`. Reactions dispatch through `scope.Dispatch(...)`.
 
-```csharp
-public sealed class Context
-{
-    // Shape TBD — tied to the GameState contract (see open questions).
-    // At minimum: read-only GameState view and the identity of the subscribing instance.
-    public InstanceId Self { get; }
-    public GameState State { get; }
-    public void Dispatch(GameCommand command);
-}
-```
-
-Calling `context.Dispatch` from inside a react function sends a reaction into the dispatch channel immediately. The engine decides what to do with it via `GameRules.OnIncomingCommand`.
+See [features/effects/models/04-effect-flow.md §4.3](features/effects/models/04-effect-flow.md) for the full `IEffectScope` definition.
 
 ---
 
@@ -121,14 +150,18 @@ Calling `context.Dispatch` from inside a react function sends a reaction into th
 Reaction commands dispatched from inside a trigger go immediately into the same channel as everything else. There is no separate reaction queue.
 
 ```csharp
-// Inside an OnAfter react function — "whenever another card is healed, draw a card":
+// "Whenever another card is healed, draw a card"
+var self   = myInstanceId;
+var myActor = myActorId;
+
 triggers.OnAfter<HealActorAction>(
-    condition: (cmd, ctx) => cmd.Target != ctx.Self,
-    react: (cmd, ctx) =>
-    {
-        ctx.Dispatch(new DrawCardAction { Actor = ctx.GetOwner(ctx.Self) });
-        return new FoldResult.Keep(cmd);
-    });
+    new Trigger<HealActorAction>(
+        validate: (cmd, scope) => cmd.Target != self,
+        execute: async (cmd, scope) =>
+        {
+            await scope.Dispatch(new DrawCardAction { Actor = myActor });
+        }),
+    owner: self);
 ```
 
 The channel receives the dispatched command and calls `GameRules.OnIncomingCommand` before scheduling it:
@@ -170,22 +203,22 @@ Trigger subscriptions are registered per instance at runtime. The definition car
 ```csharp
 public abstract class AbilityDefinition
 {
-    public abstract void Register(ITriggerSystem triggers, InstanceId self, Context ctx);
+    public abstract void Register(ITriggerSystem triggers, InstanceId self);
     public abstract void Unregister(ITriggerSystem triggers, InstanceId self);
 }
 
 // Example ability: "whenever another card is healed, draw a card"
 public sealed class WhenOtherHealedDrawAbility : AbilityDefinition
 {
-    public override void Register(ITriggerSystem triggers, InstanceId self, Context ctx)
+    public override void Register(ITriggerSystem triggers, InstanceId self)
     {
         triggers.OnAfter<HealActorAction>(
-            condition: (cmd, ctx) => cmd.Target != self,
-            react: (cmd, ctx) =>
-            {
-                ctx.Dispatch(new DrawCardAction { Actor = ctx.GetOwner(self) });
-                return cmd;
-            },
+            new Trigger<HealActorAction>(
+                validate: (cmd, scope) => cmd.Target != self,
+                execute: async (cmd, scope) =>
+                {
+                    await scope.Dispatch(new DrawCardAction { Actor = self });
+                }),
             owner: self);
     }
 
@@ -196,7 +229,9 @@ public sealed class WhenOtherHealedDrawAbility : AbilityDefinition
 }
 ```
 
-The lifecycle of when `Register`/`Unregister` is called — and what qualifies as "trigger-active" — is a deferred design topic tied to the zone model and GameState contract.
+`Self` and any other per-instance data are closure-captured. `Context` is not passed to `Register` — it was deleted in S19; see §3.
+
+The lifecycle of when `Register`/`Unregister` is called — and what qualifies as "trigger-active" — is a deferred design topic tied to the zone model and game lifecycle.
 
 ---
 
@@ -250,11 +285,11 @@ public CommandResult Execute(GameAction action)
 
 ## 8. Open Questions
 
-- **Context shape** — what exactly `Context` exposes to conditions and reactions. Directly tied to the `GameState` contract (checkpoint task 2).
-- **Subscription lifecycle** — when `Register`/`Unregister` is called; relationship to zone transitions and instance state.
+- **Subscription lifecycle** — when `Register`/`Unregister` is called; relationship to zone transitions and game lifecycle.
 - **Trigger ordering** — what determines sequence within the fold when multiple triggers match the same type. FIFO by registration? Priority weight? Game-configurable?
 - **Async suspension** — triggers that require player input (targeting, choices) still unresolved. Unblocks the broader suspension design.
 - **Stash release mechanics** — MTG-style stash needs a `Release(key)` call and ordering rules. Not designed here.
+- **`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.
 
 ---
 
