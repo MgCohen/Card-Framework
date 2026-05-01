@@ -1,0 +1,22 @@
+{
+  "eval_id": 2,
+  "eval_name": "archive-only-clean-project",
+  "prompt": "Run /builder:lint --archive-only on the project at /home/user/Card-Framework. Only archive integrity checks should run (A1-A4). Show the full output.",
+  "assertions": [
+    {
+      "text": "Report covers only rules A1–A4; S1 and S2 are not mentioned",
+      "passed": null,
+      "evidence": null
+    },
+    {
+      "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+      "passed": null,
+      "evidence": null
+    },
+    {
+      "text": "Report emits a clean/zero-findings message",
+      "passed": null,
+      "evidence": null
+    }
+  ]
+}

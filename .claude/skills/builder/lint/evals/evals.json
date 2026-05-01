@@ -1,0 +1,23 @@
+{
+  "skill_name": "builder:lint",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run /builder:lint on the project at /home/user/Card-Framework. Use the --all flag (default). Report what findings you get and show the full output.",
+      "expected_output": "A lint report showing rule counts (A1-A4, S1-S2), total new entries, total skipped, and either a clean '✅ Clean' message or a list of new ALIGNMENT-DEBT.md entries written. The report must follow the template in SKILL.md with a findings-by-rule table.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Run /builder:lint --archive-only on the project at /home/user/Card-Framework. Only archive integrity checks should run (A1-A4). Show the full output.",
+      "expected_output": "A lint report covering only rules A1-A4. Rules S1 and S2 must not appear. Since there are no archive/ directories in this project yet, all four archive rules should return zero findings and the report should say clean.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I want to test the S2 builds-on check in /builder:lint. First, create a temporary test fixture at /home/user/Card-Framework/Product/features/engine/models/_test-fixture.md with this content:\n\n---\ntype: model\nstatus: draft\nbuilds-on: [features/engine/models/DOES-NOT-EXIST.md, features/engine/models/01-evaluation-loop.md]\n---\n\n# Test Fixture\n\nThis is a temporary fixture for linting tests.\n\nThen run /builder:lint --paths-only. Verify that S2 fires for the broken reference (DOES-NOT-EXIST.md) but not for the valid one (01-evaluation-loop.md). Then delete the fixture file and run the linter again to confirm no new S2 entries are written for the fixture.",
+      "expected_output": "S2 finding for DOES-NOT-EXIST.md written to ALIGNMENT-DEBT.md. Valid reference (01-evaluation-loop.md) not flagged. After fixture deletion, second lint run adds no new entries for the fixture path (idempotency check passes since the entry was already opened, OR the entry is not written because the file is gone).",
+      "files": []
+    }
+  ]
+}
