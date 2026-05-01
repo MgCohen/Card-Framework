@@ -1,0 +1,283 @@
+{
+  "metadata": {
+    "skill_name": "builder-lint",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-05-01T13:48:19Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 106.9,
+        "tokens": 31913,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+          "passed": true,
+          "evidence": "report.md contains a table with all 7 rules: A1, A2, A3a, A3b, A4, S1, S2, each with a 'New' count and description"
+        },
+        {
+          "text": "Report includes a stat strip with counts for new entries and skipped entries",
+          "passed": true,
+          "evidence": "report.md line 5: '\ud83d\udcca 0 new entries \u00b7 0 skipped (already open) \u00b7 4 total open'"
+        },
+        {
+          "text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent",
+          "passed": true,
+          "evidence": "report.md line 3: '\u2705 Clean: no new findings.'"
+        },
+        {
+          "text": "No file other than ALIGNMENT-DEBT.md is modified",
+          "passed": true,
+          "evidence": "Report explicitly states 'Existing open debt (not modified)' \u2014 no writes to other files mentioned in transcript"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 67.4,
+        "tokens": 28279,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned",
+          "passed": true,
+          "evidence": "report.md findings table contains only A1, A2, A3a, A3b, A4 \u2014 no S1 or S2 rows"
+        },
+        {
+          "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+          "passed": true,
+          "evidence": "All 5 rules show 0 new entries. Notes confirm no archive/ subdirectories exist under Product/features/"
+        },
+        {
+          "text": "Report emits a clean/zero-findings message",
+          "passed": true,
+          "evidence": "report.md: '\u2705 Clean: no new findings.'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 137.5,
+        "tokens": 36806,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+          "passed": true,
+          "evidence": "report.md Run 1: 'id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 \u2014 builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)'"
+        },
+        {
+          "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+          "passed": true,
+          "evidence": "report.md: 'Valid path: features/engine/models/01-evaluation-loop.md \u2014 EXISTS \u2014 not flagged'"
+        },
+        {
+          "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+          "passed": true,
+          "evidence": "report.md Run 2: '0 new entries \u00b7 0 skipped (already open) \u00b7 7 total open'. Fixture absent means no S2 finding generated."
+        },
+        {
+          "text": "Fixture file _test-fixture.md does not exist after the run completes",
+          "passed": true,
+          "evidence": "report.md: 'Fixture: Product/features/engine/models/_test-fixture.md \u2014 DELETED before this run [Run 2]'. Confirmed absent."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 566.2,
+        "tokens": 91690,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+          "passed": true,
+          "evidence": "report.md contains a table with all 7 rules and counts"
+        },
+        {
+          "text": "Report includes a stat strip with counts for new entries and skipped entries",
+          "passed": true,
+          "evidence": "report.md line 3: '\ud83d\udcca 11 new findings \u00b7 1 skipped (already open as ad-20260501-026) \u00b7 5 open in ledger pre-run'"
+        },
+        {
+          "text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent",
+          "passed": true,
+          "evidence": "Report lists 6 proposed ALIGNMENT-DEBT entries (ad-20260501-027 through 032) with full entry shapes"
+        },
+        {
+          "text": "No file other than ALIGNMENT-DEBT.md is modified",
+          "passed": true,
+          "evidence": "Report proposes entries but notes them as 'proposed' \u2014 transcript confirms no writes beyond the ledger"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 132.1,
+        "tokens": 31300,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned",
+          "passed": true,
+          "evidence": "Baseline report covers only 4 archive integrity checks with no mention of S1 or S2"
+        },
+        {
+          "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+          "passed": true,
+          "evidence": "All 4 checks return zero findings. Report confirms archive/ dirs contain only .gitkeep files"
+        },
+        {
+          "text": "Report emits a clean/zero-findings message",
+          "passed": true,
+          "evidence": "Report states 'Zero findings across all four checks' and 'Clean \u2014 no archive integrity findings'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.5,
+        "passed": 2,
+        "failed": 2,
+        "total": 4,
+        "time_seconds": 85.4,
+        "tokens": 17301,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+          "passed": false,
+          "evidence": "The baseline report correctly identified DOES-NOT-EXIST.md as broken, but per the task it did not write ALIGNMENT-DEBT.md entries (no skill guidance to do so). It reported findings but did not persist them to the ledger."
+        },
+        {
+          "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+          "passed": true,
+          "evidence": "Baseline report: '01-evaluation-loop.md \u2014 NOT flagged \u2014 file exists and resolves correctly'"
+        },
+        {
+          "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+          "passed": false,
+          "evidence": "Baseline did not run a second pass \u2014 no idempotency check was performed without skill guidance"
+        },
+        {
+          "text": "Fixture file _test-fixture.md does not exist after the run completes",
+          "passed": true,
+          "evidence": "Baseline report confirms: 'The fixture file has been deleted'"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 103.9333,
+        "stddev": 35.144,
+        "min": 67.4,
+        "max": 137.5
+      },
+      "tokens": {
+        "mean": 32332.6667,
+        "stddev": 4278.9628,
+        "min": 28279,
+        "max": 36806
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.8333,
+        "stddev": 0.2887,
+        "min": 0.5,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 261.2333,
+        "stddev": 265.1391,
+        "min": 85.4,
+        "max": 566.2
+      },
+      "tokens": {
+        "mean": 46763.6667,
+        "stddev": 39531.9437,
+        "min": 17301,
+        "max": 91690
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.17",
+      "time_seconds": "-157.3",
+      "tokens": "-14431"
+    }
+  },
+  "notes": []
+}

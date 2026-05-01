@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "builder-lint", "runs": [{"id": "eval-1-full-lint-with_skill", "prompt": "Run /builder:lint on the project at /home/user/Card-Framework. Use the --all flag (default). Report what findings you get and show the full output.", "eval_id": 1, "outputs": [{"name": "report.md", "type": "text", "content": "# Lint Report\n\n\u2705 Clean: no new findings.\n\n\ud83d\udcca 0 new entries \u00b7 0 skipped (already open) \u00b7 4 total open\n\n### Findings by rule\n| Rule | New | Description |\n|------|-----|-------------|\n| A1   | 0   | Forward-pointer integrity |\n| A2   | 0   | Stale inbound links |\n| A3a  | 0   | Retired status, active location |\n| A3b  | 0   | Active status, archive location |\n| A4   | 0   | Missing successor |\n| S1   | 0   | Broken path references |\n| S2   | 0   | Broken builds-on references |\n\n---\n\n## Detail\n\n### A1 \u2014 Forward-pointer integrity\nNo archive/ directories exist under Product/features/. No superseded_by: pointers to check. Zero findings.\n\n### A2 \u2014 Stale inbound links to archive\nAll archive/ text hits were in workflow docs, templates, and the archive-convention ADR \u2014 prose describing the convention, not actual links into archived files. No archive files exist on disk. Zero findings.\n\n### A3a \u2014 Active files with retired status\nAll hits for 'status: Superseded|status: Cancelled' were in BACKLOG.md prose and _workflow templates. No active feature docs carry a retired status. Zero findings.\n\n### A3b \u2014 Archive docs lacking retired status\nNo archive/ directories exist. Zero findings.\n\n### A4 \u2014 Successor presence\nNo superseded_by: pointers exist anywhere in the project. Zero findings.\n\n### S1 \u2014 Broken path references\nAll bare path references found resolve to existing files:\n- features/entities/entities.md OK\n- features/zones/zones.md OK\n- features/actions/actions.md OK\n- features/triggers/triggers.md OK\n- features/effects/effects.md OK\n- features/engine/engine.md OK\n- features/presentation/presentation.md OK\n- Product/support/samples/pile-counter.md OK\n\nZero findings.\n\n### S2 \u2014 Broken builds-on references\nAll builds-on: entries in active feature docs resolve to existing, non-archived files:\n- features/effects/models/01-async-dispatch.md OK\n- features/effects/models/04-effect-flow.md OK\n- features/engine/models/01-evaluation-loop.md OK\n- features/engine/models/02-gamerules-contract.md OK\n- features/engine/models/03-snapshot-pipeline.md OK\n- features/actions/models/01-command-pipeline.md OK\n- features/actions/models/02-availability-snapshot.md OK\n\nZero findings.\n\n---\n\n## Existing open debt (not modified)\n\n4 entries remain open in Product/ledgers/ALIGNMENT-DEBT.md:\n- ad-20260501-022: engine/02 -> engine/03: IHandlerRegistry removal from constructor\n- ad-20260501-023: engine/02 -> decisions/0001: IHandlerRegistry service count\n- ad-20260501-024: engine/02 -> OPEN-QUESTIONS.md: 5 resolved OQs need strikethrough\n- ad-20260501-025: triggers/01 -> effects/02: ITriggerPipeline shape conflict\n"}], "grading": {"expectations": [{"text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)", "passed": true, "evidence": "report.md contains a table with all 7 rules: A1, A2, A3a, A3b, A4, S1, S2, each with a 'New' count and description"}, {"text": "Report includes a stat strip with counts for new entries and skipped entries", "passed": true, "evidence": "report.md line 5: '\ud83d\udcca 0 new entries \u00b7 0 skipped (already open) \u00b7 4 total open'"}, {"text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent", "passed": true, "evidence": "report.md line 3: '\u2705 Clean: no new findings.'"}, {"text": "No file other than ALIGNMENT-DEBT.md is modified", "passed": true, "evidence": "Report explicitly states 'Existing open debt (not modified)' \u2014 no writes to other files mentioned in transcript"}], "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}, "claims": [{"claim": "All 8 bare path references (S1) resolve to existing files", "type": "factual", "verified": false, "evidence": "CRITICAL: The baseline run found 8 broken S1 references (stale %20-encoded spike links, wrong-depth relative path) that the with-skill run missed entirely. The skill's grep pattern only matches bare paths like 'features/x/y.md' \u2014 it misses URL-encoded paths and relative paths like '../ledgers/OPEN-QUESTIONS.md'"}, {"claim": "All 7 builds-on targets resolve to existing files", "type": "factual", "verified": false, "evidence": "The baseline found 3 broken S2 references in _workflow/ docs. The skill's S2 grep only checks 'Product/features/' \u2014 it excludes _workflow/ docs entirely"}], "eval_feedback": {"suggestions": [{"reason": "The skill passed all 4 format assertions but missed 11 real findings the baseline caught. The assertions only check report structure, not correctness of the scan. A critical assertion is missing: 'The skill finds the same real broken references as a thorough manual check' \u2014 i.e., coverage of URL-encoded paths, relative paths, and _workflow/ docs in S2."}], "overall": "Assertions pass but mask the most important failure: the skill's grep patterns are too narrow and produce false negatives."}}}, {"id": "eval-1-full-lint-without_skill", "prompt": "Run /builder:lint on the project at /home/user/Card-Framework. Use the --all flag (default). Report what findings you get and show the full output.", "eval_id": 1, "outputs": [{"name": "report.md", "type": "text", "content": "# Lint Report \u2014 All Rules\n\n\ud83d\udcca 11 new findings \u00b7 1 skipped (already open as ad-20260501-026) \u00b7 5 open in ledger pre-run\n\nChecked: 102 docs in `Product/` (excluding `_workflow/_validation/`)\nDate: 2026-05-01\nMode: `--all` (archive integrity + path resolution + builds-on)\n\n---\n\n## Summary by check type\n\n| Check | Rule | New findings | Already logged | Status |\n|-------|------|-------------|----------------|--------|\n| Archive integrity \u2014 forward-pointer | A1 | 0 | 0 | Clean |\n| Archive integrity \u2014 stale inbound links | A2 | 0 | 0 | Clean |\n| Archive integrity \u2014 status/location | A3a | 0 | 0 | Clean |\n| Archive integrity \u2014 status in archive/ | A3b | 0 | 0 | Clean |\n| Archive integrity \u2014 successor presence | A4 | 0 | 0 | Clean |\n| Broken path references | S1 | 8 | 1 | Issues found |\n| builds-on references | S2 | 3 | 0 | Issues found |\n| **Total** | | **11** | **1** | |\n\n---\n\n## A \u2014 Archive Integrity\n\nAll 7 `archive/` directories (one per feature) are empty. No archived docs exist. All A1\u2013A4 checks pass trivially.\n\n**Clean \u2014 no archive integrity findings**\n\n---\n\n## S1 \u2014 Broken Path References\n\n### S1-1 through S1-3: Stale spike links in GAME-ARCHETYPES.md (genuine broken links)\n\n| Rule | Doc | Line | Reference | Actual file |\n|------|-----|------|-----------|-------------|\n| S1 | `general/GAME-ARCHETYPES.md` | 56 | `spikes/SabberStone-Architecture-Analysis.md%20(1)` | `spikes/sabberstone-architecture.md` |\n| S1 | `general/GAME-ARCHETYPES.md` | 57 | `spikes/Fireplace-Architecture-Analysis.md%20(1)` | `spikes/fireplace-architecture.md` |\n| S1 | `general/GAME-ARCHETYPES.md` | 58 | `spikes/Brimstone-Architecture-Analysis.md%20(1)` | `spikes/brimstone-architecture.md` |\n\nThe three spike links use stale filenames with `%20` URL-encoding (old files with spaces and a `(1)` copy suffix). The spikes were renamed to lowercase kebab-case during migration. The link text is correct but the targets do not exist.\n\nFix: Update lines 56-58 to use the actual filenames: `spikes/sabberstone-architecture.md`, `spikes/fireplace-architecture.md`, `spikes/brimstone-architecture.md`.\n\n---\n\n### S1-4: Wrong-depth relative link in 04-gamestate-slices.md (genuine broken link)\n\n| Rule | Doc | Lines | Reference | Resolves to | Correct |\n|------|-----|-------|-----------|-------------|---------|\n| S1 | `features/engine/models/04-gamestate-slices.md` | 83, 150, 162 | `../ledgers/OPEN-QUESTIONS.md` | `features/engine/ledgers/OPEN-QUESTIONS.md` (missing) | `../../../ledgers/OPEN-QUESTIONS.md` |\n\nThe file lives at `features/engine/models/` (3 levels deep under `Product/`). One `..` step reaches `features/engine/`, not `Product/`. The ledger is at `Product/ledgers/OPEN-QUESTIONS.md`, requiring 3 `../` steps up. All three occurrences share the same bug.\n\nFix: Replace `../ledgers/OPEN-QUESTIONS.md` with `../../../ledgers/OPEN-QUESTIONS.md` at lines 83, 150, and 162.\n\n---\n\n### S1-5 through S1-8: Phantom paths in prose/code examples (low severity)\n\nThese paths appear as backtick-quoted text or inside code block examples, not as clickable `[text](path)` hyperlinks. Readers cannot follow them to a 404. Logged for completeness; no immediate action required.\n\n| Rule | Doc | Line | Path | Context |\n|------|-----|------|------|---------|\n| S1 | `_workflow/PRODUCT-BUILDER.md` | 91 | `features/actions/decisions/0002-async-layer-hierarchy.md` | Prose naming example (intentionally fabricated) |\n| S1 | `_workflow/PRODUCT-BUILDER.md` | 91 | `features/actions/models/03-action-definition.md` | Prose naming example (intentionally fabricated) |\n| S1 | `_workflow/REPORT-STYLE.md` | 238 | `features/engine/models/04-evaluation-loop.md` | Sample end-session output block |\n| S1 | `_workflow/REPORT-STYLE.md` | 272 | `features/engine/archive/01-old.md` | Sample lint report table |\n\n---\n\n### S1 \u2014 already logged\n\n| ID | Doc | Detail |\n|----|-----|--------|\n| ad-20260501-026 | `features/engine/models/_test-fixture.md` | S2 test fixture in ALIGNMENT-DEBT; file intentionally absent |\n\n---\n\n## S2 \u2014 builds-on References\n\nAll 13 `builds-on:` entries in `Product/features/` resolve correctly. Issues are in `_workflow/` docs using same-directory shorthand rather than `Product/`-root-relative paths.\n\n| Rule | Doc | Entry | Resolution from `Product/` root | Status |\n|------|-----|-------|----------------------------------|--------|\n| S2 | `_workflow/REPORT-STYLE.md` | `PRODUCT-BUILDER.md` | `Product/PRODUCT-BUILDER.md` \u2014 MISSING (exists at `_workflow/PRODUCT-BUILDER.md`) | Broken |\n| S2 | `_workflow/REPORT-STYLE.md` | `EMOJI-LEGEND.md` | `Product/EMOJI-LEGEND.md` \u2014 MISSING (exists at `_workflow/EMOJI-LEGEND.md`) | Broken |\n| S2 | `_workflow/EMOJI-LEGEND.md` | `PRODUCT-BUILDER.md` | `Product/PRODUCT-BUILDER.md` \u2014 MISSING (exists at `_workflow/PRODUCT-BUILDER.md`) | Broken |\n\n`PRODUCT-BUILDER.md` itself uses `Product/`-root convention (`builds-on: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]` \u2014 both verified at root). `REPORT-STYLE.md` and `EMOJI-LEGEND.md` omit the `_workflow/` prefix, producing dangling references. Fix: prefix entries with `_workflow/`.\n\n---\n\n## Prior-art docs (informational, out of scope)\n\nTwo `.plan.md` files in `support/prior-art/` reference pre-migration paths (`Docs/` and `Assets/Scripts/`) that no longer exist. These are historical plan documents predating the Product Builder workflow; stale links are expected. Not proposed as new debt entries.\n\n| File | Stale reference type |\n|------|---------------------|\n| `support/prior-art/card-game-base-architecture-bb88f456.plan.md` | `Docs/` (5 paths) + `Assets/Scripts/` (7 paths) |\n| `support/prior-art/card-game-base-architecture-117b41c9.plan.md` | `Docs/` (2 paths) + `Assets/Scripts/` (5 paths) + `Generators/` (1 path) |\n\n---\n\n## Proposed new ALIGNMENT-DEBT entries\n\n```\n- id: ad-20260501-027 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 \u2014 line 56 broken link: spikes/SabberStone-Architecture-Analysis.md%20(1) not found; actual file is spikes/sabberstone-architecture.md\n- id: ad-20260501-028 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 \u2014 line 57 broken link: spikes/Fireplace-Architecture-Analysis.md%20(1) not found; actual file is spikes/fireplace-architecture.md\n- id: ad-20260501-029 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 \u2014 line 58 broken link: spikes/Brimstone-Architecture-Analysis.md%20(1) not found; actual file is spikes/brimstone-architecture.md\n- id: ad-20260501-030 | status: open | source: linter | target: features/engine/models/04-gamestate-slices.md | reason: S1 \u2014 lines 83/150/162: ../ledgers/OPEN-QUESTIONS.md resolves to features/engine/ledgers/ (missing); correct relative path is ../../../ledgers/OPEN-QUESTIONS.md\n- id: ad-20260501-031 | status: open | source: linter | target: _workflow/REPORT-STYLE.md | reason: S2 \u2014 builds-on [PRODUCT-BUILDER.md, EMOJI-LEGEND.md] not found at Product/ root; should be [_workflow/PRODUCT-BUILDER.md, _workflow/EMOJI-LEGEND.md]\n- id: ad-20260501-032 | status: open | source: linter | target: _workflow/EMOJI-LEGEND.md | reason: S2 \u2014 builds-on [PRODUCT-BUILDER.md] not found at Product/ root; should be _workflow/PRODUCT-BUILDER.md\n```\n\nDebt opened: 6 new entries proposed (027-032)\nExisting open entries pre-run: 5 (ad-20260501-022 through 026)\nTotal open after this run: 11\n"}], "grading": {"expectations": [{"text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)", "passed": true, "evidence": "report.md contains a table with all 7 rules and counts"}, {"text": "Report includes a stat strip with counts for new entries and skipped entries", "passed": true, "evidence": "report.md line 3: '\ud83d\udcca 11 new findings \u00b7 1 skipped (already open as ad-20260501-026) \u00b7 5 open in ledger pre-run'"}, {"text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent", "passed": true, "evidence": "Report lists 6 proposed ALIGNMENT-DEBT entries (ad-20260501-027 through 032) with full entry shapes"}, {"text": "No file other than ALIGNMENT-DEBT.md is modified", "passed": true, "evidence": "Report proposes entries but notes them as 'proposed' \u2014 transcript confirms no writes beyond the ledger"}], "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}, "claims": [{"claim": "Found 8 broken S1 references and 3 broken S2 references (11 total)", "type": "factual", "verified": true, "evidence": "Report enumerates all 11: 3 stale spike links with %20 encoding, 1 wrong-depth relative path (3 line occurrences = 1 finding), 4 phantom prose paths (low severity), 3 _workflow builds-on with bare filenames"}, {"claim": "Correctly distinguished genuine broken links from prose examples", "type": "quality", "verified": true, "evidence": "Report explicitly labels S1-5 through S1-8 as 'phantom paths in prose/code examples (low severity)' and explains they are not clickable links"}], "eval_feedback": {"suggestions": [], "overall": "No suggestions \u2014 baseline performed well and the assertions are appropriate."}}}, {"id": "eval-2-archive-only-with_skill", "prompt": "Run /builder:lint --archive-only on the project at /home/user/Card-Framework. Only archive integrity checks should run (A1-A4). Show the full output.", "eval_id": 2, "outputs": [{"name": "report.md", "type": "text", "content": "# Lint Report\n\n**Run:** `--archive-only` (rules A1\u2013A4 only) \u00b7 2026-05-01\n\n0 new entries \u00b7 0 skipped \u00b7 6 total open\n\n### Findings by rule\n\n| Rule | New | Description |\n|------|-----|-------------|\n| A1   | 0   | Forward-pointer integrity |\n| A2   | 0   | Stale inbound links to archive/ |\n| A3a  | 0   | Retired status, active location |\n| A3b  | 0   | Active status, archive location |\n| A4   | 0   | Missing or archived successor |\n\n\u2705 Clean: no new findings.\n\n**Notes:** No `archive/` subdirectories exist under `Product/features/` \u2014 the migration scan (BACKLOG task PR-2) confirmed all 13 Models and 19 ADRs carry active statuses. Archive integrity rules A1\u2013A4 have nothing to check.\n\n\u26a0\ufe0f Pass-mode: 6 open debt entries (from prior cascade passes) \u2014 consider a discharge pass before continuing.\n"}], "grading": {"expectations": [{"text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned", "passed": true, "evidence": "report.md findings table contains only A1, A2, A3a, A3b, A4 \u2014 no S1 or S2 rows"}, {"text": "All archive rules return zero findings (no archive/ directories exist in this project)", "passed": true, "evidence": "All 5 rules show 0 new entries. Notes confirm no archive/ subdirectories exist under Product/features/"}, {"text": "Report emits a clean/zero-findings message", "passed": true, "evidence": "report.md: '\u2705 Clean: no new findings.'"}], "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}, "claims": [], "eval_feedback": {"suggestions": [], "overall": "No suggestions \u2014 eval-2 with-skill performed correctly on all assertions."}}}, {"id": "eval-2-archive-only-without_skill", "prompt": "Run /builder:lint --archive-only on the project at /home/user/Card-Framework. Only archive integrity checks should run (A1-A4). Show the full output.", "eval_id": 2, "outputs": [{"name": "report.md", "type": "text", "content": "# Archive Integrity Lint Report\n\n**Scope:** `Product/` docs \u2014 archive integrity checks only\n**Date:** 2026-05-01\n**Checks performed:**\n1. Archived docs whose `superseded_by:` points at missing or archived files\n2. Active docs that link into `archive/` directories\n3. Files with retired status living outside `archive/`, or files in `archive/` without retired status\n4. `superseded_by:` pointers whose named successor doesn't exist\n\n---\n\n## Summary\n\n**Zero findings.** All four archive-integrity checks pass clean.\n\n---\n\n## Check 1 \u2014 Archived docs with broken `superseded_by:` pointers\n\nAll seven feature `archive/` directories contain only a `.gitkeep` file. No archived docs exist, so there are no `superseded_by:` fields to validate.\n\n**Findings: none**\n\n---\n\n## Check 2 \u2014 Active docs linking into `archive/` directories\n\nA scan of all non-workflow, non-session, non-ADR-0004, non-ledger docs for markdown links of the form `(*/archive/*)` returned no matches. The only references to `archive/` paths in the codebase appear in:\n\n- `Product/_workflow/PRODUCT-BUILDER.md` \u2014 normative spec prose (not a link to a real archived file)\n- `Product/_workflow/REPORT-STYLE.md` \u2014 report template examples\n- `Product/_workflow/_templates/archive.md` \u2014 template definition\n- `Product/decisions/0004-archive-convention.md` \u2014 ADR prose describing the convention\n- `Product/ledgers/BACKLOG.md` \u2014 backlog entry prose referencing the migration task (now struck through as done)\n\nNone of these are stale inbound links to real archived content.\n\n**Findings: none**\n\n---\n\n## Check 3 \u2014 Status / location mismatches\n\n### Files with `status: Superseded`, `status: Cancelled`, `status: Retired`, or `status: Abandoned` living outside `archive/`\n\nScan of `^status:` front-matter across all 105 `.md` files under `Product/`:\n\n| Location | Statuses observed |\n|---|---|\n| `features/*/models/*.md` | `settled`, `draft` |\n| `features/*/decisions/*.md` | `accepted` |\n| `features/*.md` (overview docs) | `settled` |\n| `decisions/*.md` | `accepted` |\n| `general/*.md` | `settled` |\n| `spikes/*.md` | `concluded`, `graduated` |\n\nNo file outside `archive/` carries `Superseded`, `Cancelled`, `Retired`, or `Abandoned` status.\n\n### Files inside `archive/` without a retired status\n\nThe seven `archive/` directories contain only `.gitkeep` files. No content files are present.\n\n**Findings: none**\n\n---\n\n## Check 4 \u2014 `superseded_by:` pointers whose named successor doesn't exist\n\nNo `superseded_by:` fields appear in any content doc (only in the `_workflow/_templates/archive.md` template and normative spec prose). There are no broken successor pointers.\n\n**Findings: none**\n\n---\n\n## Notes\n\n- The BACKLOG.md migration task (migrate superseded/cancelled docs into `archive/`) was marked done on 2026-05-01 with the note that the migration scan ran clean \u2014 confirmed here independently.\n- The word \"superseded\" appears in inline prose within `features/actions/models/01-command-pipeline.md` and `features/effects/models/01-async-dispatch.md`, but these are commentary on retired *concepts*, not `status:` front-matter fields on retired docs. No action required.\n- All seven feature `archive/` directories are properly scaffolded with `.gitkeep` and are ready to receive archived docs when needed.\n"}], "grading": {"expectations": [{"text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned", "passed": true, "evidence": "Baseline report covers only 4 archive integrity checks with no mention of S1 or S2"}, {"text": "All archive rules return zero findings (no archive/ directories exist in this project)", "passed": true, "evidence": "All 4 checks return zero findings. Report confirms archive/ dirs contain only .gitkeep files"}, {"text": "Report emits a clean/zero-findings message", "passed": true, "evidence": "Report states 'Zero findings across all four checks' and 'Clean \u2014 no archive integrity findings'"}], "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}, "claims": [], "eval_feedback": {"suggestions": [], "overall": "No suggestions."}}}, {"id": "eval-3-s2-broken-builds-on-with_skill", "prompt": "Create a test fixture with a broken builds-on reference, run /builder:lint --paths-only, verify S2 fires for the bad reference but not the valid one, then delete fixture and confirm idempotency.", "eval_id": 3, "outputs": [{"name": "report.md", "type": "text", "content": "# Eval-3 S2 Broken builds-on \u2014 Full Lint Output\n\n## Run 1 (fixture present)\n\n**Command:** `/builder:lint --paths-only`\n**Fixture:** `Product/features/engine/models/_test-fixture.md` present with:\n```yaml\nbuilds-on: [features/engine/models/DOES-NOT-EXIST.md, features/engine/models/01-evaluation-loop.md]\n```\n\n### Lint Report\n\n\ud83d\udcca 1 new entry \u00b7 0 skipped (already open) \u00b7 7 total open\n\n### Findings by rule\n| Rule | New | Description |\n|------|-----|-------------|\n| S1   | 0   | Broken path references |\n| S2   | 1   | Broken builds-on references |\n\n\u26a0\ufe0f Pass-mode: 7 open debt entries \u2014 consider a discharge pass before continuing.\n\n**S2 finding detail:**\n- Target: `features/engine/models/_test-fixture.md`\n- Missing path: `features/engine/models/DOES-NOT-EXIST.md` \u2014 DOES NOT EXIST \u2014 flagged\n- Valid path: `features/engine/models/01-evaluation-loop.md` \u2014 EXISTS \u2014 not flagged\n\n**New ledger entry written:**\n```\n- id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 \u2014 builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)\n```\n\n---\n\n## Run 2 (fixture deleted \u2014 idempotency check)\n\n**Command:** `/builder:lint --paths-only`\n**Fixture:** `Product/features/engine/models/_test-fixture.md` \u2014 DELETED before this run\n\n### Lint Report\n\n\ud83d\udcca 0 new entries \u00b7 0 skipped (already open) \u00b7 7 total open\n\n### Findings by rule\n| Rule | New | Description |\n|------|-----|-------------|\n| S1   | 0   | Broken path references |\n| S2   | 0   | Broken builds-on references |\n\n\u26a0\ufe0f Pass-mode: 7 open debt entries \u2014 consider a discharge pass before continuing.\n\n**Idempotency result:** No new entries written. The fixture's removal meant no builds-on reference to DOES-NOT-EXIST.md exists anymore, so no new S2 finding was generated.\n\n---\n\n## Verification Summary\n\n| Check | Result |\n|-------|--------|\n| S2 fires for DOES-NOT-EXIST.md | YES \u2014 flagged in Run 1 |\n| S2 does NOT fire for 01-evaluation-loop.md | CORRECT \u2014 valid path, not flagged |\n| Fixture deleted before Run 2 | CONFIRMED |\n| Run 2 produces no new entries | CONFIRMED \u2014 idempotency holds |\n| No duplicate entries after two runs | CONFIRMED |\n"}], "grading": {"expectations": [{"text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)", "passed": true, "evidence": "report.md Run 1: 'id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 \u2014 builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)'"}, {"text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)", "passed": true, "evidence": "report.md: 'Valid path: features/engine/models/01-evaluation-loop.md \u2014 EXISTS \u2014 not flagged'"}, {"text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path", "passed": true, "evidence": "report.md Run 2: '0 new entries \u00b7 0 skipped (already open) \u00b7 7 total open'. Fixture absent means no S2 finding generated."}, {"text": "Fixture file _test-fixture.md does not exist after the run completes", "passed": true, "evidence": "report.md: 'Fixture: Product/features/engine/models/_test-fixture.md \u2014 DELETED before this run [Run 2]'. Confirmed absent."}], "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}, "claims": [], "eval_feedback": {"suggestions": [], "overall": "No suggestions \u2014 eval-3 with-skill passed all assertions cleanly."}}}, {"id": "eval-3-s2-broken-builds-on-without_skill", "prompt": "Create a test fixture with a broken builds-on reference, run /builder:lint --paths-only, verify S2 fires for the bad reference but not the valid one, then delete fixture and confirm idempotency.", "eval_id": 3, "outputs": [{"name": "report.md", "type": "text", "content": "# Lint Report: builds-on Reference Check\n\n**Date:** 2026-05-01  \n**Scope:** `Product/features/` \u2014 all `.md` files with `builds-on:` front-matter  \n**Task:** Verify all `builds-on` references resolve to existing, non-archived files\n\n---\n\n## Summary\n\n- **Total files scanned:** 15 (with `builds-on:` front-matter)\n- **Total references checked:** 16 (excluding `root` sentinels)\n- **Missing references found:** 1\n- **Archived references found:** 0 (no archive/ files exist)\n\n---\n\n## Findings\n\n### BROKEN \u2014 Missing Target\n\n| File | Reference | Status |\n|------|-----------|--------|\n| `Product/features/engine/models/_test-fixture.md` | `features/engine/models/DOES-NOT-EXIST.md` | FILE NOT FOUND |\n\n**Details:** The file `Product/features/engine/models/DOES-NOT-EXIST.md` does not exist on disk. This reference is broken and should be corrected or removed.\n\n---\n\n### Valid References in Same File\n\n| File | Reference | Status |\n|------|-----------|--------|\n| `Product/features/engine/models/_test-fixture.md` | `features/engine/models/01-evaluation-loop.md` | OK |\n\n**Note:** `01-evaluation-loop.md` exists and resolves correctly. It is **not** flagged.\n\n---\n\n### All Other builds-on References (OK)\n\n| File | Reference | Status |\n|------|-----------|--------|\n| `features/effects/models/02-replacement-prevention.md` | `features/effects/models/01-async-dispatch.md` | OK |\n| `features/effects/models/03-ongoing-effects.md` | `features/effects/models/01-async-dispatch.md` | OK |\n| `features/effects/models/04-effect-flow.md` | `features/effects/models/01-async-dispatch.md` | OK |\n| `features/effects/models/04-effect-flow.md` | `features/engine/models/03-snapshot-pipeline.md` | OK |\n| `features/engine/models/02-gamerules-contract.md` | `features/engine/models/01-evaluation-loop.md` | OK |\n| `features/engine/models/03-snapshot-pipeline.md` | `features/engine/models/02-gamerules-contract.md` | OK |\n| `features/engine/models/03-snapshot-pipeline.md` | `features/actions/models/02-availability-snapshot.md` | OK |\n| `features/engine/models/04-gamestate-slices.md` | `features/effects/models/04-effect-flow.md` | OK |\n| `features/engine/models/04-gamestate-slices.md` | `features/engine/models/02-gamerules-contract.md` | OK |\n| `features/actions/models/02-availability-snapshot.md` | `features/actions/models/01-command-pipeline.md` | OK |\n| `features/actions/models/02-availability-snapshot.md` | `features/engine/models/03-snapshot-pipeline.md` | OK |\n| `features/presentation/models/01-presentation-loop.md` | `features/actions/models/02-availability-snapshot.md` | OK |\n| `features/presentation/models/01-presentation-loop.md` | `features/engine/models/03-snapshot-pipeline.md` | OK |\n| `features/triggers/models/01-trigger-fold.md` | `features/engine/models/01-evaluation-loop.md` | OK |\n\n---\n\n## Lint Verdict\n\n- `DOES-NOT-EXIST.md` \u2014 **FLAGGED** (file does not exist)\n- `01-evaluation-loop.md` \u2014 **NOT flagged** (file exists and resolves correctly)\n\nThe linter correctly distinguishes between broken and valid references within the same `builds-on` array.\n"}], "grading": {"expectations": [{"text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)", "passed": false, "evidence": "The baseline report correctly identified DOES-NOT-EXIST.md as broken, but per the task it did not write ALIGNMENT-DEBT.md entries (no skill guidance to do so). It reported findings but did not persist them to the ledger."}, {"text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)", "passed": true, "evidence": "Baseline report: '01-evaluation-loop.md \u2014 NOT flagged \u2014 file exists and resolves correctly'"}, {"text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path", "passed": false, "evidence": "Baseline did not run a second pass \u2014 no idempotency check was performed without skill guidance"}, {"text": "Fixture file _test-fixture.md does not exist after the run completes", "passed": true, "evidence": "Baseline report confirms: 'The fixture file has been deleted'"}], "summary": {"passed": 2, "failed": 2, "total": 4, "pass_rate": 0.5}, "claims": [], "eval_feedback": {"suggestions": [{"reason": "The first two assertions implicitly assume ALIGNMENT-DEBT.md is written \u2014 that's a skill-specific behavior. For a fair baseline comparison, the assertions for the baseline run should focus on detection accuracy (did it flag the right references?) rather than ledger writes."}], "overall": "Two assertions test ledger-write behavior that only makes sense for the skill run. Baseline detection was correct \u2014 the failing assertions reflect eval design, not agent failure."}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "builder-lint", "skill_path": "<path/to/skill>", "executor_model": "<model-name>", "analyzer_model": "<model-name>", "timestamp": "2026-05-01T13:48:19Z", "evals_run": [1, 2, 3], "runs_per_configuration": 3}, "runs": [{"eval_id": 1, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 106.9, "tokens": 31913, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)", "passed": true, "evidence": "report.md contains a table with all 7 rules: A1, A2, A3a, A3b, A4, S1, S2, each with a 'New' count and description"}, {"text": "Report includes a stat strip with counts for new entries and skipped entries", "passed": true, "evidence": "report.md line 5: '\ud83d\udcca 0 new entries \u00b7 0 skipped (already open) \u00b7 4 total open'"}, {"text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent", "passed": true, "evidence": "report.md line 3: '\u2705 Clean: no new findings.'"}, {"text": "No file other than ALIGNMENT-DEBT.md is modified", "passed": true, "evidence": "Report explicitly states 'Existing open debt (not modified)' \u2014 no writes to other files mentioned in transcript"}], "notes": []}, {"eval_id": 2, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 3, "failed": 0, "total": 3, "time_seconds": 67.4, "tokens": 28279, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned", "passed": true, "evidence": "report.md findings table contains only A1, A2, A3a, A3b, A4 \u2014 no S1 or S2 rows"}, {"text": "All archive rules return zero findings (no archive/ directories exist in this project)", "passed": true, "evidence": "All 5 rules show 0 new entries. Notes confirm no archive/ subdirectories exist under Product/features/"}, {"text": "Report emits a clean/zero-findings message", "passed": true, "evidence": "report.md: '\u2705 Clean: no new findings.'"}], "notes": []}, {"eval_id": 3, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 137.5, "tokens": 36806, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)", "passed": true, "evidence": "report.md Run 1: 'id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 \u2014 builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)'"}, {"text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)", "passed": true, "evidence": "report.md: 'Valid path: features/engine/models/01-evaluation-loop.md \u2014 EXISTS \u2014 not flagged'"}, {"text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path", "passed": true, "evidence": "report.md Run 2: '0 new entries \u00b7 0 skipped (already open) \u00b7 7 total open'. Fixture absent means no S2 finding generated."}, {"text": "Fixture file _test-fixture.md does not exist after the run completes", "passed": true, "evidence": "report.md: 'Fixture: Product/features/engine/models/_test-fixture.md \u2014 DELETED before this run [Run 2]'. Confirmed absent."}], "notes": []}, {"eval_id": 1, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 566.2, "tokens": 91690, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)", "passed": true, "evidence": "report.md contains a table with all 7 rules and counts"}, {"text": "Report includes a stat strip with counts for new entries and skipped entries", "passed": true, "evidence": "report.md line 3: '\ud83d\udcca 11 new findings \u00b7 1 skipped (already open as ad-20260501-026) \u00b7 5 open in ledger pre-run'"}, {"text": "Report emits either '\u2705 Clean' (zero findings) or lists new ALIGNMENT-DEBT.md entries \u2014 not silent", "passed": true, "evidence": "Report lists 6 proposed ALIGNMENT-DEBT entries (ad-20260501-027 through 032) with full entry shapes"}, {"text": "No file other than ALIGNMENT-DEBT.md is modified", "passed": true, "evidence": "Report proposes entries but notes them as 'proposed' \u2014 transcript confirms no writes beyond the ledger"}], "notes": []}, {"eval_id": 2, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 3, "failed": 0, "total": 3, "time_seconds": 132.1, "tokens": 31300, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned", "passed": true, "evidence": "Baseline report covers only 4 archive integrity checks with no mention of S1 or S2"}, {"text": "All archive rules return zero findings (no archive/ directories exist in this project)", "passed": true, "evidence": "All 4 checks return zero findings. Report confirms archive/ dirs contain only .gitkeep files"}, {"text": "Report emits a clean/zero-findings message", "passed": true, "evidence": "Report states 'Zero findings across all four checks' and 'Clean \u2014 no archive integrity findings'"}], "notes": []}, {"eval_id": 3, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.5, "passed": 2, "failed": 2, "total": 4, "time_seconds": 85.4, "tokens": 17301, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)", "passed": false, "evidence": "The baseline report correctly identified DOES-NOT-EXIST.md as broken, but per the task it did not write ALIGNMENT-DEBT.md entries (no skill guidance to do so). It reported findings but did not persist them to the ledger."}, {"text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)", "passed": true, "evidence": "Baseline report: '01-evaluation-loop.md \u2014 NOT flagged \u2014 file exists and resolves correctly'"}, {"text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path", "passed": false, "evidence": "Baseline did not run a second pass \u2014 no idempotency check was performed without skill guidance"}, {"text": "Fixture file _test-fixture.md does not exist after the run completes", "passed": true, "evidence": "Baseline report confirms: 'The fixture file has been deleted'"}], "notes": []}], "run_summary": {"with_skill": {"pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0}, "time_seconds": {"mean": 103.9333, "stddev": 35.144, "min": 67.4, "max": 137.5}, "tokens": {"mean": 32332.6667, "stddev": 4278.9628, "min": 28279, "max": 36806}}, "without_skill": {"pass_rate": {"mean": 0.8333, "stddev": 0.2887, "min": 0.5, "max": 1.0}, "time_seconds": {"mean": 261.2333, "stddev": 265.1391, "min": 85.4, "max": 566.2}, "tokens": {"mean": 46763.6667, "stddev": 39531.9437, "min": 17301, "max": 91690}}, "delta": {"pass_rate": "+0.17", "time_seconds": "-157.3", "tokens": "-14431"}}, "notes": []}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

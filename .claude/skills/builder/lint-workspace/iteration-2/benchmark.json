@@ -1,0 +1,303 @@
+{
+  "metadata": {
+    "skill_name": "builder-lint",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-05-01T14:08:19Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+          "passed": true,
+          "evidence": "report.md contains a table with all 7 rules and counts"
+        },
+        {
+          "text": "Report includes a stat strip with counts for new entries and skipped entries",
+          "passed": true,
+          "evidence": "report.md: '\ud83d\udcca 6 new entries \u00b7 2 skipped (already open, stale targets) \u00b7 8 total open'"
+        },
+        {
+          "text": "S1 detects the broken spike links in general/GAME-ARCHETYPES.md (URL-encoded filenames with %20)",
+          "passed": true,
+          "evidence": "Report lists GAME-ARCHETYPES.md spike links (SabberStone, Fireplace, Brimstone) as S1 findings 1-3"
+        },
+        {
+          "text": "S1 detects the wrong-depth relative path in features/engine/models/04-gamestate-slices.md (../ledgers/OPEN-QUESTIONS.md)",
+          "passed": false,
+          "evidence": "04-gamestate-slices.md not mentioned in any S1 finding in old-skill report"
+        },
+        {
+          "text": "S2 detects broken builds-on entries in _workflow/REPORT-STYLE.md and/or _workflow/EMOJI-LEGEND.md",
+          "passed": false,
+          "evidence": "S2 = 0. Old skill S2 grep scoped to Product/features/ only \u2014 _workflow/ docs never scanned"
+        },
+        {
+          "text": "No file other than ALIGNMENT-DEBT.md is modified",
+          "passed": true,
+          "evidence": "Run explicitly marked read-only \u2014 ALIGNMENT-DEBT.md not modified"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned",
+          "passed": true,
+          "evidence": "Report covers only 4 archive integrity checks, no S1/S2"
+        },
+        {
+          "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+          "passed": true,
+          "evidence": "All checks return zero findings"
+        },
+        {
+          "text": "Report emits a clean/zero-findings message",
+          "passed": true,
+          "evidence": "report.md: '\u2705 Clean: no new findings.'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "old_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.75,
+        "passed": 3,
+        "failed": 1,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+          "passed": true,
+          "evidence": "Old skill correctly identified DOES-NOT-EXIST.md as missing; deduplication suppressed a new write since ad-20260501-027 already existed"
+        },
+        {
+          "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+          "passed": true,
+          "evidence": "Report confirms 01-evaluation-loop.md not flagged"
+        },
+        {
+          "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+          "passed": false,
+          "evidence": "Old-skill baseline did not perform a second run after fixture deletion \u2014 no idempotency check"
+        },
+        {
+          "text": "Fixture file _test-fixture.md does not exist after the run completes",
+          "passed": true,
+          "evidence": "Report confirms _test-fixture2.md deleted at end"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+          "passed": true,
+          "evidence": "report.md contains a table with all 7 rules, each with a New count and description"
+        },
+        {
+          "text": "Report includes a stat strip with counts for new entries and skipped entries",
+          "passed": true,
+          "evidence": "report.md: '\ud83d\udcca 12 new entries \u00b7 2 skipped (already open: ad-20260501-026, ad-20260501-027) \u00b7 18 total open'"
+        },
+        {
+          "text": "S1 detects the broken spike links in general/GAME-ARCHETYPES.md (URL-encoded filenames with %20)",
+          "passed": true,
+          "evidence": "Entries ad-20260501-029, 030, 031 cover the three spike links \u2014 SabberStone, Fireplace, Brimstone \u2014 noted as '(URL-decoded)'"
+        },
+        {
+          "text": "S1 detects the wrong-depth relative path in features/engine/models/04-gamestate-slices.md (../ledgers/OPEN-QUESTIONS.md)",
+          "passed": false,
+          "evidence": "04-gamestate-slices.md not mentioned in any S1 finding. Agent excluded it \u2014 likely treated the markdown link as a code-block/prose example, or resolved the path relative to the _workflow/ root rather than the file's directory."
+        },
+        {
+          "text": "S2 detects broken builds-on entries in _workflow/REPORT-STYLE.md and/or _workflow/EMOJI-LEGEND.md",
+          "passed": false,
+          "evidence": "S2 = 0 new findings. Agent note: 'All 15 active builds-on: declarations resolve.' The _workflow/ bare-filename entries (PRODUCT-BUILDER.md, EMOJI-LEGEND.md) were likely resolved relative to their own directory rather than Product/ root."
+        },
+        {
+          "text": "No file other than ALIGNMENT-DEBT.md is modified",
+          "passed": true,
+          "evidence": "Report explicitly states only ALIGNMENT-DEBT.md was modified (12 entries appended)"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 3,
+        "failed": 0,
+        "total": 3,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Report covers only rules A1\u2013A4; S1 and S2 are not mentioned",
+          "passed": true,
+          "evidence": "report.md findings table contains only A1, A2, A3a, A3b, A4 \u2014 no S1 or S2 rows"
+        },
+        {
+          "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+          "passed": true,
+          "evidence": "All rules show 0 new entries"
+        },
+        {
+          "text": "Report emits a clean/zero-findings message",
+          "passed": true,
+          "evidence": "report.md: '\u2705 Clean: no new findings.'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+          "passed": true,
+          "evidence": "Entry ad-20260501-026 already existed from iteration-1 and was correctly identified as a duplicate \u2014 idempotency check passed, not a new write. The finding was previously registered."
+        },
+        {
+          "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+          "passed": true,
+          "evidence": "report.md: valid path 01-evaluation-loop.md not flagged"
+        },
+        {
+          "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+          "passed": true,
+          "evidence": "report.md: '0 new entries \u00b7 1 skipped (already open)' on second run"
+        },
+        {
+          "text": "Fixture file _test-fixture.md does not exist after the run completes",
+          "passed": true,
+          "evidence": "report.md confirms fixture deleted before second run"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "old_skill": {
+      "pass_rate": {
+        "mean": 0.8067,
+        "stddev": 0.1721,
+        "min": 0.67,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.89,
+        "stddev": 0.1905,
+        "min": 0.67,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "-0.08",
+      "time_seconds": "+0.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": []
+}

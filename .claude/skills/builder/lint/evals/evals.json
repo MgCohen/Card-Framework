@@ -1,0 +1,42 @@
+{
+  "skill_name": "builder:lint",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run /builder:lint on the project at /home/user/Card-Framework. Use the --all flag (default). Report what findings you get and show the full output.",
+      "expected_output": "A lint report showing rule counts (A1-A4, S1-S2), total new entries, total skipped, and either a clean '✅ Clean' message or a list of new ALIGNMENT-DEBT.md entries written. The report must follow the template in SKILL.md with a findings-by-rule table. Crucially, S1 must detect the broken spike links in general/GAME-ARCHETYPES.md (URL-encoded filenames) and the wrong-depth relative path in features/engine/models/04-gamestate-slices.md. S2 must detect the broken builds-on entries in _workflow/REPORT-STYLE.md and _workflow/EMOJI-LEGEND.md.",
+      "files": [],
+      "assertions": [
+        "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+        "Report includes a stat strip with counts for new entries and skipped entries",
+        "S1 detects the broken spike links in general/GAME-ARCHETYPES.md (URL-encoded filenames with %20)",
+        "S1 detects the wrong-depth relative path in features/engine/models/04-gamestate-slices.md (../ledgers/OPEN-QUESTIONS.md)",
+        "S2 detects broken builds-on entries in _workflow/REPORT-STYLE.md and/or _workflow/EMOJI-LEGEND.md",
+        "No file other than ALIGNMENT-DEBT.md is modified"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run /builder:lint --archive-only on the project at /home/user/Card-Framework. Only archive integrity checks should run (A1-A4). Show the full output.",
+      "expected_output": "A lint report covering only rules A1-A4. Rules S1 and S2 must not appear. Since there are no archive/ directories in this project yet, all four archive rules should return zero findings and the report should say clean.",
+      "files": [],
+      "assertions": [
+        "Report covers only rules A1–A4; S1 and S2 are not mentioned",
+        "All archive rules return zero findings (no archive/ directories exist in this project)",
+        "Report emits a clean/zero-findings message"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to test the S2 builds-on check in /builder:lint. First, create a temporary test fixture at /home/user/Card-Framework/Product/features/engine/models/_test-fixture.md with this content:\n\n---\ntype: model\nstatus: draft\nbuilds-on: [features/engine/models/DOES-NOT-EXIST.md, features/engine/models/01-evaluation-loop.md]\n---\n\n# Test Fixture\n\nThis is a temporary fixture for linting tests.\n\nThen run /builder:lint --paths-only. Verify that S2 fires for the broken reference (DOES-NOT-EXIST.md) but not for the valid one (01-evaluation-loop.md). Then delete the fixture file and run the linter again to confirm no new S2 entries are written for the fixture.",
+      "expected_output": "S2 finding for DOES-NOT-EXIST.md written to ALIGNMENT-DEBT.md. Valid reference (01-evaluation-loop.md) not flagged. After fixture deletion, second lint run adds no new entries for the fixture path.",
+      "files": [],
+      "assertions": [
+        "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+        "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+        "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+        "Fixture file _test-fixture.md does not exist after the run completes"
+      ]
+    }
+  ]
+}

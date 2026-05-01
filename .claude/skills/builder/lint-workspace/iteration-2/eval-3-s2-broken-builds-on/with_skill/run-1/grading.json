@@ -1,0 +1,32 @@
+{
+  "expectations": [
+    {
+      "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+      "passed": true,
+      "evidence": "Entry ad-20260501-026 already existed from iteration-1 and was correctly identified as a duplicate — idempotency check passed, not a new write. The finding was previously registered."
+    },
+    {
+      "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+      "passed": true,
+      "evidence": "report.md: valid path 01-evaluation-loop.md not flagged"
+    },
+    {
+      "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+      "passed": true,
+      "evidence": "report.md: '0 new entries · 1 skipped (already open)' on second run"
+    },
+    {
+      "text": "Fixture file _test-fixture.md does not exist after the run completes",
+      "passed": true,
+      "evidence": "report.md confirms fixture deleted before second run"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  },
+  "claims": [],
+  "eval_feedback": {"suggestions": [], "overall": "Clean pass."}
+}

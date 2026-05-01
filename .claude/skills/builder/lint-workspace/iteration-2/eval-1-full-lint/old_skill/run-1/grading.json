@@ -1,0 +1,45 @@
+{
+  "expectations": [
+    {
+      "text": "Report contains a findings-by-rule table referencing all 7 rules (A1, A2, A3a, A3b, A4, S1, S2)",
+      "passed": true,
+      "evidence": "report.md contains a table with all 7 rules and counts"
+    },
+    {
+      "text": "Report includes a stat strip with counts for new entries and skipped entries",
+      "passed": true,
+      "evidence": "report.md: '📊 6 new entries · 2 skipped (already open, stale targets) · 8 total open'"
+    },
+    {
+      "text": "S1 detects the broken spike links in general/GAME-ARCHETYPES.md (URL-encoded filenames with %20)",
+      "passed": true,
+      "evidence": "Report lists GAME-ARCHETYPES.md spike links (SabberStone, Fireplace, Brimstone) as S1 findings 1-3"
+    },
+    {
+      "text": "S1 detects the wrong-depth relative path in features/engine/models/04-gamestate-slices.md (../ledgers/OPEN-QUESTIONS.md)",
+      "passed": false,
+      "evidence": "04-gamestate-slices.md not mentioned in any S1 finding in old-skill report"
+    },
+    {
+      "text": "S2 detects broken builds-on entries in _workflow/REPORT-STYLE.md and/or _workflow/EMOJI-LEGEND.md",
+      "passed": false,
+      "evidence": "S2 = 0. Old skill S2 grep scoped to Product/features/ only — _workflow/ docs never scanned"
+    },
+    {
+      "text": "No file other than ALIGNMENT-DEBT.md is modified",
+      "passed": true,
+      "evidence": "Run explicitly marked read-only — ALIGNMENT-DEBT.md not modified"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 2,
+    "total": 6,
+    "pass_rate": 0.67
+  },
+  "claims": [],
+  "eval_feedback": {
+    "suggestions": [],
+    "overall": "Old skill finds 6 S1 via markdown link extraction but misses relative paths and _workflow/ S2 — same gaps as new skill on these two assertions."
+  }
+}

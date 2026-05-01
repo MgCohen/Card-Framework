@@ -24,6 +24,22 @@ Resolved entries get strikethrough plus resolution note:
 
 ## Entries
 
+### Linter findings — 2026-05-01
+
+- id: ad-20260501-039 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-117b41c9.plan.md | reason: S1 — broken path reference: Docs/SabberStone-Architecture-Analysis.md does not exist
+- id: ad-20260501-038 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-117b41c9.plan.md | reason: S1 — broken path reference: Docs/Architecture/ReactiveNetworkQueue.md does not exist
+- id: ad-20260501-037 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/Architecture/BlackBoxSimulation.md does not exist
+- id: ad-20260501-036 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/Architecture/ReactiveNetworkQueue.md does not exist
+- id: ad-20260501-035 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/Research/Card Game Architecture Research.md does not exist
+- id: ad-20260501-034 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/Brimstone-Architecture-Analysis.md does not exist
+- id: ad-20260501-033 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/Fireplace-Architecture-Analysis.md does not exist
+- id: ad-20260501-032 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-bb88f456.plan.md | reason: S1 — broken path reference: Docs/SabberStone-Architecture-Analysis.md does not exist
+- id: ad-20260501-031 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 — broken path reference: spikes/Brimstone-Architecture-Analysis.md (1) (URL-decoded) does not exist
+- id: ad-20260501-030 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 — broken path reference: spikes/Fireplace-Architecture-Analysis.md (1) (URL-decoded) does not exist
+- id: ad-20260501-029 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 — broken path reference: spikes/SabberStone-Architecture-Analysis.md (1) (URL-decoded) does not exist
+- id: ad-20260501-028 | status: open | source: linter | target: _workflow/PRODUCT-BUILDER.md | reason: S1 — broken path reference: AI-FIRST-AUTOMATION.md (3 prose links at §5.11, §5.12, §5.13) does not exist
+- id: ad-20260501-027 | status: open | source: linter | target: features/engine/models/_test-fixture2.md | reason: S2 — builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)
+
 ### Hygiene — straggler from auto debt-pass 2026-05-01
 
 - ~~id: ad-20260501-026 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/02-gamerules-contract.md §9 | reason: prose says "four injected services" after IHandlerRegistry removal reduced count to 3~~ → resolved 2026-05-01 (auto debt-pass hygiene scan: "four" → "three" in §9 Composition prose)
