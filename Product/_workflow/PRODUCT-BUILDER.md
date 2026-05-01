@@ -496,6 +496,13 @@ The session note records the **trail**, not a linear narrative: what was created
 
 **Session note lifecycle.** Session notes are gitignored while in-progress (avoids noise on main). `/builder:end-session` force-adds them at close. The `pre-push` hook (§5.0 step 7) additionally checkpoints the in-progress note into a small commit before every push — so if a conversation crashes before end-session runs, `/builder:start-session` can still detect and resume the dangling skeleton.
 
+Session-note `status:` values:
+
+- **`in-progress`** — open session; gitignored; pre-push hook commits as checkpoint.
+- **`completed`** — closed session, work landed on its branch; force-added at end-session; merge-pass picks it up and adds to `merged[]` on the main branch.
+- **`merged`** — completed session whose branch has been merged into main by merge-pass.
+- **`discarded`** — session was a no-op, schema test, or otherwise shouldn't pollute the workflow record. Set by `/builder:start-session`'s orphan-cleanup pass (for empty leftover skeletons) or by `/builder:end-session --discard` (for deliberately throwaway sessions). merge-pass skips these entirely — they never enter `merged[]`. Use `--discard` for schema-validation runs, abandoned starts, and any session whose work shouldn't be cited as a checkpoint reference.
+
 ### 5.4 Reopening a settled decision
 
 **ADR.** Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in the session log.

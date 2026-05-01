@@ -45,6 +45,7 @@ The design rule is **precision over parsimony**. Add slots for any concept that 
 | 🧹 | cleanup action | chat only | start-session orphan-skeleton sweep surfacing |
 | 🔀 | branch / parallel-session info | chat only | start-session and end-session branch-mode strip |
 | 📦 | backlog reference | chat only | start-session backlog table heading |
+| 🔍 | artifact / sketch review | chat only | end-session unsaved-body review table (interfaces, protocols, sketches discussed in conversation) |
 
 **Scope:**
 - **Both** — the emoji appears in committed `.md` artifacts (session notes, doc-type templates, etc.) AND in chat reports. Strict 1:1 across both.
@@ -105,3 +106,4 @@ If any test fails, use bold prose anchors instead.
 
 - **2026-04-30** — initial legend (9 entries: 🎯 📋 ❓ ⚠️ ✅ 🛑 ⏳ 📝 📊).
 - **2026-05-01** — absorbed chat-only extensions from retired `REPORT-STYLE.md`. Added 🕐 📤 🔄 🔒 🧹 🔀 📦 with a `Scope: chat only` tag. 🔒 moved from §4 (excluded) to §2 — design-pass legitimized its use. ⏳ broadened from "deferred" to "deferred / awaiting" to cover the awaiting-automated-discharge case.
+- **2026-05-01** — added 🔍 (chat only) for end-session unsaved-body review table. Pre-existing in `end-session.md` step 2a but undocumented; absorbed during the post-retirement review.

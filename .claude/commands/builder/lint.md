@@ -27,7 +27,6 @@ In one bash call:
 ```bash
 # All markdown docs under Product/ (excluding _validation fixtures)
 find Product/ -name '*.md' \
-  --exclude-dir='_workflow/_validation' \
   -not -path '*/_workflow/_validation/*' \
   | sort
 ```
