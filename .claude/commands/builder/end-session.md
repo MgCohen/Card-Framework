@@ -29,17 +29,17 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - Glossary updates: `<terms>` (grep changelog section of `ledgers/GLOSSARY.md`).
    - Backlog entries opened: `<titles>`.
 
-5. **Draft the refreshed checkpoint.** **Critical: do not overwrite `Product/SESSION-CHECKPOINT.md` directly.** Build a draft and surface it for human approval first.
+5. **Write the refreshed checkpoint.**
    - Read the current `SESSION-CHECKPOINT.md`.
    - Read the session note's Part 1 "Active question going out" — that becomes the new "active open question" in the checkpoint.
    - Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md` for items to surface.
-   - Generate the draft following the §4.7 template structure: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume.
+   - Generate and write the new checkpoint following the §4.7 template structure: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume.
    - Bump the `last-updated` and the session counter line.
-   - Show the diff against the current checkpoint. **Wait for the user's approval** before writing.
+   - Write directly — no diff, no approval gate. The PR is the review surface.
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.
 
-7. **Commit and push.** Auto-run after the checkpoint is approved/applied and the session-note status is flipped.
+7. **Commit and push.** Auto-run after the checkpoint is written and the session-note status is flipped.
    - Stage all `Product/` changes (created + modified). Use explicit paths from the deltas in step 4 — never `git add -A`. Skip anything outside `Product/` unless the user explicitly added it during the session.
    - **The session note itself requires `git add -f`** — `Product/sessions/session-*.md` is gitignored (see `.gitignore`) so the in-progress skeleton stays quiet during the session. Only the deliberate end-of-session add force-tracks it. Already-tracked session files (from before this convention) re-stage normally; the `-f` is harmless either way.
    - Commit format:
@@ -65,7 +65,6 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 ## Notes
 
-- Never auto-write the checkpoint. Always diff-and-confirm before applying.
 - If the cascade-discipline check fails, surface, don't silently fix.
 - If session-note caps are blown (>50 lines per part), trim suggestions go to the user; don't trim automatically.
 - Auto-commit and push are part of the close — run them once the checkpoint diff is approved. Never `--force`, never `--no-verify`. If a pre-commit hook fails, surface the failure; do not bypass.
