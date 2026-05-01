@@ -5,6 +5,16 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 
 You are running an unattended alignment-debt discharge pass. Workflow rules: `Product/_workflow/PRODUCT-BUILDER.md` §5.5 / §5.7 / §5.8. Plan: `PLANS/auto-debt-pass.md`. The PR you open is the only review gate — be conservative, surface ambiguity, never guess.
 
+## Performance — turn count matters
+
+Each tool call is **one turn**. The action runs with a bounded `--max-turns` budget; running out of turns mid-pass loses all in-progress work. Optimize aggressively:
+
+- **Batch independent tool calls into one turn.** Multiple `Read` calls in parallel, multiple `Edit` calls in parallel, multiple `Bash` invocations in parallel — the harness supports it. Sequential calls are only correct when later calls depend on earlier results.
+- **Use one bash call per logical operation, not per file.** Term replacements across one file: single `sed -i -E` with multiple `s///` patterns. Multi-file straggler scan: single `grep -rE 'a|b|c'` with regex alternation. Git stage + commit + push: single chained `git add ... && git commit ... && git push`.
+- **Cache reads.** Read each file at most once per pass — extract everything you need on first read, don't re-read inside loops.
+
+The agent's value is judgment (confidence-gate routing, auto-flag categorization, active question copy). Mechanical execution belongs in bash, not in many small tool calls.
+
 ## Steps
 
 1. **Sync.** `git fetch origin && git pull --ff-only`. **Refuse to start if the working tree is dirty** — exit with `working tree dirty, refusing to run` and stop. The agent runs from whatever ref the trigger placed us on: `main` for organic GHA fires (the `push: branches: [main]` trigger), the dispatched ref for `workflow_dispatch` (used by Layer 3 validation), and the developer's chosen branch for local runs (the runbook says to be on `main` before invoking — see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md)). Do not `git checkout main`; that would silently switch the dev away from a feature branch on accidental local invocation, and would break Layer 3 dispatch tests by switching away from the seeded branch.
@@ -22,20 +32,44 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
       - **PR merged** or **no PR found** → treat as stale, `git push origin --delete <branch>`, continue.
    d. Once all matches are resolved, `git checkout -b claude/debt-pass-YYYY-MM-DD-01` (always `-01` — collisions are resolved before this step).
 
-5. **Discharge loop.** Walk open entries top to bottom. For each:
-   a. Parse the entry: `source`, `target`, `reason`, date.
-   b. Read `source` and `target` paths.
-   c. **Confidence check on `reason`.** If the `reason` text is too vague for a confident mechanical edit (e.g. uses "rewrite," "redesign," "reshape," "restructure," "reconsider," or names a non-mechanical change), **leave the entry `open`**, record it for the PR body's `## Skipped — needs a session` section, and continue. Better to discharge 9 of 10 and surface the holdout than to guess.
-   d. Otherwise, apply the mechanical edit named in `reason` to the target doc. Strike through the ledger entry with the resolution date and a one-line resolution note:
+5. **Discharge loop — batched.** Optimize for low turn count (each tool call is one turn; max-turns is bounded). The discharge is a deterministic transformation once you have the data, so batch everything.
+
+   a. **Parse all entries in one pass.** Read `Product/ledgers/ALIGNMENT-DEBT.md` once and extract `(source, target, reason, date)` tuples for every line in `## Open` ending in `| open`.
+
+   b. **Read all source + target paths in parallel.** Single turn with multiple `Read` tool calls (one per unique path). Cache the contents — do not re-read inside the per-entry loop.
+
+   c. **Confidence-check pass.** For each entry, classify as `mechanical` or `skipped` (if `reason` contains `rewrite`, `redesign`, `reshape`, `restructure`, or `reconsider`). Build two lists in memory. Skipped entries stay `open` in the ledger and feed the PR body's `## Skipped — needs a session` section.
+
+   d. **Mechanical edit batch.** Group mechanical entries by target file. For each target file:
+      - **Term replacements** (most common — e.g. `replace OldFooBar with NewFooBar`): apply *all* replacements for that file in a single `sed -i -E` bash call:
+        ```bash
+        sed -i -E '
+          s/\bOldFooBar\b/NewFooBar/g
+          s/\bLegacyBaz\b/ModernBaz/g
+        ' Product/path/to/target.md
+        ```
+        Use `\b` word boundaries to avoid partial matches. One bash invocation per target file (parallel across files where the agent can run multiple bash calls in one turn).
+      - **Section-specific edits** (less common — e.g. `update §6 to ...`): single `Edit` tool call per change. Acceptable when batching doesn't help because the edit isn't a global replace.
+
+   e. **Ledger strikethrough batch.** Apply all strikethroughs + Resolved-section moves in a single `Edit` tool call (replace_all=false, with one large old_string → new_string spanning the affected `## Open` lines and the `## Resolved` insertion point) — or one `awk`/`python` pass if the entry count is large enough that a single Edit's old_string would be unwieldy. Strikethrough format unchanged:
       ```markdown
       - ~~YYYY-MM-DD | source: ... | target: ... | reason: ... | open~~ → resolved YYYY-MM-DD (auto debt-pass: <one-line note>)
       ```
-      Move resolved entries from `## Open` to `## Resolved`.
+      Resolved entries move from `## Open` to `## Resolved` in the same edit.
 
-6. **Hygiene scan.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). For each:
-   a. `grep -r '<term>' Product/ --exclude='ledgers/ALIGNMENT-DEBT.md' --exclude-dir='_workflow/_validation'` to find stragglers the original cascade walk missed. (Two exclusions: the ledger itself, because its strikethrough resolution-note format echoes the retired term verbatim and would false-positive every pass; and the validation harness directory, which deliberately documents fixture term names — `OldFooBar`, `LegacyBaz`, etc. — and must remain stable across debt-pass runs. Without the harness exclusion, the hygiene scan progressively destroys its own test fixture.)
-   b. For each straggler hit, apply the same mechanical replacement.
-   c. Open a new ledger entry **and immediately strike it through** (opened-and-closed in this same pass), recording it for the PR body's `## Stragglers caught` section.
+6. **Hygiene scan — batched.** Extract retired terms from each discharged entry's `reason` field (terms named with `replace with X`, `→ X`, `swap to X`, etc.). Then:
+
+   a. **Single multi-term grep.** Use one bash call with regex alternation across all retired terms:
+      ```bash
+      grep -rnE '\b(OldFooBar|LegacyBaz|DeprecatedZed|RetireWidget)\b' Product/ \
+        --exclude='ledgers/ALIGNMENT-DEBT.md' \
+        --exclude-dir='_workflow/_validation'
+      ```
+      Two exclusions: the ledger itself, because its strikethrough resolution-note format echoes the retired term verbatim and would false-positive every pass; and the validation harness directory, which deliberately documents fixture term names — `OldFooBar`, `LegacyBaz`, etc. — and must remain stable across debt-pass runs. Use `\b` word boundaries to avoid substring matches.
+
+   b. **Batched replacement.** If stragglers are found, group hits by file. For each file, apply all replacements in a single `sed -i -E` bash call (same shape as step 5d term-replacement batch). One bash invocation per straggler file.
+
+   c. **Batched ledger entry append.** Open new ledger entries for all stragglers caught **and immediately strike them through** (opened-and-closed in this same pass). Apply via a single `Edit` tool call appending to the appropriate `## Resolved` block (or one if multiple sections). All stragglers feed the PR body's `## Stragglers caught` section.
 
 7. **Update the retired-tokens registry.** For each retired term discovered in this pass, append to `Product/_workflow/retired-tokens.json`:
    ```json
@@ -48,7 +82,7 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
    ```
    **Idempotent:** skip terms already present (match on `term` + `retired` date). Create the file as `[]` if it doesn't exist. Debt-pass writes; `builder-lint` reads.
 
-8. **Refresh the checkpoint.** Read `Product/_workflow/_templates/checkpoint.md` for the structural shell. Then read the prior `Product/SESSION-CHECKPOINT.md` to lift forward context. Fill the new checkpoint as follows:
+8. **Refresh the checkpoint.** Read `Product/_workflow/_templates/checkpoint.md` (structural shell) and prior `Product/SESSION-CHECKPOINT.md` (forward context) **in parallel** — single turn, two `Read` tool calls. Fill the new checkpoint as follows:
    - Front matter: bump `last-updated` to today, increment session counter to `NN+1` (where `NN` is the prior session number).
    - `## Where we stopped` — one-liner: `Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped.`
    - `## 🎯 The active open question (singular)` — copy verbatim from the prior checkpoint. Debt-pass does not change the active design thread.
@@ -79,10 +113,20 @@ You are running an unattended alignment-debt discharge pass. Workflow rules: `Pr
 
 10. **Defensive empty-pass check.** Run `git status --porcelain Product/` — if zero changes, exit with `empty pass — nothing to commit, refusing to open PR` and stop. Per §3 of the plan: never open a PR with zero `Product/` changes.
 
-11. **Single commit + push.** Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by explicit paths. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
+11. **Single commit + push — chained.** Stage, commit, and push in **one bash invocation** to keep this to a single turn:
+    ```bash
+    git add Product/ledgers/ALIGNMENT-DEBT.md \
+            Product/_workflow/retired-tokens.json \
+            Product/SESSION-CHECKPOINT.md \
+            Product/sessions/session-NN.md \
+            <other touched paths from steps 5–6> \
+      && git commit -m "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" \
+      && git push -u origin claude/debt-pass-YYYY-MM-DD-01
+    ```
+    - Stage all `Product/` changes (entry edits, registry update, ledger strikethroughs, checkpoint, session note) by **explicit paths**. Never `git add -A`. Never use `--force`, `--amend`, or `--no-verify`.
     - Subject: `Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped`
     - Body: bulleted summary mirroring the PR sections in step 12. Include `https://claude.ai/code/<session>` trailer per harness convention.
-    - Push: `git push -u origin claude/debt-pass-YYYY-MM-DD-01`.
+    - The chain (`&&`) means a failure at any link aborts the rest — safer than three independent calls.
 
 12. **Open the PR.** `gh pr create --base main --head claude/debt-pass-YYYY-MM-DD-01 --title "Auto debt-pass NN — <N> closed, <M> stragglers, <K> skipped" --body @-`, body shape:
 
