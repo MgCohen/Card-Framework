@@ -1,5 +1,6 @@
 ---
-description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review.
+description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review. Automation-only (CI or `--force`).
+argument-hint: [--force]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -15,11 +16,20 @@ Each tool call is **one turn**. The action runs with a bounded `--max-turns` bud
 
 The agent's value is judgment (confidence-gate routing, auto-flag categorization, active question copy). Mechanical execution belongs in bash, not in many small tool calls.
 
+## Pre-flight — invocation gate
+
+This command is automation-only. Before any other work, allow the run only if **either**:
+
+- `$GITHUB_ACTIONS` is set (CI invocation), **or**
+- `$ARGUMENTS` contains `--force` (explicit local override — used when you want to inspect the diff before pushing).
+
+Otherwise, exit immediately with: `debt-pass is automation-only — the GHA workflow runs on the threshold. Pass --force if you really want to discharge locally.` No tool calls beyond the env/argument check.
+
 ## Steps
 
 1. **Sync.** `git fetch origin && git pull --ff-only`. **Refuse to start if the working tree is dirty** — exit with `working tree dirty, refusing to run` and stop. The agent runs from whatever ref the trigger placed us on: `main` for organic GHA fires (the `push: branches: [main]` trigger), the dispatched ref for `workflow_dispatch` (used by Layer 3 validation), and the developer's chosen branch for local runs (the runbook says to be on `main` before invoking — see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md)). Do not `git checkout main`; that would silently switch the dev away from a feature branch on accidental local invocation, and would break Layer 3 dispatch tests by switching away from the seeded branch.
 
-2. **Threshold check.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` (lines matching `^- id: ad-` — unresolved entries start with `- id:`, resolved entries start with `- ~~`). If **< 5**, exit with `nothing to do (count=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
+2. **Threshold check.** Count open **cascade** entries in `Product/ledgers/ALIGNMENT-DEBT.md` — lines matching `^- id: ad-` (unresolved; resolved start with `- ~~`) AND **not** containing `source: linter`. Linter findings (`source: linter` or `source: linter/archive`) are mechanical link-cleanup; they don't count toward the threshold but are still discharged in the same pass when cascade tips the gate. If cascade count **< 5**, exit with `nothing to do (cascade=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
 
 3. **In-progress session pre-check.** Run `grep -rl 'status: in-progress' Product/sessions/`. For each match, read the file and classify:
    - **Empty skeleton** — `work-summary` is `""` AND `### Work done` has no bullets AND `### Decisions settled` has no bullets. This is a `start-session` placeholder that was never filled. Note the path as `ADOPTED_SKELETON` and continue — debt-pass will fill it in-place at step 9 rather than creating a new file.
@@ -43,6 +53,8 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    b. **Read all source + target paths in parallel.** Single turn with multiple `Read` tool calls (one per unique path). Cache the contents — do not re-read inside the per-entry loop.
 
    c. **Confidence-check pass.** For each entry, classify as `mechanical` or `skipped` (if `reason` contains `rewrite`, `redesign`, `reshape`, `restructure`, or `reconsider`). Build two lists in memory. Skipped entries stay `open` in the ledger and feed the PR body's `## Skipped — needs a session` section.
+
+   For each `mechanical` entry, also tag its **category** by its `source:` field — `linter` if `source:` starts with `linter` (i.e. `linter` or `linter/archive`), otherwise `cascade`. Track these counts (`<C>` cascade discharged, `<L>` linter discharged) — they feed the work-summary in step 9 so the PR title surfaces the discharge shape.
 
    d. **Mechanical edit batch.** Group mechanical entries by target file. For each target file:
       - **Term replacements** (most common — e.g. `replace OldFooBar with NewFooBar`): apply *all* replacements for that file in a single `sed -i -E` bash call:
@@ -101,14 +113,14 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    started-at: <today>T<HHMM>:00Z
    last-updated: <today>
    date: <today>
-   work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."
+   work-summary: "Auto debt-pass: <C> cascade + <L> linter discharged, <M> stragglers caught, <K> skipped."
    tags: [#session, #debt-pass]
    ---
    ```
-   Title: `# Debt-pass — <today> (auto)`.
+   Title: `# Debt-pass — <today> (auto)`. Use the cascade/linter counts from step 5c. If either count is 0, still render both terms (e.g. `0 cascade + 13 linter discharged`) — the explicit zero is informative, not noise.
 
    **Path B — adopted empty skeleton (`ADOPTED_SKELETON` set in step 3).** Update the existing file in-place. Do not rename or move it. Patch the frontmatter:
-   - Set `work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."`
+   - Set `work-summary: "Auto debt-pass: <C> cascade + <L> linter discharged, <M> stragglers caught, <K> skipped."` (always render both `<C>` and `<L>` even when one is 0).
    - Add `#debt-pass` to `tags` if not already present.
    - Set `last-updated: <today>`.
    - Leave `session-id`, `parent`, `started-at`, `status` unchanged.
@@ -117,7 +129,7 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
 
    **Both paths — body sections to fill:**
    - **Active question coming in** — (Path A only) copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`. Path B already has this.
-   - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones).
+   - **Work done** — bullets: `<C> cascade entries discharged`, `<L> linter entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones). Render both cascade and linter bullets even when one is 0.
    - **Decisions settled** — none (debt-pass is mechanical; write `none`).
    - **Active question going out** — copy verbatim from the prior checkpoint's active question. Debt-pass does not introduce its own.
    - **Followups created** — none routed beyond the skipped entries (already in the ledger).
@@ -156,5 +168,5 @@ If any rule would be violated, stop and surface — never silently bypass.
 
 - This command is invoked unattended from `.github/workflows/debt-pass.yml` via `anthropics/claude-code-action@v1`. The PR is the human-review surface; the command itself has no interactive prompts.
 - The threshold gate lives in the GHA workflow (count ≥ 5 from awk/grep on the ledger). Step 2 in this command is a defensive secondary check — it should rarely fire on its own.
-- Manual run for debugging: `claude -p "/builder:debt-pass"` from a clean working tree on `main` with `gh` authenticated. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
+- Manual run for debugging: `claude -p "/builder:debt-pass --force"` from a clean working tree on `main` with `gh` authenticated. `--force` is required outside CI — see the pre-flight invocation gate. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
 - Layer 2 local validation: see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md) for the pre-seeded fixture, override prompt, six-watchpoint checklist, and cleanup sequence — re-run after any change to this command.
