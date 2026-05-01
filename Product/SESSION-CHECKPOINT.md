@@ -7,6 +7,7 @@ merged:
   - session-20260501-2359-cutover
   - session-20260501-1105-engine-wiring
   - session-20260501-1107-zone-topology
+  - session-20260501-1237-engine-wiring-stack
   - session-20260501-1132-engine-wiring
 batch:
   - session-20260501-1132-engine-wiring
