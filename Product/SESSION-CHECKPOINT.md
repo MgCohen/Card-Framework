@@ -2,15 +2,16 @@
 type: checkpoint
 schema-version: 2
 last-updated: 2026-05-01
-head: session-20260501-1132-engine-wiring
+head: session-20260501-1528-debt-pass
 merged:
   - session-20260501-2359-cutover
   - session-20260501-1105-engine-wiring
   - session-20260501-1107-zone-topology
   - session-20260501-1237-engine-wiring-stack
   - session-20260501-1132-engine-wiring
+  - session-20260501-1528-debt-pass
 batch:
-  - session-20260501-1132-engine-wiring
+  - session-20260501-1528-debt-pass
 tags: [#checkpoint]
 ---
 
@@ -22,14 +23,14 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-S(engine-wiring 2026-05-01 11:32): Design pass (6 Qs) + patches applied on engine wiring stack — IHandlerRegistry resolver-only, ICommandPipeline owns validate/execute, ITriggerSystem/ITriggerPipeline split, drain loop bug fixed, VContainer wiring, GameEngineBuilder as config object. 4 debt entries opened for cascade cleanup.
+- S(debt-pass 2026-05-01 15:28): Auto debt-pass: 14 entries discharged (broken path references removed from 5 docs), 0 stragglers caught, 1 skipped (ITriggerPipeline reconciliation needs session).
 
 ---
 
 ## 🎯 The active open question (singular)
 
-**Debt discharge (ad-022 through ad-025)** — four cascade entries from the engine wiring session: update `engine/03-snapshot-pipeline` (stale IHandlerRegistry), update ADR-0001 (stale service list), strike through 5 resolved oq-IDs in `OPEN-QUESTIONS.md`, reconcile `ITriggerPipeline` shape between `effects/02` and `triggers/01`.
-*(From session-20260501-1132-engine-wiring.)*
+**Discharge `ad-20260501-025`** — reconcile `ITriggerPipeline` shape between `effects/02` and `triggers/01`: `effects/02 §3` has `Task<TriggerFoldResult> RunBefore(GameCommand, IReadOnlyList<TriggerMatch>, IEffectScope)`; `triggers/01 §7` has `BeforeFoldResult RunBefore(GameAction, IEffectScope)`. Pick one authoritative shape and patch the other doc.
+*(From session-20260501-1528-debt-pass.)*
 
 ---
 
@@ -50,19 +51,18 @@ S(engine-wiring 2026-05-01 11:32): Design pass (6 Qs) + patches applied on engin
 
 | # | Task | Notes |
 |---|------|-------|
-| **1** | **Debt discharge (ad-022–025)** | Mechanical — engine/03, ADR-0001, OPEN-QUESTIONS.md, ITriggerPipeline shape conflict. Run `/builder:debt-pass`. |
-| **2** | **Merge test branches** | `test/parallel-A` and `test/parallel-B` served their purpose — clean up after merge-pass PR merges. |
-| **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
-| **4** | **Zone model internal opens** | Nine sub-questions in `oq-zone-internal-opens` — design-pass candidate. |
+| **1** | **Discharge `ad-20260501-025`** | ITriggerPipeline shape conflict — `effects/02 §3` vs `triggers/01 §7`. Design-pass candidate. |
+| **2** | **Zone model internal opens** | Nine sub-questions in `oq-zone-internal-opens` — design-pass candidate. |
+| **3** | **`GameEngineBuilder` construction protocol** | `oq-engine-builder` — load-bearing for any game author. |
+| **4** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
 
 ---
 
 ## Artifacts to read on resume
 
-- [`features/engine/models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — ICommandPipeline interface + fixed drain loop
-- [`features/engine/models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — 3-service GameRules, ICommandHandler/CommandHandler<T,R>, IHandlerRegistry resolver-only
-- [`features/triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — ITriggerSystem/ITriggerPipeline split
-- [`ledgers/ALIGNMENT-DEBT.md`](ledgers/ALIGNMENT-DEBT.md) — ad-022 through ad-025
+- [`features/triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — ITriggerPipeline subscription surface (ad-025 source)
+- [`features/effects/models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — ITriggerPipeline execution surface (ad-025 target)
+- [`ledgers/ALIGNMENT-DEBT.md`](ledgers/ALIGNMENT-DEBT.md) — ad-025 still open
 
 ---
 
