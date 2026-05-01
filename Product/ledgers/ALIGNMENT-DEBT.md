@@ -39,13 +39,16 @@ Resolved entries get strikethrough plus resolution note:
 - id: ad-20260501-029 | status: open | source: linter | target: general/GAME-ARCHETYPES.md | reason: S1 — broken path reference: spikes/SabberStone-Architecture-Analysis.md (1) (URL-decoded) does not exist
 - id: ad-20260501-028 | status: open | source: linter | target: _workflow/PRODUCT-BUILDER.md | reason: S1 — broken path reference: AI-FIRST-AUTOMATION.md (3 prose links at §5.11, §5.12, §5.13) does not exist
 - id: ad-20260501-027 | status: open | source: linter | target: features/engine/models/_test-fixture2.md | reason: S2 — builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)
-- id: ad-20260501-026 | status: open | source: linter | target: features/engine/models/_test-fixture.md | reason: S2 — builds-on references missing or archived path (features/engine/models/DOES-NOT-EXIST.md)
+
+### Hygiene — straggler from auto debt-pass 2026-05-01
+
+- ~~id: ad-20260501-026 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/02-gamerules-contract.md §9 | reason: prose says "four injected services" after IHandlerRegistry removal reduced count to 3~~ → resolved 2026-05-01 (auto debt-pass hygiene scan: "four" → "three" in §9 Composition prose)
 
 ### Cascade — engine wiring stack design pass + patches (session-20260501-1132)
 
-- id: ad-20260501-022 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/03-snapshot-pipeline.md | reason: GameRules sketch still shows 4-service constructor with `IHandlerRegistry Handlers`; Q2 verdict removed it — update to 3 services
-- id: ad-20260501-023 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/decisions/0001-gamerules-as-class-with-services.md | reason: ADR option C lists `IHandlerRegistry` as an injected service; now 3 services after Q2 verdict
-- id: ad-20260501-024 | status: open | source: features/engine/models/02-gamerules-contract.md | target: ledgers/OPEN-QUESTIONS.md | reason: oq-handler-registry, oq-command-pipeline, oq-engine-startup, oq-gamerules-service-wiring, oq-trigger-type-unification all resolved session-20260501-1132 — strike through
+- ~~id: ad-20260501-022 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/03-snapshot-pipeline.md | reason: GameRules sketch still shows 4-service constructor with `IHandlerRegistry Handlers`; Q2 verdict removed it — update to 3 services~~ → resolved 2026-05-01 (auto debt-pass: removed `IHandlerRegistry Handlers` property, constructor param, and assignment from abstract class and `PileCounterRules`; removed row from "What moved" table; updated intro text)
+- ~~id: ad-20260501-023 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/decisions/0001-gamerules-as-class-with-services.md | reason: ADR option C lists `IHandlerRegistry` as an injected service; now 3 services after Q2 verdict~~ → resolved 2026-05-01 (auto debt-pass: removed `IHandlerRegistry` from Option C injected-services list)
+- ~~id: ad-20260501-024 | status: open | source: features/engine/models/02-gamerules-contract.md | target: ledgers/OPEN-QUESTIONS.md | reason: oq-handler-registry, oq-command-pipeline, oq-engine-startup, oq-gamerules-service-wiring, oq-trigger-type-unification all resolved session-20260501-1132 — strike through~~ → resolved 2026-05-01 (auto debt-pass: all 5 oq-IDs struck through with session-20260501-1132 resolution notes)
 - id: ad-20260501-025 | status: open | source: features/triggers/models/01-trigger-fold.md | target: features/effects/models/02-replacement-prevention.md | reason: ITriggerPipeline shape conflict — effects/02 §3 has `Task<TriggerFoldResult> RunBefore(GameCommand, IReadOnlyList<TriggerMatch>, IEffectScope)`; triggers/01 §7 has `BeforeFoldResult RunBefore(GameAction, IEffectScope)` — reconcile to one authoritative shape
 
 ### Cascade — S19 slice catalog + Effect/Trigger unification
