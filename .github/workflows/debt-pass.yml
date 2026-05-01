@@ -6,17 +6,16 @@ name: Auto debt-pass
 # docs, opens a PR, and stops — human review at the PR is the only gate. See
 # PLANS/auto-debt-pass.md for the full spec.
 #
-# Trigger note: `pull_request: types: [closed]` rather than `push` because
-# anthropics/claude-code-action@v1 rejects raw push events ("Unsupported event
-# type: push"). A merged PR is itself a close event, so this captures the same
-# moment with a context the action accepts.
+# Two-job design: `threshold` fires on merged PRs and dispatches a fresh
+# `workflow_dispatch` event when the count is over the limit. `debt-pass` listens
+# only on `workflow_dispatch` so the Claude action always runs in that context —
+# running it under `pull_request` caused the action to enter PR-assistant mode on
+# the already-merged PR and exit immediately without doing any work.
 #
-# No `paths:` filter on purpose: if the workflow ever crashes or is
-# misconfigured (as happened with the original push trigger), debt accumulates
-# silently and a path filter would gate the recovery on someone touching the
-# ledger again. Running the threshold check on every merge means the system
-# self-corrects on the next PR. The check is sub-second; only the action gates
-# on `fire == 'true'`.
+# No `paths:` filter on the threshold job: if the workflow ever crashes or is
+# misconfigured, debt accumulates silently and a path filter would gate recovery
+# on someone touching the ledger again. Running the check on every merge means
+# the system self-corrects on the next PR. The check is sub-second.
 
 on:
   pull_request:
@@ -25,8 +24,32 @@ on:
   workflow_dispatch:
 
 jobs:
+  threshold:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Threshold check
+        run: |
+          count=$(grep -c '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md || true)
+          count=${count:-0}
+          if [ "$count" -ge 5 ]; then
+            echo "Threshold tripped: $count open entries (>= 5). Dispatching debt-pass."
+            gh workflow run debt-pass.yml
+          else
+            echo "Below threshold: $count open entries (< 5). Skipping."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   debt-pass:
-    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -39,22 +62,7 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Threshold check
-        id: check
-        run: |
-          count=$(grep -c '| status: open |' Product/ledgers/ALIGNMENT-DEBT.md || true)
-          count=${count:-0}
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-          if [ "$count" -ge 5 ]; then
-            echo "fire=true" >> "$GITHUB_OUTPUT"
-            echo "Threshold tripped: $count open entries (>= 5)."
-          else
-            echo "fire=false" >> "$GITHUB_OUTPUT"
-            echo "Below threshold: $count open entries (< 5). Skipping."
-          fi
-
       - name: Run debt-pass
-        if: steps.check.outputs.fire == 'true'
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
