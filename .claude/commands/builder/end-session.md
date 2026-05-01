@@ -27,19 +27,25 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 2a. **Unsaved-body check.** (Skipped when invoked with `--auto-pr`.)
 
-   Ask the user: *"Did this session settle any new interface, contract, or Model body (e.g. a typed C# interface, a named protocol shape, an ADR-worthy decision)? If yes, where is it saved in `Product/`?"*
+   Read the conversation history of this session. Identify every artifact that was **settled** — meaning a final shape was agreed, a verdict was given, or a design was accepted. This includes:
+   - Typed interfaces, protocols, or records defined or revised in chat (C# interfaces, abstract classes, named contracts)
+   - Model decisions with an explicit user verdict ("use X", "go with Y", "that's right")
+   - ADR-worthy choices that were locked but not yet written
+   - Any pseudocode or sketch the user accepted as the canonical shape
 
-   - **No** → proceed.
-   - **Yes, saved at `<path>`** → verify the path exists (`Read` or `ls`). If it does, proceed. If it doesn't, treat as yes-and-nowhere.
-   - **Yes, not saved anywhere** (yes-and-nowhere) → **refuse to close**. Print:
-     ```
-     ⚠️ Unsaved body detected — refusing to close.
-     This session settled a design artifact that has no canonical home in Product/.
-     Options:
-       (a) Write it now — create or edit the target Model/ADR/feature doc, then re-run /builder:end-session.
-       (b) Defer explicitly — add a backlog entry via /builder:add-to-backlog describing what was settled and where it should land, then re-run.
-     ```
-     Stop. Do not proceed to step 3.
+   For each settled artifact found:
+
+   a. **Locate its canonical file.** Search `Product/` for the Model, ADR, or feature doc where this artifact belongs (by topic, cross-reference, or existing content).
+
+   b. **Compare.** Read the file. Check whether the settled shape is captured accurately — not just mentioned, but written as the authoritative definition.
+
+   c. **If missing or stale → write it now.** Edit or create the target doc to capture the settled artifact verbatim. Use the exact shape from the conversation — the user's verdict is the source of truth. Do not summarise or paraphrase a typed interface; write the interface. Do not defer.
+
+   d. **If no canonical file exists yet** → create one using `/builder:new`, then write the artifact into it.
+
+   **If no settled artifacts are found in the conversation** → proceed directly to step 3. This step is a no-op for sessions that were purely exploratory or operational (backlog work, tooling changes, etc.).
+
+   **Do not prompt the user, do not add a backlog entry, do not skip.** The conversation is the source; the files are the sink. This step bridges the two before context is lost.
 
 3. **Cascade-discipline check** (per `PRODUCT-BUILDER.md` §5.7).
    - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `Product/features/**/{notes,decisions}/*.md` and `Product/decisions/*.md`.
