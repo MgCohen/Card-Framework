@@ -114,7 +114,7 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
    |---|---|
    | <topic> | S<NN> |
    ```
-5. **Debt** (stat strip) — `📊 <N> debt · threshold <T>` (plus `· ⚠️ pass-mode` when gate fired)
+5. **Debt** (stat strip) — `📊 <N> debt` (plus ` · ⏳ awaiting automated discharge` when N ≥ 5; informational only — GHA debt-pass handles discharge, no session is gated)
 5a. **Backlog** (H3 anchor heading + table, conditional) —
    ```
    ### 📦 Backlog

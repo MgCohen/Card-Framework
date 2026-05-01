@@ -77,9 +77,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
    **Branch mode:** Skip checkpoint write entirely. Print: `Branch session — checkpoint update deferred to /builder:merge-pass.` Proceed to step 6.
 
-   **Main mode:** Write directly — no diff, no approval gate. The PR is the review surface.
-   - **v2 checkpoint:** Invoke `/builder:project-checkpoint` (rules at `.claude/commands/builder/project-checkpoint.md`). Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
-   - **v1 checkpoint:** Read the current `SESSION-CHECKPOINT.md`. Read the session note's "Active question going out" — that becomes the new active open question. Read `ledgers/OPEN-QUESTIONS.md` and `ledgers/BACKLOG.md`. Generate the new checkpoint following the §4.7 template: Where we stopped / Active open question / Other still-open / Suggested next steps / Artifacts to read on resume. Bump `last-updated` and session counter.
+   **Main mode:** Write directly — no diff, no approval gate. The PR is the review surface. Invoke `/builder:project-checkpoint` (rules at `.claude/commands/builder/project-checkpoint.md`). Inputs: `merged[] + [this session-id]`, `batch[] = [this session-id]` (single-merge fast-forward), this session's frontmatter and "Active question going out," current ledger state. Build the full projected body.
 
 6. **Flip the session note status.** `status: in-progress` → `status: completed`. Bump `last-updated`.
 
@@ -102,7 +100,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - **📊 Deltas** — counts from step 4 (docs created, models edited, ADRs landed, debt +N/−M, glossary updates).
    - **📝 Session note** — `📝 Session note: \`session-NN.md\` → completed`.
    - **📤 Commit** — `📤 Commit: \`<sha>\` → \`<branch>\``, plus `· PR: [#NN](<url>)` when a PR exists; drop the PR clause otherwise.
-   - **⚠️ Pass-mode warning** — render only when post-close debt count > 5 (per §5.8): `⚠️ Pass-mode required next session — debt <N> / threshold <T>`.
+   - **⏳ Debt-pass note** — render only when post-close debt count ≥ 5 (per §5.8): `⏳ Debt ≥ threshold — automated discharge will run on next GHA fire (debt <N> / threshold 5).`
    - **🎯 Next steps** — bullet list, derived from the session note's Part 1 "Active question going out" + the checkpoint's "Suggested next steps" section.
    - **🔀 Branch info** (branch mode only) — `Branch: <branch> · session: <session-id> · parent: <parent> · merge: pending → /builder:merge-pass`.
 
@@ -116,4 +114,4 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 - If session-note caps are blown (>50 lines per part), trim suggestions go to the user; don't trim automatically.
 - Auto-commit and push are part of the close — run them once the checkpoint diff is approved. Never `--force`, never `--no-verify`. If a pre-commit hook fails, surface the failure; do not bypass.
 - Stage only `Product/` paths from the session deltas. If the workspace has unrelated dirty files (out-of-session work the user was holding), surface them before staging and ask.
-- If `ledgers/ALIGNMENT-DEBT.md` has more than 5 open entries after this session closes, flag it loudly — the next session is forced into pass-mode (§5.8).
+- If `ledgers/ALIGNMENT-DEBT.md` has 5+ open entries after this session closes, the closing report's debt-pass note will surface that the GHA discharge will fire next. No session is forced into pass-mode.
