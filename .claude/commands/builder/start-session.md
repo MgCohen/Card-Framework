@@ -46,6 +46,7 @@ You are starting a new Product Builder session. Workflow lives in `Product/_work
    - **🕐 Last session** — read the checkpoint's "Where we stopped" content. If the checkpoint doesn't carry a one-line bridge yet (older format), grep the prior session note's Part 2 outcome section. For session 01, render `🕐 First session — no carry-in context`.
    - **❓ Carry-over** — top entries from `OPEN-QUESTIONS.md` (table form: `Topic | Since`, where `Since` is the session number the entry was opened). If 0 open, render `❓ No open questions`.
    - **📊 Debt** — count from step 4. Append `· ⚠️ pass-mode` when count > 5. If 0 debt, render `📊 0 debt · clean slate`.
+   - **📦 Backlog** — every open entry from `ledgers/BACKLOG.md` (entries not struck through). Table form: `Item | Trigger`, where `Item` is the entry's bold title and `Trigger` is the entry's `Trigger:` line condensed to one line. Render in ledger order — do not re-sort or filter. If 0 open, render `📦 Backlog empty`.
    - **📝 Session doc** — the path of the session note pre-created in step 3.
    - **Closing prompt** — `_Confirm or pivot._` (italic, no emoji).
 

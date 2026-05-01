@@ -107,8 +107,16 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
    | <topic> | S<NN> |
    ```
 5. **Debt** (stat strip) — `📊 <N> debt · threshold <T>` (plus `· ⚠️ pass-mode` when gate fired)
-6. **Session doc** (strip) — `` 📝 Current session doc: `Product/sessions/session-NN.md` ``
-7. **Closing prompt** (italic) — `_Confirm or pivot._`
+6. **Backlog** (H3 anchor heading + table) —
+   ```
+   ### 📦 Backlog
+   | Item | Trigger |
+   |---|---|
+   | <title> | <one-line trigger condition> |
+   ```
+   Full table — every open entry from `BACKLOG.md`, in ledger order. Trigger column is the entry's `Trigger:` line, condensed to one line.
+7. **Session doc** (strip) — `` 📝 Current session doc: `Product/sessions/session-NN.md` ``
+8. **Closing prompt** (italic) — `_Confirm or pivot._`
 
 **Empty-state strips** (replace the corresponding section):
 
@@ -117,6 +125,7 @@ The bold-prose `**<verb>:**` anchor (e.g., `**Created:**`, `**Renamed:**`, `**Pa
 | Last session (S01) | `🕐 First session — no carry-in context` |
 | Carry-over (0 open) | `❓ No open questions` |
 | Debt (0 entries) | `📊 0 debt · clean slate` |
+| Backlog (0 open) | `📦 Backlog empty` |
 
 **Adaptation rule:** the skeleton is fixed and renders the same regardless of session-type. Sections adapt to *data* (counts, gate state), never to inferred session-type — start-session does not classify the session.
 
@@ -249,3 +258,4 @@ Uses the §2.7 result-strip pattern.
 - **2026-04-30** — bootstrap deferred (§3.5 placeholder); will be captured in a future iteration.
 - **2026-04-30** — start-session §3.1 rendering constraints added: no prose preamble, no inline code in the 🎯 H2, 🕐 Last session is hard one-line.
 - **2026-04-30** — start-session resume mode: 🔄 added as chat-only extension; §3.1 grew a step 1a resume strip rendered when the skill detects a dangling pre-created skeleton (per `start-session.md` step 2).
+- **2026-05-01** — start-session §3.1: 📦 Backlog section added between Debt and Session doc. Full table of every open `BACKLOG.md` entry in ledger order; empty state `📦 Backlog empty`.
