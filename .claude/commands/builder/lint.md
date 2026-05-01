@@ -124,13 +124,16 @@ Read `Product/ledgers/ALIGNMENT-DEBT.md`. For each finding from steps 3–5, che
 
 ### 7. Write new ledger entries
 
-For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Open`:
+For each new finding, append to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Entries` (or whatever the most recent date-stamped subsection is — group same-day findings together). Use the v2 entry format:
 
 ```markdown
-- YYYY-MM-DD | source: linter/archive | target: <affected path> | reason: <rule code> — <one-line description> | open
+- id: ad-YYYYMMDD-NNN | status: open | source: linter | target: <affected path> | reason: <rule code> — <one-line description>
 ```
 
-Use today's date. Batch all new entries into a **single Edit call** (append to `## Open`).
+- `source:` is `linter` for §5.10 rules (S1, S2) and `linter/archive` for §5.14 rules (A1–A4). The `linter*` prefix is what excludes these from the §5.8 threshold count — do not invent other source labels.
+- `id:` uses today's date (`YYYYMMDD`) and an incrementing 3-digit suffix that doesn't collide with existing entries on that date. Read the ledger first to find the next free NNN.
+
+Batch all new entries into a **single Edit call**.
 
 ### 8. Render the report per `Product/_workflow/REPORT-STYLE.md` §3.7
 
@@ -138,7 +141,7 @@ Use the lint report template. Emit:
 - counts by rule (findings per A1/A2/A3a/A3b/A4/S1/S2)
 - total new ledger entries opened
 - total skipped (already in ledger)
-- ⚠️ pass-mode strip if new entries push total open count ≥ 5
+- linter findings do **not** trip the §5.8 threshold — no pass-mode strip from this skill
 
 ## Safety rails
 

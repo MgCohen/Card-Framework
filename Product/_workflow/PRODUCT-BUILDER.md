@@ -576,9 +576,15 @@ The session-note assertion is the forcing function: it makes "I considered casca
 
 ### 5.8 Consistency-pass cadence
 
-`ledgers/ALIGNMENT-DEBT.md` crossing **5 open entries** triggers the GHA debt-pass workflow (`.github/workflows/debt-pass.yml`), which discharges automatically and opens a PR for review. The threshold is the automation trigger, not a session gate — start-session surfaces the count as informational (`📊 N debt · ⏳ awaiting automated discharge`) but never forces a session into pass-mode.
+`ledgers/ALIGNMENT-DEBT.md` crossing **5 open cascade entries** triggers the GHA debt-pass workflow (`.github/workflows/debt-pass.yml`), which discharges automatically and opens a PR for review. The threshold is the automation trigger, not a session gate — start-session surfaces the count as informational (`📊 N cascade · M linter`) but never forces a session into pass-mode.
 
-Threshold of 5 is calibration, not principle. Adjust if data shows otherwise — but pick a number and commit.
+**Cascade vs linter classification.** Entries are discriminated by the `source:` field:
+- **Cascade** entries (anything *not* `source: linter` / `source: linter/archive`) come from Model edits per §5.7 — design churn that must be reconciled in dependent docs. These count toward the threshold.
+- **Linter findings** (`source: linter` or `source: linter/archive`, opened by `/builder:lint` per §5.10/§5.14) are mechanical link-cleanup. They do *not* count toward the threshold but are still discharged in the same pass when cascade tips the gate.
+
+Rationale: linter findings can pile up cheaply (a single archive operation can open 5+ broken-path entries in one pass) and would otherwise trip the threshold without representing real design pressure. They're cheap to clear in the same run that handles cascade.
+
+Threshold of 5 cascade entries is calibration, not principle. Adjust if data shows otherwise — but pick a number and commit.
 
 Manual local discharge (`/builder:debt-pass --force`) is supported when you want to inspect the diff before pushing, but is no longer the primary path. Without `--force` and outside CI, the command refuses.
 
@@ -605,9 +611,9 @@ Automation, not a session shape. A linter (run as `/builder:lint` skill or CI st
 - No `builds-on:` references missing or pointing at non-existent paths.
 - Archive integrity rules (see §5.14): forward-pointer integrity, no stale inbound links, status/location agreement, successor presence.
 
-**Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter`, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow, with the §5.8 threshold catching accumulation.
+**Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter` for path/builds-on rules, source = `linter/archive` for archive-integrity rules, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow.
 
-The linter doesn't enforce; the threshold does.
+**Linter findings do not trigger the §5.8 threshold** — only cascade entries (anything not `source: linter*`) do. Linter findings ride along when cascade tips the gate. This prevents an archive op that opens 5+ broken-link entries from spuriously triggering pass-mode without any underlying design pressure.
 
 ### 5.11 Adding a new feature
 
