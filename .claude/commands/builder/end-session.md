@@ -27,25 +27,37 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
 
 2a. **Unsaved-body check.** (Skipped when invoked with `--auto-pr`.)
 
-   Read the conversation history of this session. Identify every artifact that was **settled** — meaning a final shape was agreed, a verdict was given, or a design was accepted. This includes:
-   - Typed interfaces, protocols, or records defined or revised in chat (C# interfaces, abstract classes, named contracts)
-   - Model decisions with an explicit user verdict ("use X", "go with Y", "that's right")
-   - ADR-worthy choices that were locked but not yet written
-   - Any pseudocode or sketch the user accepted as the canonical shape
+   Read the conversation history of this session. Identify every artifact that has a concrete shape in the conversation — interfaces, protocols, records, model decisions, pseudocode, named contract shapes, ADR-worthy choices.
 
-   For each settled artifact found:
+   For each artifact, classify it:
+   - **Accepted** — the user gave an explicit positive verdict on the shape, or it was used/referenced as authoritative in subsequent turns.
+   - **Not accepted** — the shape was proposed but rejected, or explicitly set aside.
+   - **Uncertain** — discussed but no clear verdict; or left open by design.
 
-   a. **Locate its canonical file.** Search `Product/` for the Model, ADR, or feature doc where this artifact belongs (by topic, cross-reference, or existing content).
+   Then, for each Accepted artifact, check its canonical `Product/` file (if one exists) and determine whether the shape is already captured accurately.
 
-   b. **Compare.** Read the file. Check whether the settled shape is captured accurately — not just mentioned, but written as the authoritative definition.
+   Render a review table and **wait for the user to confirm before writing anything:**
 
-   c. **If missing or stale → write it now.** Edit or create the target doc to capture the settled artifact verbatim. Use the exact shape from the conversation — the user's verdict is the source of truth. Do not summarise or paraphrase a typed interface; write the interface. Do not defer.
+   ```
+   ### 🔍 Sketches found this session
 
-   d. **If no canonical file exists yet** → create one using `/builder:new`, then write the artifact into it.
+   | Artifact | Verdict | File match |
+   |---|---|---|
+   | `IHandlerRegistry` interface | ✅ Accepted | ❌ Not in file |
+   | `GameEngineBuilder` builder pattern | ✅ Accepted | ✅ Matches engine/01 §6 |
+   | `ICommandPipeline` stub | ⚠️ Uncertain | ❌ Not in file |
+   | Queue ordering sketch | ❌ Not accepted | — |
 
-   **If no settled artifacts are found in the conversation** → proceed directly to step 3. This step is a no-op for sessions that were purely exploratory or operational (backlog work, tooling changes, etc.).
+   _Review and correct if needed. Accepted + not-in-file items will be written now._
+   ```
 
-   **Do not prompt the user, do not add a backlog entry, do not skip.** The conversation is the source; the files are the sink. This step bridges the two before context is lost.
+   The user may correct any row before confirming. Once confirmed:
+   - **Accepted + not in file** → write the artifact into its canonical `Product/` doc now. If no canonical file exists, create one via `/builder:new` first. Use the exact shape from the conversation — do not paraphrase a typed interface; write the interface.
+   - **Accepted + matches file** → no action.
+   - **Uncertain** → only write if the user explicitly upgraded it to Accepted during review.
+   - **Not accepted** → skip.
+
+   **If no artifacts are found** → proceed directly to step 3. No-op for operational sessions with no design work.
 
 3. **Cascade-discipline check** (per `PRODUCT-BUILDER.md` §5.7).
    - Find Models and ADRs touched in this session: `git diff --name-only` against the session-start commit, filtered to `Product/features/**/{notes,decisions}/*.md` and `Product/decisions/*.md`.
