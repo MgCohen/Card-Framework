@@ -26,17 +26,17 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 ## Open
 
-- **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `features/actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
+- id: bl-interaction-feature | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `features/actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
   Trigger: next presentation or engine-wiring session; or whenever intent → template lookup (OPEN-QUESTIONS) is designed.
   References: `general/ARCHITECTURE.md`, `features/actions/decisions/0008-intent-vocabulary.md`, `features/presentation/models/01-presentation-loop.md` §8.
   Status: open
 
-- **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md` §3 defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
+- id: bl-authoring-feature | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md` §3 defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
   Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
   References: `features/effects/models/04-effect-flow.md` §3 §9, `general/ARCHITECTURE.md` §Authoring, `ledgers/OPEN-QUESTIONS.md` §Authoring.
   Status: open
 
-- **FEATURE-MAP auto-generator** — replace hand-maintained `FEATURE-MAP.md` with a generator that reads feature roots, Models, and `builds-on:` front matter to produce the index table, mermaid graph, and model breakdown.
+- id: bl-feature-map-generator | **FEATURE-MAP auto-generator** — replace hand-maintained `FEATURE-MAP.md` with a generator that reads feature roots, Models, and `builds-on:` front matter to produce the index table, mermaid graph, and model breakdown.
   Trigger: `~15 Models in Product/features/` OR first drift incident traceable to a stale FEATURE-MAP.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §6, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §6.
   Status: open
@@ -47,7 +47,7 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 - ~~**`/builder:archive` skill (PR 3, optional)** — helper that automates archiving a doc: flips `status` to `Superseded` or `Cancelled`, writes `superseded_by` / `archived_on` / `reason`, `git mv`s the file into the feature's `archive/` folder (creating it with `.gitkeep` if absent), runs `/builder:lint`, opens a single-commit PR. One commit, mechanical. Trigger: after PR 2 migration lands. References: `Product/_workflow/PRODUCT-BUILDER.md §5.14`, `.claude/commands/builder/lint.md`. Status: open~~ → done 2026-05-01 (skill spec at `.claude/commands/builder/archive.md`; validates source, shows diff, user confirms, single commit + PR)
 
-- **`builder-drift-detection` skill** — session-mode + CI-mode drift detection between code in `Assets/` and `settled`/`implemented` Features/Models in `Product/`.
+- id: bl-drift-detection | **`builder-drift-detection` skill** — session-mode + CI-mode drift detection between code in `Assets/` and `settled`/`implemented` Features/Models in `Product/`.
   Trigger: first feature reaches `implemented` status (§5.6.2 build gate).
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §5, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §5.12.
   Status: open
@@ -56,7 +56,7 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 - ~~**`/builder:design-pass` skill** — structured Q-by-Q design walk for non-mechanical Model edits. Pattern: enumerate questions in dependency order; for each present options + lean + rationale; wait for verdict; advance. Locks open design space progressively without committing edits until all Qs settle. Session 15 is the canonical example (8 Qs on the §6 boundary redesign). Trigger: when a second design question of similar shape arrives, or post Tier 1 commands. References: `Product/sessions/session-15.md`, `ProductBuilder/AI-FIRST-AUTOMATION.md` §8. Status: open~~ → done 2026-05-01 (skill spec at `.claude/commands/builder/design-pass.md`, report template at `Product/_workflow/REPORT-STYLE.md` §3.6, 🔒 chat-only extension added)
 
-- **`/builder:end-session` headless mode** — extend with flags `--auto-confirm-checkpoint`, `--auto-pr`, and `--steps=close-only` so it can be composed by unattended automation (specifically `/builder:debt-pass`'s checkpoint-refresh step). Currently end-session has a hard human-approval gate on the checkpoint diff (step 5) and "suggest, don't auto-create" PR default (step 7) — both load-bearing for interactive use, but block headless composition.
+- id: bl-end-session-headless | **`/builder:end-session` headless mode** — extend with flags `--auto-confirm-checkpoint`, `--auto-pr`, and `--steps=close-only` so it can be composed by unattended automation (specifically `/builder:debt-pass`'s checkpoint-refresh step). Currently end-session has a hard human-approval gate on the checkpoint diff (step 5) and "suggest, don't auto-create" PR default (step 7) — both load-bearing for interactive use, but block headless composition.
   Trigger: after `/builder:debt-pass` lands and accumulates evidence on what end-session needs to expose. Blocks: migrating debt-pass step 7 from local fill rules to delegation.
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
   Status: open
@@ -65,57 +65,57 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 - ~~**Upgrade `actions/checkout@v4` → `@v5`** — Node.js 20 deprecated 2026-06-02. One-line bump in `.github/workflows/debt-pass.yml`. Trigger: before 2026-06-02. References: `.github/workflows/debt-pass.yml`. Status: open~~ → done 2026-05-01 (bumped to `actions/checkout@v5`)
 
-- **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
+- id: bl-debt-pass-graceful-budget | **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
   Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.
   References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
   Status: open
 
-- **`/builder:end-session` unsaved-body check** — end-session must detect when a session sketched or approved a Model body / interface / contract / ADR-shape that was *not* written to a canonical file (Model doc, ADR, feature note) and either prompt to save it, refuse to close, or surface it as deferred-with-justification. Today end-session only checks debt + hygiene; sketched-but-unsaved bodies leak into prose-only memory (session note + checkpoint) and require errata commits later. Session 15 is the canonical example: the `ICommandAwaiter` final shape was settled by user verdict but never written into `04-effect-flow.md`; an errata commit (`89c161e`) was needed to capture mapper + gateway invariants the close pass missed. Realistic mechanism: a yes/no/where prompt during step 2 of end-session — "Did this session settle any new interface, contract, or Model body? If yes, where is it saved?" — refuse to close on yes-and-nowhere.
+- id: bl-end-session-unsaved-body | **`/builder:end-session` unsaved-body check** — end-session must detect when a session sketched or approved a Model body / interface / contract / ADR-shape that was *not* written to a canonical file (Model doc, ADR, feature note) and either prompt to save it, refuse to close, or surface it as deferred-with-justification. Today end-session only checks debt + hygiene; sketched-but-unsaved bodies leak into prose-only memory (session note + checkpoint) and require errata commits later. Session 15 is the canonical example: the `ICommandAwaiter` final shape was settled by user verdict but never written into `04-effect-flow.md`; an errata commit (`89c161e`) was needed to capture mapper + gateway invariants the close pass missed. Realistic mechanism: a yes/no/where prompt during step 2 of end-session — "Did this session settle any new interface, contract, or Model body? If yes, where is it saved?" — refuse to close on yes-and-nowhere.
   Trigger: next end-session skill iteration; or next session that exhibits the same leak.
   References: `Product/sessions/session-15.md`, errata commit `89c161e`, `.claude/commands/builder/end-session.md` step 2 (hygiene).
   Status: open
 
-- **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
+- id: bl-tier-2-3-commands | **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
   Status: open
 
-- **Definition Editor** — authoring tool for cards, zones, game templates, effects, visuals.
+- id: bl-definition-editor | **Definition Editor** — authoring tool for cards, zones, game templates, effects, visuals.
   Trigger: `authoring` feature reaches `settled`.
   References: ARCHITECTURE §"Authoring", FEATURE-MAP `authoring` (considered).
   Status: open
 
-- **Simulation Debugger** — inspector for state, history, pending tasks, triggers, decisions.
+- id: bl-simulation-debugger | **Simulation Debugger** — inspector for state, history, pending tasks, triggers, decisions.
   Trigger: first feature reaches `implemented` (debugger needs a real running simulation to inspect).
   References: ARCHITECTURE §"Tooling".
   Status: open
 
-- **Scenario Runner** — load a known state and exercise a command/effect for fast iteration.
+- id: bl-scenario-runner | **Scenario Runner** — load a known state and exercise a command/effect for fast iteration.
   Trigger: first feature reaches `implemented`.
   References: ARCHITECTURE §"Tooling".
   Status: open
 
-- **Replay Viewer** — step through history and inspect state transitions.
+- id: bl-replay-viewer | **Replay Viewer** — step through history and inspect state transitions.
   Trigger: history pipeline (`engine/03-snapshot-pipeline`) reaches `implemented`.
   References: features/engine/models/03-snapshot-pipeline.md, ARCHITECTURE §"Tooling".
   Status: open
 
-- **Rule Trace** — explain why an action was legal/illegal and which effects modified it.
+- id: bl-rule-trace | **Rule Trace** — explain why an action was legal/illegal and which effects modified it.
   Trigger: first feature reaches `implemented`.
   References: ARCHITECTURE §"Tooling".
   Status: open
 
-- **Validation Reports** — detect broken card definitions, missing assets, bad IDs, invalid references.
+- id: bl-validation-reports | **Validation Reports** — detect broken card definitions, missing assets, bad IDs, invalid references.
   Trigger: `authoring` feature reaches `draft` (needs a definition surface to validate).
   References: FEATURE-MAP `authoring` (considered).
   Status: open
 
-- **Versioned Definitions** — definition versioning/hashing for client-server agreement.
+- id: bl-versioned-definitions | **Versioned Definitions** — definition versioning/hashing for client-server agreement.
   Trigger: `networking` feature begins; or save/load arrives, whichever first.
   References: FEATURE-MAP `networking` (considered).
   Status: open
 
-- **Presets package** — preset rule templates (TCG, deckbuilder, spatial sim) as compositions of framework primitives.
+- id: bl-presets-package | **Presets package** — preset rule templates (TCG, deckbuilder, spatial sim) as compositions of framework primitives.
   Trigger: post-v1, after at least 2 features reach `implemented` and the framework primitive surface is stable.
   References: ARCHITECTURE §"Preset Direction", RECOMMENDATIONS §"Recommendation 7".
   Status: open
