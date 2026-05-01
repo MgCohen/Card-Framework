@@ -1,5 +1,6 @@
 ---
-description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review.
+description: Auto-discharge `ALIGNMENT-DEBT.md` — mechanical edits, single commit, PR for review. Automation-only (CI or `--force`).
+argument-hint: [--force]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 

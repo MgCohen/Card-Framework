@@ -13,7 +13,7 @@ You are closing a Product Builder session. Workflow rules: `Product/_workflow/PR
    - Result is `main` or `master` → **main mode**: full single-writer flow (checkpoint written inline).
    - Any other branch → **branch mode**: checkpoint write is deferred to `/builder:merge-pass`. Steps 5 and 9 behave differently (see below).
 
-1b. **Author `work-summary` (v2 sessions only).** If the session note has `schema-version: 2` in its frontmatter:
+1b. **Author `work-summary`.**
    - Read the "Active question going out" line from Part 1.
    - Pre-fill `work-summary:` as a one-line synthesis (e.g., `Drafted <X>; resolved <Y>; surfaced <Z>.`).
    - If `work-summary` is already non-empty in the frontmatter, skip the prompt — treat the existing value as confirmed and proceed.
