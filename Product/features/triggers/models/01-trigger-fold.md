@@ -111,15 +111,39 @@ public sealed class DrawOnHeal : Trigger<HealActorAction>
 }
 ```
 
-### Subscription
+### Subscription — `ITriggerSystem`
+
+Card abilities register and unregister through `ITriggerSystem`. This is the surface `AbilityDefinition.Register` calls.
 
 ```csharp
-void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameCommand;
-void OnAfter<T>(Trigger<T> trigger, InstanceId owner)  where T : GameCommand;
-void RemoveAll(InstanceId owner);
+public interface ITriggerSystem
+{
+    void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameCommand;
+    void OnAfter<T>(Trigger<T> trigger, InstanceId owner)  where T : GameCommand;
+    void RemoveAll(InstanceId owner);
+}
 ```
 
 `owner` is the entity that registered the trigger — used by `RemoveAll` to unsubscribe all triggers belonging to that instance at once.
+
+### Execution — `ITriggerPipeline`
+
+The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both interfaces.
+
+```csharp
+public interface ITriggerPipeline
+{
+    BeforeFoldResult RunBefore(GameAction action, IEffectScope scope);
+    void             RunAfter (GameAction action, CommandResult result, IEffectScope scope);
+}
+
+public sealed record BeforeFoldResult(
+    bool        IsCancelled,
+    string?     CancelReason,
+    bool        IsReplaced,
+    GameCommand? Replacement,
+    GameAction  Command);   // the (possibly modified) command to pass to the handler
+```
 
 ### The fold mechanic
 
@@ -253,16 +277,16 @@ A handler should never dispatch another `GameAction` directly. If sequencing mul
 
 ## 7. Updated Pipeline Shape
 
-`RunPreHooks` from doc 18 is replaced by `triggerSystem.RunBefore`. The pipeline now:
+`RunPreHooks` from doc 18 is replaced by `ITriggerPipeline.RunBefore`. The pipeline holds `ITriggerPipeline` (the execution surface); card abilities hold `ITriggerSystem` (the subscription surface). One `TriggerSystem` class implements both.
 
 ```csharp
 public CommandResult Execute(GameAction action)
 {
     using var envelope = history.OpenEnvelope(BuildCause(action));
 
-    var before = triggerSystem.RunBefore(action, context);
+    var before = triggerPipeline.RunBefore(action, context);
     if (before.IsCancelled)
-        return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.Reason));
+        return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
 
     if (before.IsReplaced)
     {
@@ -273,7 +297,7 @@ public CommandResult Execute(GameAction action)
 
     var result = Handle(before.Command, envelope);
 
-    triggerSystem.RunAfter(before.Command, result, context);
+    triggerPipeline.RunAfter(before.Command, result, context);
 
     return history.CloseAndPublish(envelope, result);
 }
@@ -289,7 +313,7 @@ public CommandResult Execute(GameAction action)
 - **Trigger ordering** — what determines sequence within the fold when multiple triggers match the same type. FIFO by registration? Priority weight? Game-configurable?
 - **Async suspension** — triggers that require player input (targeting, choices) still unresolved. Unblocks the broader suspension design.
 - **Stash release mechanics** — MTG-style stash needs a `Release(key)` call and ordering rules. Not designed here.
-- **`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.
+- ~~**`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.~~ → resolved session-20260501-1132: split into `ITriggerSystem` (subscription) and `ITriggerPipeline` (execution); one `TriggerSystem` class implements both. Note: `ITriggerPipeline` shape in effects/02 §3 has a different signature — see ad-20260501-025.
 
 ---
 

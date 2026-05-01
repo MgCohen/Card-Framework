@@ -35,7 +35,18 @@ The engine does not know what any particular command means or what game is being
 
 ### ICommandPipeline
 
-The framework's executor. Receives one action, runs before triggers, invokes the handler, runs after triggers, publishes the envelope, and returns a result. It does not know about the queue or what happens after. This is the pipeline already described in [Action Flow Snippets](features/actions/models/01-command-pipeline.md).
+The framework's executor. It owns two responsibilities: validating commands at intake (by resolving the handler from the registry and delegating to `handler.Validate`), and executing them through the full pipeline (before triggers → handler → after triggers → envelope). It does not know about the queue or what happens after.
+
+```csharp
+public interface ICommandPipeline
+{
+    // Called at intake — resolves the handler and delegates to handler.Validate.
+    bool Validate(GameCommand command, IStateScope state, out string? reason);
+
+    // Called by the engine loop — runs the full pipeline for one action.
+    CommandResult Execute(GameAction action);
+}
+```
 
 ### GameRules
 
@@ -59,15 +70,14 @@ public sealed class GameEngine
     private bool running;
 
     // Single entry point for all sources — player input, timers, trigger reactions.
-    // GameRules.OnIncomingCommand decides scheduling before the command is enqueued.
+    // Pipeline validates first; GameRules.OnIncomingCommand decides scheduling.
     public void Dispatch(GameCommand command)
     {
+        if (!pipeline.Validate(command, store, out _))
+            return;
         var result = rules.OnIncomingCommand(command, DispatchOrigin.PlayerIntent);
         if (!result.Accepted)
-        {
-            // Rejected by rule
             return;
-        }
         if (!running) Drain();
     }
 
@@ -86,11 +96,13 @@ public sealed class GameEngine
                 pending.Enqueue(next with { OriginCommandId = action.OriginCommandId });
         }
 
+        running = false;
+
         // Queue is empty. Game decides what now.
+        // running = false before dispatching so Drain() can re-enter if needed.
         var drainResult = rules.OnQueueDrained();
         foreach (var cmd in drainResult.Dispatch)
             Dispatch(cmd);
-        running = false;
     }
 }
 ```

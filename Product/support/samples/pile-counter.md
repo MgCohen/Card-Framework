@@ -223,15 +223,7 @@ The mapper switches on the typed template (no string-keyed slot lookup) and reso
 Handlers own command-specific legality and dispatch the mutator payload that drives state change. `Validate` reads slices through Scaffold `IStateScope`; `Handle` returns `Task<TResult>` (most handlers complete synchronously). See [04-effect-flow §6](features/effects/models/04-effect-flow.md) for the handler signature, §4.4 for `IHandlerContext`.
 
 ```csharp
-public interface ICommandHandler<TCommand, TResult>
-    where TCommand : GameCommand
-    where TResult : CommandResult
-{
-    bool Validate(TCommand command, IStateScope state, out string? reason);
-    Task<TResult> Handle(TCommand command, IHandlerContext ctx);
-}
-
-public sealed class MoveCardHandler : ICommandHandler<MoveCardCommand, MoveCardResult>
+public sealed class MoveCardHandler : CommandHandler<MoveCardCommand, MoveCardResult>
 {
     public bool Validate(MoveCardCommand move, IStateScope state, out string? reason)
     {
@@ -290,9 +282,8 @@ public sealed class PileCounterRules : GameRules
     public PileCounterRules(
         IStateScope        state,
         IAvailableActions  actions,
-        IIntakeQueue       pending,
-        IHandlerRegistry   handlers)
-        : base(state, actions, pending, handlers) { }
+        IIntakeQueue       pending)
+        : base(state, actions, pending) { }
 
     public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
     {
@@ -350,8 +341,8 @@ Almost everything else Pile Counter cares about lives elsewhere — handler `Val
 ```csharp
 public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
 {
-    // 1. Command-specific legality (handler). Validate reads slices through IStateScope.
-    if (!handlers.Validate(command, state, out var reason))
+    // 1. Command-specific legality — pipeline resolves the handler and delegates to Validate.
+    if (!pipeline.Validate(command, store, out var reason))
         return IntakeResult.Reject(reason);
 
     // 2. Flow gating + routing (rule). Rule reads state via its injected IStateScope
@@ -365,7 +356,7 @@ public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
 }
 ```
 
-Validate first (catches malformed commands cheaply), then rule's flow check. Both can reject; both produce the same `IntakeResult` shape. `IntakeContext` is gone — `Pending` is the rule's injected service, `Origin` is the only ephemeral input. `state` here is the engine's `IStateScope` over the `Store`.
+`pipeline.Validate` catches malformed commands cheaply (resolves handler, delegates to `handler.Validate`), then the rule's flow check decides routing. Both can reject; both produce the same `IntakeResult` shape. `Origin` is the only ephemeral input; state is read through `IStateScope` over the `Store`.
 
 ### 9.8 Bootstrap
 
@@ -379,27 +370,20 @@ public interface IPuzzleFactory { Puzzle Create(); }
 
 public static class PileCounterBootstrap
 {
-    public static GameEngine Create(IPuzzleFactory factory)
+    public static GameEngine Create(IPuzzleFactory factory, IObjectResolver container)
     {
         var puzzle = factory.Create();
 
-        // Engine constructs the canonical services and injects them into the rule.
-        // Initial slices are seeded into the Store; mutators are registered per
-        // payload type so Store.Execute(payload) fans out correctly.
+        // GameEngineBuilder holds match configuration — initial state, handler/mutator lists,
+        // match-specific data (players, seed). VContainer resolves framework services.
         var builder = new GameEngineBuilder()
             .WithInitialSlices(BuildInitialSlices(puzzle))
-            .WithHandlers(new MoveCardHandler())
-            .WithMutators(
-                new PileMoveMutator(),     // Mutator<PilesState,    MoveCardPayload>
-                new LastMoveMutator())     // Mutator<LastMoveState, MoveCardPayload>
-            .WithRule(services => new PileCounterRules(
-                services.State,
-                services.Actions,
-                services.Pending,
-                services.Handlers))
-            .WithIntentMapper(services => new PileCounterIntentMapper(services.State));
+            .WithHandlers<MoveCardHandler>()
+            .WithMutators<PileMoveMutator, LastMoveMutator>()  // Mutator<PilesState/LastMoveState, MoveCardPayload>
+            .WithRule<PileCounterRules>()
+            .WithIntentMapper<PileCounterIntentMapper>();
 
-        return builder.Build();
+        return builder.Build(container);
     }
 
     private static IEnumerable<BaseState> BuildInitialSlices(Puzzle p)
@@ -420,7 +404,9 @@ public static class PileCounterBootstrap
 }
 ```
 
-The engine builder constructs the canonical services (`IStateScope` over the Scaffold `Store`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`) and exposes them through a `services` bag the game uses to wire the rule and intent mapper. The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build()`. After `Build` returns, the engine is idle. First `OnQueueDrained` runs, the rule calls `Actions.Set(...)`, presentation layer renders. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop and [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the service-injection rationale.
+`GameEngineBuilder` is a match-configuration object — it holds the lists of handlers, mutators, rules, and initial state, plus any match-specific data (players, seed). It does not wire services itself; `Build(container)` delegates service resolution to VContainer. The game registers its types in a VContainer installer; the framework registers its own services (`IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`) in the framework installer. `GameRules` and `IIntentMapper` implementations declare their dependencies as constructor parameters — VContainer injects them normally.
+
+The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build()`. After `Build` returns the engine is idle and dormant — the first `Dispatch()` call triggers `Drain()`. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop.
 
 ---
 
@@ -440,8 +426,8 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **`OnQueueDrained` returns `DrainResult { Dispatch }` only.** Snapshot publication moved to the injected `IAvailableActions` service. Supersedes earlier `DrainResult { Snapshot, Dispatch }`.
 - **Four rejection paths:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect).
 - **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the rule + intent mapper through them.
-- **Engine intake order:** `handler.Validate` first, then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
-- **`GameRules` is service-injected.** Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry` all on the constructor; methods take only ephemeral data ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
+- **Engine intake order:** `pipeline.Validate` first (pipeline resolves handler, delegates to `handler.Validate`), then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
+- **`GameRules` is service-injected.** Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue` on the constructor (three services — `IHandlerRegistry` removed per session-20260501-1132 Q2); methods take only ephemeral data ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
 
 ---
 
@@ -469,7 +455,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 - **Q5 — `AvailableActions` mutator implementation.** Framework-shipped — the `IAvailableActions` service writes the slot through an internal mutator ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)). Confirm at engine implementation.
 - **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [doc 29 §3](features/engine/models/03-snapshot-pipeline.md)). `PlayerChoice` shape pin during implementation.
 - **Q7 — `IGameStore` final shape.** Sketched as a presentation-side wrapper exposing `State`, `OnStateChanged`, `SubmitIntent`. Final shape depends on the chosen state library.
-- **Q9 — `IHandlerRegistry` shape.** Sketched as `handlers.Validate(command, state, out reason)` — needs a typed lookup mechanism (probably keyed by `Type`). Resolves with Q2.
+- ~~**Q9 — `IHandlerRegistry` shape.**~~ Resolved session-20260501-1132 Q1: registry is resolver-only (`ICommandHandler Resolve(GameCommand)`); validate/execute live on `ICommandPipeline`; game authors extend `CommandHandler<TCommand, TResult>`.
 - **Q11 — `IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
 - **Q12 — Re-validation at dequeue.** Validate at intake plus a second time before handler runs (state may have changed). Currently OK as double-validate.
 

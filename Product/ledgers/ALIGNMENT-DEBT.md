@@ -24,6 +24,13 @@ Resolved entries get strikethrough plus resolution note:
 
 ## Entries
 
+### Cascade — engine wiring stack design pass + patches (session-20260501-1132)
+
+- id: ad-20260501-022 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/03-snapshot-pipeline.md | reason: GameRules sketch still shows 4-service constructor with `IHandlerRegistry Handlers`; Q2 verdict removed it — update to 3 services
+- id: ad-20260501-023 | status: open | source: features/engine/models/02-gamerules-contract.md | target: features/engine/decisions/0001-gamerules-as-class-with-services.md | reason: ADR option C lists `IHandlerRegistry` as an injected service; now 3 services after Q2 verdict
+- id: ad-20260501-024 | status: open | source: features/engine/models/02-gamerules-contract.md | target: ledgers/OPEN-QUESTIONS.md | reason: oq-handler-registry, oq-command-pipeline, oq-engine-startup, oq-gamerules-service-wiring, oq-trigger-type-unification all resolved session-20260501-1132 — strike through
+- id: ad-20260501-025 | status: open | source: features/triggers/models/01-trigger-fold.md | target: features/effects/models/02-replacement-prevention.md | reason: ITriggerPipeline shape conflict — effects/02 §3 has `Task<TriggerFoldResult> RunBefore(GameCommand, IReadOnlyList<TriggerMatch>, IEffectScope)`; triggers/01 §7 has `BeforeFoldResult RunBefore(GameAction, IEffectScope)` — reconcile to one authoritative shape
+
 ### Cascade — S19 slice catalog + Effect/Trigger unification
 
 - ~~2026-05-01 | id: ad-20260501-001 | source: features/engine/models/04-gamestate-slices.md | target: support/samples/pile-counter.md | reason: §9.8 `BuildInitialSlices` explicitly yields `AvailableActionsState`; engine now auto-seeds framework slices at `Build()` — remove from `BuildInitialSlices` | open~~ → resolved 2026-05-01 (AvailableActionsState removed; comment added pointing to 04-gamestate-slices §4)

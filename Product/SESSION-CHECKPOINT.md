@@ -2,14 +2,14 @@
 type: checkpoint
 schema-version: 2
 last-updated: 2026-05-01
-head: session-20260501-1107-zone-topology
+head: session-20260501-1132-engine-wiring
 merged:
   - session-20260501-2359-cutover
   - session-20260501-1105-engine-wiring
   - session-20260501-1107-zone-topology
+  - session-20260501-1132-engine-wiring
 batch:
-  - session-20260501-1105-engine-wiring
-  - session-20260501-1107-zone-topology
+  - session-20260501-1132-engine-wiring
 tags: [#checkpoint]
 ---
 
@@ -21,21 +21,14 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-- S(engine-wiring 2026-05-01 11:05): Live test of v2 start-session + end-session branch mode on test/parallel-A — no content work; schema validation only.
-- S(zone-topology 2026-05-01 11:07): Live test of v2 start-session + end-session branch mode on test/parallel-B — no content work; schema validation only.
+S(engine-wiring 2026-05-01 11:32): Design pass (6 Qs) + patches applied on engine wiring stack — IHandlerRegistry resolver-only, ICommandPipeline owns validate/execute, ITriggerSystem/ITriggerPipeline split, drain loop bug fixed, VContainer wiring, GameEngineBuilder as config object. 4 debt entries opened for cascade cleanup.
 
 ---
 
 ## 🎯 The active open question (singular)
 
-**Engine wiring stack** — `IHandlerRegistry` interface, `GameEngineBuilder` construction protocol, `ICommandPipeline` interface, engine startup / first `OnQueueDrained` trigger, `GameRules` service wiring. Cluster of 5 — one design-pass session.
-*(From session-20260501-1107-zone-topology.)*
-
----
-
-## Recent exit questions (parallel batch)
-
-- **Engine wiring stack** — `IHandlerRegistry` interface, `GameEngineBuilder` construction protocol, `ICommandPipeline` interface, engine startup / first `OnQueueDrained` trigger, `GameRules` service wiring. — from `session-20260501-1105-engine-wiring`.
+**Debt discharge (ad-022 through ad-025)** — four cascade entries from the engine wiring session: update `engine/03-snapshot-pipeline` (stale IHandlerRegistry), update ADR-0001 (stale service list), strike through 5 resolved oq-IDs in `OPEN-QUESTIONS.md`, reconcile `ITriggerPipeline` shape between `effects/02` and `triggers/01`.
+*(From session-20260501-1132-engine-wiring.)*
 
 ---
 
@@ -56,15 +49,19 @@ tags: [#checkpoint]
 
 | # | Task | Notes |
 |---|------|-------|
-| **1** | **Engine wiring design pass** | `IHandlerRegistry` + `GameEngineBuilder` + `ICommandPipeline` + `ITriggerSystem`/`ITriggerPipeline` unification + startup. Cluster of 5 — one design-pass session. |
+| **1** | **Debt discharge (ad-022–025)** | Mechanical — engine/03, ADR-0001, OPEN-QUESTIONS.md, ITriggerPipeline shape conflict. Run `/builder:debt-pass`. |
 | **2** | **Merge test branches** | `test/parallel-A` and `test/parallel-B` served their purpose — clean up after merge-pass PR merges. |
 | **3** | **Step 8 docs** | Update `PRODUCT-BUILDER.md` + `REPORT-STYLE.md` with parallel-session model and merge-pass cadence. |
+| **4** | **Zone model internal opens** | Nine sub-questions in `oq-zone-internal-opens` — design-pass candidate. |
 
 ---
 
 ## Artifacts to read on resume
 
-_(none — test sessions had no Product/features or Product/ledgers changes)_
+- [`features/engine/models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — ICommandPipeline interface + fixed drain loop
+- [`features/engine/models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — 3-service GameRules, ICommandHandler/CommandHandler<T,R>, IHandlerRegistry resolver-only
+- [`features/triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — ITriggerSystem/ITriggerPipeline split
+- [`ledgers/ALIGNMENT-DEBT.md`](ledgers/ALIGNMENT-DEBT.md) — ad-022 through ad-025
 
 ---
 

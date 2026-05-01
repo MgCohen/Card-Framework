@@ -60,18 +60,15 @@ public abstract class GameRules
     protected IStateScope        State    { get; }   // Scaffold; read-only
     protected IAvailableActions  Actions  { get; }
     protected IIntakeQueue       Pending  { get; }
-    protected IHandlerRegistry   Handlers { get; }
 
     protected GameRules(
         IStateScope        state,
         IAvailableActions  actions,
-        IIntakeQueue       pending,
-        IHandlerRegistry   handlers)
+        IIntakeQueue       pending)
     {
         State    = state;
         Actions  = actions;
         Pending  = pending;
-        Handlers = handlers;
     }
 
     // 1. Intake. Pure flow: paused/ended gating + routing the command into
@@ -105,12 +102,11 @@ public abstract class GameRules
 | `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [04-effect-flow §4.1](features/effects/models/04-effect-flow.md). |
 | `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The rule (and effects) call this to publish; the engine never auto-publishes. See [doc 29 §2](features/engine/models/03-snapshot-pipeline.md). |
 | `IIntakeQueue Pending` | The live engine queue. Same operations the old `IntakeContext.Pending` exposed: `AddFirst` / `AddLast` / `Remove` / iterate. |
-| `IHandlerRegistry Handlers` | Read-only handler lookup. The rule may call `Validate` on demand (e.g., to prune templates whose every binding fails); never invokes `Handle`. |
 
 ### Contract guarantees
 
 - **All four methods are synchronous.** No `Task`, no awaits. `GameRules` is a pure decision layer; async work belongs to handlers, effects, and `ITriggerPipeline`.
-- **Side effects flow through narrow capability services.** `OnIncomingCommand` mutates `Pending`. `OnQueueDrained` writes through `Actions`. `Evaluate` and `FilterTriggers` remain pure observer (return data, never side-effect). **The rule never holds `GameEngine`** — only the four narrow services above. (This relaxes the "all four methods observer-shaped" framing of earlier drafts; see [doc 29 §5](features/engine/models/03-snapshot-pipeline.md).)
+- **Side effects flow through narrow capability services.** `OnIncomingCommand` mutates `Pending`. `OnQueueDrained` writes through `Actions`. `Evaluate` and `FilterTriggers` remain pure observer (return data, never side-effect). **The rule never holds `GameEngine`** — only the three narrow services above. (This relaxes the "all four methods observer-shaped" framing of earlier drafts; see [doc 29 §5](features/engine/models/03-snapshot-pipeline.md).)
 - **`GameRules` never mutates state slices directly.** State changes happen through dispatched `GameAction`s whose handlers call `ctx.Store.Execute(payload)`, which fans out to the registered Scaffold `Mutator<TState, TPayload>`s ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md), [doc 26 §9.5](support/samples/pile-counter.md)). `Actions.Set` writes the `AvailableActionsState` slice through an internal mutator — that's the only slice the rule writes, and it goes through the same pipeline.
 - **`GameRules` holds zero game-affecting state.** This is a contract guarantee, not a suggestion. Services are *configuration*, not gameplay memory. The rule may hold service handles, lookup tables, cached evaluators — never gameplay memory. Anything game-affecting (last-move, phase, stash buffers, etc.) lives as a state slice in the Scaffold `Store`.
 - **Command-specific legality is not the rule's concern.** Each `ICommandHandler<TCommand,TResult>.Validate` owns the legality of its own command. The rule is generic across game logic.
@@ -285,20 +281,40 @@ An earlier draft returned `DrainResult { Snapshot, Dispatch }` and let the engin
 - **End-of-game check** — emit `new EndGameCommand(...)` in `Dispatch` if the game is over.
 - **One-shot games** — never publish past bootstrap; `OnQueueDrained` is a no-op (`return DrainResult.Empty;`).
 
-### `IHandlerRegistry`
+### Handler types
 
-The handler registry is the lookup that finds the right `Validate` implementation per command type. It is **read-only** — the rule never invokes `Handle` directly.
+Game authors implement handlers by extending `CommandHandler<TCommand, TResult>`. The pipeline resolves them through a non-generic `ICommandHandler` base; the typed abstract class bridges the two surfaces.
 
 ```csharp
-public interface IHandlerRegistry
+// Non-generic base — the pipeline works through this surface
+public interface ICommandHandler
 {
     bool Validate(GameCommand command, IStateScope state, out string? reason);
+    Task<CommandResult> Handle(GameCommand command, IHandlerContext ctx);
+}
+
+// Typed base game authors extend
+public abstract class CommandHandler<TCommand, TResult> : ICommandHandler
+    where TCommand : GameCommand
+    where TResult  : CommandResult
+{
+    public abstract bool Validate(TCommand command, IStateScope state, out string? reason);
+    public abstract Task<TResult> Handle(TCommand command, IHandlerContext ctx);
+
+    bool ICommandHandler.Validate(GameCommand cmd, IStateScope state, out string? reason)
+        => Validate((TCommand)cmd, state, out reason);
+    Task<CommandResult> ICommandHandler.Handle(GameCommand cmd, IHandlerContext ctx)
+        => Handle((TCommand)cmd, ctx).ContinueWith(t => (CommandResult)t.Result);
+}
+
+// Registry — resolver only; used internally by the pipeline
+public interface IHandlerRegistry
+{
+    ICommandHandler Resolve(GameCommand command);
 }
 ```
 
-The rule uses it only when it explicitly chooses to pre-validate bindings (e.g., to prune templates with no legal bindings). The default flow does not call `Validate` during snapshot construction — per-binding legality is enforced at dispatch.
-
-(The full handler-dispatch shape is the subject of a forthcoming action-pipeline doc; see open items.)
+`IHandlerRegistry` is a pipeline-internal type. `GameRules` does not hold it — per-binding legality is enforced at dispatch by `ICommandPipeline.Validate`, not pre-validated during snapshot construction.
 
 ---
 

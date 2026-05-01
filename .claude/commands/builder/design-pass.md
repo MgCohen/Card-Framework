@@ -14,14 +14,27 @@ You are running a design pass. This workflow settles open design questions befor
    - Any Model docs, ADRs, or feature notes the user referenced or that the topic names
    - `Product/ledgers/OPEN-QUESTIONS.md` for related open threads
 
-3. **Enumerate design questions** in dependency order. Questions that constrain later questions must come first (e.g., "what *is* the entity" before "where does it live"). Surface the proposed list to the user before starting the walk:
+3. **Open with a context summary + question list, then ask Q1 immediately.**
+
+   Render in this order — no user confirmation gate:
+
+   **a. Context summary** — structured, not a paragraph. Include all of the following that apply:
+   - **What this is:** one-paragraph explainer of the concept being designed
+   - **Known sketches:** paste or quote any existing code/type sketches from Model docs, session notes, or samples that are directly relevant — show the actual snippet, not just a reference
+   - **Key design points:** bullet list of constraints, invariants, or settled decisions that the questions must respect
+   - **File references:** link every doc that contains relevant context
+   - **Examples / cases:** if a concrete game scenario (Pile Counter, MTG-like, etc.) illuminates why a question matters, include it
+
+   **b. Question list** — one line each, no options yet:
    ```
    ## Design questions (N total)
-   - Q1: <question>
-   - Q2: <question>
+   - Q1: <one-line question>
+   - Q2: <one-line question>
    ...
    ```
-   Wait for the user to confirm the order or request reordering/additions before advancing to Phase 2.
+   Order by dependency — questions that constrain later ones come first.
+
+   **c. Ask Q1 immediately.** Do not wait for the user to approve the list or reorder. Go straight into the Phase 2 format for Q1.
 
 ## Phase 2 — Question walk
 
