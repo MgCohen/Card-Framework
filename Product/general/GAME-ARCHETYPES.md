@@ -53,9 +53,6 @@ Sources:
 
 - [SabberStone overview](https://hearthsim.info/sabberstone)
 - [Kettle protocol](https://hearthsim.info/kettle/)
-- [SabberStone notes](spikes/SabberStone-Architecture-Analysis.md%20(1))
-- [Fireplace notes](spikes/Fireplace-Architecture-Analysis.md%20(1))
-- [Brimstone notes](spikes/Brimstone-Architecture-Analysis.md%20(1))
 
 ## Roguelike Deckbuilders: Slay The Spire
 

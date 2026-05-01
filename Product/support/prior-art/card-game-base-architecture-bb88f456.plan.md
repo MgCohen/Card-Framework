@@ -7,7 +7,7 @@ isProject: false
 
 # Card Game Base Architecture Plan
 
-This plan defines the C# business-logic architecture for a multiplayer card game, drawing from [SabberStone-Architecture-Analysis.md](Docs/SabberStone-Architecture-Analysis.md) (primary), [Fireplace-Architecture-Analysis.md](Docs/Fireplace-Architecture-Analysis.md), [Brimstone-Architecture-Analysis.md](Docs/Brimstone-Architecture-Analysis.md), and [Card Game Architecture Research.md](Docs/Research/Card%20Game%20Architecture%20Research.md). It integrates with [Store](Assets/Scripts/Game/State/Runtime/Store.cs), [NetworkMessageDispatcher](Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs), and the [ReactiveNetworkQueue](Docs/Architecture/ReactiveNetworkQueue.md) / [BlackBoxSimulation](Docs/Architecture/BlackBoxSimulation.md) patterns.
+This plan defines the C# business-logic architecture for a multiplayer card game, drawing from  patterns.
 
 ---
 
@@ -178,7 +178,7 @@ flowchart TB
 
 - **Logic** emits domain events (e.g., `HistoryLogGenerated`, `OptionsReady`) and accepts `PlayerTask` enqueue requests. It has no knowledge of packets or client IDs.
 - **Adapter** is the only component that knows both the game API and the network DTOs. It translates in both directions.
-- **Aligned with** [ReactiveNetworkQueue](Docs/Architecture/ReactiveNetworkQueue.md): Inbox/Outbox pipes keep the Queue/Engine transport-agnostic.
+- **Aligned with** : Inbox/Outbox pipes keep the Queue/Engine transport-agnostic.
 
 ---
 
@@ -190,7 +190,7 @@ flowchart TB
 | State storage | [Store](Assets/Scripts/Game/State/Runtime/Store.cs), [Mutator](Assets/Scripts/Game/State/Runtime/Mutators/Mutator.cs), [State](Assets/Scripts/Game/State/Runtime/State/State.cs)                                                      |
 | Transport     | [INetworkMessageDispatcher](Assets/Scripts/Infra/NetworkMessages/Runtime/Contracts/INetworkMessageDispatcher.cs), [NetworkMessageDispatcher](Assets/Scripts/Infra/NetworkMessages/Runtime/Implementation/NetworkMessageDispatcher.cs) |
 | Serialization | `unmanaged` structs for DTOs; [AutoPacker](Generators/AutoPacker) or CustomSerializable for complex types                                                                                                                             |
-| Inbox/Outbox  | Define in Adapter layer; subscribe/push pattern per [ReactiveNetworkQueue](Docs/Architecture/ReactiveNetworkQueue.md)                                                                                                                 |
+| Inbox/Outbox  | Define in Adapter layer; subscribe/push pattern per                                                                                                                  |
 | Game state    | Entity + GameTags (ECS-lite); TaskQueue; Step enum; TriggerManager                                                                                                                                                                    |
 
 
