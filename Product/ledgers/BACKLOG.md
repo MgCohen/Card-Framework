@@ -26,6 +26,16 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 ## Open
 
+- **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `features/actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
+  Trigger: next presentation or engine-wiring session; or whenever intent → template lookup (OPEN-QUESTIONS) is designed.
+  References: `general/ARCHITECTURE.md`, `features/actions/decisions/0008-intent-vocabulary.md`, `features/presentation/models/01-presentation-loop.md` §8.
+  Status: open
+
+- **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md` §3 defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
+  Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
+  References: `features/effects/models/04-effect-flow.md` §3 §9, `general/ARCHITECTURE.md` §Authoring, `ledgers/OPEN-QUESTIONS.md` §Authoring.
+  Status: open
+
 - **FEATURE-MAP auto-generator** — replace hand-maintained `FEATURE-MAP.md` with a generator that reads feature roots, Models, and `builds-on:` front matter to produce the index table, mermaid graph, and model breakdown.
   Trigger: `~15 Models in Product/features/` OR first drift incident traceable to a stale FEATURE-MAP.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §6, `ProductBuilder/PRODUCT-BUILDER-PROPOSAL.md` §6.

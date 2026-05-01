@@ -23,7 +23,33 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ## Open
 
-_(none — discharged in session 16)_
+### Cascade — engine/02 contract settled → engine/01 and triggers/01 never updated (S17 audit)
+
+`engine/02-gamerules-contract.md` settled the 4-method abstract-class `GameRules` shape and the `IntakeResult`/`DispatchOrigin`/`DrainResult` types. `engine/01-evaluation-loop.md` and `triggers/01-trigger-fold.md` were not updated at the time and still show the old 3-method interface with retired types.
+
+- 2026-05-01 | source: features/engine/models/02-gamerules-contract.md | target: features/engine/models/01-evaluation-loop.md §3 §5 §6 | reason: old `void OnQueueDrained(GameEngine,GameState)`, `Evaluate(...,GameState state)`, `SchedulingDecision/SchedulingContext` signatures; engine/02 settled `DrainResult OnQueueDrained()`, `Evaluate(action,result)`, `IntakeResult/DispatchOrigin` | open
+- 2026-05-01 | source: features/engine/models/02-gamerules-contract.md | target: features/triggers/models/01-trigger-fold.md §4 | reason: §4 shows an inline 3-method `GameRules` interface with `SchedulingDecision` return and no `FilterTriggers`; engine/02 settled the 4-method abstract-class shape | open
+
+### Cascade — effects/02 FoldResult settled → triggers/01 react signature never updated (S17 audit)
+
+`effects/02-replacement-prevention.md` settled `react: Func<T,Context,FoldResult>` with the `Keep/Cancel/Replace` discriminated union. `triggers/01-trigger-fold.md` §2 still declares the older `react: Func<T,Context,T>` (returns modified command). Incompatible signatures for the same fold mechanism.
+
+- 2026-05-01 | source: features/effects/models/02-replacement-prevention.md | target: features/triggers/models/01-trigger-fold.md §2 | reason: triggers/01 §2 declares `react: Func<T,Context,T>`; effects/02 settled `react: Func<T,Context,FoldResult>` (discriminated union Keep/Cancel/Replace); incompatible — one of the two must be the authoritative shape | open
+
+### Cascade — ICommandAwaiter settled (session 15) → effects/01 scope.Dispatch description missed (S17 audit)
+
+- 2026-05-01 | source: features/effects/models/04-effect-flow.md §4.5 | target: features/effects/models/01-async-dispatch.md §7 | reason: §7 scope.Dispatch end-to-end trace describes the full fold without mentioning the engine-level awaiter pre-check; a `TryResolve` match short-circuits before the fold (settled S15 Q7); trace is stale | open
+
+### Cascade — Scaffold types (session 14) — IHandlerRegistry.Validate missed (S17 audit)
+
+- 2026-05-01 | source: features/effects/models/04-effect-flow.md §4 | target: features/engine/models/02-gamerules-contract.md §6 | reason: `IHandlerRegistry.Validate` still takes `GameState state`; Scaffold cascade (S14) retired single-record GameState in favour of `IStateScope`; missed in S14 discharge | open
+
+### Cascade — session 15/16 — Scope references survived discharge (S17 audit)
+
+S15 Q6 deleted the `Scope` discriminator from `AvailableActionsSnapshot`. The S15–S16 discharge pass missed two targets.
+
+- 2026-05-01 | source: sessions/session-15.md | target: features/presentation/models/01-presentation-loop.md §12 | reason: §12 still references `Scope` argument on `AvailableActionsSnapshot` constructor; Scope discriminator deleted S15 Q6 | open
+- 2026-05-01 | source: sessions/session-15.md | target: support/samples/pile-counter.md §9.1 | reason: §9.1 last paragraph still mentions `Scope` field on `AvailableActionsSnapshot`; same S15 Q6 deletion; missed in S15–S16 discharge | open
 
 ## Resolved
 

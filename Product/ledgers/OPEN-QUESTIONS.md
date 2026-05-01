@@ -21,6 +21,10 @@ Status: initial answers captured in [Core Model Decisions](features/entities/mod
 - ~~Do all entities have definitions, or can runtime-only entities exist without definitions?~~ → All entities must have a base definition, including generated tokens. (doc 08)
 - ~~How do attachments, equipment, stacked cards, tokens, and transformed cards relate to a base card instance?~~ → Instance = definition + modifiers. Attachments are separate instances connected through relationships. (doc 08)
 
+Still open:
+- **Entity destruction / Cleanup lifecycle** — what "destroyed" means for the Store, when the framework Cleanup hook fires relative to the destruction command envelope, and what happens to in-flight dispatches referencing the destroyed entity. Load-bearing for ongoing effects that self-destruct. ([effects/03-ongoing-effects §5](features/effects/models/03-ongoing-effects.md))
+- **Entity modifier mutation API (Scaffold bridge)** — concrete payload shapes for `AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload` through the `com.scaffold.entities.states` bridge. Needed before any game reads or writes layered modifier values. ([entities/01-definition-instance-model §Values And Modifiers](features/entities/models/01-definition-instance-model.md))
+
 ## Zones
 
 Status: initial answers captured in [Zone Model Decisions](features/zones/models/01-zone-model.md), then incorporated into [Zone Model](features/zones/models/01-zone-model.md).
@@ -31,6 +35,10 @@ Status: initial answers captured in [Zone Model Decisions](features/zones/models
 - ~~How should hidden, partially visible, and viewer-specific state be modeled?~~ → Two visibility channels: membership visibility and detail visibility. Actor/player/ownership semantics are not yet designed; per-actor visibility query API is deferred. (docs 11, 12)
 - ~~Should zone movement be a generic event, a task, or a specialized rules primitive?~~ → Zone movement is a normal simulation-driven game action flowing through the standard pipeline. (docs 11, 12)
 - ~~How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?~~ → Deferred to the action/decision model; may or may not be zones depending on game. (docs 11, 12)
+
+Still open:
+- **Zone model internal open questions** — nine questions within `zones/01-zone-model.md` "Open Questions Left For Later" have no follow-up model: zone-as-entity vs lightweight record, membership storage model, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, and spatial rule attachment. Several (membership storage, visibility API, actor semantics) are blocking for any non-trivial game. ([zones/01-zone-model.md](features/zones/models/01-zone-model.md))
+- **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model. ([effects/03-ongoing-effects §6](features/effects/models/03-ongoing-effects.md))
 
 ## Rules And Scheduling
 
@@ -61,6 +69,15 @@ Still open:
 - **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were deleted (S15 Q6); snapshot carries templates only. Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. (doc 29 §9; [04-effect-flow §9](features/effects/models/04-effect-flow.md))
 - **`Context` shape** — what exactly `Context` exposes to trigger conditions and reaction functions is explicitly TBD; directly tied to the slice catalog above. (doc 21 §3, §8)
 - **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else. (doc 21 §8)
+- **`IHandlerRegistry` interface** — typed lookup API (how to resolve the correct `Validate` overload for a given command type), registration surface, and how `GameEngineBuilder` populates it. Placeholder one-liner in engine/02 §6 explicitly deferred. ([engine/02 §6](features/engine/models/02-gamerules-contract.md))
+- **`GameEngineBuilder` construction protocol** — the builder type used in `pile-counter §9.8` (`WithHandlers`, `WithMutators`, `WithRule`, `WithIntentMapper`, `Build`) and the `services` bag object are undefined anywhere. Load-bearing for any game author. ([pile-counter §9.8](support/samples/pile-counter.md))
+- **Engine startup / first `OnQueueDrained` trigger** — on a freshly-built idle engine the queue is empty; the drain loop condition (`!running && pending.Count > 0`) would never fire. How the first drain (and the initial available-actions write) is triggered is undocumented. ([engine/01 §3](features/engine/models/01-evaluation-loop.md))
+- **`ICommandPipeline` interface** — `GameEngine` holds a `readonly ICommandPipeline pipeline` and calls `pipeline.Execute(action)`, but the interface is never defined. Its relationship to the trigger fold (effects/02) and handler dispatch is described in prose only. ([engine/01 §2 §9](features/engine/models/01-evaluation-loop.md))
+- **`ITriggerSystem` vs `ITriggerPipeline` — unification decision** — two competing shapes: `triggers/01` uses `ITriggerSystem` with `OnBefore<T>/OnAfter<T>/RemoveAll(owner)` (subscription registration surface); `effects/02` uses `ITriggerPipeline` with `RunBefore/RunAfter` + `TriggerMatch` (execution surface). Are these the same type, two sides of one type, or two separate objects? ([triggers/01 §2 §5](features/triggers/models/01-trigger-fold.md), [effects/02 §3 §5](features/effects/models/02-replacement-prevention.md))
+- **Intent → template lookup** — `IIntentMapper.Map(ActionTemplate, PlayerChoice)` requires a pre-resolved template, but how the gateway/store picks the matching `ActionTemplate` from the snapshot for a raw `PlayerIntent` is undocumented. The "(or builds one from the intent)" clause in presentation/01 §10 step 6 is unexplained. ([presentation/01 §8 §10](features/presentation/models/01-presentation-loop.md))
+- **`GameRules` service wiring in builder** — what the `services` bag type is, which framework layer constructs the four injected services (`IStateScope`, `IAvailableActions`, `IIntakeQueue`, `IHandlerRegistry`), and in what order they are materialized. ([engine/02 §2](features/engine/models/02-gamerules-contract.md), [pile-counter §9.8](support/samples/pile-counter.md))
+- **Trigger subscription entry point for regular cards** — `effects/03` §6 shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events. ([triggers/01 §5](features/triggers/models/01-trigger-fold.md))
+- **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop. ([actions/01 §History Envelope](features/actions/models/01-command-pipeline.md))
 
 ## Authoring
 

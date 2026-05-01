@@ -1,7 +1,7 @@
 ---
 type: model
 status: accepted
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 builds-on: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]
 tags: [#workflow, #meta]
 ---
@@ -149,7 +149,7 @@ Reader knows in 2 seconds what they're holding.
 
 Feature roots derive their `Dependencies` section from the union of contained Models' `builds-on:`, so they don't need to repeat it in front matter.
 
-**Supersession** is recorded in two places only: the old doc's `status: superseded by NNNN` string (where NNNN is the new ADR's identifier), and the new doc's `## Consequences > Reverts/replaces` field. No `superseded-by:` front-matter field — would be a third locus for the same fact, with the same drift risk Q3 eliminated for cascade implications.
+**Supersession** is recorded in two places only: the old doc's `status: superseded by <ref>` string, and the new doc's `## Consequences > Reverts/replaces` field. The `<ref>` form depends on doc type — for ADRs it's the new ADR's project-wide identifier (`NNNN`); for Models it's the new Model's per-feature path or counter (`02-gamerules-contract` or `02`). No `superseded-by:` front-matter field — would be a third locus for the same fact, with the same drift risk Q3 eliminated for cascade implications.
 
 ---
 
@@ -288,6 +288,10 @@ A purely descriptive Model (e.g., a system that doesn't have meaningful alternat
 **`implemented` status convention.** A Model flips to `implemented` (via §5.6.2 build gate) when code in the implementation directory satisfies its contract. Edits to an `implemented` Model's contract surface open **drift entries** against the code — either code updates to match, or the Model reverts to `settled`.
 
 **`abandoned` status convention.** A Model that gets partway through and is decided against keeps its body as historical record, but receives a one-line header at the top: *"Status: abandoned YYYY-MM-DD — <reason>. Original attempt below for record."* The `abandoned` status is distinct from `superseded` (which implies a replacement Model exists). Use `abandoned` when the line of inquiry was wrong, not when a better answer was found.
+
+**`superseded` status convention.** A Model whose contract has been replaced by a later Model in the same feature folder (the new one is now canonical) keeps its body as historical record. Front matter: `status: superseded by NN-<slug>` (per-feature numbered, matching ADR convention). Header at the top: *"Status: superseded YYYY-MM-DD by [NN-<slug>](path) — `<reason>`. Body below for record."* The new Model's `## Consequences > Reverts/replaces` field names this Model. Trigger §5.4 / §5.9 cascade protocol — every doc with `builds-on:` referencing the old Model gets a debt entry, plus a token grep across `Product/` for any retired identifiers (§5.7 step 1b).
+
+**Detecting silent supersession.** When writing a new Model that introduces a contract surface (interface, type, method shape), check whether any older Model in the same feature folder defines or sketches the same surface differently. If so, the older Model is now superseded — apply this convention before writing further content. Skipping this check is the failure mode that produced `engine/02` silently superseding `engine/01`'s `GameRules` interface without flipping the status (S17 audit).
 
 ### 4.4 Sample
 
@@ -489,7 +493,11 @@ The session note records the **trail**, not a linear narrative: what was created
 
 ### 5.4 Reopening a settled decision
 
-Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in the session log.
+**ADR.** Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in the session log.
+
+**Model.** Don't edit the old Model. Either write a new Model that replaces the contract, or extend a later-numbered Model that already covers the same surface. Set the old Model's status to `superseded by NN-<slug>` and apply the §4.3 superseded-status convention (one-line header, body kept for record). Note the reason in the session log.
+
+In both cases, the supersession is itself a debt-generating event — see §5.9.
 
 ### 5.5 Alignment-debt discharge as a focus
 
@@ -550,7 +558,10 @@ The flip itself is a deliberate user action — Models reaching the target makes
 
 **On every Model edit, before commit:**
 
-1. Identify downstream docs the edit affects (Models, Features, Samples, ADRs that build on this one).
+1. **Identify downstream docs the edit affects** (Models, Features, Samples, ADRs). Three sub-steps, all mandatory:
+   - **1a. `builds-on:` walk.** Every doc whose front-matter `builds-on:` references this Model or its feature root. This catches *consumers* of the contract.
+   - **1b. Retired-token grep.** For any type, method, identifier, or field whose name or signature changed, run `grep -rn "<retired-token>" Product/` and add every match as a target. This catches docs that *describe or redefine* the type without consuming it via `builds-on:` — the failure mode that produced 7 missed cascade targets in the S17 audit. Mental search alone is not sufficient; the grep is the forcing function.
+   - **1c. Shadow-check.** If the edit introduces a new contract surface (new interface, new type, new method shape), check older Models in the same feature folder for competing sketches of the same surface. A match means the older Model is now superseded — apply §4.3 superseded-status convention and §5.4 protocol *before* listing further cascade targets, then re-run 1a/1b on the freshly-superseded doc.
 2. Append **one ledger entry per affected doc**: source path, target path, one-line reason, status `open`, date.
 3. In the session note's content section, record a one-line `debt: N opened` (or `debt: none` if the edit was self-contained). Empty is not allowed — `debt: none` is the explicit signal that cascade was considered.
 
@@ -568,15 +579,16 @@ A consistency pass can also be invoked opportunistically (when the primary threa
 
 ### 5.9 Backtracking on supersession
 
-When an ADR is superseded (§5.4), the supersession is itself a debt-generating event:
+When an ADR or Model is superseded (§5.4), the supersession is itself a debt-generating event:
 
-1. Write the new ADR (`NNNN supersedes MMMM`), set old ADR `superseded by NNNN`.
-2. Walk the `builds-on:` graph: find every doc whose `builds-on:` references the superseded ADR or its host Model.
-3. For each, append a ledger entry: source = new ADR path, target = dependent doc, reason = "supersession of MMMM may invalidate framing."
-4. The new ADR's `## Consequences > Reverts/replaces` field names the cascade scope.
-5. Decide in-session: discharge debt now, or let it count toward the §5.8 threshold for next pass.
+1. Write the new ADR (`NNNN supersedes MMMM`) or new Model; set the old doc's status to `superseded by <ref>` per §3 / §4.3.
+2. Walk the `builds-on:` graph: find every doc whose `builds-on:` references the superseded ADR/Model or its host feature.
+3. **Run the §5.7 step 1b retired-token grep** across `Product/` for any identifier, type, or method that changed shape under the new doc. Add matches as cascade targets. This catches docs that *describe* the old contract without consuming it via `builds-on:`.
+4. For each target, append a ledger entry: source = new doc path, target = dependent doc, reason = "supersession of MMMM may invalidate framing" (or specific signature drift for grep-found targets).
+5. The new doc's `## Consequences > Reverts/replaces` field names the cascade scope.
+6. Decide in-session: discharge debt now, or let it count toward the §5.8 threshold for next pass.
 
-Without `builds-on:` mandatory in front matter (§3), this walk has holes. With it, the walk is exhaustive.
+`builds-on:` (§3, mandatory) catches consumers; the grep step (§5.7 1b) catches sketch-level redefinitions. Together the walk is exhaustive.
 
 ### 5.10 Reference-staleness linter
 
