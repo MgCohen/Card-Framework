@@ -32,6 +32,7 @@ Chat reports MAY add **chat-only extensions** — emoji that have a stable role 
 | 🕐 | session outcome / carry-over summary (the bridge line between sessions) | start-session, end-session |
 | 📤 | commit/push action | end-session |
 | 🔄 | resume signal (re-entering a pre-created skeleton that was never closed) | start-session |
+| 🔒 | locked design decision (a settled verdict from a design-pass walk) | design-pass |
 
 ---
 
@@ -238,6 +239,39 @@ Uses the §2.7 result-strip pattern.
 
 *Deferred — once-per-project skill, lower priority. Will be captured in a future iteration when the bootstrap shape is designed.*
 
+### 3.6 design-pass
+
+Rendered at the end of Phase 3 once all questions are locked. Not rendered mid-walk.
+
+**Render order:**
+
+1. **Title** (H1) — `# Design Pass — <topic>`
+2. **Scope** (stat strip) — `📊 <N> questions settled · no doc edits`
+3. **Locked decisions** (H3 anchor heading + bullet list) —
+   ```
+   ### 🔒 Locked decisions
+   - Q1 = <option> — <implication>
+   - Q2 = <option> — <implication>
+   ...
+   ```
+4. **Patch cascade** (H3 anchor heading + bullet list) —
+   ```
+   ### 🎯 Patch cascade
+   - <Model or ADR path> — <what changes>
+   ```
+   Omitted entirely when no downstream docs need patching.
+5. **Session note** (strip) — `📝 Session note: Part 1 "Decisions settled" + "Active question going out" updated`
+6. **Closing prompt** (italic) — `_Start a fresh session to apply these patches._`
+
+**Empty-state strips:**
+
+| Section | Empty render |
+|---|---|
+| Patch cascade (no downstream edits) | omit the section entirely |
+| Session note (no in-progress session) | `⚠️ No in-progress session note — update manually` |
+
+**No prose preamble.** Output begins at the H1 — same constraint as other skill reports.
+
 ---
 
 ## 4. Changelog
@@ -249,3 +283,4 @@ Uses the §2.7 result-strip pattern.
 - **2026-04-30** — bootstrap deferred (§3.5 placeholder); will be captured in a future iteration.
 - **2026-04-30** — start-session §3.1 rendering constraints added: no prose preamble, no inline code in the 🎯 H2, 🕐 Last session is hard one-line.
 - **2026-04-30** — start-session resume mode: 🔄 added as chat-only extension; §3.1 grew a step 1a resume strip rendered when the skill detects a dangling pre-created skeleton (per `start-session.md` step 2).
+- **2026-05-01** — design-pass template added (§3.6). 🔒 added as chat-only extension for locked design decisions.
