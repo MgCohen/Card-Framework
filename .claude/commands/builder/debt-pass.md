@@ -21,7 +21,11 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
 
 2. **Threshold check.** Count open entries in `Product/ledgers/ALIGNMENT-DEBT.md` (lines matching `^- id: ad-` — unresolved entries start with `- id:`, resolved entries start with `- ~~`). If **< 5**, exit with `nothing to do (count=N, threshold=5)` and stop. The GHA threshold gate is the primary check; this is a defensive secondary.
 
-3. **In-progress session pre-check.** Run `grep -rl 'status: in-progress' Product/sessions/`. If any file matches, exit with `session in progress (<filename>), refusing to run — close or discard it first` and stop. **This check fires here, before any expensive discharge work, on purpose** — a concurrent in-progress session means the workspace is not in a clean state for an unattended pass.
+3. **In-progress session pre-check.** Run `grep -rl 'status: in-progress' Product/sessions/`. For each match, read the file and classify:
+   - **Empty skeleton** — `work-summary` is `""` AND `### Work done` has no bullets AND `### Decisions settled` has no bullets. This is a `start-session` placeholder that was never filled. Note the path as `ADOPTED_SKELETON` and continue — debt-pass will fill it in-place at step 9 rather than creating a new file.
+   - **Non-empty session** — any actual work content is present. Exit with `session in progress (<filename>), refusing to run — close or discard it first` and stop.
+
+   This check fires before any expensive discharge work on purpose. An empty skeleton is safe to adopt; an active session with real work is not.
 
 4. **Branch collision check.**
    a. `git fetch origin --prune`.
@@ -84,7 +88,9 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
 
 8. **Checkpoint — branch mode, skip.** Debt-pass runs on a feature branch. Do not write `SESSION-CHECKPOINT.md`. The checkpoint will be reprojected by `/builder:merge-pass` when this branch merges, using `_project-checkpoint` with the session note written in step 9 as input. Print: `Checkpoint update deferred to /builder:merge-pass.`
 
-9. **Write the session note (v2).** Derive timestamp from `date -u +%Y%m%d-%H%M`. Target path: `Product/sessions/session-<YYYYMMDD>-<HHMM>-debt-pass.md`. Read `checkpoint.head` from `Product/SESSION-CHECKPOINT.md` for the `parent:` field. Scaffold front matter:
+9. **Write the session note (v2).** Two paths depending on whether an empty skeleton was adopted in step 3:
+
+   **Path A — no adopted skeleton.** Derive timestamp from `date -u +%Y%m%d-%H%M`. Target path: `Product/sessions/session-<YYYYMMDD>-<HHMM>-debt-pass.md`. Read `checkpoint.head` from `Product/SESSION-CHECKPOINT.md` for the `parent:` field. Scaffold front matter:
    ```yaml
    ---
    type: session
@@ -100,9 +106,19 @@ The agent's value is judgment (confidence-gate routing, auto-flag categorization
    ---
    ```
    Title: `# Debt-pass — <today> (auto)`.
-   - **Active question coming in** — copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`.
+
+   **Path B — adopted empty skeleton (`ADOPTED_SKELETON` set in step 3).** Update the existing file in-place. Do not rename or move it. Patch the frontmatter:
+   - Set `work-summary: "Auto debt-pass: <N> entries discharged, <M> stragglers caught, <K> skipped."`
+   - Add `#debt-pass` to `tags` if not already present.
+   - Set `last-updated: <today>`.
+   - Leave `session-id`, `parent`, `started-at`, `status` unchanged.
+
+   The title and `### Active question coming in` are already filled by `start-session` — do not overwrite them.
+
+   **Both paths — body sections to fill:**
+   - **Active question coming in** — (Path A only) copy verbatim from the prior checkpoint's `## 🎯 The active open question (singular)`. Path B already has this.
    - **Work done** — bullets: `<N> debt entries discharged`, `<M> stragglers caught`, `<K> skipped — needs a session`, `retired-tokens.json: <list of new terms>`, `debt: none` (debt-pass closes entries; it never opens new ones).
-   - **Decisions settled** — none (debt-pass is mechanical; debit `none`).
+   - **Decisions settled** — none (debt-pass is mechanical; write `none`).
    - **Active question going out** — copy verbatim from the prior checkpoint's active question. Debt-pass does not introduce its own.
    - **Followups created** — none routed beyond the skipped entries (already in the ledger).
    - **References** — list of touched docs (from the discharge + hygiene loops).
@@ -132,7 +148,7 @@ The agent **will not**:
 - Use `git push --force`, `git commit --amend`, or any `--no-verify` flag.
 - Run if the working tree is dirty on entry (step 1).
 - Run if a prior debt-pass PR is open (step 4c).
-- Run if any session file has `status: in-progress` at pre-flight (step 3) — refuse early to avoid running alongside an active session. (The in-progress note written in step 9 is exempt — it is created after this check passes.)
+- Run if any session file has `status: in-progress` at pre-flight (step 3) **and has actual work content** — refuse early to avoid stomping an active session. Empty skeletons (blank `work-summary`, empty Work done + Decisions settled) are adopted in-place at step 9; they are not a refusal trigger.
 
 If any rule would be violated, stop and surface — never silently bypass.
 
