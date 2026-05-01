@@ -1,0 +1,27 @@
+{
+  "expectations": [
+    {
+      "text": "Report covers only rules A1–A4; S1 and S2 are not mentioned",
+      "passed": true,
+      "evidence": "Report covers only 4 archive integrity checks, no S1/S2"
+    },
+    {
+      "text": "All archive rules return zero findings (no archive/ directories exist in this project)",
+      "passed": true,
+      "evidence": "All checks return zero findings"
+    },
+    {
+      "text": "Report emits a clean/zero-findings message",
+      "passed": true,
+      "evidence": "report.md: '✅ Clean: no new findings.'"
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "pass_rate": 1.0
+  },
+  "claims": [],
+  "eval_feedback": {"suggestions": [], "overall": "Clean pass."}
+}

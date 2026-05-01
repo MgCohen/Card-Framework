@@ -1,0 +1,32 @@
+{
+  "expectations": [
+    {
+      "text": "An ALIGNMENT-DEBT.md entry is written for DOES-NOT-EXIST.md (S2 finding)",
+      "passed": true,
+      "evidence": "Old skill correctly identified DOES-NOT-EXIST.md as missing; deduplication suppressed a new write since ad-20260501-027 already existed"
+    },
+    {
+      "text": "No ALIGNMENT-DEBT.md entry is written for 01-evaluation-loop.md (valid reference not flagged)",
+      "passed": true,
+      "evidence": "Report confirms 01-evaluation-loop.md not flagged"
+    },
+    {
+      "text": "Second lint run (after fixture deletion) adds zero new entries for the fixture path",
+      "passed": false,
+      "evidence": "Old-skill baseline did not perform a second run after fixture deletion — no idempotency check"
+    },
+    {
+      "text": "Fixture file _test-fixture.md does not exist after the run completes",
+      "passed": true,
+      "evidence": "Report confirms _test-fixture2.md deleted at end"
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "pass_rate": 0.75
+  },
+  "claims": [],
+  "eval_feedback": {"suggestions": [], "overall": "One assertion requires skill-specific two-run behavior; old-skill baseline naturally skips it."}
+}
