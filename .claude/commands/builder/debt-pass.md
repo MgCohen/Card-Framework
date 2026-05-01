@@ -15,6 +15,15 @@ Each tool call is **one turn**. The action runs with a bounded `--max-turns` bud
 
 The agent's value is judgment (confidence-gate routing, auto-flag categorization, active question copy). Mechanical execution belongs in bash, not in many small tool calls.
 
+## Pre-flight — invocation gate
+
+This command is automation-only. Before any other work, allow the run only if **either**:
+
+- `$GITHUB_ACTIONS` is set (CI invocation), **or**
+- `$ARGUMENTS` contains `--force` (explicit local override — used when you want to inspect the diff before pushing).
+
+Otherwise, exit immediately with: `debt-pass is automation-only — the GHA workflow runs on the threshold. Pass --force if you really want to discharge locally.` No tool calls beyond the env/argument check.
+
 ## Steps
 
 1. **Sync.** `git fetch origin && git pull --ff-only`. **Refuse to start if the working tree is dirty** — exit with `working tree dirty, refusing to run` and stop. The agent runs from whatever ref the trigger placed us on: `main` for organic GHA fires (the `push: branches: [main]` trigger), the dispatched ref for `workflow_dispatch` (used by Layer 3 validation), and the developer's chosen branch for local runs (the runbook says to be on `main` before invoking — see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md)). Do not `git checkout main`; that would silently switch the dev away from a feature branch on accidental local invocation, and would break Layer 3 dispatch tests by switching away from the seeded branch.
@@ -156,5 +165,5 @@ If any rule would be violated, stop and surface — never silently bypass.
 
 - This command is invoked unattended from `.github/workflows/debt-pass.yml` via `anthropics/claude-code-action@v1`. The PR is the human-review surface; the command itself has no interactive prompts.
 - The threshold gate lives in the GHA workflow (count ≥ 5 from awk/grep on the ledger). Step 2 in this command is a defensive secondary check — it should rarely fire on its own.
-- Manual run for debugging: `claude -p "/builder:debt-pass"` from a clean working tree on `main` with `gh` authenticated. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
+- Manual run for debugging: `claude -p "/builder:debt-pass --force"` from a clean working tree on `main` with `gh` authenticated. `--force` is required outside CI — see the pre-flight invocation gate. The branch-collision check makes re-runs safe — a prior PR will be detected and the run will skip.
 - Layer 2 local validation: see [`Product/_workflow/_validation/debt-pass-runbook.md`](../../Product/_workflow/_validation/debt-pass-runbook.md) for the pre-seeded fixture, override prompt, six-watchpoint checklist, and cleanup sequence — re-run after any change to this command.

@@ -36,6 +36,7 @@ You are running a merge-pass to reconcile parallel Product Builder sessions into
    - For each candidate branch, find new session notes: `git diff --name-only main...<branch> -- 'Product/sessions/session-*.md'`.
    - Read the frontmatter of each found session note. Collect: `{ session-id, branch, parent, started-at, status, work-summary }`.
    - Skip any session with `status: in-progress` — not ready to merge. Note them in the PR body.
+   - Skip any session with `status: discarded` — orphan from start-session's cleanup pass; never enters `merged[]`. No surfacing needed.
 
 3. **Read checkpoint state.**
    Read `Product/SESSION-CHECKPOINT.md`. Extract `head` and `merged[]` from frontmatter.

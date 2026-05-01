@@ -576,11 +576,11 @@ The session-note assertion is the forcing function: it makes "I considered casca
 
 ### 5.8 Consistency-pass cadence
 
-When `ledgers/ALIGNMENT-DEBT.md` crosses **5 open entries**, the next session is forced into pass-mode (§5.5 alignment-debt discharge). The threshold is the structural forcing function: scales with actual debt, doesn't burn sessions when the ledger is empty, doesn't rely on judgment we've shown we can fail at.
+`ledgers/ALIGNMENT-DEBT.md` crossing **5 open entries** triggers the GHA debt-pass workflow (`.github/workflows/debt-pass.yml`), which discharges automatically and opens a PR for review. The threshold is the automation trigger, not a session gate — start-session surfaces the count as informational (`📊 N debt · ⏳ awaiting automated discharge`) but never forces a session into pass-mode.
 
 Threshold of 5 is calibration, not principle. Adjust if data shows otherwise — but pick a number and commit.
 
-A consistency pass can also be invoked opportunistically (when the primary thread blocks), but the threshold is the *only* hard rule.
+Manual local discharge (`/builder:debt-pass --force`) is supported when you want to inspect the diff before pushing, but is no longer the primary path. Without `--force` and outside CI, the command refuses.
 
 ### 5.9 Backtracking on supersession
 
