@@ -56,6 +56,11 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `PLANS/auto-debt-pass.md` §1 step 7, `.claude/commands/builder/end-session.md`.
   Status: open
 
+- **`/builder:end-session` unsaved-body check** — end-session must detect when a session sketched or approved a Model body / interface / contract / ADR-shape that was *not* written to a canonical file (Model doc, ADR, feature note) and either prompt to save it, refuse to close, or surface it as deferred-with-justification. Today end-session only checks debt + hygiene; sketched-but-unsaved bodies leak into prose-only memory (session note + checkpoint) and require errata commits later. Session 15 is the canonical example: the `ICommandAwaiter` final shape was settled by user verdict but never written into `04-effect-flow.md`; an errata commit (`89c161e`) was needed to capture mapper + gateway invariants the close pass missed. Realistic mechanism: a yes/no/where prompt during step 2 of end-session — "Did this session settle any new interface, contract, or Model body? If yes, where is it saved?" — refuse to close on yes-and-nowhere.
+  Trigger: next end-session skill iteration; or next session that exhibits the same leak.
+  References: `Product/sessions/session-15.md`, errata commit `89c161e`, `.claude/commands/builder/end-session.md` step 2 (hygiene).
+  Status: open
+
 - **Other Tier 2/3 commands and skills** — see `ProductBuilder/AI-FIRST-AUTOMATION.md` §8 sequencing for the ordered list and triggers. (`/builder:debt-pass` was promoted out of this umbrella above.)
   Trigger: per item in §8.
   References: `ProductBuilder/AI-FIRST-AUTOMATION.md` §8.
