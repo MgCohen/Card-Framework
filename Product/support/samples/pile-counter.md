@@ -1,7 +1,7 @@
 ---
 type: sample
 status: draft
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
 tags: [#sample, #pile-counter]
 ---
@@ -218,7 +218,7 @@ public sealed class PileCounterIntentMapper : IIntentMapper
 }
 ```
 
-The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading the `PilesState` slice through Scaffold's `IStateScope`. See [doc 29 §3](features/engine/models/03-snapshot-pipeline.md) for the typed-template binding pattern, [04-effect-flow §4.1](features/effects/models/04-effect-flow.md) for `IStateScope`.
+The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by reading the `PilesState` slice through Scaffold's `IStateScope`. This is normal state-driven mapping — `IStateScope` is injected here for `LocateCard`, not for decision awareness (the mapper is decision-unaware per S15 / ADR-0006). See [doc 29 §3](features/engine/models/03-snapshot-pipeline.md) for the typed-template binding pattern, [04-effect-flow §4.1](features/effects/models/04-effect-flow.md) for `IStateScope`.
 
 ### 9.4 Handler (validate + handle)
 
@@ -335,7 +335,7 @@ public sealed class PileCounterRules : GameRules
             templates.Add(new MoveCardTemplate(top.Id, destinations));
         }
 
-        Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+        Actions.Set(new AvailableActionsSnapshot(templates));
         return DrainResult.Empty;
     }
 }

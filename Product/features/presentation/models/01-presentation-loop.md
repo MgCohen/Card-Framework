@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 builds-on: [features/actions/models/02-availability-snapshot.md, features/engine/models/03-snapshot-pipeline.md]
 tags: [#presentation, #loop, #available-actions]
 ---
@@ -89,7 +89,7 @@ public sealed class GameState
 }
 ```
 
-`AvailableActionsSnapshot` carries `Scope` + typed `ActionTemplate` list (see [doc 28](features/actions/models/02-availability-snapshot.md) for the shape, [doc 29](features/engine/models/03-snapshot-pipeline.md) for production).
+`AvailableActionsSnapshot` carries a typed `ActionTemplate` list (no scope discriminator — dropped S15 Q6; see [doc 28](features/actions/models/02-availability-snapshot.md) for the shape, [doc 29](features/engine/models/03-snapshot-pipeline.md) for production).
 
 Treating the snapshot as state — not as a side-channel — has three consequences:
 
@@ -257,6 +257,7 @@ A player makes a move in Pile Counter:
 6. **Store binds the intent.** Picks the matching `ActionTemplate` from the snapshot (or builds one from the intent), wraps the player's pick in `PlayerChoice`, calls `IntentMapper.Map(template, choice)` → `MoveCardCommand(card, from, to)`.
 7. **Store calls `engine.Dispatch(command, PlayerIntent)`.**
 8. **Engine intake pipeline:**
+   0. Pre-pipeline awaiter check: `awaiter.TryResolve(command)`. Pile Counter has no open awaits, so this is a no-op and the command falls through. (In a decision-active game this would short-circuit here; no envelope, no handler, no triggers.)
    1. `handler.Validate(command, state, out reason)` — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
    2. `rule.OnIncomingCommand(command, origin)` — Pile Counter's rule trivially `Pending.AddLast(command)`, returns `Ok`.
 9. **Drain begins.** Pipeline runs: before-fold (no triggers) → `MoveCardHandler.Handle` → after-fold (no triggers) → envelope published.
@@ -269,7 +270,7 @@ A player makes a move in Pile Counter:
 
 ## 11. Decisions Locked
 
-- **Snapshot lives in state.** `GameState.AvailableActions: AvailableActionsSnapshot` (Scope + typed templates). No separate channel, no push API.
+- **Snapshot lives in state.** `GameState.AvailableActions: AvailableActionsSnapshot` (typed templates only — no scope discriminator). No separate channel, no push API.
 - **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters. See [doc 28](features/actions/models/02-availability-snapshot.md), [doc 29 §3](features/engine/models/03-snapshot-pipeline.md).
 - **Snapshot is written via the `IAvailableActions` service** by the rule (default in `OnQueueDrained`) or effects (mid-execution overrides). Engine never auto-publishes.
 - **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change. Pattern-matches typed templates.
@@ -294,7 +295,7 @@ public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch)
 public override DrainResult OnQueueDrained()
 {
     var templates = EnumerateTemplates(State.Current);
-    Actions.Set(new AvailableActionsSnapshot(new FreeInput(), templates));
+    Actions.Set(new AvailableActionsSnapshot(templates));
     return DrainResult.Empty;
 }
 ```
@@ -309,7 +310,7 @@ The engine dispatches each `Dispatch` command. The snapshot write is a service c
 
 This loop was designed against Pile Counter, which has no triggers, no async decisions, no phase transitions, and no game-end state beyond a simple win check. Richer games may surface additional concerns:
 
-- **Async decisions** — when an effect awaits player input (target picker, choice overlay), the affordance shape may need to express "the player must respond *here*" vs. "the player has free input." Currently AffordanceMap is purely about free input.
+- **Async decisions** — when an effect awaits player input (target picker, choice overlay), the snapshot contains only the legal-response templates; the engine's `ICommandAwaiter` handles routing. The UI currently has no explicit "you must respond here" signal from the snapshot (scope discriminator was dropped S15 Q6); the template set itself conveys context.
 - **Multiplayer / hidden info** — different players see different affordances. The snapshot may need scoping per actor.
 - **Snapshot diffing** — for performance, the engine may compute snapshot deltas rather than full recomputes. Out of scope for now.
 - **Animation timing** — the UI may want to defer rendering a new state until an animation completes. State updates fire immediately; the view needs an animation queue. Presentation concern, not framework.
@@ -324,7 +325,7 @@ These extend the framework's snapshot story; they don't break the four-layer mod
 - **`IIntentMapper` shape** — refined: `Map(ActionTemplate, PlayerChoice) → GameCommand` ([doc 29 §3](features/engine/models/03-snapshot-pipeline.md)). `PlayerChoice` shape (positional vs named, parameter typing) pin during implementation.
 - **`IGameStore` shape** — sketched here as a presentation-side wrapper; final shape depends on the chosen state library (Scaffold State).
 - **Snapshot revision tag** — useful for the UI to detect "I have a stale snapshot." Worth adding once we hit a concrete need.
-- **Snapshot scope as state machine** — `FreeInput`/`DecisionPrompt` is transitional; richer FSM-shaped game-state model is the eventual direction ([doc 29 §4](features/engine/models/03-snapshot-pipeline.md)).
+- **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were dropped (S15 Q6). FSM-shaped state model is the eventual successor to type-only routing ([doc 29 §9](features/engine/models/03-snapshot-pipeline.md)).
 
 ---
 

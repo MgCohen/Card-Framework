@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 builds-on: [features/effects/models/01-async-dispatch.md, features/engine/models/03-snapshot-pipeline.md]
 tags: [#effects, #handler-context, #decisions, #async]
 ---
@@ -13,7 +13,7 @@ This document settles the full mid-execution lifecycle of an effect: what servic
 Builds on:
 
 - [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — layer hierarchy, two dispatch paths, `IEffectScope`
-- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions`, snapshot scope (`FreeInput` / `DecisionPrompt`)
+- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions`, snapshot shape (templates-only; scope discriminator dropped S15)
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — gateway, intent mapper, command pipeline
 
 ---
@@ -70,7 +70,7 @@ Effects can have per-instance state (counters, accumulators) but where that stat
 
 ## 4. Service Surfaces
 
-The state read/write surface is **not invented here** — we use the `com.scaffold.states` package's existing types. The framework only adds engine-internal services that don't exist upstream (`IAvailableActions`, `IDecisionResolver`).
+The state read/write surface is **not invented here** — we use the `com.scaffold.states` package's existing types. The framework only adds engine-internal services that don't exist upstream (`IAvailableActions`, `ICommandAwaiter`).
 
 ### 4.1 Reads — `IStateScope` (Scaffold)
 
@@ -151,77 +151,73 @@ public interface IHandlerContext
 {
     Store              Store    { get; }   // Scaffold; read + execute mutators
     IAvailableActions  Actions  { get; }   // mid-execution snapshot writes
-    IDecisionResolver  Resolver { get; }   // open and resolve decisions
+    ICommandAwaiter    Resolver { get; }   // register and resolve decision awaits
 }
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`. Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
 - **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line in pile-counter §9.4 is replaced by a single `ctx.Store.Execute(new MoveCardPayload(...))` call.
-- **No `CurrentDecisionId` field.** A decision handler receives the dispatched action as a parameter and reads its `CommandId` directly; carrying it on the context would duplicate the action's own identifier.
 
 > **Follow-up.** `IHandlerContext` aggregates three services into one parameter. An alternative is to constructor-inject the services on each handler and drop the context type entirely — fewer indirections, friendlier to DI, lets each handler declare exactly what it needs. Whether that scales better across games (more handlers? more services? composition with abilities?) is undesigned. Revisit when a second game stresses the surface; recorded in [§9](#9-open-follow-ups).
 
-### 4.5 `IDecisionResolver`
+### 4.5 `ICommandAwaiter`
 
 ```csharp
-public interface IDecisionResolver
+public interface ICommandAwaiter
 {
-    Task<PlayerChoice> Await(CommandId id);
-    bool TryResolve(CommandId id, PlayerChoice choice);
+    Task<TCommand> Wait<TCommand>(CancellationToken ct = default)
+        where TCommand : GameCommand;
+    bool TryResolve(GameCommand cmd);
 }
 ```
 
-- **`Await(id)`** — registers a `TaskCompletionSource<PlayerChoice>` keyed by `id` and returns its `Task`. Used by decision handlers.
-- **`TryResolve(id, choice)`** — completes the registered TCS for `id`. Returns `false` if no awaiter is registered (defensive; should not happen under the invariants in [§5](#5-decision-id-and-threading)).
+- **`Wait<TCommand>(ct)`** — registers a closure-captured `cmd is TCommand` predicate backed by a `TaskCompletionSource<TCommand>`. Returns the `Task`. Used by decision handlers to pause until a matching command arrives. Single-open per type-hierarchy is a runtime assert.
+- **`TryResolve(cmd)`** — pattern-matches `cmd` against every registered predicate. On a match, completes the associated TCS with the concrete command; returns `true`. Returns `false` if no predicate matches (the engine falls through to the normal pipeline). Called by the engine's pre-pipeline check on every `Dispatch`.
 
-The resolver is a normal engine service, exposed on `IHandlerContext` so that the one handler that needs it (the decision-response handler in [§6](#6-the-uniform-boundary)) can call `TryResolve`. Effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
+The awaiter is a normal engine service exposed on `IHandlerContext`. Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
 
-> **Follow-up.** The TCS-keyed-by-`CommandId` shape is the simplest thing that works for the await/resume mechanic and is **not load-bearing on the rest of this Model** — every other invariant (uniform boundary, decision-id ≡ command-id, sequential nesting, mutation discipline) holds regardless of how the resolver itself is implemented. The resolver shape — including suspension/resumption across engine ticks (save/load), error/timeout semantics, and whether a richer state-machine subsumes it — needs a focused review when the FSM-shaped state model in [§9](#9-open-follow-ups) lands. Marked for full review later.
+> **Follow-up.** The TCS-backed type-predicate shape is the simplest thing that works for the await/resume mechanic and is **not load-bearing on the rest of this Model**. It has not been stress-tested against error/timeout semantics, multi-actor decisions, and suspension/resumption across engine ticks (save/load). Full review when the FSM-shaped state model in [§9](#9-open-follow-ups) lands.
 
 ---
 
-## 5. Decision Id And Threading
+## 5. Decision Routing — Type-Only
 
-### 5.1 The id is the action's `CommandId`
+### 5.1 No decision id
 
-Every decision is opened by a `GameAction` (`RequestTargetAction`, `RequestChoiceAction`, etc.). That action already carries a stable `CommandId` minted at intent → command translation. There is **no separate `DecisionId` type**. Every place that previously said `DecisionId` now uses `CommandId`.
+The awaiter registers a `cmd is TCommand` predicate — the generic type parameter is the routing key. There is **no `DecisionId`**, no `CommandId` carried by the awaiter or the snapshot. The mapper produces a normal `SelectTargetCommand` or `PickOptionCommand` without any special annotation; the engine's pre-pipeline check pattern-matches it.
 
-This collapses what was a parallel registry (decisions) into the existing identity (commands), and removes the "where does a decision id originate?" question — it originates wherever a `RequestTargetAction` does.
+This removes the "where does a decision id originate?" question entirely, and eliminates the `DecisionPrompt(CommandId)` snapshot scope field that previously carried it. The snapshot never needs to signal that a decision is open — the awaiter answers that directly.
 
-### 5.2 Snapshot scope carries the action's `CommandId`
+### 5.2 At most one open awaiter per type hierarchy
 
-```csharp
-public sealed record DecisionPrompt(CommandId Id) : SnapshotScope;
-```
+While a decision-handler's `Handle` is awaiting `Resolver.Wait<TCommand>()`, the dispatched action has not completed. Its after-fold has not run. No triggered effect is running. The next `scope.Dispatch` line in the requesting effect cannot start until this one returns. Sequential nesting only.
 
-Replaces the transitional `DecisionPrompt(DecisionId)` shape in `03-snapshot-pipeline.md` §4. Snapshot scope is still transitional overall (the FSM-shaped state model is the eventual direction; see [§9](#9-open-follow-ups)) — only the id type changes.
+Single-open per type-hierarchy is a runtime assert. Two `Wait` registrations with overlapping type hierarchies is a programming error.
 
-### 5.3 At most one open decision
+### 5.3 End-to-end thread
 
-While a decision-handler's `Handle` is awaiting `Resolver.Await(id)`, the dispatched action has not completed. Its after-fold has not run. Triggered effects fire on action lifecycle events, so no triggered effect is running. The next `scope.Dispatch` line in the requesting effect cannot start until this one returns. Sequential nesting only — no concurrent decisions are reachable under the layer hierarchy.
-
-This is recorded as a framework invariant. Routing in [§6](#6-the-uniform-boundary) relies on it: there is at most one `DecisionPrompt(id)` open at any instant.
-
-### 5.4 End-to-end thread
-
-A single `CommandId` (call it `cmd-42`) threads through the entire decision lifecycle:
+A targeting decision (`RequestTargetAction` → player picks `enemyX` → `DealDamageAction`):
 
 ```
 Effect.Execute(scope)
-  └─ scope.Dispatch(RequestTargetAction { Id: cmd-42, Filter: EnemyFilter })
+  └─ scope.Dispatch(RequestTargetAction { Filter: EnemyFilter })
 
-Engine routes the action → handler.Handle(action, ctx):
-  ctx.Actions.Set(snapshot { Scope: DecisionPrompt(cmd-42), Templates: [...] })
-  await ctx.Resolver.Await(cmd-42)            // TCS registered, control yields
+Engine routes → RequestTargetHandler.Handle(action, ctx):
+  var legal = ComputeLegalTargets(ctx.Store, action.Filter);
+  ctx.Actions.Set(new AvailableActionsSnapshot(
+      new[] { new ChooseTargetTemplate(legal) }));
+  var cmd = await ctx.Resolver.Wait<SelectTargetCommand>();
+  return new RequestTargetResult { Target = cmd.Target };
 
 Engine paused on the await. Queue does not advance.
 
-Player intent arrives → IntentMapper inspects state.AvailableActions.Scope:
-  scope is DecisionPrompt(cmd-42)
-  → emit DecisionResponseCommand { DecisionId: cmd-42, Choice: { Targets: [enemyX] } }
+Player intent → IntentMapper switches on ChooseTargetTemplate:
+  → SelectTargetCommand { Target: enemyX }
 
-engine.Dispatch(DecisionResponseCommand) → DecisionResponseHandler.Handle:
-  ctx.Resolver.TryResolve(cmd-42, choice)     // TCS completes
+engine.Dispatch(SelectTargetCommand):
+  Pre-pipeline awaiter check: awaiter.TryResolve(SelectTargetCommand) → match
+  Short-circuits (no envelope, no handler, no triggers).
+  Wait<SelectTargetCommand> task completes with the command.
 
 Original handler resumes:
   return new RequestTargetResult { Target: enemyX }
@@ -231,63 +227,60 @@ Effect continues:
   └─ await scope.Dispatch(DealDamageAction { Target: enemyX, Amount: 6 })
 ```
 
-One identifier, one path. No ambient state, no parallel registry.
+Type only. No snapshot scope consulted. No decision id in flight.
 
 ---
 
 ## 6. The Uniform Boundary
 
-The gateway / intake layer treats all player input identically. There is no special "decision response" code path at the boundary — every intent maps to a `GameCommand` and goes through `engine.Dispatch`.
+The gateway / intake layer treats all player input identically. Every intent maps to a `GameCommand` via `IntentMapper.Map` and enters `engine.Dispatch`. No scope branch at the gateway; the mapper is decision-unaware. This restores [ADR-0006](features/actions/decisions/0006-player-intent-mapper.md).
 
-The branching happens inside `IIntentMapper`, which inspects the current snapshot scope:
+### Gateway flow
 
-```csharp
-public GameCommand Map(ActionTemplate template, PlayerChoice choice) =>
-    State.Current.AvailableActions.Scope switch
-    {
-        FreeInput          => MapFreeInput(template, choice),
-        DecisionPrompt p   => new DecisionResponseCommand(p.Id, choice),
-    };
+```
+intent → IntentMapper.Map(template, choice) → GameCommand → engine.Dispatch
 ```
 
-`DecisionResponseCommand` is a normal `GameCommand` with a normal handler:
+`IIntentMapper.Map` switches on the typed template subtype only:
 
 ```csharp
-public sealed record DecisionResponseCommand(
-    CommandId    DecisionId,
-    PlayerChoice Choice) : GameCommand;
-
-public sealed class DecisionResponseHandler
-    : ICommandHandler<DecisionResponseCommand, DecisionResponseResult>
+public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
 {
-    public bool Validate(DecisionResponseCommand cmd, GameState s, out string? reason)
-    {
-        if (s.AvailableActions.Scope is not DecisionPrompt p || p.Id != cmd.DecisionId)
-        { reason = "no matching open decision"; return false; }
-        reason = null;
-        return true;
-    }
-
-    public Task<DecisionResponseResult> Handle(DecisionResponseCommand cmd, IHandlerContext ctx)
-    {
-        ctx.Resolver.TryResolve(cmd.DecisionId, cmd.Choice);
-        return Task.FromResult(new DecisionResponseResult());
-    }
-}
+    MoveCardTemplate     m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (PileId)choice.Targets[0]),
+    ChooseTargetTemplate t => new SelectTargetCommand(choice.Targets[0]),
+    _ => throw new InvalidOperationException($"unknown template: {template}")
+};
 ```
 
-The engine remains unaware of decisions versus free input at the routing layer. It is just commands → handlers. The "is a decision open?" awareness lives in two places: `IIntentMapper` (to choose the command shape) and `DecisionResponseHandler.Validate` (to reject stale or unmatched responses).
+No snapshot scope inspection. The mapper produces `SelectTargetCommand` whether or not a decision is open — it does not know.
+
+### Engine-level pre-pipeline awaiter check (Q7)
+
+On every `engine.Dispatch`, the engine runs the awaiter check **before** the normal pipeline:
+
+```csharp
+// Engine.Dispatch (simplified)
+if (awaiter.TryResolve(command))
+    return;   // short-circuit: no envelope, no handler, no triggers (Q4)
+
+// normal five-validation-layer pipeline (ADR-0007):
+BeginPipeline(command);
+```
+
+If the awaiter matches (`cmd is TCommand`), it completes `Wait<TCommand>()` and the engine short-circuits. The matched command never reaches the handler or trigger fold. One logical event (the request action) produces one envelope.
+
+Non-matching commands fall through to the normal pipeline; all five validation layers (ADR-0007) gate them as usual.
 
 ### `ICommandHandler.Handle` returns `Task<TResult>`
 
-For decision handlers to await `Resolver.Await(id)`, the handler signature must be async-capable. The contract becomes:
+For decision handlers to await `Resolver.Wait<TCommand>()`, the handler signature must be async-capable:
 
 ```csharp
 public interface ICommandHandler<TCommand, TResult>
     where TCommand : GameCommand
     where TResult  : CommandResult
 {
-    bool Validate(TCommand command, GameState state, out string? reason);
+    bool Validate(TCommand command, IStateScope state, out string? reason);
     Task<TResult> Handle(TCommand command, IHandlerContext ctx);
 }
 ```
@@ -345,12 +338,11 @@ public sealed class RequestTargetHandler
         var legal = ComputeLegalTargets(ctx.Store, action.Filter);
 
         ctx.Actions.Set(new AvailableActionsSnapshot(
-            Scope:     new DecisionPrompt(action.Id),
-            Templates: new[] { new ChooseTargetTemplate(legal) }));
+            new[] { new ChooseTargetTemplate(legal) }));
 
-        var choice = await ctx.Resolver.Await(action.Id);
+        var cmd = await ctx.Resolver.Wait<SelectTargetCommand>();
 
-        return new RequestTargetResult { Target = choice.Targets[0] };
+        return new RequestTargetResult { Target = cmd.Target };
     }
 }
 ```
@@ -408,8 +400,8 @@ The previous sample §9.5 line `LastMoveMutator : IStateMutator<MoveCardCommand>
 - **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityVariableState`, or on a dedicated slice — is left to the ongoing-effects/authoring follow-up. `03-ongoing-effects.md` already settled the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
 - **`CommandResult` cancellation shape.** Flag on the base record vs. typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup.
 - **`IHandlerContext` vs. constructor-injected services on handlers.** Aggregating `Store`, `Actions`, `Resolver` into a context type is one option; constructor-injecting them per handler (and dropping the context entirely) is another. The latter declares each handler's needs explicitly and is friendlier to DI, but multiplies wiring cost as services grow. Decision is undesigned — revisit when a second game stresses the surface or when handler count crosses a threshold that makes the cost visible. Hooked from [§4.4](#44-ihandlercontext).
-- **`IDecisionResolver` shape — full review.** The current TCS-keyed-by-`CommandId` shape is the simplest mechanic that satisfies the await/resume contract. It is **not load-bearing on this Model's invariants**, but it has not been stress-tested against: error/timeout semantics, multi-actor decisions, suspension/resumption across engine ticks (save/load), and whether a richer FSM-shaped state model subsumes it. Needs a focused review when the FSM successor in the next bullet lands. Hooked from [§4.5](#45-idecisionresolver).
-- **Snapshot scope as a state machine.** `FreeInput`/`DecisionPrompt(CommandId)` is still transitional. The FSM-shaped state model (`PickATargetState`, `MainPhaseState`, etc., each owning its own snapshot surface) is the eventual direction. When it lands, `DecisionPrompt` becomes its own state with its own validation surface, separating decision prompts from free-input availability. Likely subsumes the resolver shape question above. Carries forward from `03-snapshot-pipeline.md` §9.
+- **`ICommandAwaiter` shape — full review.** The TCS-backed type-predicate shape is the simplest mechanic that satisfies the await/resume contract. It is **not load-bearing on this Model's invariants**, but it has not been stress-tested against: error/timeout semantics, multi-actor decisions, and suspension/resumption across engine ticks (save/load). Needs a focused review when the FSM-shaped state model in the next bullet lands. Hooked from [§4.5](#45-icommandawaiter).
+- **FSM-shaped game state.** Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor — it would replace type-only routing with richer, self-describing game-state phases. Revisit when the first async-decision-heavy game arrives. Carries forward from `03-snapshot-pipeline.md` §9.
 - **Suspension across engine ticks (save/load).** What state must persist if a game saves mid-decision is deferred — the resolver's TCS plus the dispatched action's cause envelope are the candidates, but the persistence shape depends on game-lifecycle design (checkpoint task #12).
 - **`GameState` slice catalog.** The Scaffold State binding ([§4.1](#41-reads--istatescope-scaffold)) makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked as checkpoint task #2; this Model does not pin the catalog.
 
@@ -419,13 +411,13 @@ The previous sample §9.5 line `LastMoveMutator : IStateMutator<MoveCardCommand>
 
 Pinned by this Model and referenceable from downstream docs:
 
-1. **Decision id ≡ `CommandId`** of the action that opened the decision. There is no separate `DecisionId` type.
-2. **At most one `DecisionPrompt` open at any time.** Sequential nesting only.
-3. **Uniform boundary.** All player input goes `intent → IntentMapper → GameCommand → engine.Dispatch`. No special-case path for decision responses; the mapper picks the right command shape based on snapshot scope.
+1. **No decision id.** Type-only routing: the `TCommand` type parameter in `ICommandAwaiter.Wait<TCommand>()` is the routing key. There is no `DecisionId` and no `CommandId` carried by the awaiter or the snapshot.
+2. **At most one open awaiter per type hierarchy.** Single-open is a runtime assert. Sequential nesting only.
+3. **Uniform boundary.** All player input goes `intent → IntentMapper.Map(template, choice) → GameCommand → engine.Dispatch`. The mapper switches on template subtype only and is decision-unaware. The engine's pre-pipeline awaiter check intercepts matched commands before the normal pipeline.
 4. **Mutation only through mutators.** Scaffold's `Mutator<TState, TPayload>.Change` is the only producer of new slice state. Only handlers invoke mutators (via `Store.Execute(payload)`); effects cannot mutate.
 5. **Mutator payloads are dedicated types**, not the command. One payload may fan out to N registered mutators; `Store.Execute(payload)` runs every mutator registered for that payload type and commits atomically.
-6. **`IHandlerContext` exposes** Scaffold `Store`, `IAvailableActions`, `IDecisionResolver`. No mutate-helper surface; no decision-id field.
-7. **`IEffectScope` exposes** Scaffold `IStateScope`, `Dispatch`, `Cancel`. No mutator/store surface; no resolver surface.
+6. **`IHandlerContext` exposes** Scaffold `Store`, `IAvailableActions`, `ICommandAwaiter`. No mutate-helper surface; no decision-id field.
+7. **`IEffectScope` exposes** Scaffold `IStateScope`, `Dispatch`, `Cancel`. No mutator/store surface; no awaiter surface.
 8. **`ICommandHandler.Handle` returns `Task<TResult>`**. Synchronous handlers return `Task.FromResult(...)`.
 
 ---
@@ -437,4 +429,4 @@ Pinned by this Model and referenceable from downstream docs:
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions`, snapshot scope discriminator
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — gateway, `IIntentMapper`, command pipeline
 - [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; §9.4–9.5 carry alignment debt against this Model
-- [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) — open cascade entries from this Model
+- [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) — cascade entries from this Model (S15 §6 patch discharged S16)

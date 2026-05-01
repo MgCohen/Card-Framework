@@ -1,6 +1,6 @@
 ---
 type: ledger
-last-updated: 2026-04-30
+last-updated: 2026-05-01
 ---
 
 # Alignment Debt
@@ -23,15 +23,32 @@ Resolved entries get strikethrough plus resolution date and link to the resolvin
 
 ## Open
 
-_(none — discharged in session 14)_
+_(none — discharged in session 16)_
+
+## Resolved
+
+### Cascade — §6 boundary redesign (session 15 design pass → discharged session 16)
+
+Driven by S15 Q1–Q8 verdicts. `IDecisionResolver` retired in favour of `ICommandAwaiter` (type-only routing, no id, closure-captured `cmd is T`). `SnapshotScope` / `FreeInput` / `DecisionPrompt` removed from the snapshot (Q6: scope discriminator dropped; awaiter answers "is an await open?"). `DecisionResponseCommand` / `DecisionResponseHandler` deleted. Engine-level pre-pipeline awaiter check replaces mapper-side scope branching. Mapper and gateway are decision-unaware. ADR-0006 + ADR-0007 restored.
+
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/effects/models/04-effect-flow.md §4.5 | reason: `IDecisionResolver` → `ICommandAwaiter`; interface now `Wait<TCommand>(ct)` + `TryResolve(cmd)`; type-only routing, no id | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/effects/models/04-effect-flow.md §5 | reason: §5.2 DecisionPrompt deleted (no scope); §5.1 reframed as no-id / type-only; §5.4 end-to-end thread rewritten | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/effects/models/04-effect-flow.md §6 | reason: Remove `DecisionResponseCommand`/`Handler` + scope-switch mapper; add engine-level awaiter check + decision-unaware gateway | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/effects/models/04-effect-flow.md §10 §11 | reason: Invariants 1/2/3/6 updated for no-id / `ICommandAwaiter` / awaiter-check boundary; §11 links | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/engine/models/03-snapshot-pipeline.md §4 | reason: Remove `SnapshotScope` / `FreeInput` / `DecisionPrompt`; snapshot is templates-only | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/engine/models/03-snapshot-pipeline.md §7 | reason: `RequestTargetHandler` example: drop `DecisionPrompt` from `Actions.Set`; `Await(id)` → `Wait<SelectTargetCommand>()` | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/engine/models/03-snapshot-pipeline.md §9 | reason: Snapshot-scope FSM open item reframed; discriminator deleted, not transitional | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/actions/models/01-command-pipeline.md §3 | reason: Gateway confirmation note: decision-unaware per ADR-0006 restored; cross-reference 04-effect-flow | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/actions/models/02-availability-snapshot.md | reason: Remove `FreeInput` from `AvailableActionsSnapshot` calls; note scope dropped in §4 of doc 29 | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: features/presentation/models/01-presentation-loop.md | reason: Remove Scope prose in §4/§11/§12; add awaiter pre-check to §10 step 8; update §13 async-decisions caveat | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: support/samples/pile-counter.md | reason: Mapper comment; remove `new FreeInput()` from `Actions.Set` calls in §9.3/§9.6/§9.8 | open~~ → resolved 2026-05-01 (session 16)
+- ~~2026-05-01 | source: sessions/session-15.md | target: ledgers/OPEN-QUESTIONS.md | reason: Snapshot-scope-as-FSM entry reframed; `FreeInput`/`DecisionPrompt` deleted (not transitional); new framing is awaiter succession | open~~ → resolved 2026-05-01 (session 16)
 
 ### Cascade — Scaffold State/Store types audit
 
 Driven by §4.1–§4.2 of `04-effect-flow.md`. Several docs invented `IGameStateProvider`, `IStore`, `IStateMutator<TPayload>`, and a single-record `GameState` (`state with { ... }`, `state.Piles`, `state.LastMove`). Scaffold's actual types are: `IStateScope` (read), `IStoreScope : IStateScope` (read + events), `Store` (concrete; `Execute<TPayload>(payload)` fans out to all mutators registered for that payload type), `Mutator<TState>` / `Mutator<TState, TPayload>` (with `Change(state, [payload], IStateScope scope)`). State is sliced — accessed via `store.Get<TState>()`, not as a single record. `GameState` shape is still an open question (slice catalog).
 
 _All entries discharged in session 14._
-
-## Resolved
 
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md | target: support/samples/pile-counter.md §9.4 | reason: handler uses `ctx.Mutate.MoveCardBetweenPiles(...)`; new model removes `Mutate` from `IHandlerContext` — replace with `ctx.Store.Execute<TMutator, TPayload>(payload)` calls | open~~ → resolved 2026-04-30 (session 14: handler now does single `ctx.Store.Execute(new MoveCardPayload(...))`)
 - ~~2026-04-30 | source: features/effects/models/04-effect-flow.md | target: support/samples/pile-counter.md §9.5 | reason: `LastMoveMutator : IStateMutator<MoveCardCommand>` uses the command as payload; new model requires dedicated payload types — switch to `IStateMutator<LastMovePayload>` (and add `PileMoveMutator` invocation in handler) | open~~ → resolved 2026-04-30 (session 14: `PileMoveMutator` and `LastMoveMutator` both `Mutator<TState, MoveCardPayload>`; payload-keyed fanout)

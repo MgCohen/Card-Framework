@@ -1800,6 +1800,8 @@ public sealed class IntentGateway : IIntentGateway
 
 `IntentResult.Accepted` does **not** mean the command succeeded — it means the engine received it. The actual outcome arrives via the published `HistoryEnvelope` whose `Cause.OriginCommandId` matches.
 
+> **Decision-unaware boundary (ADR-0006, confirmed S15).** The gateway maps intent to command based on the template type only. It never inspects snapshot scope or emits a `DecisionResponseCommand`. The engine's pre-pipeline `ICommandAwaiter` check handles in-progress decision responses before they reach the normal pipeline. See [04-effect-flow §6](features/effects/models/04-effect-flow.md).
+
 ```csharp
 public sealed record IntentResult
 {
