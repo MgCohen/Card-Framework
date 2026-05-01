@@ -53,7 +53,7 @@ User input: `$ARGUMENTS`
 
 10. **Write the file.** Show the planned diff first; on confirm, write.
 
-11. **Patch the in-progress session note.** Find the latest `Product/sessions/session-NN.md` with status `in-progress`. Append a line to its Part 1 "Work done" section: `- <type> <relative path> created`. Skip this step for `plan` type — plans don't get session-noted.
+11. **Patch the in-progress session note.** Find the session with `status: in-progress` via `grep -rl 'status: in-progress' Product/sessions/`. If multiple match, use the most recently modified (`ls -t`). Append a line to its Part 1 "Work done" section: `- <type> <relative path> created`. Skip this step for `plan` type — plans don't get session-noted.
 
 12. **Render the result per `Product/_workflow/REPORT-STYLE.md` §3.4 (new template).** Use the §2.7 result-strip pattern: `**Created:**` followed by the path and `(<type>, <status>)` parenthetical (omit the status for `plan` type). Append the `📝 Session note: Part 1 "Work done" updated` strip on the next line, except for `plan` type (no session-note patch).
 
