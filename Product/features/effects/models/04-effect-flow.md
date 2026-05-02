@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: [features/effects/models/01-async-dispatch.md, features/engine/models/03-snapshot-pipeline.md]
+references: [features/effects/models/01-async-dispatch.md, features/engine/models/03-snapshot-pipeline.md]
 tags: [#effects, #handler-context, #decisions, #async]
 ---
 

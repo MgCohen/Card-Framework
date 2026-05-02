@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: features/entities/models/01-definition-instance-model.md
+references: features/entities/models/01-definition-instance-model.md
 tags: [#cards, #model]
 ---
 

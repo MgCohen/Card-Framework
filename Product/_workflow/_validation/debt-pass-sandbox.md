@@ -1,6 +1,5 @@
 ---
 type: sandbox
-last-updated: 2026-04-30
 tags: [#validation]
 ---
 

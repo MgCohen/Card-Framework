@@ -1,7 +1,6 @@
 ---
 type: ledger
 schema-version: 2
-last-updated: 2026-05-01
 ---
 
 # Alignment Debt

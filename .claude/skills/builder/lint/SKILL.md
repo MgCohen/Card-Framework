@@ -17,7 +17,7 @@ You are the Product Builder reference-staleness and archive-integrity linter. Yo
 
 **Why this matters:** the Product Builder workflow maintains a web of cross-references between feature docs, decisions, ledgers, and archived predecessors. The reference convention (`_workflow/REFERENCE-CONVENTIONS.md`) requires every cross-doc reference to be a `Product/`-rooted absolute path — this keeps grep, sed, and renames mechanical. When a doc moves, gets archived, or someone slips a relative path or encoded filename into a link, the references break silently. This linter surfaces those breaks before they cause confusion or data loss.
 
-Workflow context: `Product/_workflow/PRODUCT-BUILDER.md` §5.10 (path/builds-on rules) and §5.14 (archive integrity rules). `Product/_workflow/REFERENCE-CONVENTIONS.md` (canonical reference format).
+Workflow context: `Product/_workflow/PRODUCT-BUILDER.md` §5.10 (path/references rules) and §5.14 (archive integrity rules). `Product/_workflow/REFERENCE-CONVENTIONS.md` (canonical reference format).
 
 ## Arguments
 
@@ -146,24 +146,24 @@ For each unique path: verify `Product/<path>` exists on disk.
 
 **Finding:** `S1 — broken path reference`
 
-### S2 — builds-on references
+### S2 — references entries
 
-`builds-on:` declares dependency chains. Every entry must resolve to an existing, non-archived file (or be the literal `root`).
+`references:` declares dependency chains. Every entry must resolve to an existing, non-archived file (or be the literal `root`).
 
 ```bash
-grep -rn '^builds-on:' Product/ --include='*.md' | grep -v '/archive/'
+grep -rn '^references:' Product/ --include='*.md' | grep -v '/archive/'
 ```
 
-Parse each `builds-on:` list. Each entry is interpreted as `Product/<entry>` (no relative resolution, no per-location prefix logic). Entries pointing into `archive/` are always findings.
+Parse each `references:` list. Each entry is interpreted as `Product/<entry>` (no relative resolution, no per-location prefix logic). Entries pointing into `archive/` are always findings.
 
-**Finding:** `S2 — builds-on references missing or archived path`
+**Finding:** `S2 — references entries missing or archived path`
 
 ### S3 — Relative path violation
 
-The convention forbids relative paths in markdown links and `builds-on:`. Catch them with a single regex pass:
+The convention forbids relative paths in markdown links and `references:`. Catch them with a single regex pass:
 
 ```bash
-grep -rnE '\]\((\.\./|\./|/)[^)]*\.md|^builds-on:.*\.\./' \
+grep -rnE '\]\((\.\./|\./|/)[^)]*\.md|^references:.*\.\./' \
   Product/ --include='*.md' \
   --exclude-dir='_workflow/_validation'
 ```

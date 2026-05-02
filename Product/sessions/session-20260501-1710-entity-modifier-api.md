@@ -5,7 +5,6 @@ session-id: session-20260501-1710-entity-modifier-api
 parent: session-20260501-1545-trigger-pipeline-shape
 status: completed
 started-at: 2026-05-01T17:10:18Z
-last-updated: 2026-05-02
 work-summary: "Resolved oq-entity-modifier-api with Q1–Q5 conventions on the Scaffold bridge; created entities/02 runtime-surface Model; added slice subscriptions + atomic batches to engine/04; clarified ActorId vs InstanceId in GLOSSARY."
 debt-opened: 2
 tags: [#session]

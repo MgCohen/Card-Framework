@@ -5,7 +5,6 @@ session-id: session-20260501-1602-zone-model-internal-opens
 parent: session-20260501-1545-trigger-pipeline-shape
 status: completed
 started-at: 2026-05-01T16:02:00Z
-last-updated: 2026-05-02
 work-summary: "Design pass on zone model internal opens — settled 8 of 9 sub-questions, deferred spatial; locked cross-cutting Objects-over-IDs principle; iterated on zone/card shape (CardRef rotation, IReference, OwnershipState, CardMapState) reversing Q6.2 visibility lock. Patches applied: 5 ADRs (1 cross-cutting + 3 zone + 1 card), 1 new feature folder (cards), 2 Models substantially revised (zones, cards), 2 Models touched up (entities, glossary), open-questions/backlog updates, audit findings opened as alignment debt."
 tags: [#session]
 ---

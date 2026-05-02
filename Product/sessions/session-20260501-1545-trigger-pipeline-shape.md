@@ -5,7 +5,6 @@ session-id: session-20260501-1545-trigger-pipeline-shape
 parent: session-20260501-1528-debt-pass
 status: completed
 started-at: 2026-05-01T15:46:03Z
-last-updated: 2026-05-01
 work-summary: "Discharged ad-20260501-025: reconciled ITriggerPipeline shape — triggers/01 §2 and §7 patched to match effects/02 §3 authoritative async shape with available parameter and TriggerFoldResult."
 tags: [#session]
 ---

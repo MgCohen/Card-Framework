@@ -5,7 +5,6 @@ session-id: session-20260502-1246-zone-model-internal-opens
 parent: session-20260501-1545-trigger-pipeline-shape
 status: completed
 started-at: 2026-05-02T12:46:52Z
-last-updated: 2026-05-02
 date: 2026-05-02
 work-summary: "Auto debt-pass: 2 cascade + 0 linter discharged, 0 stragglers caught, 8 skipped."
 tags: [#session, #debt-pass]

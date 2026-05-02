@@ -5,7 +5,6 @@ session-id: session-20260501-1528-debt-pass
 parent: session-20260501-1132-engine-wiring
 status: completed
 started-at: 2026-05-01T15:28:00Z
-last-updated: 2026-05-01
 date: 2026-05-01
 work-summary: "Auto debt-pass: 14 entries discharged (broken path references removed from 5 docs), 0 stragglers caught, 1 skipped (ITriggerPipeline reconciliation needs session)."
 tags: [#session, #debt-pass]

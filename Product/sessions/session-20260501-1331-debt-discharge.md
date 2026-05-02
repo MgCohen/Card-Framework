@@ -5,7 +5,6 @@ session-id: session-20260501-1331-debt-discharge
 parent: session-20260501-1132-engine-wiring
 status: completed
 started-at: 2026-05-01T13:31:00Z
-last-updated: 2026-05-01
 work-summary: "Auto debt-pass: 3 entries discharged, 1 straggler caught, 1 skipped (ad-025 needs design session)."
 tags: [#session, #debt-pass]
 ---

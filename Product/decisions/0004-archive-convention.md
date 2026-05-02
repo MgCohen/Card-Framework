@@ -1,8 +1,7 @@
 ---
 type: adr
 status: accepted
-last-updated: 2026-05-01
-builds-on: [_workflow/PRODUCT-BUILDER.md]
+references: [_workflow/PRODUCT-BUILDER.md]
 tags: [#workflow, #meta, #archive]
 ---
 

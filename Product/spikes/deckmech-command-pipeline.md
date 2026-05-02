@@ -1,7 +1,6 @@
 ---
 type: spike
 status: concluded
-last-updated: 2026-04-29
 forward-link: features/actions/
 tags: [#spike, #deckmech, #command-pipeline]
 ---

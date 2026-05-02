@@ -1,6 +1,5 @@
 ---
 type: feature-map
-last-updated: 2026-05-01
 ---
 
 # Feature Map
@@ -71,36 +70,36 @@ graph TD
 
 **Cycle observation:** `actions ↔ engine` is bidirectional because `actions/02-availability-snapshot` builds on `engine/03-snapshot-pipeline`, while `engine/03-snapshot-pipeline` builds on `actions/02-availability-snapshot`. This is by design — the availability snapshot is produced by the engine *and* consumed by the action pipeline as part of validation. Worth a future Model to document the contract that closes the loop, but not currently flagged as drift.
 
-Solid arrows = current `builds-on` edges between settled features. Dashed arrows = expected dependency direction once the considered feature lands.
+Solid arrows = current `references` edges between settled features. Dashed arrows = expected dependency direction once the considered feature lands.
 
 ## Model-level breakdown
 
 ### `entities` (settled)
-- [`models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — settled, builds-on: `root`
+- [`models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — settled, references: `root`
 
 ### `zones` (settled)
-- [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, builds-on: `root`
+- [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, references: `root`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, builds-on: `root`
-- [`models/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) — settled, builds-on: `actions/01`, `engine/03` ⚠️ (see cycle)
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `root`
+- [`models/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) — settled, references: `actions/01`, `engine/03` ⚠️ (see cycle)
 
 ### `triggers` (settled)
-- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, builds-on: `engine/01`
+- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `engine/01`
 
 ### `effects` (settled)
-- [`models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) — settled, builds-on: `root`
-- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, builds-on: `effects/01`
-- [`models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) — settled, builds-on: `effects/01`
-- [`models/04-effect-flow.md`](features/effects/models/04-effect-flow.md) — settled, builds-on: `effects/01`, `engine/03`
+- [`models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) — settled, references: `root`
+- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, references: `effects/01`
+- [`models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) — settled, references: `effects/01`
+- [`models/04-effect-flow.md`](features/effects/models/04-effect-flow.md) — settled, references: `effects/01`, `engine/03`
 
 ### `engine` (settled)
-- [`models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — settled, builds-on: `root`
-- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, builds-on: `engine/01`
-- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — settled, builds-on: `engine/02`, `actions/02` ⚠️ (see cycle)
+- [`models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — settled, references: `root`
+- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`
+- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — settled, references: `engine/02`, `actions/02` ⚠️ (see cycle)
 
 ### `presentation` (settled)
-- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, builds-on: `actions/02`, `engine/03`
+- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, references: `actions/02`, `engine/03`
 
 ### `authoring` (considered)
 No models yet. Promote when authoring tooling becomes the active thread (likely after first feature reaches `implemented`).

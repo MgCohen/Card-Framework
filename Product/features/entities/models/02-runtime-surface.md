@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-02
-builds-on:
+references:
   - features/entities/models/01-definition-instance-model.md
 tags: [#entities, #runtime, #api]
 ---

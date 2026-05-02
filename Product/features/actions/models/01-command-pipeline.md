@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-30
-builds-on: root
+references: root
 tags: [#actions, #model, #command-pipeline]
 ---
 

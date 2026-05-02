@@ -1,7 +1,6 @@
 ---
 type: adr
 status: accepted
-last-updated: 2026-04-30
 tags: [#adr, #engine, #gamerules, #state]
 ---
 

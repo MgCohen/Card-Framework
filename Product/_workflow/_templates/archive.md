@@ -4,8 +4,7 @@ status: Superseded | Cancelled
 superseded_by: <relative path to successor>   # required iff status=Superseded; omit for Cancelled
 archived_on: YYYY-MM-DD
 reason: <one-line why>
-last-updated: YYYY-MM-DD
-builds-on: []
+references: []
 tags: []
 ---
 

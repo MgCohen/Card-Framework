@@ -5,7 +5,6 @@ session-id: session-20260501-1132-engine-wiring
 parent: session-20260501-1107-zone-topology
 status: completed
 started-at: 2026-05-01T11:32:00Z
-last-updated: 2026-05-01
 work-summary: "Design pass (6 Qs) + patches applied: IHandlerRegistry resolver-only, ICommandPipeline owns validate/execute, ITriggerSystem/ITriggerPipeline split, drain loop bug fixed, VContainer wiring, GameEngineBuilder as config object."
 tags: [#session]
 ---

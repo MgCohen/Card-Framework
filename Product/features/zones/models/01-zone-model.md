@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: root
+references: root
 tags: [#zones, #model]
 ---
 
