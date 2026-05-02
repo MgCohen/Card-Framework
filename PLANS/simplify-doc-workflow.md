@@ -230,6 +230,117 @@ Or collapse to one PR if we trust the diff. TBD when sketching.
 
 ---
 
+## Inventory — what changes when all 7 decisions land
+
+### Slash commands (`.claude/commands/builder/`)
+
+| Command | Action | Driven by | Notes |
+|---|---|---|---|
+| `bootstrap` | Edit (medium) | all | Update once-per-project scaffold to new shape |
+| `start-session` | Edit (shrink) | #6 | Read-only briefing; no artifact creation, no orphan cleanup |
+| `end-session` | Edit (shrink) | #6 | Runs linter, ensures CURRENT fresh, exits. No session-note write. Drop `--discard`. Keep name |
+| `new` | Edit | #3, #4 | Drop session + (feature-internal) ADR templates from picker. Pre-stub strict Model sections |
+| `design-pass` | Edit (light) | #6, #7 | Output shifts to CURRENT.md scratch; promoted opens go to OPEN-ITEMS |
+| `archive` | Edit (light) | #5, #6 | Drop ALIGNMENT-DEBT integration; session lifecycle awareness gone |
+| `promote-glossary` | Edit (light) | #6 | Drop branch-annotation from changelog; possibly absorb retired-tokens append (see G4) |
+| `merge-pass` | Delete | #6 | Parallel sessions abandoned |
+| `project-checkpoint` | Delete | #6 | Was projection helper; CURRENT is hand-managed now |
+| `debt-pass` | Delete | #5 | Cascade ledger gone |
+
+### Skills (`.claude/skills/`)
+
+| Skill | Action | Driven by | Notes |
+|---|---|---|---|
+| `builder/lint` | Edit (significant) | #1, #2, #4, #5 | Drop ALIGNMENT-DEBT writes (becomes a report). Add: structure check, header-body sync, reverse graph + `/builder:deps`, git-derived `last-updated`, retired-tokens validation. **Step zero: harden against silent failures** |
+| `builder/lint-workspace/` | Keep / archive | — | Eval workspace; not in critical path |
+
+### Hooks / GHA
+
+| Item | Action | Driven by |
+|---|---|---|
+| `.githooks/pre-push` | Delete | #6 |
+| `.github/workflows/debt-pass.yml` | Delete | #5 (already disabled) |
+
+### Templates (`Product/_workflow/_templates/`)
+
+| Template | Action | Driven by |
+|---|---|---|
+| `model.md` | Edit (significant) — new front matter, strict section order, provenance absorbs feature-internal ADRs | #1, #2, #3, #4 |
+| `feature.md` | Edit — front matter; drop `decisions/` pointer | #1, #2, #3 |
+| `adr.md` | Edit — re-scope to project-wide only | #3 |
+| `spike.md` | Edit (light) — front-matter cleanup | #1, #2 |
+| `sample.md` | Edit (light) — front-matter cleanup | #1, #2 |
+| `checkpoint.md` | Edit (heavy) — strip lifecycle metadata; add `## Scratch` | #6 |
+| `session.md` | Delete | #6 |
+
+### Ledgers (`Product/ledgers/`)
+
+| Ledger | Action |
+|---|---|
+| `ALIGNMENT-DEBT.md` | Archive (#5) |
+| `OPEN-QUESTIONS.md` + `BACKLOG.md` | Merge → delete originals; new `OPEN-ITEMS.md` (#7) |
+| `GLOSSARY.md` | Edit (light) — drop branch annotations from changelog |
+| `FEATURE-MAP.md` | Keep as-is — derivation deferred (future considerations) |
+
+### Plans (`PLANS/`)
+
+| Plan | Action |
+|---|---|
+| `auto-debt-pass.md` | Status: abandoned |
+| `parallel-sessions.md` | Status: abandoned |
+| `simplify-doc-workflow.md` | Live |
+
+### Workflow doc (`Product/_workflow/PRODUCT-BUILDER.md`)
+
+| Section | Action |
+|---|---|
+| §3 Front matter | Rewrite — `references:`, drop `last-updated:` and `builds-on:` |
+| §4 Templates | Rewrite — strict Model structure, ADR scope change, drop session template |
+| §5.0 Bootstrap | Edit — new ledger shape, drop pre-push install |
+| §5.1–§5.3 Sessions | Collapse heavy — to a paragraph |
+| §5.4 Reopening decisions | Edit (light) — supersession survives; cascade walk on-demand |
+| §5.6 Status gates | Keep |
+| §5.7–§5.9 Cascade machinery | Delete — replaced by one paragraph |
+| §5.10 Linter | Rewrite — expanded responsibilities |
+| §5.11 New feature | Edit — drop `decisions/` subfolder creation |
+| §5.12 Drift detection | Keep |
+| §5.13 Lifecycle reference | Edit — automation table shrinks |
+| §5.14 Archive convention | Keep (light edit) |
+| §6 Cross-cutting | Rewrite — three ledgers → two, three lifetimes → two |
+
+### Settings
+
+| File | Action |
+|---|---|
+| `.claude/settings.json` | Keep |
+| `.claude/settings.local.json` | Edit (light) — clean up stale Windows path permissions |
+
+### To create
+
+| New surface | Why | Decision |
+|---|---|---|
+| `/builder:snapshot` | Opt-in milestone — copy CURRENT to `sessions/<date>-<slug>.md` | #6 |
+| `/builder:deps <path>` | Forward + reverse reference walk for one doc | #4 |
+| `Product/ledgers/OPEN-ITEMS.md` | The unified ledger | #7 |
+
+---
+
+## Open gaps
+
+To lock one-by-one before edit work starts. Each gets a verdict line appended below.
+
+| # | Gap | Status |
+|---|---|---|
+| G1 | CURRENT.md freshness enforcement (discipline / soft warn / pre-commit) | open |
+| G2 | Existing session notes — leave or quarantine | open |
+| G3 | ADR migration hand-work — triage scope | open |
+| G4 | Retired-tokens registry — who writes it now | open |
+| G5 | `end-session` linter integration — gate or soft | open |
+| G6 | `AGENTS.md` + root `CLAUDE.md` — final reference sweep | open |
+| G7 | `design-pass` output discipline — new target shape | open |
+
+---
+
 ## Pending feedback (more to come)
 
 User flagged additional thoughts coming. Add them here as they land before we move from sketch → execution.
