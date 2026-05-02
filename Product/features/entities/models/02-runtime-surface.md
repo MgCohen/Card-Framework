@@ -57,7 +57,12 @@ FloatVariableValue v = entity.GetVariable<float>(Vars.Speed);  // ❌ wrong: ask
 
 The handle resolves the effective value (definition default → instance base override → modifier fold) before unwrapping. Authors never see `VariableValue` subclasses on the read side unless they're working with structural-change events.
 
-**Effective vs. base.** `GetVariable<T>` returns the **effective** value (with all modifiers applied). To inspect raw base values or individual modifiers, read the slice directly: `store.Get<EntityVariableState>(entityId)` returns the canonical record exposing `BaseValues` and `ModifierStacks`.
+**Identity and definition.** `entity.Id` returns the `InstanceId`. `entity.Definition` (inherited from `BaseEntityInstance<TDef>`) returns the typed definition — useful for reading authored fields:
+
+```csharp
+var villager = ctx.Entities.Get<VillagerDefinition>(id);
+VillagerJob job = villager.Definition.Job;   // authored field on the typed definition
+```
 
 **Polymorphism.** Code that should work against either authoring instances or state-backed entities should hold the interface:
 
@@ -65,26 +70,85 @@ The handle resolves the effective value (definition default → instance base ov
 void Inspect<TDef>(IReadOnlyEntity<TDef> e) where TDef : IEntityDefinition { ... }
 ```
 
+### 2.1 Direct slice access
+
+`GetVariable<T>` returns the **effective** value (with all modifiers applied). For raw inspection — base values without fold, full modifier stacks, single modifiers by id — read the canonical slice directly:
+
+```csharp
+EntityVariableState state = ctx.Store.Get<EntityVariableState>(entityId);
+
+// Base value only (no modifier fold). Falls back to definition default if missing.
+VariableValue? baseAttack =
+    state.BaseValues.TryGetValue(Vars.Attack, out var bv)
+        ? bv
+        : (definition.TryGetDefaultValue(Vars.Attack, out var dv) ? dv : null);
+
+// Full modifier stack on a variable, ordered (ascending Modifier.Order, FIFO ties).
+IReadOnlyList<ActiveModifier> attackMods =
+    state.ModifierStacks.TryGetValue(Vars.Attack, out var stack)
+        ? stack
+        : Array.Empty<ActiveModifier>();
+
+// Single modifier by id.
+ActiveModifier? specific = attackMods.FirstOrDefault(m => m.Id.Equals(targetId));
+```
+
+`ActiveModifier` carries `Id` (`ModifierId`), `Modifier` (`VariableModifier`), and optional `Source` (`ModifierSource?`). Slice-direct reads are the right tool for debug inspectors, history-replay tooling, and projection layers that need raw state. Gameplay code prefers the effective-value reads on the handle.
+
 ---
 
 ## 3. Subscriptions
 
-Two subscription channels:
+Three subscription channels on the entity, plus one lifecycle event.
 
-- **Per-variable value change** — `Subscribe(key, Action<VariableValue> onChange)`. Fires whenever the effective value for `key` changes (after fold). The first callback fires synchronously with the current value when subscribing. Returns `IDisposable` that, when disposed, unregisters. Equivalent imperative form: `Unsubscribe(key, onChange)`.
-- **Structural changes** — `SubscribeToVariableStructuralChanges(handler)`. Fires `Added`/`Removed` events when a variable enters or leaves the entity's effective key set. Coalesced over the atomic batch — a `Remove`-and-`Re-Add` of the same variable in one `ExecuteBatch` produces no event.
-
-Use the per-variable channel for "react to attack stat changes." Use the structural channel for "this entity now has a Stunned variable" / "the Stunned variable was removed."
-
-For per-mutation granularity (every `Add`/`Remove` event from a single batch), subscribe to the slice directly:
+### 3.1 Per-variable effective-value change
 
 ```csharp
-store.Subscribe<EntityVariableState>(entityId, (_, state, ev) => { ... });
+IDisposable Subscribe(Variable key, Action<VariableValue> onChange);
+void        Unsubscribe(Variable key, Action<VariableValue> onChange);
 ```
 
-This is the engine's path; presentation rarely needs it.
+Fires whenever the effective value for `key` changes (after fold). The first callback fires synchronously with the current value when subscribing. Returns `IDisposable` that, when disposed, unregisters. Use this for "react to attack stat changes."
 
-**Lifetime.** Subscriptions are released automatically when the entity is destroyed (via `StateEntity.Dispose()` and the underlying `StoreVariableStorage.Dispose()`). Manual `Unsubscribe` / disposing the handle returned from `Subscribe` is the correct discharge for shorter-lived listeners (e.g. presentation views unloading).
+### 3.2 Variable structural changes
+
+```csharp
+IDisposable SubscribeToVariableStructuralChanges(
+    Action<VariableStructuralChange, Variable, VariableValue?> handler);
+```
+
+Fires `Added` / `Removed` events when a variable enters or leaves the entity's effective key set. Coalesced over the atomic batch — a `Remove`-and-`Re-Add` of the same variable in one `ExecuteBatch` produces no event. Use this for "this entity now has a Stunned variable" / "the Stunned variable was removed."
+
+### 3.3 Per-mutation slice events (uncoalesced)
+
+For every `Add`/`Remove` event in a batch (not coalesced), subscribe to the slice directly:
+
+```csharp
+store.Subscribe<EntityVariableState>(entityId, (_, newState, ev) => {
+    // ev: StateChangeEvent.Updated | StateChangeEvent.Removed
+    // newState: the post-mutation slice
+});
+```
+
+This is the lowest-level surface — engines, debuggers, and replay tools use it. Presentation usually wants the coalesced channels above instead.
+
+### 3.4 Entity removal
+
+```csharp
+event Action OnEntityRemoved;   // on StateEntity<TDef>
+```
+
+Fires when the entity's canonical row is removed (via `Entities.Destroy(id)` or rollback past spawn). Subscribe when a long-lived consumer needs to react symmetrically to the spawn it bound against:
+
+```csharp
+entity.OnEntityRemoved += () => { /* tear down view, unbind, log, … */ };
+```
+
+The framework's per-variable and structural subscriptions are released automatically — manual `OnEntityRemoved` handling is only for callers that hold references beyond the entity itself (presentation views, telemetry).
+
+### 3.5 Lifetime
+
+`StateEntity.Dispose()` (called by `Entities.Destroy(id)`) tears down the underlying `StoreVariableStorage`, which clears every per-variable and structural subscription registered through the handle. Manual `Unsubscribe` / disposing the `IDisposable` from `Subscribe` is the correct discharge for shorter-lived listeners (e.g. presentation views unloading while the entity is still alive).
 
 ---
 
@@ -180,6 +244,36 @@ token.AddModifier(corruptionStep);
 ```
 
 If `Vars.CorruptionLevel` were declared in `ImpDefinition.DefinedVariables`, calling `AddVariable` would return `false` (slice's `WithVariable` is a no-op when the key already exists in `BaseValues`). Definition-declared variables stay as definition defaults until written.
+
+### 4.5 Batched mutations
+
+Multiple payloads can commit atomically through `Store.ExecuteBatch`. Use this when several writes should be visible to subscribers as a single step:
+
+```csharp
+// Build modifier entries via the factory (deterministic ids).
+var atkBuff = ctx.Modifiers.Create(Vars.Attack,  new IntAddModifier { Amount = 2 }, source);
+var defBuff = ctx.Modifiers.Create(Vars.Defense, new IntAddModifier { Amount = 1 }, source);
+
+ctx.Store.ExecuteBatch(new object[] {
+    new AddModifierPayload(target.Id, atkBuff.Key, atkBuff.Modifier!, atkBuff.Id!.Value, atkBuff.Source),
+    new AddModifierPayload(target.Id, defBuff.Key, defBuff.Modifier!, defBuff.Id!.Value, defBuff.Source),
+    new IncrementTurnCounterPayload(),   // a game-authored payload writing a non-entity slice
+});
+```
+
+The factory returns an `EntityModifierEntry` with `Id` and `Source` populated. When dropping to raw `AddModifierPayload` for batching, unpack those fields explicitly (the `!` operators are safe — factory output always sets them). Game authors who batch frequently can wrap this in a small helper.
+
+Guarantees:
+
+- **Atomic commit.** All registered mutators for every payload run, then the runner's overlay commits in one shot. No half-applied state is observable.
+- **One slice update event per affected slice per batch.** `EntityVariableState`'s `StoreVariableStorage` rebuilds its caches once after the batch commits; per-variable subscribers fire once for changed values; structural subscribers see coalesced add/remove diffs (a remove-and-re-add of the same variable produces no event).
+- **Mixed payload types are allowed.** The same batch can carry entity payloads (`AddModifierPayload`, `SetBaseValuePayload`, …), game-authored payloads, and framework payloads. Each payload's mutators target their own slices.
+- **Reads inside the batch are not allowed.** `ExecuteBatch` runs the whole sequence before returning; there is no opportunity to read between payloads. Callers that need read-mutate-read sequences must split into separate `Execute` calls.
+- **Ordering is the iteration order of the supplied collection.** The runner processes payloads in the order they're enumerated.
+
+Use cases: applying multiple modifiers from a single ability in one observable step; restoring entity state during snapshot load; history-replay reconstruction; any sequence where intermediate state should not be visible to subscribers.
+
+The `IMutableEntity` surface does not expose batch composition — its methods each call `Store.Execute` for a single payload. To batch entity mutations alongside non-entity ones, drop to raw payloads as shown above. The factory still applies: build modifier entries through `ctx.Modifiers.Create(...)` and then construct `AddModifierPayload` from the entry's fields.
 
 ---
 
