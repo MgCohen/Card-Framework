@@ -27,4 +27,4 @@ Definition and Instance types (with IDs and variable handles), Entity-shaped acc
 ADRs (backfilled in phase 5) live in `features/entities/decisions/`. Provenance for the original "core model" decisions (formerly doc 8) is folded into `01-definition-instance-model.md`.
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for entity-related questions.
+See `ledgers/OPEN-ITEMS.md` for entity-related questions.

@@ -35,7 +35,7 @@ Then form a model of state before responding:
 - What is the active open question?
 - Are there mid-progress drafts? (status `draft` Models in `features/<f>/models/`)
 - Are there debts to discharge?
-- Did the previous session leave a trigger primed (e.g. a Spike about to graduate, a BACKLOG item whose trigger fired)?
+- Did the previous session leave a trigger primed (e.g. a Spike about to graduate, a OPEN-ITEMS item whose trigger fired)?
 
 Brief the human on this state in 4–6 lines. Do not jump straight into work without surfacing what you found.
 
@@ -43,7 +43,7 @@ Brief the human on this state in 4–6 lines. Do not jump straight into work wit
 
 | Human says… | You do… |
 |---|---|
-| *"What's next?" / "Where are we?" / no specific direction* | Synthesize state from the bootstrap reads. Surface the active open question. List 2–3 candidate threads (active question, debt discharge, BACKLOG triggers if any have fired) with one-line rationale. Ask which to pull. **Don't guess.** |
+| *"What's next?" / "Where are we?" / no specific direction* | Synthesize state from the bootstrap reads. Surface the active open question. List 2–3 candidate threads (active question, debt discharge, OPEN-ITEMS triggers if any have fired) with one-line rationale. Ask which to pull. **Don't guess.** |
 | *"Continue X" / "Resume" / "Pick up where we left off"* | Load X's mid-progress state. Propose the next concrete step. Confirm before writing. |
 | *"Design X" / "Add a feature"* | Determine: does X fit an existing feature, need a new feature folder (see *When you add a feature*), or start as a Spike? Surface the choice; do not decide silently. |
 | *"I want to discuss the workflow itself"* | Open `_workflow/PRODUCT-BUILDER.md`. Otherwise leave it closed. |
@@ -60,8 +60,8 @@ You may not violate these without explicit human approval, even if asked.
 3. **Per-feature counters restart at `01`.** Filenames are bare (`01-command-pipeline.md`); the path is the prefix. Cross-references use full paths (`features/actions/models/01-command-pipeline.md`), never "doc 28".
 4. **The alignment-debt ledger is the single source of truth for cascade.** Models and Features do **not** carry inline `## Implications` sections.
 5. **Status flips are deliberate human actions.** Never flip `draft → settled` or `settled → implemented` without checking the gate and confirming with the human.
-6. **The three ledgers are independent.** No dual-write across `OPEN-QUESTIONS.md`, `ALIGNMENT-DEBT.md`, `BACKLOG.md`. Each fact lives in exactly one.
-7. **One thread per session.** Adjacent issues you spot go to `BACKLOG.md` with a trigger condition — not into the current change.
+6. **The three ledgers are independent.** No dual-write across `OPEN-ITEMS.md`, `ALIGNMENT-DEBT.md`, `OPEN-ITEMS.md`. Each fact lives in exactly one.
+7. **One thread per session.** Adjacent issues you spot go to `OPEN-ITEMS.md` with a trigger condition — not into the current change.
 8. **The session note records the trail truthfully.** What it claims must match what happened.
 
 ---
@@ -77,8 +77,8 @@ Watch for these conditions and act when they fire. Tell the human what you're do
 | A major decision settles | Write an ADR. Feature-scoped → `features/<f>/decisions/NNNN-<slug>.md`. Project-wide → `decisions/NNNN-<slug>.md`. Per-feature counter; per-project counter for general. |
 | A settled decision is being reopened | Don't edit the old ADR. Write a new one (`NNNN supersedes MMMM`), set old ADR's status to `superseded by NNNN`, walk `references:` and open one debt entry per dependent doc — supersession is itself a cascade event. |
 | A feature gains/loses a Model or shifts dependencies | Refresh `ledgers/FEATURE-MAP.md` (table + mermaid + breakdown). |
-| Concrete work is deferred ("we'll do this later") | Append to `ledgers/BACKLOG.md` with a trigger condition. Don't leave it as a comment in the session note. |
-| A durable open question surfaces | Append to `ledgers/OPEN-QUESTIONS.md`. Ephemeral questions answered in-session go in the session note part 2 — not in OPEN-QUESTIONS. |
+| Concrete work is deferred ("we'll do this later") | Append to `ledgers/OPEN-ITEMS.md` with a trigger condition. Don't leave it as a comment in the session note. |
+| A durable open question surfaces | Append to `ledgers/OPEN-ITEMS.md`. Ephemeral questions answered in-session go in the session note part 2 — not in OPEN-ITEMS. |
 | A Spike is reaching its end | Update its status (`concluded` / `graduated` / `archived`). Add forward links if it informed a Model/ADR. Spikes are static once resolved — don't re-edit them as downstream evolves. |
 | Ledger crosses 5 open entries | Tell the human: the next session must be pass-mode. Don't quietly continue design work. |
 
@@ -127,7 +127,7 @@ A Feature can't sit at a higher tier than its lowest *qualifying* Model (qualify
 
 `ledgers/` carries three independent ledgers. They have distinct shapes and lifecycles. Don't dual-write.
 
-### `OPEN-QUESTIONS.md` — durable design questions
+### `OPEN-ITEMS.md` — durable design questions
 - **Open when:** a design question surfaces that we can't answer in-session and isn't ephemeral.
 - **Close when:** the question is answered (strikethrough + link to resolving doc).
 - **Entry shape:** title + paragraph framing + linked context + status.
@@ -138,7 +138,7 @@ A Feature can't sit at a higher tier than its lowest *qualifying* Model (qualify
 - **Entry shape:** `- 2026-04-29 | source: <path> | target: <path> | reason: <one line> | open`.
 - **Threshold:** > 5 open entries forces the next session into pass-mode.
 
-### `BACKLOG.md` — deferred concrete work
+### `OPEN-ITEMS.md` — deferred concrete work
 - **Open when:** work is deliberately deferred ("we know what to do, we're not doing it yet").
 - **Close when:** work begins (strikethrough + PR/commit link).
 - **Entry shape:** title + 2-line context + trigger condition + references + status.
@@ -167,7 +167,7 @@ When the active thread lands or the session reaches a natural close:
    - **Part 1 (Content):** active question coming in, work done, decisions settled, `debt: N opened` or `debt: none`, active question going out.
    - **Part 2 (Links & open threads):** followups created, ephemeral questions (scratch), references.
 2. **Rewrite** `SESSION-CHECKPOINT.md` (don't append) with the landing state — where we stopped, the active open question, suggested next steps, artifacts to read on resume.
-3. Update `ledgers/OPEN-QUESTIONS.md`: strikethrough resolved questions with link to resolving doc; add new opens.
+3. Update `ledgers/OPEN-ITEMS.md`: strikethrough resolved questions with link to resolving doc; add new opens.
 4. Update `ledgers/GLOSSARY.md` changelog if vocabulary changed.
 5. Commit on `claude/<topic>` branch and open PR.
 
@@ -185,8 +185,8 @@ Product/
   general/
     PRODUCT-BUILDER.md       # the formal spec — workflow rules + rationale
     VISION / GAME-ARCHETYPES / ARCHITECTURE / ROADMAP /
-    RECOMMENDATIONS / GLOSSARY / OPEN-QUESTIONS               # orientation
-    ALIGNMENT-DEBT / BACKLOG / FEATURE-MAP                    # the three ledgers
+    RECOMMENDATIONS / GLOSSARY / OPEN-ITEMS               # orientation
+    ALIGNMENT-DEBT / OPEN-ITEMS / FEATURE-MAP                    # the three ledgers
     _templates/              # 7 doc-type templates
     decisions/NNNN-<slug>.md # project-wide ADRs
   features/<feature>/

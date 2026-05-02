@@ -425,5 +425,5 @@ public IntentResult Submit(MoveInstanceToZoneRequest request)
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — the existing end-to-end flow that this engine wraps
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — what happens inside a single pipeline execution
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — payload and result shapes
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — scheduler and rules-engine open questions
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — scheduler and rules-engine open questions
 

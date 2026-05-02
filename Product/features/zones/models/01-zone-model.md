@@ -368,7 +368,7 @@ Note: card packs are *not* zones. A pack is an entity with a generator effect; o
 
 ## Deferred
 
-- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The framework does not pre-define a hook for this; a spatial-rules game's design pass adds the appropriate fields to the contents shape (or a parallel slice) when the requirements are concrete. See `bl-spatial-rule-attachment` in `BACKLOG.md`.
+- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The framework does not pre-define a hook for this; a spatial-rules game's design pass adds the appropriate fields to the contents shape (or a parallel slice) when the requirements are concrete. See `bl-spatial-rule-attachment` in `OPEN-ITEMS.md`.
 - **Slot / group structure on contents** — battlefields with fixed rows or grouped piles. Same logic as spatial: no pre-defined hook; games add the fields when forced. The current contents shape is a flat `IReadOnlyList<Card>`.
 - **Per-actor asymmetric reveals** — visibility states like "card visible to player A but not player B" are not first-class in the visibility model; games that need them model the reveal as a transient game-state slice. Per-actor map shape on the visibility flag was rejected as YAGNI.
 
@@ -396,7 +396,7 @@ Atomic decisions captured below also become ADRs in `features/zones/decisions/` 
 
 # Zone Model Decisions
 
-This document answers the Zones questions from [Open Questions](ledgers/OPEN-QUESTIONS.md). These are early research decisions, not final implementation contracts.
+This document answers the Zones questions from [Open Questions](ledgers/OPEN-ITEMS.md). These are early research decisions, not final implementation contracts.
 
 ## Status
 

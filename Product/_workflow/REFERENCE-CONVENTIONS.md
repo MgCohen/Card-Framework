@@ -96,7 +96,7 @@ Append `#section-<n>` for numbered sections, or `#<lowercase-kebab-heading>` for
 When pointing at an open-question or backlog entry, prefer **ID + path** together. The ID is for human cross-reference; the path is what the linter and grep follow.
 
 ```markdown
-See oq-engine-builder (ledgers/OPEN-QUESTIONS.md) for the wiring gap.
+See oq-engine-builder (ledgers/OPEN-ITEMS.md) for the wiring gap.
 ```
 
 ID-only references are fine inside the same ledger (no path noise on every line). Cross-ledger references should include the path.

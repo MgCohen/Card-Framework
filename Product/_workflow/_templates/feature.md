@@ -24,4 +24,4 @@ What a consumer of this feature sees. Contracts, services, types — the outer b
 Pointers to load-bearing ADRs in this feature's `decisions/`.
 
 ## ❓ Open
-Pointers to `ledgers/OPEN-QUESTIONS.md` items relevant to this feature.
+Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.

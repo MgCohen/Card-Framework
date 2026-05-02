@@ -59,7 +59,7 @@ Zone configuration (capacity, ordering, insertion behavior, default visibility p
 
 Per ADR-0005, framework APIs take the zone object directly: `state.Get<ZoneContentsState>(zone)`, `zone.GetCards(state)`. The zone is used as a slice key; utility methods on the zone take state per call.
 
-Reverse-query aggregates (e.g., a `CardRef → Zone` index) are deferred until a concrete consumer surfaces. See `bl-card-location-index` in `BACKLOG.md`.
+Reverse-query aggregates (e.g., a `CardRef → Zone` index) are deferred until a concrete consumer surfaces. See `bl-card-location-index` in `OPEN-ITEMS.md`.
 
 ## Consequences
 

@@ -27,4 +27,4 @@ Zone identifiers, membership queries, and zone-aware accessors. Actions referenc
 ADRs in `features/zones/decisions/` (backfilled in phase 5).
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for zone-related questions.
+See `ledgers/OPEN-ITEMS.md` for zone-related questions.

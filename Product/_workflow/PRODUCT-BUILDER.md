@@ -1,7 +1,7 @@
 ---
 type: model
 status: accepted
-references: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]
+references: [SESSION-CHECKPOINT.md, ledgers/OPEN-ITEMS.md]
 tags: [#workflow, #meta]
 ---
 
@@ -19,7 +19,7 @@ Top-level folders, in two groups:
 
 **Workflow-shaped** — structure defined by this spec:
 - **`_workflow/`** — workflow definition itself (this doc + doc-type templates). Rarely opened in normal operation.
-- **`ledgers/`** — workflow-defined files whose content is project-specific: the open-items ledger (`OPEN-QUESTIONS`/`BACKLOG` — see §6 for the consolidation underway), the glossary, the feature map. Opened daily.
+- **`ledgers/`** — workflow-defined files whose content is project-specific: the open-items ledger (`OPEN-ITEMS.md`), the glossary, the feature map. Opened daily.
 - **`decisions/`** — project-wide ADRs (cross-feature decisions, workflow choices).
 
 **Project-shaped** — content is the project itself:
@@ -47,8 +47,7 @@ Product/
 
   ledgers/                   # workflow-shaped, project-content (opened daily)
     GLOSSARY.md              # canonical vocabulary
-    OPEN-QUESTIONS.md        # durable open design questions
-    BACKLOG.md               # deferred concrete work; trigger conditions for revisit
+    OPEN-ITEMS.md            # loose ends — questions, deferred work, known TODOs
     FEATURE-MAP.md           # bird's-eye view: features, models, dep graph (mermaid)
 
   decisions/                 # project-wide ADRs (NNNN-<slug>.md, project-wide counter)
@@ -223,7 +222,7 @@ What a consumer of this feature sees. Contracts, services, types — the outer b
 Pointers to load-bearing ADRs in this feature's `decisions/`.
 
 ## Open
-Pointers to `ledgers/OPEN-QUESTIONS.md` items relevant to this feature.
+Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.
 ```
 
 A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature clears the §5.6.1 research gate, status flips `draft → settled` and it becomes the canonical contract for that feature. When code lands in the implementation directory that satisfies the contract, status flips `settled → implemented` (§5.6.2 build gate).
@@ -447,12 +446,12 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 Once-per-project phase before §5.1 applies. Output is a working `Product/` skeleton with enough orientation to start session 02 with a real question.
 
-1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledgers: `ledgers/OPEN-QUESTIONS.md`, `ledgers/BACKLOG.md`, `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
+1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledger: `ledgers/OPEN-ITEMS.md`, plus `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
 4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
-6. **Seed `ledgers/OPEN-QUESTIONS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
+6. **Seed `ledgers/OPEN-ITEMS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
 7. **Install the pre-push hook.** `.githooks/pre-push` is tracked in the repo. Run `git config core.hooksPath .githooks` once after cloning. The hook checkpoints any in-progress session note (see §5.3) into a small commit before every push — so a broken conversation can always be resumed via `/builder:start-session`.
 8. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
 9. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
@@ -472,11 +471,11 @@ Sessions branch. That's normal, not an exception. As work surfaces sub-problems,
   - Open-ended exploration / prior-art survey → **Spike** (in `spikes/`).
   - System needs design (decisions, structure, or both) → **Model**.
   - New concrete reference instance → **Sample** (in `support/samples/`).
-- **Capture for later** if it's out of scope: promote to `ledgers/OPEN-QUESTIONS.md` so it doesn't get lost.
+- **Capture for later** if it's out of scope: promote to `ledgers/OPEN-ITEMS.md` so it doesn't get lost.
 
 When a major decision settles → write an ADR (in `features/<feature>/decisions/` for feature-scoped, `decisions/` for project-scoped).
 When a Model edit cascades to other docs → run the linter to identify affected dependents; fix in place (see §5.7).
-When concrete work is deferred ("build this later" / "revisit when X") → append to `ledgers/BACKLOG.md` with a trigger condition.
+When concrete work is deferred ("build this later" / "revisit when X") → append to `ledgers/OPEN-ITEMS.md` with a trigger condition.
 When a spike concludes or graduates → update its status and add forward links.
 New vocabulary → patch `ledgers/GLOSSARY.md` and append to its changelog.
 When a feature gains/loses a Model or shifts dependencies → refresh `ledgers/FEATURE-MAP.md`.
@@ -489,7 +488,7 @@ The session note records the **trail**, not a linear narrative: what was created
 
 1. Write `sessions/session-NN.md` (two parts, ~50 lines each cap).
 2. Refresh `SESSION-CHECKPOINT.md` with the landing state (rewrite, don't append).
-3. Update `ledgers/OPEN-QUESTIONS.md` — strikethrough resolved with link to resolving doc; add new opens.
+3. Update `ledgers/OPEN-ITEMS.md` — delete resolved entries (resolving doc owns the answer); add new opens.
 4. Update `ledgers/GLOSSARY.md` changelog if vocabulary changed.
 5. Commit + PR on `claude/<topic>` branch.
 
@@ -741,78 +740,51 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 
 | File | Role | Cadence |
 |------|------|---------|
-| `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-QUESTIONS items by link with current context | End of every session |
+| `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-ITEMS entries by id+link | End of every session |
 | `_workflow/PRODUCT-BUILDER.md` | This doc, once accepted | When workflow conventions change |
 | `ledgers/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
-| `ledgers/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
-| `ledgers/BACKLOG.md` | Deferred concrete work — known TODOs with trigger conditions for revisit. Distinct from open questions (deliberate deferrals, not unanswered questions) | Append when work is deferred; tick off when work begins |
+| `ledgers/OPEN-ITEMS.md` | Durable ledger of loose ends — questions, deferred work, known TODOs. Self-contained paragraph entries. Resolution = delete the entry (resolving doc owns the answer) | Append on durable open; delete on resolution |
 | `ledgers/FEATURE-MAP.md` | Bird's-eye view: feature index table, mermaid dependency graph, model-level breakdown. Hand-maintained v1; auto-generated v2 | When a Model lands, a Feature ships, or dependencies shift |
 | `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
-| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled, debt opened/closed; (2) links + ephemeral/followup questions | End of every session |
+| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
 | `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
-### Three lifetimes, three homes for questions
+### Two homes for questions
 
 | Question kind | Lifetime | Home |
 |---|---|---|
-| **Durable** open question | Project lifetime, until resolved | `ledgers/OPEN-QUESTIONS.md` |
-| **Active** focus question | Current session(s) | `SESSION-CHECKPOINT.md` (may link to an OPEN-QUESTIONS item with current context) |
-| **Ephemeral** session question — "wait, do we mean X or Y?" | One conversation; dies on answer | Inline in the draft doc, or scratch in the session note. Promoted to OPEN-QUESTIONS only if it turns out to be durable. |
+| **Durable** open item — questions, deferred tasks, known TODOs | Project lifetime, until resolved (then deleted) | `ledgers/OPEN-ITEMS.md` |
+| **Active + ephemeral** — current focus, mid-conversation scratch | Current session(s) | `SESSION-CHECKPOINT.md` (focus + `## Scratch` for ephemerals) |
 
-**Single-source rule still holds.** OPEN-QUESTIONS owns the canonical text. The checkpoint owns the current framing/context. Ephemeral questions never enter OPEN-QUESTIONS unless promoted.
+Ephemerals stay in CURRENT/SESSION-CHECKPOINT until they either get answered (delete), promote to OPEN-ITEMS (worth tracking durably), or get left for next session.
 
-### Three ledgers, three shapes
+### Two ledgers, two shapes
 
-`ledgers/` carries three independent ledgers, each with a distinct shape and lifecycle:
+`ledgers/` carries two independent ledgers, each with a distinct shape and lifecycle:
 
 | Ledger | Shape | Closure |
 |--------|-------|---------|
-| `OPEN-QUESTIONS.md` | Unanswered design questions | Strikethrough + link to resolving doc |
-| `BACKLOG.md` | Deferred concrete work (known TODOs) | Strikethrough + link to PR/commit when work begins |
+| `OPEN-ITEMS.md` | Loose ends (questions, tasks, deferrals) — self-contained paragraph entries with optional `kind:` tag | Delete on resolution; resolving doc owns the answer |
+| `GLOSSARY.md` | Canonical vocabulary + changelog | Glossary terms persist; renames go through `/builder:promote-glossary` |
 
-These don't overlap. A question is "we don't know what to do." Debt is "this Model edit affected that doc." Backlog is "we know what to do; we're not doing it yet." Mixing shapes mixes lifecycles — keep them separate.
-
-**Single-source rule.** Each piece of state lives in exactly one of these files. The checkpoint *links to* the others; it does not duplicate them. Models do not duplicate cascade information inline (no `## Implications for prior docs` section — cascade is detected by the linter on demand, not tracked).
+**Single-source rule.** Each piece of state lives in exactly one place. The checkpoint *links to* OPEN-ITEMS by id; it does not duplicate. Models do not duplicate cascade information inline (cascade is detected by the linter on demand, not tracked).
 
 ### Ledger entry shapes
 
-Canonical entry shape per ledger. Automations (`/builder:open-debt`, `/builder:lint`, `/builder:add-to-backlog`, etc.) write entries in this exact shape; humans writing entries by hand follow the same.
-
-Unlike §4 doc templates (which become files in `_templates/`), ledger entry shapes are **spec-only** — they're appended to existing ledger files, not used to spawn new ones. Edits land here in §6; automations either hard-code the shape from this section or read it at build time. No template file extraction.
-
-**`BACKLOG.md` entry**
+`OPEN-ITEMS.md` entries are self-contained paragraphs. Each entry tells the full story without requiring outside context.
 
 ```markdown
-- **Title** — 2-line context describing what's deferred and why.
-  Trigger: `<condition that makes this actionable>`.
+- id: <oq-* | bl-* | optional> | kind: question | task | defer | **Title** — paragraph framing the loose end. What's known, what's open, why it matters. Two or three sentences.
+  Trigger: `<condition that makes this actionable>` (optional, for tasks/defers).
   References: `<paths or links to related docs>`.
-  Status: open
 ```
 
-Done entries get strikethrough plus link to the PR/commit that closed them:
-
-```markdown
-- ~~**Title** — context. Trigger: ... References: ... Status: open~~ → done 2026-05-02 ([commit](link))
-```
-
-**`OPEN-QUESTIONS.md` entry**
-
-```markdown
-- **Title** — one-paragraph framing of the question. What's known, what's unknown, what's blocked on it.
-  Linked context: `<paths to related docs>`.
-  Status: open
-```
-
-Resolved entries get strikethrough + link to the resolving doc:
-
-```markdown
-- ~~**Title** — framing... Status: open~~ → resolved by [features/engine/models/03](path)
-```
+No strikethrough archive. When an entry resolves, **delete it** — the resolving doc (Model section, ADR, feature note saying "we're not doing this", etc.) owns the answer. Git keeps deletion history if ever needed: `git log --diff-filter=D ledgers/OPEN-ITEMS.md`.
 
 **`FEATURE-MAP.md` layout**
 
-Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (per BACKLOG entry, trigger ~15 Models).
+Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (see `OPEN-ITEMS.md` entry `bl-feature-map-generator`).
 

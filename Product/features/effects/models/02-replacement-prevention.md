@@ -267,4 +267,4 @@ This means the history shows both: "A was replaced" and "B executed." The causal
 - [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — trigger fold, subscription, OnBefore/OnAfter
 - [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — GameRules, scheduling, engine loop
 - [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — async layer, Decisions
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — open items
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — open items

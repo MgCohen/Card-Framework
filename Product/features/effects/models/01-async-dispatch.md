@@ -211,4 +211,4 @@ public interface IEffectScope
 - [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, Stash scheduling
 - [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — type hierarchy, trigger fold
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — CompositeAction and scope utilities
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — async suspension open item
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — async suspension open item

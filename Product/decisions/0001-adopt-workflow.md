@@ -16,7 +16,7 @@ After 11 sessions of flat `RESEARCH/` work the project's design content had outg
 ## Options considered
 - A: Keep flat `RESEARCH/` + add ADRs alongside — rejected because it doesn't address mega-docs, spike/feature mixing, or alignment-debt tracking.
 - B: Adopt a heavy framework (e.g., a dedicated docs SaaS) — rejected because the project is small and tooling overhead would dominate value.
-- C: Adopt the seven-doc-type, feature-first, `general/`+`features/`+`spikes/`+`support/`+`sessions/` structure with three ledgers (`ALIGNMENT-DEBT`, `BACKLOG`, `FEATURE-MAP`). Chosen.
+- C: Adopt the seven-doc-type, feature-first, `general/`+`features/`+`spikes/`+`support/`+`sessions/` structure with three ledgers (`ALIGNMENT-DEBT`, `OPEN-ITEMS`, `FEATURE-MAP`). Chosen.
 
 ## Decision
 The workflow described in `_workflow/PRODUCT-BUILDER.md` is the canonical Product Builder workflow for this project. Forward-going design work follows it. The migration from the legacy flat `RESEARCH/` layout into `Product/` was carried out in session 12 (see `sessions/session-12.md`) per `ProductBuilder/MIGRATION-GUIDE.md`.

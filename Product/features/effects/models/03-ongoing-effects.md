@@ -164,4 +164,4 @@ This is out of scope for the current session and depends on the stats redesign w
 - [features/entities/models/01-definition-instance-model.md](features/entities/models/01-definition-instance-model.md) — entity/definition/instance model
 - [features/zones/models/01-zone-model.md](features/zones/models/01-zone-model.md) — zone model; attachment storage may extend this
 - [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — trigger subscription and lifecycle
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — open items
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — open items
