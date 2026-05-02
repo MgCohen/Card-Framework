@@ -230,7 +230,12 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Remove pre-push hook for in-progress session notes (`.githooks/pre-push`).
 - Existing session notes in `Product/sessions/` stay as historical record — no migration.
 
-Order: PR 1 → PR 2 → PR 5a → PR 5b → PR 3+4.
+**PR 6 — root instruction refresh** *(follow-up per G6)*
+- Update `AGENTS.md` to reflect the steady-state workflow (no debt-pass, no session lifecycle, OPEN-ITEMS, etc.).
+- Update root `CLAUDE.md` likewise; ensure project-rules section still applies.
+- Verify no stale references to deleted commands/skills/ledgers.
+
+Order: PR 1 → PR 2 → PR 5a → PR 5b → PR 3+4 → PR 6.
 
 Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then ledger consolidation (decoupled). Then session lightening (decoupled, high relief). Finally the combined template + linter + per-feature Model/ADR rollout — the heaviest PR, but coherent because Model rewrites and ADR folds happen in lockstep per feature.
 
@@ -344,7 +349,7 @@ To lock one-by-one before edit work starts. Each gets a verdict line appended be
 | G3 | ADR migration hand-work — triage scope | **locked: one big PR, staged commit-by-feature, combined with Model template rollout.** PR 3 and PR 4 merge: define new strict Model template + harden linter as the first commit, then walk feature-by-feature — for each feature, one commit that rewrites every Model into the new template *and* folds sibling ADRs into the provenance sections in the same pass. Project-wide ADRs (cross-cutting) stay in top-level `Product/decisions/`. Feature-internal ADR files archived with a forward link to the absorbing Model section after fold. |
 | G4 | Retired-tokens registry — who writes it now | **locked: `/builder:promote-glossary` writes it on rename.** Existing `<old-term> -> <new-term>` syntax extended to also append `Product/_workflow/retired-tokens.json` (term, retired date, replacement, one-line context). Add `--rename-only` mode for token renames that don't touch GLOSSARY (rare). Linter consumes the registry for actionable error messages ("X was retired YYYY-MM-DD; use Y instead"). |
 | G5 | `end-session` linter integration — gate or soft | **locked: interactive triage.** There is no "closing" a session anymore (no per-session artifact to gate). `end-session` is just a routine bundle — runs linter + freshness check + chat-log scan for unsaved sketches. Findings surface as interactive prompts: *"linter found N issues; freshness check found M; chat scan found K unsaved sketches — fix now / defer to OPEN-ITEMS / ignore?"* Agent waits for direction per category. Not a refusal-style gate; an interaction point that the user routes through. |
-| G6 | `AGENTS.md` + root `CLAUDE.md` — final reference sweep | open |
+| G6 | `AGENTS.md` + root `CLAUDE.md` — final reference sweep | **locked: separate follow-up PR after main cleanup.** Land all cleanup PRs first; then one small PR refreshes both root instruction files against the steady-state workflow. Avoids rewriting the same sections multiple times as decisions land in different PRs, and produces a single coherent before/after diff. |
 | G7 | `design-pass` output discipline — new target shape | open |
 
 ---
