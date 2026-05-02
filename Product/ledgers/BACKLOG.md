@@ -61,16 +61,6 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
 
 - ~~**Upgrade `actions/checkout@v4` → `@v5`** — Node.js 20 deprecated 2026-06-02. One-line bump in `.github/workflows/debt-pass.yml`. Trigger: before 2026-06-02. References: `.github/workflows/debt-pass.yml`. Status: open~~ → done 2026-05-01 (bumped to `actions/checkout@v5`)
 
-- id: bl-debt-pass-gha-silent-failure | **GHA debt-pass produces no output when cascade entries require judgment** — the 2026-05-02 organic GHA fire (triggered by PR #76 touching ALIGNMENT-DEBT, 10 cascade entries open) completed with `terminal_reason: completed` but opened no PR and no branch. Root cause unknown: likely Haiku classified all cascade entries as non-mechanical and silently exited the discharge loop without committing. Needs investigation: (1) add step-level logging to the spec so silent exits surface a reason, (2) check whether the confidence-check keywords (`rewrite`, `redesign`, etc.) are too narrow, (3) verify the defensive empty-pass guard (step 10) doesn't swallow a legitimate "nothing discharged" case without a trace.
-  Trigger: before next GHA fire with a cascade-heavy ledger.
-  References: `.claude/commands/builder/debt-pass.md` step 5c, `.github/workflows/debt-pass.yml`, GHA run 2026-05-02T12:34 on main.
-  Status: open
-
-- id: bl-debt-pass-graceful-budget | **Graceful turn-budget exhaustion for `/builder:debt-pass`** — currently when the agent hits `--max-turns`, it fails hard with `error_max_turns` and all in-progress edits are lost (no commit, no PR). Bad outcome for a long-running unattended pass that did most of the work. Add a "near-budget" rule to the spec: when the agent estimates it has fewer than ~5 turns remaining, stop the discharge loop, jump to step 9, and commit/push/PR what's done with a `## Partial completion` section in the PR body listing entries discharged vs. entries left open. Reviewer sees real progress instead of a wasted run. Implementation note: agent doesn't natively know the budget — the spec needs to teach it to count its own turns or derive remaining budget from `--max-turns` (passed via env or hard-coded as a constant in the spec).
-  Trigger: after the parallel-tool-use optimization above, since that may make the issue rare enough to ignore.
-  References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
-  Status: open
-
 - id: bl-spatial-rule-attachment | **Spatial rule attachment surface for zones** — when a game (Stacklands-style) needs spatial coordinates as rules data rather than presentation layout, the framework must commit to where spatial info attaches. The current zone contents shape is a flat `IReadOnlyList<Card>` — there is no pre-defined hook. When forced by a real game, decide between: extending `ZoneContentsState` with per-entry structure (slot/coord field), introducing a parallel `SpatialState` slice keyed by card, or per-card position variable.
   Trigger: first spatial-rules game (Stacklands-like) reaches design-pass.
   References: `Product/features/zones/models/01-zone-model.md` §Deferred, `Product/features/zones/decisions/0001-zone-shape.md`, session-20260501-1602-zone-model-internal-opens.

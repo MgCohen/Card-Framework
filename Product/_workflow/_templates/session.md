@@ -9,7 +9,6 @@ One line.
 
 ### Work done
 - doc features/<feature>/models/NN written
-- alignment debt opened on docs X/Y/Z
 - ADR-NNNN landed
 
 ### Decisions settled
@@ -21,7 +20,6 @@ One line — what the next session opens with.
 ## Part 2 — Links & open threads (cap ~50 lines)
 
 ### Followups created
-- alignment debt: ...
 - new open question (promoted): ...
 
 ### Ephemeral questions (scratch, not promoted)

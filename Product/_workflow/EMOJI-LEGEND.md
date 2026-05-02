@@ -29,7 +29,6 @@ The design rule is **precision over parsimony**. Add slots for any concept that 
 | Emoji | Concept | Scope | Notes |
 |---|---|---|---|
 | 🎯 | active question | both | singular per session/report |
-| 📋 | alignment-debt entry/list | both | the `ALIGNMENT-DEBT` ledger concept |
 | ❓ | open-questions entry | both | the `OPEN-QUESTIONS` ledger concept |
 | ⚠️ | workflow gate fired | both | threshold crossed, validation gate triggered |
 | ✅ | locked | both | doc/section sealed against further changes |
