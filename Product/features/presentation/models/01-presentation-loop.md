@@ -141,6 +141,8 @@ public sealed class PileCounterAffordances
 
 The map pattern-matches on typed template subtypes — no string-keyed slot lookup, no command construction. Each template already exposes its data as named fields.
 
+> **ADR-0005 boundary note.** `InstanceId` keys in `Dictionary<InstanceId, ...>` and `InstanceId card` parameters in `CanDrag`/`OnDrop` are **boundary-correct** here. The `AffordanceMap` is the presentation-side consumer of the engine's wire-form snapshot — presentation works in terms of IDs because it receives the snapshot from the boundary, not a live object graph. See [ADR-0005](decisions/0005-objects-over-ids.md).
+
 **Properties:**
 - Pure projection of `AvailableActions`. No additional state.
 - Game-specific — Pile Counter's affordance shape is "card → valid destinations." Other games will have completely different shapes (target selectors, choice prompts, etc.).

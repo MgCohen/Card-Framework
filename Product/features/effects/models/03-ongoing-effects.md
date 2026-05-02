@@ -52,6 +52,8 @@ public sealed class HealOverTimeDefinition : EntityDefinition
     public int HealAmount  { get; init; }
     public int TurnCount   { get; init; }
 
+    // ADR-0005: `self` is a stable subscription key — entities use their InstanceId as the trigger owner
+    // so subscriptions survive CardRef rotations. Boundary-correct per ADR-0005 §Stable subscription keys.
     public override void Register(ITriggerSystem triggers, InstanceId self, Context ctx)
     {
         triggers.OnAfter<TurnStartSignal>(

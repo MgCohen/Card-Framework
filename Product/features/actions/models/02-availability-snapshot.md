@@ -86,6 +86,8 @@ public sealed record Subset<T>(string Name, IReadOnlyList<T> Pool, int Min, int 
 
 Per-subtype fields express the action's shape directly: `Destinations: IReadOnlyList<EntityId>` for a move, `Targets + Modes + XCost` for a spell, etc. Targets are uniformly `EntityId` lists ([doc 10's instance/entity model](features/entities/models/01-definition-instance-model.md)) — whether the entity is a card, slot, player, or zone is a per-action concern.
 
+> **ADR-0005 boundary note.** `InstanceId` and `EntityId` fields in `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper`. Rule-side code constructing templates derives IDs from held objects; the template stores IDs because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
+
 The template is the spec. `GameCommand` remains the resolved dispatch. The two are bridged by `PlayerChoice`:
 
 ```csharp
