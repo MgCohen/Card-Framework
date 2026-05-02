@@ -56,13 +56,16 @@ public sealed class HealOverTimeDefinition : EntityDefinition
     {
         triggers.OnAfter<TurnStartSignal>(
             condition: (_, _) => true,
-            react: (_, ctx) =>
+            react: (_, scope) =>
             {
-                var remaining = ctx.State.GetVariable(self, Vars.TurnsRemaining);
-                ctx.Dispatch(new HealActorAction { Target = ctx.GetHost(self), Amount = HealAmount });
-                ctx.Dispatch(new SetVariableAction { Target = self, Key = Vars.TurnsRemaining, Value = remaining - 1 });
+                // Read via the entity handle — IReadOnlyEntity surface
+                var attachment = scope.Entities.Get<HealOverTimeDefinition>(self);
+                var remaining = attachment.GetVariable<int>(Vars.TurnsRemaining);
+
+                scope.Dispatch(new HealActorAction { Target = scope.GetHost(self), Amount = HealAmount });
+                scope.Dispatch(new DecrementTurnsRemainingAction { Target = self });   // handler does the SetBaseValuePayload write
                 if (remaining - 1 <= 0)
-                    ctx.Dispatch(new DestroyEntityAction { Target = self });
+                    scope.Dispatch(new DestroyEntityAction { Target = self });
             },
             owner: self);
     }
