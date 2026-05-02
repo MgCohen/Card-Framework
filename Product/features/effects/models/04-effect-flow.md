@@ -152,14 +152,17 @@ public interface IEffectScope
 ```csharp
 public interface IHandlerContext
 {
-    Store              Store    { get; }   // Scaffold; read + execute mutators
-    IAvailableActions  Actions  { get; }   // mid-execution snapshot writes
-    ICommandAwaiter    Resolver { get; }   // register and resolve decision awaits
+    Store                 Store     { get; }   // Scaffold; read + execute mutators
+    IAvailableActions     Actions   { get; }   // mid-execution snapshot writes
+    ICommandAwaiter       Resolver  { get; }   // register and resolve decision awaits
+    IModifierIdGenerator  Modifiers { get; }   // deterministic ModifierId allocation
 }
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`. Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
 - **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line in pile-counter §9.4 is replaced by a single `ctx.Store.Execute(new MoveCardPayload(...))` call.
+- **Entity-variable mutations.** For modifier / base-value / variable mutations against entity slices, prefer the `IMutableEntity` surface on a `StateEntity` handle (obtained from the engine's entity registry): `entity.AddModifier(var, modifier, source)` synthesizes the bridge payload and dispatches it. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and handle-less paths. Convention details and the six bridge payloads are spelled out in [`entities/01` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md).
+- **`Modifiers`** — deterministic `ModifierId` allocator. Handlers call `ctx.Modifiers.NextId()` to mint the id passed into `AddModifierPayload`. `ModifierId.New()` is forbidden in handler code — `Guid.NewGuid()` is non-deterministic and breaks replay / multiplayer. The counter is engine-owned, snapshotted with engine state, and restored on `LoadSnapshot`.
 
 > **Follow-up.** `IHandlerContext` aggregates three services into one parameter. An alternative is to constructor-inject the services on each handler and drop the context type entirely — fewer indirections, friendlier to DI, lets each handler declare exactly what it needs. Whether that scales better across games (more handlers? more services? composition with abilities?) is undesigned. Revisit when a second game stresses the surface; recorded in [§9](#9-open-follow-ups).
 

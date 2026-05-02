@@ -112,6 +112,8 @@ All entities have a **framework-level Cleanup hook** that is called automaticall
 
 This is a lifecycle guarantee, not a trigger reaction. An attachment does not need an `OnAfter<DestroyEntityAction>` subscription to clean up its triggers — destruction handles it.
 
+The canonical cleanup verb for modifiers contributed by an attachment entity is `RemoveModifiersBySourcePayload(target.Id, new ModifierSource(attachment.Id))`, dispatched per affected target by the attachment's destruction handler (or by the framework Cleanup hook). Per [`entities/01` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md), `ModifierSource.Source` is the attachment's `InstanceId`, so this sweep is uniform across equipment, auras, status effects, and other ongoing-effect attachments.
+
 The exact lifecycle design (what "destroyed" means, when Cleanup fires relative to the destruction envelope, what happens to in-flight dispatches that reference the destroyed entity) is a **deferred topic** — entity lifecycle needs a dedicated design pass. The pattern here relies on Cleanup existing; the mechanism is not fully specified yet.
 
 ---
