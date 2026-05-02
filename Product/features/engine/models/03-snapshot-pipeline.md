@@ -88,6 +88,8 @@ public sealed record CastSpellTemplate(
     : ActionTemplate(typeof(CastSpellCommand), Spell);
 ```
 
+> **ADR-0005 boundary note.** `InstanceId Card`, `InstanceId Spell`, and other `Identifier<T>` fields on `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives IDs from held objects (`card.Id`, `spell.Id`); the template stores the ID because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
+
 Two simplifications from doc 28's draft:
 
 - **`Type CommandType` instead of `ActionId`.** The handler registry is already keyed by command type ([doc 25 §6](features/engine/models/02-gamerules-contract.md)); IntentMapper dispatches on it; history serialises it. No parallel string-id registry.

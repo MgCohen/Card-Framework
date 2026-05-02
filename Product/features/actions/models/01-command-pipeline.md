@@ -1862,6 +1862,10 @@ Payload:
 ```csharp
 public readonly record struct GameActionId;
 
+// ADR-0005: ActorId, InstanceId, ZoneId, and other Identifier<T> values in GameCommand and GameAction
+// records are boundary-correct. GameCommands are the pipeline's wire form — they are dispatched,
+// serialized (history envelopes), and network-transported as-is. Handlers extract domain objects
+// from IDs via ctx.Entities.Get<TDef>(id) inside handler bodies.
 // Base for all pipeline-dispatchable types (GameAction, CompositeAction, GameSignal).
 public abstract record GameCommand;
 

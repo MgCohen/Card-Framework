@@ -138,6 +138,8 @@ public sealed class TurnTimerService
 {
     private readonly GameEngine engine;
 
+    // ADR-0005: ActorId is boundary-correct — timer events originate from an external clock with no
+    // Actor object reference (type-mismatch boundary per ADR-0005).
     public void OnTimeExpired(ActorId actor)
     {
         engine.Dispatch(new ForceEndTurnCommand(actor));
@@ -353,6 +355,8 @@ The framework supports both through an **optional** available-actions system. By
 ```csharp
 public interface IAvailableActionsSnapshot
 {
+    // ADR-0005: ActorId is boundary-correct — presentation queries the snapshot by actor identity;
+    // presentation is the wire-form consumer side per ADR-0005.
     IReadOnlyList<AvailableAction> GetActionsFor(ActorId actor);
 }
 

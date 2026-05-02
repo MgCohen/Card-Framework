@@ -125,6 +125,7 @@ The framework hands handlers the concrete `Store`; they call `ctx.Store.Execute(
 
 The shape this gives us:
 
+- **`TPayload` types are boundary-correct for `Identifier<T>` use.** Mutator payloads are the Store's wire form — they persist, serialize, and transport analogously to `GameCommand`s. `InstanceId`, `PileId`, and similar `Identifier<T>` values in payload records are boundary-correct per [ADR-0005](decisions/0005-objects-over-ids.md). Handler code *building* a payload should derive IDs from held objects (`entity.Id`, `zone.Id`) rather than storing raw IDs in locals.
 - **Payload is a dedicated type, not the command.** A "last move" mutator takes a `LastMovePayload`, never `MoveCardCommand`. Payloads are framework-owned; commands are pipeline-owned.
 - **One payload, many mutators.** Mutators are registered per `TPayload` at engine bootstrap. When the handler dispatches one payload through `Store.Execute(payload)`, **every mutator registered for that payload type runs**, each producing its own slice's new state. The handler does not enumerate which mutators exist; the registry does.
 - **Mutators read sibling slices through `IStateScope`.** A mutator computing the new `LastMoveState` can look up the current `PilesState` via the `scope` parameter on `Change`.
