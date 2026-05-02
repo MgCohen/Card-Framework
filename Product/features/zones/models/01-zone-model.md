@@ -201,7 +201,7 @@ zone.GetOwner(state);                    // reads OwnershipState
 
 The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state per call, so a zone reference is timeless and can be passed across scope boundaries safely.
 
-For reverse queries — "what zone is this card in?" — the framework maintains a derived `CardLocationIndex` slice keyed by `CardRef → Zone` (per the [Card Model](features/cards/models/01-card-model.md)). The index is updated atomically by the same mutators that write `ZoneContentsState`.
+Reverse queries — "what zone is this card in?" — currently scan `ZoneContentsState` slices. A derived index slice can be added when a real consumer demands it; deferred to backlog (`bl-card-location-index`) until then.
 
 ## Insertion API
 
@@ -289,7 +289,7 @@ Per the [Card Model](features/cards/models/01-card-model.md), every card carries
 - `InstanceId` — stable across the card's lifetime; used for variable storage, modifier storage, history, server-internal subscriptions.
 - `CardRef` — temporary; the slice key in `CardMapState` and the reference used in `ZoneContentsState`. Rotates on every move and on every visibility transition.
 
-When a card hides, `HideCardMutation { Card, NewRef }` rotates the `CardRef` server-side: `CardMapState` swaps the old ref out and the new ref in, every `ZoneContentsState` containing the old ref swaps it for the new ref, `CardLocationIndex` rebinds, and `CardVisibilityState[card.InstanceId]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
+When a card hides, `HideCardMutation { Card, NewRef }` rotates the `CardRef` server-side: `CardMapState` swaps the old ref out and the new ref in, every `ZoneContentsState` containing the old ref swaps it for the new ref, and `CardVisibilityState[card.InstanceId]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
 
 The simulation-side `InstanceId` stays stable forever (preserves the entities Model invariant). Triggers, effects, attachments, and history all reference the `Card` object or its `InstanceId` — they are unaffected by ref rotation.
 

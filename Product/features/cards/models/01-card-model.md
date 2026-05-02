@@ -152,9 +152,9 @@ public sealed record DestroyCardMutation(Card Card) : CompositeAction;
 ### Composite expansion (in prose, not normative API)
 
 - **CreateCardMutation** — inserts `(NewRef, Card)` into `CardMapState`; initializes the card's `EntityVariableState` slice from `Definition.BaseValues`; if the card enters a zone immediately, also inserts `NewRef` into that zone's `ZoneContentsState`.
-- **MoveCardMutation** — removes `card.GetRef(state)` from `Source.ZoneContentsState`; rotates the entry in `CardMapState` (`oldRef → NewRef`); inserts `NewRef` into `Destination.ZoneContentsState` at `Position`; rebinds `CardLocationIndex` for the card.
-- **HideCardMutation** / **ShowCardMutation** — rotates the entry in `CardMapState`; swaps `oldRef → NewRef` in any `ZoneContentsState` containing the card; rebinds `CardLocationIndex`; writes `CardVisibilityState[card.InstanceId]`.
-- **DestroyCardMutation** — removes the entry from `CardMapState`; removes the card from any `ZoneContentsState`; removes from `CardLocationIndex`; removes per-card slices keyed by `InstanceId` (variables, modifiers, visibility); fires the cleanup hook (per `oq-entity-destruction`, still open).
+- **MoveCardMutation** — removes `card.GetRef(state)` from `Source.ZoneContentsState`; rotates the entry in `CardMapState` (`oldRef → NewRef`); inserts `NewRef` into `Destination.ZoneContentsState` at `Position`.
+- **HideCardMutation** / **ShowCardMutation** — rotates the entry in `CardMapState`; swaps `oldRef → NewRef` in any `ZoneContentsState` containing the card; writes `CardVisibilityState[card.InstanceId]`.
+- **DestroyCardMutation** — removes the entry from `CardMapState`; removes the card from any `ZoneContentsState`; removes per-card slices keyed by `InstanceId` (variables, modifiers, visibility); fires the cleanup hook (per `oq-entity-destruction`, still open).
 
 ## Read API
 
@@ -181,23 +181,6 @@ Reading a card's current ref or owner:
 var ref = card.GetRef(state);      // current CardRef
 var owner = card.GetOwner(state);  // Actor or null
 ```
-
-## CardLocationIndex
-
-Derived aggregate slice keyed by `CardRef → Zone`. Maintained atomically by the same mutators that write `ZoneContentsState`.
-
-```csharp
-public sealed record CardLocationIndex : IState
-{
-    public ImmutableDictionary<CardRef, Zone> Locations { get; init; }
-        = ImmutableDictionary<CardRef, Zone>.Empty;
-
-    public Zone? LocationOf(CardRef @ref) =>
-        Locations.TryGetValue(@ref, out var zone) ? zone : null;
-}
-```
-
-Backs reverse queries: "what zone is this card in?" is O(1).
 
 ## Useful Invariants
 
