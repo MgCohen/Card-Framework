@@ -115,6 +115,47 @@ Four of five jobs are double-bookkept. Cut.
 
 **Discipline shift:** the rule changes from *"session note is the trail; checkpoint is the spine"* to *"checkpoint is the only spine; agent keeps it current as work happens."* Slightly more discipline mid-session, much less ceremony around boundaries.
 
+### 7. Unify OPEN-QUESTIONS + BACKLOG → one ledger
+
+The doctrinal split (questions are *I don't know*; backlog is *I know but not doing*) is fuzzy in practice. Collapse to one ledger of loose ends.
+
+- **One file:** `Product/ledgers/OPEN-ITEMS.md` (replaces both `OPEN-QUESTIONS.md` and `BACKLOG.md`).
+- **Self-contained entries** — each is a paragraph, not a one-liner. What's known, what's open, why it matters, links to related docs. Reading any single entry tells the full story. Higher cost-per-entry is itself a forcing function — only open one when it's worth tracking.
+- **Optional `kind:` tag** per entry (`question` / `task` / `defer`) if filtering is useful. File is one regardless.
+- **Resolution = delete the entry.** No strikethrough archive. The resolving doc owns the answer (Model section, ADR, feature note for "we're not doing this," etc.). Git keeps deletion history if ever needed: `git log --diff-filter=D ledgers/OPEN-ITEMS.md`.
+- **Ephemeral mid-conversation questions** live in CURRENT.md `## Scratch` section (per #6). End of session: scratch gets answered (delete), promoted to OPEN-ITEMS (worth tracking), or left for next session.
+
+**Kills:**
+- `OPEN-QUESTIONS.md` + `BACKLOG.md` — merged.
+- Strikethrough-on-resolve convention.
+- "Three lifetimes, three homes" table in §6 — collapses to two homes (OPEN-ITEMS for durable, CURRENT.md for active + ephemeral).
+- Doctrinal split text in §6 ("Three ledgers, three shapes") — rewrite as two (OPEN-ITEMS + GLOSSARY; ALIGNMENT-DEBT gone per #5; FEATURE-MAP earmarked for derivation per future considerations).
+
+---
+
+## Future considerations (not locked)
+
+Captured here so we don't lose them. Revisit after the locked cleanup lands and the workflow has stabilized for several sessions.
+
+### FEATURE-MAP as a derived dependency graph
+
+Today `FEATURE-MAP.md` is hand-maintained. Once the linter exposes the reverse reference graph (per #4), most of FEATURE-MAP becomes derivable. The end vision the user wants:
+
+- One canonical doc showing every feature, its Models, and its dependencies.
+- Edges at two granularities: feature → feature (rolled-up), and model → model (fine-grained).
+- A model in feature C may reference a model in feature A even if the *features* don't depend on each other — that needs to be visible. The reverse-graph data already supports this; the rendering needs to expose both layers.
+- The graph is load-bearing for **build ordering**: when implementation starts, walk the dependency graph bottom-up to find the path of least resistance — implement the leaves first, then their consumers, etc.
+
+Likely shape: linter generates `Product/ledgers/FEATURE-MAP.md` from `references:` data + folder structure. Hand-maintained pieces (descriptions, status annotations) live in a separate small input file the linter reads and merges. Mermaid render auto-updated.
+
+Defer until the locked cleanup lands and the user wants to do the graph work in earnest on this project.
+
+### MCP-backed CURRENT.md for cross-machine / parallel sessions
+
+Earlier proposal: store CURRENT in an MCP server so multiple sessions / machines share one source of truth. Hydrate at session start, push back at session end.
+
+Deferred — solves a problem that doesn't exist today (solo work, one machine, one active session). Adds infrastructure cost and loses git audit trail for the spine. Revisit if/when parallel sessions become a real workflow.
+
 ---
 
 ## Linter responsibilities (consolidated)
@@ -164,7 +205,13 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Harden linter against silent failures.
 - Add `/builder:deps <path>` command.
 
-**PR 5 — session workflow lightening**
+**PR 5a — ledger consolidation**
+- Create `Product/ledgers/OPEN-ITEMS.md`; merge `OPEN-QUESTIONS.md` + `BACKLOG.md` content (drop strikethrough archive — those entries are already resolved).
+- Update §6 of `PRODUCT-BUILDER.md`: collapse "three ledgers, three shapes" → two; collapse "three lifetimes, three homes" → two.
+- Drop ledger entry shape blocks for OQ + BACKLOG; add the new OPEN-ITEMS shape (paragraph-style entries).
+- Update any cross-references (e.g., session note template references) to point at OPEN-ITEMS.
+
+**PR 5b — session workflow lightening**
 - Strip `SESSION-CHECKPOINT.md` front matter (drop schema-version / head / merged / batch).
 - Rewrite `/builder:start-session` skill — read-only briefing, no artifact creation, no orphan cleanup.
 - Rewrite `/builder:end-session` skill (rename to `/builder:wrap` if desired) — runs linter, validates checkpoint freshness, exits. No session-note creation.
@@ -175,9 +222,9 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Remove pre-push hook for in-progress session notes (`.githooks/pre-push`).
 - Existing session notes in `Product/sessions/` stay as historical record — no migration.
 
-Order: PR 1 → PR 2 → PR 5 → PR 4 → PR 3.
+Order: PR 1 → PR 2 → PR 5a → PR 5b → PR 4 → PR 3.
 
-Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then session lightening (decoupled, high relief). Then linter/template (introduces enforcement). Then ADR migration last (uses the new linter/template to validate migrated Models).
+Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then ledger consolidation (decoupled, frees up session-note discussion). Then session lightening (decoupled, high relief). Then linter/template (introduces enforcement). Then ADR migration last (uses the new linter/template to validate migrated Models).
 
 Or collapse to one PR if we trust the diff. TBD when sketching.
 
