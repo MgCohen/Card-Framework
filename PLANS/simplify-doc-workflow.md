@@ -331,7 +331,7 @@ To lock one-by-one before edit work starts. Each gets a verdict line appended be
 
 | # | Gap | Status |
 |---|---|---|
-| G1 | CURRENT.md freshness enforcement (discipline / soft warn / pre-commit) | open |
+| G1 | CURRENT.md freshness enforcement (discipline / soft warn / pre-commit) | **locked: soft warn at end-session.** Keep `end-session`'s existing chat-log scan for unsaved sketches — high value, preserve. Add a freshness check: compare CURRENT's git timestamp against touched `Product/features/**` and `Product/ledgers/**` files; warn (don't block) if CURRENT is stale. Escalate to pre-commit hook only if soft warn proves insufficient. |
 | G2 | Existing session notes — leave or quarantine | open |
 | G3 | ADR migration hand-work — triage scope | open |
 | G4 | Retired-tokens registry — who writes it now | open |
