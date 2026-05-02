@@ -379,7 +379,7 @@ The zone does not decide broad legality. It organizes approved content changes.
 - ~~When does an envelope close?~~ — resolved: after the handler returns and history is published, before the evaluator is called (doc 18, doc 20)
 - ~~Can pre-hooks mutate state, or only replace/cancel commands?~~ — resolved: the `OnBefore<T>` fold react function returns `FoldResult` (Keep/Cancel/Replace) — no direct state mutation from triggers. See [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md).
 - ~~Are post-reactions allowed to dispatch immediately or queued?~~ — resolved: there are no inline post-reactions; follow-up commands are returned by the evaluator and enqueued by the engine (doc 20)
-- How do scheduler models affect action flow? — still open; see [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md)
+- How do scheduler models affect action flow? — still open; see [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md)
 - How does rollback/rejection communicate to presentation? — still open
 - What metadata must be mandatory in an envelope? — partially settled: `OriginCommandId`, `OriginIntent` (first command only), `actor`, `sourceInstance`, `result`, `entries` (doc 18)
 

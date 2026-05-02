@@ -1,11 +1,12 @@
 ---
 type: plan
-status: complete
-last-updated: 2026-05-01
+status: abandoned
 tags: [#automation, #builder, #debt-pass]
 ---
 
 # Auto debt-pass — implementation plan
+
+> **Status: abandoned 2026-05-02.** ALIGNMENT-DEBT and the threshold-driven debt-pass were retired in the doc-workflow simplification (see `PLANS/simplify-doc-workflow.md` decision #5). Cascade is detected on demand by the linter, not tracked. Original plan content preserved below for historical record.
 
 Three components, build in order. Goal: when `Product/ledgers/ALIGNMENT-DEBT.md` crosses the §5.8 threshold, an unattended agent opens a PR that drains it. Human review at the PR is the only gate.
 

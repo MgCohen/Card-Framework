@@ -335,7 +335,7 @@ Doc 8 was a mega-decisions doc spanning entities, zones, and actions. Per §2 of
 
 # Core Model Decisions
 
-This document answers the Core Model questions from [Open Questions](ledgers/OPEN-QUESTIONS.md). These are early research decisions, not final implementation contracts.
+This document answers the Core Model questions from [Open Questions](ledgers/OPEN-ITEMS.md). These are early research decisions, not final implementation contracts.
 
 ## Status
 

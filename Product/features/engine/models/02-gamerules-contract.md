@@ -415,4 +415,4 @@ For games with one rule module, implement `GameRules` directly. The constructor 
 - [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — UI loop, snapshot-in-state, four validation layers
 - [features/actions/models/02-availability-snapshot.md](features/actions/models/02-availability-snapshot.md) — snapshot shape (typed templates)
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — service-driven snapshot publication; reshapes this doc's `OnQueueDrained` and rule dependencies
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — global open questions tracker
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — global open questions tracker

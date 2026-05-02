@@ -33,6 +33,6 @@ Each feature folder gains an `archive/` subdirectory as a sibling of `models/` a
 ## Consequences
 
 - Enables: historical record stays co-located; lint catches stale inbound links automatically; `archive/` is a reliable structural signal for migration audits.
-- Constrains: any supersession or cancellation now requires a `git mv` into `archive/` plus the four front-matter fields — handled by `/builder:archive` (Tier 2 skill, see `BACKLOG.md`).
+- Constrains: any supersession or cancellation now requires a `git mv` into `archive/` plus the four front-matter fields — handled by `/builder:archive` (Tier 2 skill, see `OPEN-ITEMS.md`).
 - Rollout: PR 1 (this ADR + convention + lint + skill updates); PR 2 (migrate existing superseded/cancelled docs); PR 3 (optional `/builder:archive` helper).
 - Reverts/replaces: n/a (new convention; previously superseded docs stayed in place with only a status header).

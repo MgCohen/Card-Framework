@@ -1,7 +1,7 @@
 ---
 type: model
 status: accepted
-references: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]
+references: [SESSION-CHECKPOINT.md, ledgers/OPEN-ITEMS.md]
 tags: [#workflow, #meta]
 ---
 
@@ -19,7 +19,7 @@ Top-level folders, in two groups:
 
 **Workflow-shaped** — structure defined by this spec:
 - **`_workflow/`** — workflow definition itself (this doc + doc-type templates). Rarely opened in normal operation.
-- **`ledgers/`** — workflow-defined files whose content is project-specific: the three ledgers (`OPEN-QUESTIONS`, `ALIGNMENT-DEBT`, `BACKLOG`), the glossary, the feature map. Opened daily.
+- **`ledgers/`** — workflow-defined files whose content is project-specific: the open-items ledger (`OPEN-ITEMS.md`), the glossary, the feature map. Opened daily.
 - **`decisions/`** — project-wide ADRs (cross-feature decisions, workflow choices).
 
 **Project-shaped** — content is the project itself:
@@ -47,9 +47,7 @@ Product/
 
   ledgers/                   # workflow-shaped, project-content (opened daily)
     GLOSSARY.md              # canonical vocabulary
-    OPEN-QUESTIONS.md        # durable open design questions
-    ALIGNMENT-DEBT.md        # open cascade entries — single source of truth for debt
-    BACKLOG.md               # deferred concrete work; trigger conditions for revisit
+    OPEN-ITEMS.md            # loose ends — questions, deferred work, known TODOs
     FEATURE-MAP.md           # bird's-eye view: features, models, dep graph (mermaid)
 
   decisions/                 # project-wide ADRs (NNNN-<slug>.md, project-wide counter)
@@ -101,7 +99,7 @@ Product/
 
 ### Where cross-cutting docs live
 
-When a doc spans multiple systems (e.g., a terminology discussion touching naming hygiene broadly): it lives in the feature that triggered it and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references go to their canonical home: glossary / open questions / alignment debt / feature map → `ledgers/`; the workflow doc → `_workflow/`; project orientation → `general/`.
+When a doc spans multiple systems (e.g., a terminology discussion touching naming hygiene broadly): it lives in the feature that triggered it and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references go to their canonical home: glossary / open questions / feature map → `ledgers/`; the workflow doc → `_workflow/`; project orientation → `general/`.
 
 ### Feature names are project-specific
 
@@ -145,7 +143,7 @@ tags: [#async, #triggers]                                 # optional
 
 Reader knows in 2 seconds what they're holding.
 
-**`references:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade-walking on supersession (§5.9) and FEATURE-MAP dependency rendering.
+**`references:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade detection (§5.7) and FEATURE-MAP dependency rendering.
 
 Feature roots derive their `Dependencies` section from the union of contained Models' `references:`, so they don't need to repeat it in front matter.
 
@@ -224,12 +222,12 @@ What a consumer of this feature sees. Contracts, services, types — the outer b
 Pointers to load-bearing ADRs in this feature's `decisions/`.
 
 ## Open
-Pointers to `ledgers/OPEN-QUESTIONS.md` items relevant to this feature.
+Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.
 ```
 
 A Feature doc starts as a stub when the folder is first created — sometimes only Purpose + Boundaries, with everything else empty. It thickens as Models land beneath it. When the Feature clears the §5.6.1 research gate, status flips `draft → settled` and it becomes the canonical contract for that feature. When code lands in the implementation directory that satisfies the contract, status flips `settled → implemented` (§5.6.2 build gate).
 
-**Cascade implications** (when this doc's edits affect downstream docs) are not captured inline — they live as entries in `ledgers/ALIGNMENT-DEBT.md`. See §5.7.
+**Cascade implications** (when this doc's edits affect downstream docs) are detected on demand by the linter — see §5.7.
 
 **`implemented` status convention.** A Feature flips to `implemented` (via §5.6.2 build gate) when code lands that satisfies its contract. While `implemented`, edits to the contract surface open **drift entries** against the implementation — either code updates to match, or the Feature reverts to `settled` (signaling "code is no longer guaranteed to match"). Most of a project's lifetime, mature features sit in `implemented` — that's the steady state.
 
@@ -241,10 +239,17 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 The unified design artifact. Top half describes the system; bottom half records the provenance (options weighed, rationale, consequences). A reader gets the model first; clicks down for the "why."
 
-```markdown
-# <subject> — model
+**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a stub line (`*n/a — purely descriptive Model.*`) but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
 
-<front matter: type=model, status=draft>
+```markdown
+---
+type: model
+status: draft
+references: [<upstream features or models, or the literal `root`>]
+tags: []
+---
+
+# <subject> — model
 
 ## Problem
 What we're modeling and why this exists.
@@ -262,36 +267,40 @@ What must always be true.
 At minimum, walked through against the floor sample.
 
 ## Open follow-ups
-Unresolved threads.
+Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
 
 ---
 
-*Below: provenance — what was considered, why we chose this. Track record.*
+*Below: provenance — what was considered, why we chose this, what it constrains. Feature-internal decisions live here; project-wide cross-cutting decisions get an ADR (§4.5).*
 
-## Options considered          # (omit if no real alternatives)
+## Options considered
 - **A** — rejected because ...
 - **B** — rejected because ...
 - **C** — chosen.
 
-## Rationale                    # (omit if obvious)
-Why the chosen approach.
+(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order. Replaces what used to be a separate per-decision ADR file in `features/<feature>/decisions/`.)
 
-## Consequences                 # (omit if obvious)
-What this enables; what it constrains.
+## Rationale
+Why the chosen approach. Skip if obvious.
+
+## Consequences
+What this enables; what it constrains. Skip if obvious.
 
 ## ADR
-Linked: features/<feature>/decisions/NNNN-<title>.md
+*(Optional — present only if a project-wide ADR was opened for cross-cutting decisions. Feature-internal decisions stay above.)*
+
+Linked: `Product/decisions/NNNN-<title>.md`
 ```
 
-A purely descriptive Model (e.g., a system that doesn't have meaningful alternatives) can omit the provenance sections entirely. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look.
+A purely descriptive Model can use the empty-stub convention for the provenance sections. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look — and the linter enforces it.
 
-**Cascade implications** (downstream docs affected by edits to this Model) are not captured inline — they live as entries in `ledgers/ALIGNMENT-DEBT.md`. See §5.7.
+**Cascade implications** (downstream docs affected by edits to this Model) are detected on demand by the linter — see §5.7.
 
 **`implemented` status convention.** A Model flips to `implemented` (via §5.6.2 build gate) when code in the implementation directory satisfies its contract. Edits to an `implemented` Model's contract surface open **drift entries** against the code — either code updates to match, or the Model reverts to `settled`.
 
 **`abandoned` status convention.** A Model that gets partway through and is decided against keeps its body as historical record, but receives a one-line header at the top: *"Status: abandoned YYYY-MM-DD — <reason>. Original attempt below for record."* The `abandoned` status is distinct from `superseded` (which implies a replacement Model exists). Use `abandoned` when the line of inquiry was wrong, not when a better answer was found.
 
-**`superseded` status convention.** A Model whose contract has been replaced by a later Model in the same feature folder (the new one is now canonical) keeps its body as historical record. Front matter: `status: superseded by NN-<slug>` (per-feature numbered, matching ADR convention). Header at the top: *"Status: superseded YYYY-MM-DD by [NN-<slug>](path) — `<reason>`. Body below for record."* The new Model's `## Consequences > Reverts/replaces` field names this Model. Trigger §5.4 / §5.9 cascade protocol — every doc with `references:` referencing the old Model gets a debt entry, plus a token grep across `Product/` for any retired identifiers (§5.7 step 1b).
+**`superseded` status convention.** A Model whose contract has been replaced by a later Model in the same feature folder (the new one is now canonical) keeps its body as historical record. Front matter: `status: superseded by NN-<slug>` (per-feature numbered, matching ADR convention). Header at the top: *"Status: superseded YYYY-MM-DD by [NN-<slug>](path) — `<reason>`. Body below for record."* The new Model's `## Consequences > Reverts/replaces` field names this Model. Run the linter — every doc whose `references:` includes the old Model surfaces as a finding; fix in place. See §5.7 (Cascade detection).
 
 **Detecting silent supersession.** When writing a new Model that introduces a contract surface (interface, type, method shape), check whether any older Model in the same feature folder defines or sketches the same surface differently. If so, the older Model is now superseded — apply this convention before writing further content. Skipping this check is the failure mode that produced `engine/02` silently superseding `engine/01`'s `GameRules` interface without flipping the status (S17 audit).
 
@@ -331,21 +340,33 @@ Ambiguous bits, unresolved projections.
 
 1. **Subject finalized** — the concrete description is fully specified; we aren't still debating what the example is.
 2. **Projection uses only `settled` abstractions** — every design concept the projection depends on is itself `settled`, not `draft` or `proposed`. (No locking onto sand.)
-3. **No open implications against the sample** in `ledgers/ALIGNMENT-DEBT.md`.
+3. **Linter passes against the sample** (no broken references, no structure violations).
 4. **Stable ≥ 1 session** — at least one session has passed without **contract edits** to either the sample or its dependencies. Soft cooldown. Hygiene edits (typos, formatting, link fixes, glossary-rename mirrors) don't reset the cooldown; only changes to the Subject text, the Projection mapping, or the framing do. When committing, mark the edit explicitly: `contract edit — cooldown reset` or `hygiene edit — no cooldown reset`.
 
-After locking, design changes that affect the sample create an explicit `ledgers/ALIGNMENT-DEBT.md` entry naming the locked sample. Resolving the entry is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
+After locking, design changes that affect the sample surface as linter findings against the locked sample. Resolving them is a deliberate decision: re-lock with the new shape, unlock back to `draft`, or accept the divergence (rare).
 
 ### 4.5 ADR
 
+**Reserved for project-wide / cross-cutting decisions only.** Feature-internal decisions live in the affected Model's provenance section (§4.3 — `## Options considered`, `## Rationale`, `## Consequences`). The ADR was duplicating provenance that grep already finds; collapse into the Model.
+
+ADRs apply to decisions that:
+- Span multiple features (cross-cutting principles, framework-wide naming).
+- Are cited from many docs and deserve a one-pager (e.g., Objects-over-IDs as ADR-0005).
+- Shape the project as a whole (workflow adoption, migration moves).
+
+ADRs live at `Product/decisions/NNNN-<slug>.md` (project-wide counter). There is no `features/<feature>/decisions/` directory — feature-internal ADRs collapse into the Model.
+
 ```markdown
+---
+type: adr
+status: proposed
+references: [<related models or features>]
+tags: []
+---
+
 # ADR-NNNN — <title>
 
-<front matter: type=adr, status=proposed>
-
-Date: 2026-04-29
-Context-doc: features/<feature>/models/NN-<title>.md
-Proposal: features/<feature>/models/NN-<title>.md
+Context-doc: `Product/features/<feature>/models/NN-<slug>.md` (or whichever Model surfaced the decision)
 
 ## Context
 Two paragraphs max.
@@ -364,47 +385,9 @@ One paragraph.
 - Reverts/replaces: ADR-NNNN
 ```
 
-### 4.6 Session note
+### 4.6 Snapshot (opt-in milestone)
 
-Two parts, each capped at ~one screen (~50 lines). If either overflows, the content belongs in a numbered doc or an ADR, not the session note.
-
-*Active question coming in* mirrors the active question in `SESSION-CHECKPOINT.md` at session start; *active question going out* is what the refreshed checkpoint will hold at session end.
-
-```markdown
-# Session NN — <date>
-
-<front matter: type=session>
-
-## Part 1 — Content (cap ~50 lines)
-
-### Active question coming in
-One line.
-
-### Work done
-- doc features/<feature>/models/NN written
-- alignment debt opened on docs X/Y/Z
-- ADR-NNNN landed
-
-### Decisions settled
-- ADR-NNNN: <one line>
-
-### Active question going out
-One line — what the next session opens with.
-
-## Part 2 — Links & open threads (cap ~50 lines)
-
-### Followups created
-- alignment debt: ...
-- new open question (promoted): ...
-
-### Ephemeral questions (scratch, not promoted)
-- Things we chewed on but answered in-session.
-- Kept here for traceability; not a durable record.
-
-### References
-- Docs touched: ...
-- Related sessions: ...
-```
+Mandatory per-session notes were retired (see `PLANS/simplify-doc-workflow.md` decision #6). The live spine is `SESSION-CHECKPOINT.md` — updated continuously as work happens. When the user wants to freeze the current state as a referenceable milestone, `/builder:snapshot` copies the checkpoint into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` with `type: snapshot` front matter and a *"Frozen — do not edit"* header. Snapshots are sparse and opt-in; most sessions produce none. Legacy per-session notes live in `Product/_archive/sessions/` as historical record.
 
 ### 4.7 Checkpoint
 
@@ -448,60 +431,28 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 Once-per-project phase before §5.1 applies. Output is a working `Product/` skeleton with enough orientation to start session 02 with a real question.
 
-1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledgers: `ledgers/OPEN-QUESTIONS.md`, `ledgers/ALIGNMENT-DEBT.md`, `ledgers/BACKLOG.md`, `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
+1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledger: `ledgers/OPEN-ITEMS.md`, plus `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
 4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
-6. **Seed `ledgers/OPEN-QUESTIONS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
-7. **Install the pre-push hook.** `.githooks/pre-push` is tracked in the repo. Run `git config core.hooksPath .githooks` once after cloning. The hook checkpoints any in-progress session note (see §5.3) into a small commit before every push — so a broken conversation can always be resumed via `/builder:start-session`.
+6. **Seed `ledgers/OPEN-ITEMS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
+7. *(retired)* Pre-push hook for in-progress session notes is gone. With no per-session artifact, there is no in-flight skeleton to checkpoint.
 8. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
 9. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
 
 A bootstrap session usually fits in one sitting. If it sprawls, the project is too big or the vision isn't clear yet — pause and split.
 
-### 5.1 Starting a session
+### 5.1–5.3 Sessions
 
-Open `SESSION-CHECKPOINT.md`. Take stock — note the entry context: the active question, alignment debt, PR feedback, or whatever brought you here. That's it. No commitment to a single direction.
+**`SESSION-CHECKPOINT.md` is the only spine.** No open/close lifecycle, no per-session artifact, no schema. The agent keeps the checkpoint current as work happens — *during* the session, not just at its boundary.
 
-### 5.2 During a session
+- **`/builder:start-session`** — read-only briefing. Reads CHECKPOINT + ledgers, prints "where we are / suggested threads," waits for direction. Creates no artifact.
+- **During** — branch freely. Address inline if small; spawn a doc (Spike / Model / Sample) if it deserves one; promote durable opens to `ledgers/OPEN-ITEMS.md`; ephemeral mid-conversation questions live in CHECKPOINT's `## Scratch` section. When a Model edit cascades, run the linter and fix in place (§5.7). When a major decision settles, write an ADR. New vocabulary patches `GLOSSARY.md`. Feature scope shifts refresh `FEATURE-MAP.md`.
+- **`/builder:end-session`** — interactive triage routine. Runs the linter, freshness check (CHECKPOINT vs touched files), and chat-log scan for unsaved sketches. Surfaces findings as prompts (fix / defer to OPEN-ITEMS / ignore). Creates no artifact.
+- **`/builder:snapshot`** — opt-in only. When the user wants to freeze the current state as a milestone, copies CHECKPOINT into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md`. Otherwise nothing lands there.
 
-Sessions branch. That's normal, not an exception. As work surfaces sub-problems, sketches, or new questions:
-
-- **Address inline** if it's small and feeds the active thread.
-- **Spawn a doc** if it deserves one. Pick the doc type from §2:
-  - Open-ended exploration / prior-art survey → **Spike** (in `spikes/`).
-  - System needs design (decisions, structure, or both) → **Model**.
-  - New concrete reference instance → **Sample** (in `support/samples/`).
-- **Capture for later** if it's out of scope: promote to `ledgers/OPEN-QUESTIONS.md` so it doesn't get lost.
-
-When a major decision settles → write an ADR (in `features/<feature>/decisions/` for feature-scoped, `decisions/` for project-scoped).
-When a Model edit cascades to other docs → append one entry per affected doc to `ledgers/ALIGNMENT-DEBT.md` (see §5.7).
-When concrete work is deferred ("build this later" / "revisit when X") → append to `ledgers/BACKLOG.md` with a trigger condition.
-When a spike concludes or graduates → update its status and add forward links.
-New vocabulary → patch `ledgers/GLOSSARY.md` and append to its changelog.
-When a feature gains/loses a Model or shifts dependencies → refresh `ledgers/FEATURE-MAP.md`.
-
-Branch freely; the session log captures the trail. Returning to the original thread after a detour is normal — just record both in the session note.
-
-### 5.3 Ending a session
-
-The session note records the **trail**, not a linear narrative: what was created, what was touched, what branched, what was answered, what's still open.
-
-1. Write `sessions/session-NN.md` (two parts, ~50 lines each cap).
-2. Refresh `SESSION-CHECKPOINT.md` with the landing state (rewrite, don't append).
-3. Update `ledgers/OPEN-QUESTIONS.md` — strikethrough resolved with link to resolving doc; add new opens.
-4. Update `ledgers/GLOSSARY.md` changelog if vocabulary changed.
-5. Commit + PR on `claude/<topic>` branch.
-
-**Session note lifecycle.** Session notes are gitignored while in-progress (avoids noise on main). `/builder:end-session` force-adds them at close. The `pre-push` hook (§5.0 step 7) additionally checkpoints the in-progress note into a small commit before every push — so if a conversation crashes before end-session runs, `/builder:start-session` can still detect and resume the dangling skeleton.
-
-Session-note `status:` values:
-
-- **`in-progress`** — open session; gitignored; pre-push hook commits as checkpoint.
-- **`completed`** — closed session, work landed on its branch; force-added at end-session; merge-pass picks it up and adds to `merged[]` on the main branch.
-- **`merged`** — completed session whose branch has been merged into main by merge-pass.
-- **`discarded`** — session was a no-op, schema test, or otherwise shouldn't pollute the workflow record. Set by `/builder:start-session`'s orphan-cleanup pass (for empty leftover skeletons) or by `/builder:end-session --discard` (for deliberately throwaway sessions). merge-pass skips these entirely — they never enter `merged[]`. Use `--discard` for schema-validation runs, abandoned starts, and any session whose work shouldn't be cited as a checkpoint reference.
+Legacy per-session notes (mandatory schema, in-progress / completed / merged / discarded states, parallel-session merge-pass machinery) were retired — see `PLANS/simplify-doc-workflow.md` decision #6 for the rationale. Old notes are preserved in `Product/_archive/sessions/`.
 
 ### 5.4 Reopening a settled decision
 
@@ -509,11 +460,7 @@ Session-note `status:` values:
 
 **Model.** Don't edit the old Model. Either write a new Model that replaces the contract, or extend a later-numbered Model that already covers the same surface. Set the old Model's status to `superseded by NN-<slug>` and apply the §4.3 superseded-status convention (one-line header, body kept for record). Note the reason in the session log.
 
-In both cases, the supersession is itself a debt-generating event — see §5.9.
-
-### 5.5 Alignment-debt discharge as a focus
-
-A session can be entirely alignment-pass-shaped. Same flow — the entry context is "discharge entries from `ledgers/ALIGNMENT-DEBT.md`," and the work is mechanical updates. Listed separately because it's a recognizable session pattern, not a different workflow.
+In both cases, run the linter to surface affected dependents (see §5.7).
 
 ### 5.6 Status gates
 
@@ -522,11 +469,11 @@ Two status gates govern the lifecycle: `draft → settled` (research gate) and `
 #### 5.6.1 Research gate: `draft → settled`
 
 A Feature or Model can flip to `settled` when **all** are true:
-- No open ledger entries against it in `ledgers/ALIGNMENT-DEBT.md` (target=this path).
+- Linter passes against this doc (no broken references, no structure violations).
 - Stable for ≥ 2 sessions with no edits to its contract surface (Problem / Concepts / Contracts / Invariants / Examples).
 - All glossary terms it uses appear in `ledgers/GLOSSARY.md`.
 
-Once `settled`, the Feature/Model **is** the canonical contract. Edits to a `settled` doc are deliberate events: each opens a debt entry per affected downstream doc (per §5.7).
+Once `settled`, the Feature/Model **is** the canonical contract. Edits to a `settled` doc are deliberate events: run the linter to surface and fix affected dependents (per §5.7).
 
 **Feature roots are the typical settle target.** When a Feature settles, the Models it indexes typically settle along with it (they're the components of the contract). Models can settle independently if a Feature root isn't ready but a sub-Model is stable on its own — but the feature-shaped path is the default.
 
@@ -539,7 +486,7 @@ A Feature or Model can flip to `implemented` when **all** are true:
 
 The `implemented` flip is a deliberate user action: *"yes, the code matches the contract."* This is the steady state — most of a project's lifetime, mature features sit in `implemented`.
 
-**Drift is debt.** Any edit to an `implemented` Feature/Model's contract surface opens a drift entry against the code. Resolution: either code updates to match (entry closes), or status reverts to `settled` (signaling "code is no longer guaranteed to match"). Drift entries are normal alignment-debt entries with `source=` the contract path and `target=` the implementation directory.
+**Drift is signal.** Any edit to an `implemented` Feature/Model's contract surface creates drift against the code. Resolution: either code updates to match, or status reverts to `settled` (signaling "code is no longer guaranteed to match"). Drift is surfaced by the linter (and by post-merge drift detection in §5.12).
 
 #### 5.6.3 Feature ↔ Model status sync
 
@@ -564,63 +511,41 @@ The flip itself is a deliberate user action — Models reaching the target makes
 - A Model is abandoned → Feature stays at its current status.
 - A tiny Feature has zero Models, just the root → user can flip the Feature freely; no Model constraint.
 
-### 5.7 Debt notification
+### 5.7 Cascade detection
 
-`ledgers/ALIGNMENT-DEBT.md` is the **single source of truth** for cascade implications. Models and Features do not carry inline `## Implications` sections — that information lives only in the ledger.
+**Cascade is detected, not tracked.** When you edit a Model whose contract surface changes, run `/builder:lint` (or `/builder:deps <path>` for a focused walk). The linter reports affected dependents via the `references:` graph and the retired-tokens registry. **Fix in place.** No ledger entry, no threshold, no scheduled pass.
 
-**On every Model edit, before commit:**
+If a cascade target requires *design judgment* rather than a mechanical edit (e.g., the change opens a real question about how the dependent should behave), open an entry in `ledgers/OPEN-ITEMS.md` so the thread isn't lost.
 
-1. **Identify downstream docs the edit affects** (Models, Features, Samples, ADRs). Three sub-steps, all mandatory:
-   - **1a. `references:` walk.** Every doc whose front-matter `references:` references this Model or its feature root. This catches *consumers* of the contract.
-   - **1b. Retired-token grep.** For any type, method, identifier, or field whose name or signature changed, run `grep -rn "<retired-token>" Product/` and add every match as a target. This catches docs that *describe or redefine* the type without consuming it via `references:` — the failure mode that produced 7 missed cascade targets in the S17 audit. Mental search alone is not sufficient; the grep is the forcing function.
-   - **1c. Shadow-check.** If the edit introduces a new contract surface (new interface, new type, new method shape), check older Models in the same feature folder for competing sketches of the same surface. A match means the older Model is now superseded — apply §4.3 superseded-status convention and §5.4 protocol *before* listing further cascade targets, then re-run 1a/1b on the freshly-superseded doc.
-2. Append **one ledger entry per affected doc**: source path, target path, one-line reason, status `open`, date.
-3. In the session note's content section, record a one-line `debt: N opened` (or `debt: none` if the edit was self-contained). Empty is not allowed — `debt: none` is the explicit signal that cascade was considered.
-
-The session-note assertion is the forcing function: it makes "I considered cascade and found nothing" *visibly distinct* from "I forgot to think about it."
-
-**Granularity is per-affected-doc.** Each entry has one binary status (`open`/`resolved`). No partial-completion semantics. This makes the ledger count meaningful — N open entries means N obligations, not N cascade events.
-
-### 5.8 Consistency-pass cadence
-
-`ledgers/ALIGNMENT-DEBT.md` crossing **5 open cascade entries** triggers the GHA debt-pass workflow (`.github/workflows/debt-pass.yml`), which discharges automatically and opens a PR for review. The threshold is the automation trigger, not a session gate — start-session surfaces the count as informational (`📊 N cascade · M linter`) but never forces a session into pass-mode.
-
-**Cascade vs linter classification.** Entries are discriminated by the `source:` field:
-- **Cascade** entries (anything *not* `source: linter` / `source: linter/archive`) come from Model edits per §5.7 — design churn that must be reconciled in dependent docs. These count toward the threshold.
-- **Linter findings** (`source: linter` or `source: linter/archive`, opened by `/builder:lint` per §5.10/§5.14) are mechanical link-cleanup. They do *not* count toward the threshold but are still discharged in the same pass when cascade tips the gate.
-
-Rationale: linter findings can pile up cheaply (a single archive operation can open 5+ broken-path entries in one pass) and would otherwise trip the threshold without representing real design pressure. They're cheap to clear in the same run that handles cascade.
-
-Threshold of 5 cascade entries is calibration, not principle. Adjust if data shows otherwise — but pick a number and commit.
-
-Manual local discharge (`/builder:debt-pass --force`) is supported when you want to inspect the diff before pushing, but is no longer the primary path. Without `--force` and outside CI, the command refuses.
-
-### 5.9 Backtracking on supersession
-
-When an ADR or Model is superseded (§5.4), the supersession is itself a debt-generating event:
-
-1. Write the new ADR (`NNNN supersedes MMMM`) or new Model; set the old doc's status to `superseded by <ref>` per §3 / §4.3.
-2. Walk the `references:` graph: find every doc whose `references:` references the superseded ADR/Model or its host feature.
-3. **Run the §5.7 step 1b retired-token grep** across `Product/` for any identifier, type, or method that changed shape under the new doc. Add matches as cascade targets. This catches docs that *describe* the old contract without consuming it via `references:`.
-4. For each target, append a ledger entry: source = new doc path, target = dependent doc, reason = "supersession of MMMM may invalidate framing" (or specific signature drift for grep-found targets).
-5. The new doc's `## Consequences > Reverts/replaces` field names the cascade scope.
-6. Decide in-session: discharge debt now, or let it count toward the §5.8 threshold for next pass.
-
-`references:` (§3, mandatory) catches consumers; the grep step (§5.7 1b) catches sketch-level redefinitions. Together the walk is exhaustive.
+ALIGNMENT-DEBT, the discharge threshold, and the auto-debt-pass workflow are retired (see `Product/_archive/ledgers/ALIGNMENT-DEBT.md` for historical record).
 
 ### 5.10 Reference-staleness linter
 
-Automation, not a session shape. A linter (run as `/builder:lint` skill or CI step) checks:
+The single on-demand consistency tool (`/builder:lint`). Six responsibilities:
 
-- Every path reference in `Product/` resolves.
-- Every term in a doc has a `ledgers/GLOSSARY.md` entry.
-- No Model points at a `superseded` ADR without acknowledging.
-- No `references:` references missing or pointing at non-existent paths.
-- Archive integrity rules (see §5.14): forward-pointer integrity, no stale inbound links, status/location agreement, successor presence.
+1. **Structure check** — every Model has the canonical sections in canonical order (§4.3). Variable size is fine; variable structure is not.
+2. **References resolve** — every `references:` path exists; every inline path-shaped link in the body resolves.
+3. **Header–body consistency** — auto-populate `references:` from path-shaped tokens in the body; flag mismatches.
+4. **Retired-tokens check** — grep for tokens in `Product/_workflow/retired-tokens.json`; report hits with their replacement (e.g., *"`IGameStateProvider` was retired 2026-04-30; use `IStateScope` instead"*).
+5. **Reverse graph** — compute "who references this" from the union of all `references:` fields. Exposed via `/builder:deps <path>` (§5.10a).
+6. **Git-derived dates** — `last-updated` per doc on demand from `git log -1 --format=%cs <path>`. (Front-matter dates were retired in PR 1; git is the source of truth.)
 
-**Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter` for path/references rules, source = `linter/archive` for archive-integrity rules, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow.
+**Findings are reported, not tracked.** The linter writes a stdout report; it does not append entries to any ledger. Fix in place.
 
-**Linter findings do not trigger the §5.8 threshold** — only cascade entries (anything not `source: linter*`) do. Linter findings ride along when cascade tips the gate. This prevents an archive op that opens 5+ broken-link entries from spuriously triggering pass-mode without any underlying design pressure.
+**Hardening (PR 3+4 of the simplification rollout — see `PLANS/simplify-doc-workflow.md`).** The linter must:
+- Exit non-zero on internal errors (file not found, parse failure).
+- Emit a structured summary line (`lint: P passed, F failed, S skipped`) so absence-of-output = visible failure.
+- Include a smoke-test fixture under `.claude/skills/builder/lint/fixtures/` validating that broken-reference + structure-violation cases are flagged.
+- Distinguish *findings* (continue-on-error) from *infrastructure failures* (exit-on-error).
+
+### 5.10a Reverse-graph query — `/builder:deps`
+
+`/builder:deps <path>` answers two questions about a single doc:
+
+- **Forward**: what does this doc reference? (read from front matter `references:`.)
+- **Reverse**: who references this? (computed by the linter walking the full tree.)
+
+Output is a stdout table. Use when you're about to edit a Model and want to know its blast radius without opening every dependent file.
 
 ### 5.11 Adding a new feature
 
@@ -649,8 +574,8 @@ Drift — divergence between code in the implementation directory and the contra
 3. The agent maps changed files to the features they touch — via AI judgment from the feature roots, not via mandatory code-side linkage.
 4. The agent schedules a drift check on each touched feature (de-duplicated; batched).
 5. At check time, the agent reads the contract and the changed code, comparing semantically.
-6. If divergence is found: the agent opens a **PR with proposed contract updates**, plus ledger entries in `ledgers/ALIGNMENT-DEBT.md` naming each divergence.
-7. Human / AI session reviews the proposed PR — merges, edits, or rejects (accept-divergence with explicit ledger annotation).
+6. If divergence is found: the agent opens a **PR with proposed contract updates** describing each divergence in the PR body.
+7. Human / AI session reviews the proposed PR — merges, edits, or rejects.
 
 **Why propose-PR rather than auto-update.** Canonical contracts are too important to let an AI agent edit silently. PR review is the human-in-the-loop checkpoint; same speed in practice (trivial accepts merge fast). Auto-merge can be considered later (hybrid model) once AI agents have a track record of low false-positive proposals.
 
@@ -698,10 +623,10 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | # | Phase | What happens | Driving sections |
 |---|-------|-------------|-----------------|
 | 1 | **Initiated** | Feature folder created via §5.11 ceremony. Feature root stub written (Purpose + Boundaries). Status: `draft`. | §5.11 |
-| 2 | **Designed** | Models drafted in `models/`. ADRs land in `decisions/` as decisions settle. Spikes feed Models. Cascade implications captured as ledger entries. | §5.2, §5.4, §5.7 |
+| 2 | **Designed** | Models drafted in `models/`. ADRs land in `decisions/` as decisions settle. Spikes feed Models. Cascade detected on demand by the linter. | §5.2, §5.4, §5.7 |
 | 3 | **Settled** | Each Model passes research gate (§5.6.1). When all qualifying Models settled, Feature is eligible — user commits with deliberate flip. | §5.6.1, §5.6.3 |
 | 4 | **Implemented** | Code lands in implementation directory. Each Model passes build gate (§5.6.2). When all qualifying Models implemented, Feature is eligible — user commits. | §5.6.2, §5.6.3 |
-| 5 | **Steady state** | Most of project lifetime. Drift detection runs post-merge (§5.12). Drift opens ledger entries / proposes contract updates via PR. Consistency passes (§5.5/§5.8) discharge accumulated debt. | §5.5, §5.8, §5.12 |
+| 5 | **Steady state** | Most of project lifetime. Drift detection runs post-merge (§5.12); drift surfaces via PR with proposed contract updates. Run `/builder:lint` on demand for reference-staleness checks. | §5.10, §5.12 |
 | 6 | **Expansion** | New Models added to extend scope. Drafts don't affect Feature status. When new Models settle, Feature may revert to `settled` until code catches up. | §5.6.3, §5.11 |
 | 7 | **Retirement (rare)** | Feature abandoned (§4.2) or superseded. Folder kept as historical record; status flips signal end-of-life. | §4.2, §5.4 |
 
@@ -715,9 +640,8 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
 | **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity), `/builder:rebuild-feature-map` |
 | **Every session end** | `/builder:end-session` |
-| **After parallel sessions complete** (manual) | `/builder:merge-pass` — merges completed `claude/<topic>` branches into `main`, re-projects checkpoint. Run from `main`. See `merge-pass.md §When to run merge-pass`. |
+| **Milestone snapshot** (opt-in) | `/builder:snapshot` — freeze CHECKPOINT into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` |
 | **PR merge to main** | `builder-drift-detection` (CI mode) |
-| **Threshold-driven session shape** | Consistency pass (§5.5/§5.8) when ledger crosses 5 open entries |
 
 
 ### 5.14 Archive convention
@@ -758,7 +682,7 @@ No `supersedes:` field on the active doc. The back-reference is derived on deman
 
 #### Lint rules (enforced by `/builder:lint`)
 
-Four rules are checked on every lint run. Findings become ledger entries (source = `linter/archive`); the §5.8 threshold drives resolution.
+Four rules are checked on every lint run. Findings are surfaced in the linter report; fix in place.
 
 1. **Forward-pointer integrity** — every `archive/*.md` with `status: Superseded` has a `superseded_by` that resolves to an existing non-archived file.
 2. **No stale inbound links** — all non-archived docs are scanned for links into any `archive/` path. The only legitimate inbound link is from the successor doc named in `superseded_by`. Anything else is a stale reference to fix or remove.
@@ -785,92 +709,51 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 
 | File | Role | Cadence |
 |------|------|---------|
-| `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-QUESTIONS items by link with current context | End of every session |
+| `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-ITEMS entries by id+link | End of every session |
 | `_workflow/PRODUCT-BUILDER.md` | This doc, once accepted | When workflow conventions change |
 | `ledgers/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
-| `ledgers/OPEN-QUESTIONS.md` | Durable ledger of all unresolved project questions; strikethrough + link on resolve | When questions open or resolve |
-| `ledgers/ALIGNMENT-DEBT.md` | Single source of truth for cascade implications. One entry per (source-edit, affected-doc) pair. Drives §5.8 threshold | Append on Model edit; tick off on discharge |
-| `ledgers/BACKLOG.md` | Deferred concrete work — known TODOs with trigger conditions for revisit. Distinct from open questions (deliberate deferrals, not unanswered questions) | Append when work is deferred; tick off when work begins |
+| `ledgers/OPEN-ITEMS.md` | Durable ledger of loose ends — questions, deferred work, known TODOs. Self-contained paragraph entries. Resolution = delete the entry (resolving doc owns the answer) | Append on durable open; delete on resolution |
 | `ledgers/FEATURE-MAP.md` | Bird's-eye view: feature index table, mermaid dependency graph, model-level breakdown. Hand-maintained v1; auto-generated v2 | When a Model lands, a Feature ships, or dependencies shift |
 | `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
-| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled, debt opened/closed; (2) links + ephemeral/followup questions | End of every session |
+| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
 | `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
-### Three lifetimes, three homes for questions
+### Two homes for questions
 
 | Question kind | Lifetime | Home |
 |---|---|---|
-| **Durable** open question | Project lifetime, until resolved | `ledgers/OPEN-QUESTIONS.md` |
-| **Active** focus question | Current session(s) | `SESSION-CHECKPOINT.md` (may link to an OPEN-QUESTIONS item with current context) |
-| **Ephemeral** session question — "wait, do we mean X or Y?" | One conversation; dies on answer | Inline in the draft doc, or scratch in the session note. Promoted to OPEN-QUESTIONS only if it turns out to be durable. |
+| **Durable** open item — questions, deferred tasks, known TODOs | Project lifetime, until resolved (then deleted) | `ledgers/OPEN-ITEMS.md` |
+| **Active + ephemeral** — current focus, mid-conversation scratch | Current session(s) | `SESSION-CHECKPOINT.md` (focus + `## Scratch` for ephemerals) |
 
-**Single-source rule still holds.** OPEN-QUESTIONS owns the canonical text. The checkpoint owns the current framing/context. Ephemeral questions never enter OPEN-QUESTIONS unless promoted.
+Ephemerals stay in CURRENT/SESSION-CHECKPOINT until they either get answered (delete), promote to OPEN-ITEMS (worth tracking durably), or get left for next session.
 
-### Three ledgers, three shapes
+### Two ledgers, two shapes
 
-`ledgers/` carries three independent ledgers, each with a distinct shape and lifecycle:
+`ledgers/` carries two independent ledgers, each with a distinct shape and lifecycle:
 
 | Ledger | Shape | Closure |
 |--------|-------|---------|
-| `OPEN-QUESTIONS.md` | Unanswered design questions | Strikethrough + link to resolving doc |
-| `ALIGNMENT-DEBT.md` | Cascade implications from Model edits | Strikethrough + resolution date when affected doc reconciles |
-| `BACKLOG.md` | Deferred concrete work (known TODOs) | Strikethrough + link to PR/commit when work begins |
+| `OPEN-ITEMS.md` | Loose ends (questions, tasks, deferrals) — self-contained paragraph entries with optional `kind:` tag | Delete on resolution; resolving doc owns the answer |
+| `GLOSSARY.md` | Canonical vocabulary + changelog | Glossary terms persist; renames go through `/builder:promote-glossary` |
 
-These don't overlap. A question is "we don't know what to do." Debt is "this Model edit affected that doc." Backlog is "we know what to do; we're not doing it yet." Mixing shapes mixes lifecycles — keep them separate.
-
-**Single-source rule.** Each piece of state lives in exactly one of these files. The checkpoint *links to* the others; it does not duplicate them. Models do not duplicate ledger entries inline (no `## Implications for prior docs` section — debt lives only in `ALIGNMENT-DEBT.md`).
+**Single-source rule.** Each piece of state lives in exactly one place. The checkpoint *links to* OPEN-ITEMS by id; it does not duplicate. Models do not duplicate cascade information inline (cascade is detected by the linter on demand, not tracked).
 
 ### Ledger entry shapes
 
-Canonical entry shape per ledger. Automations (`/builder:open-debt`, `/builder:lint`, `/builder:add-to-backlog`, etc.) write entries in this exact shape; humans writing entries by hand follow the same.
-
-Unlike §4 doc templates (which become files in `_templates/`), ledger entry shapes are **spec-only** — they're appended to existing ledger files, not used to spawn new ones. Edits land here in §6; automations either hard-code the shape from this section or read it at build time. No template file extraction.
-
-**`ALIGNMENT-DEBT.md` entry**
+`OPEN-ITEMS.md` entries are self-contained paragraphs. Each entry tells the full story without requiring outside context.
 
 ```markdown
-- 2026-04-29 | source: features/engine/models/02-gamerules-contract.md | target: features/actions/models/01-command-pipeline.md | reason: validation responsibility shifted to handlers | open
-```
-
-Resolved entries get strikethrough plus resolution date and link to the resolving commit/PR:
-
-```markdown
-- ~~2026-04-29 | source: ... | target: ... | reason: ... | open~~ → resolved 2026-05-02 ([commit](link))
-```
-
-**`BACKLOG.md` entry**
-
-```markdown
-- **Title** — 2-line context describing what's deferred and why.
-  Trigger: `<condition that makes this actionable>`.
+- id: <oq-* | bl-* | optional> | kind: question | task | defer | **Title** — paragraph framing the loose end. What's known, what's open, why it matters. Two or three sentences.
+  Trigger: `<condition that makes this actionable>` (optional, for tasks/defers).
   References: `<paths or links to related docs>`.
-  Status: open
 ```
 
-Done entries get strikethrough plus link to the PR/commit that closed them:
-
-```markdown
-- ~~**Title** — context. Trigger: ... References: ... Status: open~~ → done 2026-05-02 ([commit](link))
-```
-
-**`OPEN-QUESTIONS.md` entry**
-
-```markdown
-- **Title** — one-paragraph framing of the question. What's known, what's unknown, what's blocked on it.
-  Linked context: `<paths to related docs>`.
-  Status: open
-```
-
-Resolved entries get strikethrough + link to the resolving doc:
-
-```markdown
-- ~~**Title** — framing... Status: open~~ → resolved by [features/engine/models/03](path)
-```
+No strikethrough archive. When an entry resolves, **delete it** — the resolving doc (Model section, ADR, feature note saying "we're not doing this", etc.) owns the answer. Git keeps deletion history if ever needed: `git log --diff-filter=D ledgers/OPEN-ITEMS.md`.
 
 **`FEATURE-MAP.md` layout**
 
-Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (per BACKLOG entry, trigger ~15 Models).
+Three layers — see §6 cross-cutting infrastructure table for the canonical structure (feature index | mermaid graph | model-level breakdown). Hand-maintained at v1; auto-generated at v2 (see `OPEN-ITEMS.md` entry `bl-feature-map-generator`).
 

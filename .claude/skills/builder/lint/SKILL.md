@@ -3,7 +3,7 @@ name: builder:lint
 description: >
   Reference-staleness and archive-integrity linter for the Product Builder workflow.
   Scans Product/ docs for broken path references, convention violations, stale archive
-  links, and status/location mismatches, then appends findings to ledgers/ALIGNMENT-DEBT.md.
+  links, and status/location mismatches; reports findings to stdout (no ledger writes).
   Use this skill whenever the user runs /builder:lint, asks to lint the product docs,
   check for stale references, run an integrity check on the archive, audit broken
   paths in the feature docs, or wants to know if there are any reference problems
@@ -13,7 +13,7 @@ allowed-tools: Read, Bash, Glob, Grep, Edit
 
 # builder:lint
 
-You are the Product Builder reference-staleness and archive-integrity linter. Your job is to scan `Product/` docs for integrity problems and record them in `ledgers/ALIGNMENT-DEBT.md`. You do not fix problems — you report them so the discharge flow can handle them.
+You are the Product Builder reference-staleness and archive-integrity linter. Your job is to scan `Product/` docs for integrity problems and **report findings to stdout**. You do not fix problems and you do not write to any ledger — findings are surfaced for fix-in-place.
 
 **Why this matters:** the Product Builder workflow maintains a web of cross-references between feature docs, decisions, ledgers, and archived predecessors. The reference convention (`_workflow/REFERENCE-CONVENTIONS.md`) requires every cross-doc reference to be a `Product/`-rooted absolute path — this keeps grep, sed, and renames mechanical. When a doc moves, gets archived, or someone slips a relative path or encoded filename into a link, the references break silently. This linter surfaces those breaks before they cause confusion or data loss.
 
@@ -23,9 +23,28 @@ Workflow context: `Product/_workflow/PRODUCT-BUILDER.md` §5.10 (path/references
 
 User input: `$ARGUMENTS` (default: `--all`)
 
-- `--all` — run all checks (archive integrity + path/convention checks)
+- `--all` — run all checks
 - `--archive-only` — only archive integrity checks (rules A1–A4)
 - `--paths-only` — only path-and-convention checks (rules S1–S4)
+- `--structure-only` — only Model structure check (rule M1)
+- `--tokens-only` — only retired-tokens check (rule T1)
+
+## Rule index
+
+- **S1** — every path reference in `Product/` resolves.
+- **S2** — every `references:` entry resolves to an existing, non-archived file.
+- **S3** — no relative paths (`../`, `./`, `/`-prefixed) in links or `references:`.
+- **S4** — filename hygiene (ASCII, no URL encoding).
+- **A1–A4** — archive integrity (forward-pointer, no stale inbound, status/location agreement, successor presence). See §5.14.
+- **M1** — Model structure: every Model has the canonical sections (Problem, Concepts, Contracts, Invariants, Examples, Open follow-ups, then `---` divider, then Options considered, Rationale, Consequences, optional ADR), in canonical order. Empty sections may carry the stub `*n/a — purely descriptive Model.*` but cannot be reordered or omitted.
+- **T1** — retired tokens: any token in `Product/_workflow/retired-tokens.json` appearing outside `_archive/` and `sessions/` surfaces with its replacement.
+
+## Hardening (§5.10)
+
+- Exit non-zero on internal errors (file not found, parse failure).
+- Emit a structured summary line at end of report: `lint: P passed, F failed, S skipped`.
+- Distinguish *findings* (continue-on-error, accumulate and report) from *infrastructure failures* (exit-on-error, abort with diagnostic).
+- Smoke-test fixtures live under `.claude/skills/builder/lint/fixtures/` — one Model with a broken `references:` entry, one with a structure violation. CI / manual run against fixtures verifies the linter still flags them.
 
 ## Performance rule
 
@@ -185,38 +204,14 @@ find Product/ -name '*.md' -not -path '*/_workflow/_validation/*' \
 
 ---
 
-## Step 4 — Deduplicate against existing ledger
+## Step 4 — Render the report
 
-Read `Product/ledgers/ALIGNMENT-DEBT.md`. For each finding from steps 2–3, check whether an open entry already exists with the same rule code and target path. Skip duplicates — the linter is idempotent by design.
-
----
-
-## Step 5 — Write new ledger entries
-
-Append all new findings to `Product/ledgers/ALIGNMENT-DEBT.md` under `## Entries` in a single Edit call. Use the v2 entry shape:
-
-```
-- id: ad-YYYYMMDD-NNN | status: open | source: <linter|linter/archive> | target: <affected path> | reason: <rule code> — <one-line description>
-```
-
-**Source classification:**
-- `source: linter` — for §5.10 path/convention rules (S1, S2, S3, S4).
-- `source: linter/archive` — for §5.14 archive integrity rules (A1, A2, A3a, A3b, A4).
-
-The `linter*` source prefix is what excludes these entries from the §5.8 cascade threshold count — do not invent other source labels.
-
-Use today's date. Batch all new entries into **one Edit call** — never one edit per finding.
-
-The `NNN` sequence continues from the highest existing `ad-YYYYMMDD-NNN` id in the file for today's date. If today has no entries yet, start at `001`.
-
----
-
-## Step 6 — Render the report
+(ALIGNMENT-DEBT writing removed in PR 2 of the doc-workflow simplification — the linter no longer appends to any ledger. Findings are reported only; fix in place.)
 
 **Render order:**
 
 1. **Title** (H1) — `# Lint — <scope>` (scope = "all rules" / "archive integrity" / "path checks" per flag passed).
-2. **Summary stat strip** — `📊 <N> new findings · <M> already in ledger · <K> rules checked`.
+2. **Summary stat strip** — `📊 <N> findings · <K> rules checked`.
 3. **Findings** (H3 + table, omitted if zero findings):
    ```
    ### ⚠️ Findings
@@ -225,17 +220,14 @@ The `NNN` sequence continues from the highest existing `ad-YYYYMMDD-NNN` id in t
    | A1 | features/engine/archive/01-old.md | superseded_by path missing |
    | S3 | ledgers/FEATURE-MAP.md:25 | relative link `../features/...` |
    ```
-4. **Debt opened** (strip, omitted if zero) — `📋 Debt opened: <N> new entries in ALIGNMENT-DEBT.md (source: linter*)`.
 
-**Empty-state:** when the linter finds nothing, the §3–§4 block collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
-
-**Linter findings do not trip the §5.8 threshold** (only cascade entries do — see PRODUCT-BUILDER.md §5.8 / §5.10). No pass-mode strip from this skill.
+**Empty-state:** when the linter finds nothing, the findings table collapses to a single `✅ Clean — no findings` strip. The H1 and summary stat strip still render.
 
 ---
 
 ## Safety rails
 
-- **Read-only except for `ledgers/ALIGNMENT-DEBT.md`.** Never modify any other file.
-- **Idempotent.** Re-runs must not open duplicate entries.
-- **Never modify archived docs.** The linter reports; archiving and fixing are for `/builder:archive` and `/builder:debt-pass`.
-- **No auto-resolution.** The linter opens debt entries; the discharge flow closes them.
+- **Read-only.** Never modify any file. The linter reports findings to stdout only.
+- **Idempotent.** Re-runs against unchanged inputs produce the same report.
+- **Never modify archived docs.** The linter reports; archiving and fixing are for `/builder:archive` and the user.
+- **No auto-resolution.** The linter surfaces findings; humans (or the user-driven agent) fix them in place.

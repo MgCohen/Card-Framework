@@ -27,4 +27,4 @@ Snapshot subscribers, history-event subscribers, animation callback registration
 ADRs in `features/presentation/decisions/` (none yet — backfill not in scope per §4 of MIGRATION-GUIDE.md).
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for presentation-related questions.
+See `ledgers/OPEN-ITEMS.md` for presentation-related questions.

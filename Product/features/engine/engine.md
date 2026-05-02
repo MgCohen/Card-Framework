@@ -30,4 +30,4 @@ ADRs in `features/engine/decisions/` (backfilled in phase 5):
 - GameRules as class with services, GameRules zero-state, snapshot in state, snapshot writer = IAvailableActions, state pattern, MTG-SBA known difference.
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for engine-related questions.
+See `ledgers/OPEN-ITEMS.md` for engine-related questions.

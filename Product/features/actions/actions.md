@@ -29,4 +29,4 @@ ADRs in `features/actions/decisions/` (backfilled in phase 5):
 - typed action template, on-demand validation, OnIncomingCommand-only flow, validation in handler, generic primitive rule constraint, player intent mapper, five validation layers, intent vocabulary rename.
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for action-flow questions.
+See `ledgers/OPEN-ITEMS.md` for action-flow questions.

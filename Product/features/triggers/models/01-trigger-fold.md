@@ -326,7 +326,7 @@ public async Task<CommandResult> Execute(GameAction action)
 - **Trigger ordering** — what determines sequence within the fold when multiple triggers match the same type. FIFO by registration? Priority weight? Game-configurable?
 - **Async suspension** — triggers that require player input (targeting, choices) still unresolved. Unblocks the broader suspension design.
 - **Stash release mechanics** — MTG-style stash needs a `Release(key)` call and ordering rules. Not designed here.
-- ~~**`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-QUESTIONS.md`.~~ → resolved session-20260501-1132: split into `ITriggerSystem` (subscription) and `ITriggerPipeline` (execution); one `TriggerSystem` class implements both. Shape reconciled with effects/02 §3 in session-20260501-1545 (ad-20260501-025 discharged).
+- ~~**`ITriggerSystem` vs `ITriggerPipeline` unification** — two competing shapes remain in play; see `OPEN-ITEMS.md`.~~ → resolved session-20260501-1132: split into `ITriggerSystem` (subscription) and `ITriggerPipeline` (execution); one `TriggerSystem` class implements both. Shape reconciled with effects/02 §3 in session-20260501-1545 (ad-20260501-025 discharged).
 
 ---
 
@@ -335,4 +335,4 @@ public async Task<CommandResult> Execute(GameAction action)
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — pipeline, envelope, handler flow
 - [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, GameRules, OnQueueDrained
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — CompositeAction utilities and scope
-- [ledgers/OPEN-QUESTIONS.md](ledgers/OPEN-QUESTIONS.md) — async suspension and other open items
+- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — async suspension and other open items

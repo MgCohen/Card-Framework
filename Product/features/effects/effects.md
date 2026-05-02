@@ -30,4 +30,4 @@ ADRs in `features/effects/decisions/` (backfilled in phase 5):
 - async layer hierarchy, suspension model, replacement priority.
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for effects-related questions.
+See `ledgers/OPEN-ITEMS.md` for effects-related questions.

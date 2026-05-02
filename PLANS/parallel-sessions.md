@@ -1,11 +1,12 @@
 ---
 type: plan
-status: proposed
-last-updated: 2026-05-01
+status: abandoned
 tags: [#workflow, #builder, #parallel-sessions, #checkpoint]
 ---
 
 # Parallel Sessions — implementation plan
+
+> **Status: abandoned 2026-05-02.** Per-session notes were retired in the doc-workflow simplification (see `PLANS/simplify-doc-workflow.md` decision #6). With session notes gone, the merge-pass machinery this plan depended on no longer has a unit to merge — git itself handles cross-branch reconciliation. The MCP-backed CURRENT idea for cross-machine work is preserved as a future consideration in the simplification plan. Original content preserved below for historical record.
 
 Goal: support multiple Product Builder sessions running in parallel — possibly on different branches, possibly on different machines — with a mechanical merge step. Parallel sessions are **genuinely separate sessions** (each gets its own session note); merge-pass reconciles shared state.
 

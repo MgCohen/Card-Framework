@@ -28,4 +28,4 @@ ADRs in `features/triggers/decisions/` (backfilled in phase 5):
 - trigger fold semantics, OnBefore/OnAfter design.
 
 ## Open
-See `ledgers/OPEN-QUESTIONS.md` for trigger-related questions.
+See `ledgers/OPEN-ITEMS.md` for trigger-related questions.
