@@ -2036,6 +2036,8 @@ public interface IEffectScope
 {
     ActorId Actor { get; }
     InstanceId SourceInstance { get; }
+    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
     Task<CommandResult> Dispatch(GameAction action);
 }
 ```

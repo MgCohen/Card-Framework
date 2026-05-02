@@ -39,8 +39,8 @@ Driven by [ADR-0005](decisions/0005-objects-over-ids.md). The ADR established th
 
 ### Cascade — IEffectScope shape (session-20260501-1710-entity-modifier-api)
 
-- id: ad-20260502-001 | status: open | source: features/effects/models/04-effect-flow.md | target: features/effects/models/01-async-dispatch.md §IEffectScope | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
-- id: ad-20260502-002 | status: open | source: features/effects/models/04-effect-flow.md | target: features/actions/models/01-command-pipeline.md §IEffectScope (~line 2028) | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
+- ~~id: ad-20260502-001 | status: open | source: features/effects/models/04-effect-flow.md | target: features/effects/models/01-async-dispatch.md §IEffectScope | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3~~ → resolved 2026-05-02 (auto debt-pass: added `IEntityRegistry Entities` and `IModifierFactory Modifiers` to `IEffectScope` in effects/01 §7)
+- ~~id: ad-20260502-002 | status: open | source: features/effects/models/04-effect-flow.md | target: features/actions/models/01-command-pipeline.md §IEffectScope (~line 2028) | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3~~ → resolved 2026-05-02 (auto debt-pass: added `IEntityRegistry Entities` and `IModifierFactory Modifiers` to `IEffectScope` sketch in actions/01 §7)
 
 ### Linter findings — 2026-05-01
 
