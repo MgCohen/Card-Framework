@@ -1,7 +1,6 @@
 ---
 type: spike
 status: graduated
-last-updated: 2026-04-29
 forward-link: features/engine/
 tags: [#spike, #scaffold]
 ---

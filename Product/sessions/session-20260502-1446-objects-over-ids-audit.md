@@ -5,7 +5,6 @@ session-id: session-20260502-1446-objects-over-ids-audit
 parent: session-20260501-1545-trigger-pipeline-shape
 status: completed
 started-at: 2026-05-02T14:46:00Z
-last-updated: 2026-05-02
 date: 2026-05-02
 work-summary: "Objects-over-IDs audit: 8 cascade entries discharged — all ADR-0005 boundary uses documented across effects/02, effects/03, effects/04, engine/01, engine/03, actions/01, actions/02, presentation/01."
 tags: [#session, #debt-pass]

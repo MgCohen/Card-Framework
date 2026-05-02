@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: [features/engine/models/01-evaluation-loop.md]
+references: [features/engine/models/01-evaluation-loop.md]
 tags: [#triggers, #reactions, #fold]
 ---
 

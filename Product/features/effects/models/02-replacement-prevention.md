@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
-builds-on: [features/effects/models/01-async-dispatch.md]
+references: [features/effects/models/01-async-dispatch.md]
 tags: [#effects, #replacement, #prevention]
 ---
 

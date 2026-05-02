@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md]
 tags: [#actions, #snapshot, #availability]
 ---
 

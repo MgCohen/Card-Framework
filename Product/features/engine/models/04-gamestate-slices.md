@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: [features/effects/models/04-effect-flow.md, features/engine/models/02-gamerules-contract.md]
+references: [features/effects/models/04-effect-flow.md, features/engine/models/02-gamerules-contract.md]
 tags: [#engine, #state, #slices]
 ---
 

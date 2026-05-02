@@ -1,7 +1,6 @@
 ---
 type: glossary
 status: settled
-last-updated: 2026-05-01
 tags: [#general, #glossary]
 ---
 

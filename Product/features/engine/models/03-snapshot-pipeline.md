@@ -1,8 +1,7 @@
 ---
 type: model
 status: settled
-last-updated: 2026-05-01
-builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 

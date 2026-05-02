@@ -2,7 +2,6 @@
 type: session
 schema-version: 1
 status: backfilled
-last-updated: 2026-04-29
 date: 2026-04-28
 tags: [#session, #backfill, #pile-counter, #presentation]
 ---

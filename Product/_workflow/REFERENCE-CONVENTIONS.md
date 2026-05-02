@@ -1,8 +1,7 @@
 ---
 type: model
 status: accepted
-last-updated: 2026-05-01
-builds-on: [_workflow/PRODUCT-BUILDER.md]
+references: [_workflow/PRODUCT-BUILDER.md]
 tags: [#workflow, #meta]
 ---
 
@@ -14,7 +13,7 @@ How docs under `Product/` reference each other. One rule, mechanically enforced 
 
 Every cross-doc reference is a **`Product/`-rooted absolute path**, no leading slash, forward slashes only. This applies to:
 
-- `builds-on:` front-matter entries
+- `references:` front-matter entries
 - Markdown link targets — `[text](path)`
 - Bare path mentions in prose
 
@@ -31,7 +30,7 @@ The cost is that links are not clickable in standard markdown renderers (GitHub 
 
 ## Format by use case
 
-### `builds-on:` front-matter
+### `references:` front-matter
 
 Comma-separated list of `Product/`-rooted absolute paths in `[brackets]`. Use the literal `root` for top-level Models with no parent.
 
@@ -39,16 +38,16 @@ Comma-separated list of `Product/`-rooted absolute paths in `[brackets]`. Use th
 ---
 type: model
 status: settled
-builds-on: [features/engine/models/01-evaluation-loop.md, features/actions/models/02-availability-snapshot.md]
+references: [features/engine/models/01-evaluation-loop.md, features/actions/models/02-availability-snapshot.md]
 ---
 ```
 
 ```yaml
-builds-on: root
+references: root
 ```
 
 ```yaml
-builds-on: [_workflow/PRODUCT-BUILDER.md]
+references: [_workflow/PRODUCT-BUILDER.md]
 ```
 
 ### Markdown links between docs
@@ -124,8 +123,8 @@ Rationale: removes the need for URL encoding anywhere, makes grep and sed predic
 | Rule | What it checks | Source |
 |---|---|---|
 | S1 | Absolute path mentioned in a link or prose must exist on disk | `linter` |
-| S2 | Every `builds-on:` entry resolves to an existing, non-archived file | `linter` |
-| S3 | No relative paths (`../`, `./`, `/`-prefixed) in links or `builds-on:` | `linter` |
+| S2 | Every `references:` entry resolves to an existing, non-archived file | `linter` |
+| S3 | No relative paths (`../`, `./`, `/`-prefixed) in links or `references:` | `linter` |
 | S4 | No filenames with spaces, parens, percents, or brackets | `linter` |
 | A1–A4 | Archive integrity — orthogonal to this convention | `linter/archive` |
 

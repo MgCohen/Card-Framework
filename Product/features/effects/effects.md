@@ -1,7 +1,6 @@
 ---
 type: feature
 status: settled
-last-updated: 2026-04-29
 tags: [#feature, #effects]
 ---
 

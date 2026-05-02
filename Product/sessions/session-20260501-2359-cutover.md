@@ -5,7 +5,6 @@ session-id: session-20260501-2359-cutover
 parent: session-19
 status: merged
 started-at: 2026-05-01T23:59:00Z
-last-updated: 2026-05-01
 work-summary: Schema cutover to parallel-session v2 — ledger IDs assigned, session files stamped, checkpoint frontmatter upgraded, plan and new skills (merge-pass, _project-checkpoint, start-session, end-session) landed.
 tags: [#session]
 ---

@@ -1,7 +1,6 @@
 ---
 type: adr
 status: accepted
-last-updated: 2026-05-01
 tags: [#adr, #cards, #model]
 ---
 

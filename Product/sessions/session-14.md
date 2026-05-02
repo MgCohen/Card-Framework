@@ -2,7 +2,6 @@
 type: session
 schema-version: 1
 status: completed
-last-updated: 2026-04-30
 date: 2026-04-30
 tags: [#session, #alignment-pass]
 ---

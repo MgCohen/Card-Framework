@@ -1,8 +1,7 @@
 ---
 type: model
 status: accepted
-last-updated: 2026-05-01
-builds-on: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]
+references: [SESSION-CHECKPOINT.md, ledgers/OPEN-QUESTIONS.md]
 tags: [#workflow, #meta]
 ---
 
@@ -139,17 +138,18 @@ Every doc starts with:
 ---
 type: spike | feature | model | sample | adr | session | checkpoint | plan
 status: <one of the type's status values>
-last-updated: 2026-04-29
-builds-on: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
+references: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
 tags: [#async, #triggers]                                 # optional
 ---
 ```
 
 Reader knows in 2 seconds what they're holding.
 
-**`builds-on:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade-walking on supersession (§5.9) and FEATURE-MAP dependency rendering.
+**`references:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade-walking on supersession (§5.9) and FEATURE-MAP dependency rendering.
 
-Feature roots derive their `Dependencies` section from the union of contained Models' `builds-on:`, so they don't need to repeat it in front matter.
+Feature roots derive their `Dependencies` section from the union of contained Models' `references:`, so they don't need to repeat it in front matter.
+
+**No `last-updated:` field.** Git is the source of truth for modification dates — the linter computes `last-updated` per doc on demand from `git log -1 --format=%cs <path>` when needed. Front-matter dates always drift; the field is dropped.
 
 **Supersession** is recorded in two places only: the old doc's `status: superseded by <ref>` string, and the new doc's `## Consequences > Reverts/replaces` field. The `<ref>` form depends on doc type — for ADRs it's the new ADR's project-wide identifier (`NNNN`); for Models it's the new Model's per-feature path or counter (`02-gamerules-contract` or `02`). No `superseded-by:` front-matter field — would be a third locus for the same fact, with the same drift risk Q3 eliminated for cascade implications.
 
@@ -233,7 +233,7 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 **`implemented` status convention.** A Feature flips to `implemented` (via §5.6.2 build gate) when code lands that satisfies its contract. While `implemented`, edits to the contract surface open **drift entries** against the implementation — either code updates to match, or the Feature reverts to `settled` (signaling "code is no longer guaranteed to match"). Most of a project's lifetime, mature features sit in `implemented` — that's the steady state.
 
-**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `builds-on:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
+**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `references:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
 
 **Feature ↔ Model status sync.** A Feature's status is bounded above by its qualifying Models (settled or implemented). Drafts and abandoneds don't count, so adding a new draft Model to an implemented Feature doesn't drag it down. Forward flips are deliberate user actions; backward reverts are automatic when a qualifying Model drops a tier. Full rule and worked examples in §5.6.3.
 
@@ -291,7 +291,7 @@ A purely descriptive Model (e.g., a system that doesn't have meaningful alternat
 
 **`abandoned` status convention.** A Model that gets partway through and is decided against keeps its body as historical record, but receives a one-line header at the top: *"Status: abandoned YYYY-MM-DD — <reason>. Original attempt below for record."* The `abandoned` status is distinct from `superseded` (which implies a replacement Model exists). Use `abandoned` when the line of inquiry was wrong, not when a better answer was found.
 
-**`superseded` status convention.** A Model whose contract has been replaced by a later Model in the same feature folder (the new one is now canonical) keeps its body as historical record. Front matter: `status: superseded by NN-<slug>` (per-feature numbered, matching ADR convention). Header at the top: *"Status: superseded YYYY-MM-DD by [NN-<slug>](path) — `<reason>`. Body below for record."* The new Model's `## Consequences > Reverts/replaces` field names this Model. Trigger §5.4 / §5.9 cascade protocol — every doc with `builds-on:` referencing the old Model gets a debt entry, plus a token grep across `Product/` for any retired identifiers (§5.7 step 1b).
+**`superseded` status convention.** A Model whose contract has been replaced by a later Model in the same feature folder (the new one is now canonical) keeps its body as historical record. Front matter: `status: superseded by NN-<slug>` (per-feature numbered, matching ADR convention). Header at the top: *"Status: superseded YYYY-MM-DD by [NN-<slug>](path) — `<reason>`. Body below for record."* The new Model's `## Consequences > Reverts/replaces` field names this Model. Trigger §5.4 / §5.9 cascade protocol — every doc with `references:` referencing the old Model gets a debt entry, plus a token grep across `Product/` for any retired identifiers (§5.7 step 1b).
 
 **Detecting silent supersession.** When writing a new Model that introduces a contract surface (interface, type, method shape), check whether any older Model in the same feature folder defines or sketches the same surface differently. If so, the older Model is now superseded — apply this convention before writing further content. Skipping this check is the failure mode that produced `engine/02` silently superseding `engine/01`'s `GameRules` interface without flipping the status (S17 audit).
 
@@ -571,8 +571,8 @@ The flip itself is a deliberate user action — Models reaching the target makes
 **On every Model edit, before commit:**
 
 1. **Identify downstream docs the edit affects** (Models, Features, Samples, ADRs). Three sub-steps, all mandatory:
-   - **1a. `builds-on:` walk.** Every doc whose front-matter `builds-on:` references this Model or its feature root. This catches *consumers* of the contract.
-   - **1b. Retired-token grep.** For any type, method, identifier, or field whose name or signature changed, run `grep -rn "<retired-token>" Product/` and add every match as a target. This catches docs that *describe or redefine* the type without consuming it via `builds-on:` — the failure mode that produced 7 missed cascade targets in the S17 audit. Mental search alone is not sufficient; the grep is the forcing function.
+   - **1a. `references:` walk.** Every doc whose front-matter `references:` references this Model or its feature root. This catches *consumers* of the contract.
+   - **1b. Retired-token grep.** For any type, method, identifier, or field whose name or signature changed, run `grep -rn "<retired-token>" Product/` and add every match as a target. This catches docs that *describe or redefine* the type without consuming it via `references:` — the failure mode that produced 7 missed cascade targets in the S17 audit. Mental search alone is not sufficient; the grep is the forcing function.
    - **1c. Shadow-check.** If the edit introduces a new contract surface (new interface, new type, new method shape), check older Models in the same feature folder for competing sketches of the same surface. A match means the older Model is now superseded — apply §4.3 superseded-status convention and §5.4 protocol *before* listing further cascade targets, then re-run 1a/1b on the freshly-superseded doc.
 2. Append **one ledger entry per affected doc**: source path, target path, one-line reason, status `open`, date.
 3. In the session note's content section, record a one-line `debt: N opened` (or `debt: none` if the edit was self-contained). Empty is not allowed — `debt: none` is the explicit signal that cascade was considered.
@@ -600,13 +600,13 @@ Manual local discharge (`/builder:debt-pass --force`) is supported when you want
 When an ADR or Model is superseded (§5.4), the supersession is itself a debt-generating event:
 
 1. Write the new ADR (`NNNN supersedes MMMM`) or new Model; set the old doc's status to `superseded by <ref>` per §3 / §4.3.
-2. Walk the `builds-on:` graph: find every doc whose `builds-on:` references the superseded ADR/Model or its host feature.
-3. **Run the §5.7 step 1b retired-token grep** across `Product/` for any identifier, type, or method that changed shape under the new doc. Add matches as cascade targets. This catches docs that *describe* the old contract without consuming it via `builds-on:`.
+2. Walk the `references:` graph: find every doc whose `references:` references the superseded ADR/Model or its host feature.
+3. **Run the §5.7 step 1b retired-token grep** across `Product/` for any identifier, type, or method that changed shape under the new doc. Add matches as cascade targets. This catches docs that *describe* the old contract without consuming it via `references:`.
 4. For each target, append a ledger entry: source = new doc path, target = dependent doc, reason = "supersession of MMMM may invalidate framing" (or specific signature drift for grep-found targets).
 5. The new doc's `## Consequences > Reverts/replaces` field names the cascade scope.
 6. Decide in-session: discharge debt now, or let it count toward the §5.8 threshold for next pass.
 
-`builds-on:` (§3, mandatory) catches consumers; the grep step (§5.7 1b) catches sketch-level redefinitions. Together the walk is exhaustive.
+`references:` (§3, mandatory) catches consumers; the grep step (§5.7 1b) catches sketch-level redefinitions. Together the walk is exhaustive.
 
 ### 5.10 Reference-staleness linter
 
@@ -615,10 +615,10 @@ Automation, not a session shape. A linter (run as `/builder:lint` skill or CI st
 - Every path reference in `Product/` resolves.
 - Every term in a doc has a `ledgers/GLOSSARY.md` entry.
 - No Model points at a `superseded` ADR without acknowledging.
-- No `builds-on:` references missing or pointing at non-existent paths.
+- No `references:` references missing or pointing at non-existent paths.
 - Archive integrity rules (see §5.14): forward-pointer integrity, no stale inbound links, status/location agreement, successor presence.
 
-**Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter` for path/builds-on rules, source = `linter/archive` for archive-integrity rules, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow.
+**Findings are reported, not blocked.** Each finding becomes a new entry in `ledgers/ALIGNMENT-DEBT.md` (source = `linter` for path/references rules, source = `linter/archive` for archive-integrity rules, target = the affected doc). The linter is idempotent: re-runs check existing entries before opening duplicates. Closure happens through the normal debt-discharge flow.
 
 **Linter findings do not trigger the §5.8 threshold** — only cascade entries (anything not `source: linter*`) do. Linter findings ride along when cascade tips the gate. This prevents an archive op that opens 5+ broken-link entries from spuriously triggering pass-mode without any underlying design pressure.
 
@@ -630,7 +630,7 @@ When a new feature is requested or designed:
 
 1. **Create the feature folder.** `features/<feature>/` with `models/` and `decisions/` subfolders.
 2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
-3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `builds-on:` pointing at upstream Models (or `root` if genuinely foundational).
+3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `references:` pointing at upstream Models (or `root` if genuinely foundational).
 4. **Update orientation.** Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new row + dependency edges. Patch `general/ROADMAP.md` if scheduling shifts.
 5. **Record in session note.** Content section: `feature: <name> created` — visible event in the trail.
 6. **Begin design.** From this point, the feature's evolution follows the standard per-session flow (§5.1+).
@@ -775,7 +775,7 @@ The archive convention applies to ADRs (and Models) that have been **merged to `
 
 - A decision that's never reached `main` has not been published as a settled contract; reworking it within the PR is normal review-driven iteration, not a reversal.
 - Strict archive on every PR-internal change would create archive churn during normal iteration and pollute `archive/` with WIP versions.
-- `last-updated` bumps and PR commit history are sufficient signal for in-flight changes.
+- PR commit history (and git's per-file timestamps) are sufficient signal for in-flight changes.
 
 Once a decision lands on `main`, the archive convention applies in full: a later reversal requires marking the original `Superseded` and moving it to `archive/` with `superseded_by` pointing at the replacement.
 

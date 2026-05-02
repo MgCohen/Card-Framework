@@ -5,7 +5,6 @@ session-id: session-20260501-1237-engine-wiring-stack
 parent: session-20260501-1107-zone-topology
 status: merged
 started-at: 2026-05-01T12:37:00Z
-last-updated: 2026-05-01
 merged-at: 2026-05-01
 work-summary: "Identified session-resume gaps; added pre-push checkpoint hook; folded broken session's end-session step 2a refinement."
 tags: [#session]

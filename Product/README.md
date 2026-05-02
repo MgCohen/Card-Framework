@@ -1,6 +1,5 @@
 ---
 type: index
-last-updated: 2026-04-29
 tags: [#index, #operating-manual]
 ---
 
@@ -57,7 +56,7 @@ Brief the human on this state in 4–6 lines. Do not jump straight into work wit
 You may not violate these without explicit human approval, even if asked.
 
 1. **Never write to `Product/` outside the prescribed structure.** If unsure where something belongs, write a Spike in `spikes/`. Don't number new docs at `Product/` root.
-2. **Front matter is mandatory.** Every doc starts with `type`, `status`, `last-updated`. Models additionally require `builds-on:` — a list of upstream paths or the literal `root`. Empty list (`[]`) is forbidden; `root` is the explicit "no upstream" signal.
+2. **Front matter is mandatory.** Every doc starts with `type` and `status`. Models additionally require `references:` — a list of upstream paths or the literal `root`. Empty list (`[]`) is forbidden; `root` is the explicit "no upstream" signal. (No `last-updated:` field — git is the source of truth.)
 3. **Per-feature counters restart at `01`.** Filenames are bare (`01-command-pipeline.md`); the path is the prefix. Cross-references use full paths (`features/actions/models/01-command-pipeline.md`), never "doc 28".
 4. **The alignment-debt ledger is the single source of truth for cascade.** Models and Features do **not** carry inline `## Implications` sections.
 5. **Status flips are deliberate human actions.** Never flip `draft → settled` or `settled → implemented` without checking the gate and confirming with the human.
@@ -74,9 +73,9 @@ Watch for these conditions and act when they fire. Tell the human what you're do
 | Trigger | Action |
 |---|---|
 | About to use a term not in `ledgers/GLOSSARY.md` | Add it now (entry + changelog line). A `settled` doc may not contain undefined terms — adding the term up-front prevents blocking the research gate later. |
-| About to commit a Model edit | Walk `builds-on:` for downstream docs. Open one entry per affected doc in `ledgers/ALIGNMENT-DEBT.md` (`date \| source \| target \| reason \| open`). Declare `debt: N opened` (or `debt: none`) in the session note. **Empty signal is forbidden** — `debt: none` must be visibly distinct from "I forgot to think about it." |
+| About to commit a Model edit | Walk `references:` for downstream docs. Open one entry per affected doc in `ledgers/ALIGNMENT-DEBT.md` (`date \| source \| target \| reason \| open`). Declare `debt: N opened` (or `debt: none`) in the session note. **Empty signal is forbidden** — `debt: none` must be visibly distinct from "I forgot to think about it." |
 | A major decision settles | Write an ADR. Feature-scoped → `features/<f>/decisions/NNNN-<slug>.md`. Project-wide → `decisions/NNNN-<slug>.md`. Per-feature counter; per-project counter for general. |
-| A settled decision is being reopened | Don't edit the old ADR. Write a new one (`NNNN supersedes MMMM`), set old ADR's status to `superseded by NNNN`, walk `builds-on:` and open one debt entry per dependent doc — supersession is itself a cascade event. |
+| A settled decision is being reopened | Don't edit the old ADR. Write a new one (`NNNN supersedes MMMM`), set old ADR's status to `superseded by NNNN`, walk `references:` and open one debt entry per dependent doc — supersession is itself a cascade event. |
 | A feature gains/loses a Model or shifts dependencies | Refresh `ledgers/FEATURE-MAP.md` (table + mermaid + breakdown). |
 | Concrete work is deferred ("we'll do this later") | Append to `ledgers/BACKLOG.md` with a trigger condition. Don't leave it as a comment in the session note. |
 | A durable open question surfaces | Append to `ledgers/OPEN-QUESTIONS.md`. Ephemeral questions answered in-session go in the session note part 2 — not in OPEN-QUESTIONS. |
@@ -154,7 +153,7 @@ Mid-project (not bootstrap), a new feature is a deliberate event with a five-ste
 
 1. Create `features/<feature>/` with `models/` and `decisions/` subfolders.
 2. Write the feature root stub (`<feature>.md`) — `Purpose` + `Boundaries` is enough to start.
-3. Identify upstream features. The first Model under this feature carries `builds-on:` pointing at upstream Models or the literal `root`.
+3. Identify upstream features. The first Model under this feature carries `references:` pointing at upstream Models or the literal `root`.
 4. Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new feature row + edges. Patch `general/ROADMAP.md` if scheduling shifts.
 5. Record `feature: <name> created` in the session note.
 
@@ -212,8 +211,8 @@ External:
 > Human: *"Move command-handler validation to run before the layer pipeline."*
 
 1. **Locate the contract.** Search `features/actions/models/`. Found `01-command-pipeline.md`. Read it.
-2. **Edit the Model.** Update `## Contracts`, `## Invariants`, and the affected `## Examples`. Bump `last-updated`.
-3. **Walk downstream.** Grep `builds-on:` for `features/actions/models/01-command-pipeline.md`. Two hits: `features/effects/models/01-async-dispatch.md`, `support/samples/pile-counter.md`.
+2. **Edit the Model.** Update `## Contracts`, `## Invariants`, and the affected `## Examples`.
+3. **Walk downstream.** Grep `references:` for `features/actions/models/01-command-pipeline.md`. Two hits: `features/effects/models/01-async-dispatch.md`, `support/samples/pile-counter.md`.
 4. **Open debt entries.** Two new lines in `ledgers/ALIGNMENT-DEBT.md`, one per affected doc, status `open`.
 5. **Status check.** If `01-command-pipeline.md` was `implemented`, the entries are drift entries against `Assets/` code — flag this to the human; either patch the code or revert the Model to `settled`. If `settled`, the edit is a deliberate cascade event but status stays.
 6. **Session note.** Part 1 "Work done": `debt: 2 opened`. Part 2 references the entries.

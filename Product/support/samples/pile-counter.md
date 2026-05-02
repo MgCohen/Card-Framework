@@ -1,8 +1,7 @@
 ---
 type: sample
 status: locked
-last-updated: 2026-05-01
-builds-on: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
 tags: [#sample, #pile-counter]
 ---
 

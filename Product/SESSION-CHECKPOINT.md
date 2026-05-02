@@ -1,7 +1,6 @@
 ---
 type: checkpoint
 schema-version: 2
-last-updated: 2026-05-01
 head: session-20260501-1545-trigger-pipeline-shape
 merged:
   - session-20260501-2359-cutover
