@@ -239,10 +239,17 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 The unified design artifact. Top half describes the system; bottom half records the provenance (options weighed, rationale, consequences). A reader gets the model first; clicks down for the "why."
 
-```markdown
-# <subject> — model
+**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a stub line (`*n/a — purely descriptive Model.*`) but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
 
-<front matter: type=model, status=draft>
+```markdown
+---
+type: model
+status: draft
+references: [<upstream features or models, or the literal `root`>]
+tags: []
+---
+
+# <subject> — model
 
 ## Problem
 What we're modeling and why this exists.
@@ -260,28 +267,32 @@ What must always be true.
 At minimum, walked through against the floor sample.
 
 ## Open follow-ups
-Unresolved threads.
+Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
 
 ---
 
-*Below: provenance — what was considered, why we chose this. Track record.*
+*Below: provenance — what was considered, why we chose this, what it constrains. Feature-internal decisions live here; project-wide cross-cutting decisions get an ADR (§4.5).*
 
-## Options considered          # (omit if no real alternatives)
+## Options considered
 - **A** — rejected because ...
 - **B** — rejected because ...
 - **C** — chosen.
 
-## Rationale                    # (omit if obvious)
-Why the chosen approach.
+(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order. Replaces what used to be a separate per-decision ADR file in `features/<feature>/decisions/`.)
 
-## Consequences                 # (omit if obvious)
-What this enables; what it constrains.
+## Rationale
+Why the chosen approach. Skip if obvious.
+
+## Consequences
+What this enables; what it constrains. Skip if obvious.
 
 ## ADR
-Linked: features/<feature>/decisions/NNNN-<title>.md
+*(Optional — present only if a project-wide ADR was opened for cross-cutting decisions. Feature-internal decisions stay above.)*
+
+Linked: `Product/decisions/NNNN-<title>.md`
 ```
 
-A purely descriptive Model (e.g., a system that doesn't have meaningful alternatives) can omit the provenance sections entirely. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look.
+A purely descriptive Model can use the empty-stub convention for the provenance sections. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look — and the linter enforces it.
 
 **Cascade implications** (downstream docs affected by edits to this Model) are detected on demand by the linter — see §5.7.
 
@@ -336,14 +347,26 @@ After locking, design changes that affect the sample surface as linter findings 
 
 ### 4.5 ADR
 
+**Reserved for project-wide / cross-cutting decisions only.** Feature-internal decisions live in the affected Model's provenance section (§4.3 — `## Options considered`, `## Rationale`, `## Consequences`). The ADR was duplicating provenance that grep already finds; collapse into the Model.
+
+ADRs apply to decisions that:
+- Span multiple features (cross-cutting principles, framework-wide naming).
+- Are cited from many docs and deserve a one-pager (e.g., Objects-over-IDs as ADR-0005).
+- Shape the project as a whole (workflow adoption, migration moves).
+
+ADRs live at `Product/decisions/NNNN-<slug>.md` (project-wide counter). There is no `features/<feature>/decisions/` directory — feature-internal ADRs collapse into the Model.
+
 ```markdown
+---
+type: adr
+status: proposed
+references: [<related models or features>]
+tags: []
+---
+
 # ADR-NNNN — <title>
 
-<front matter: type=adr, status=proposed>
-
-Date: 2026-04-29
-Context-doc: features/<feature>/models/NN-<title>.md
-Proposal: features/<feature>/models/NN-<title>.md
+Context-doc: `Product/features/<feature>/models/NN-<slug>.md` (or whichever Model surfaced the decision)
 
 ## Context
 Two paragraphs max.
@@ -498,15 +521,31 @@ ALIGNMENT-DEBT, the discharge threshold, and the auto-debt-pass workflow are ret
 
 ### 5.10 Reference-staleness linter
 
-Automation, not a session shape. A linter (run as `/builder:lint` skill or CI step) checks:
+The single on-demand consistency tool (`/builder:lint`). Six responsibilities:
 
-- Every path reference in `Product/` resolves.
-- Every term in a doc has a `ledgers/GLOSSARY.md` entry.
-- No Model points at a `superseded` ADR without acknowledging.
-- No `references:` references missing or pointing at non-existent paths.
-- Archive integrity rules (see §5.14): forward-pointer integrity, no stale inbound links, status/location agreement, successor presence.
+1. **Structure check** — every Model has the canonical sections in canonical order (§4.3). Variable size is fine; variable structure is not.
+2. **References resolve** — every `references:` path exists; every inline path-shaped link in the body resolves.
+3. **Header–body consistency** — auto-populate `references:` from path-shaped tokens in the body; flag mismatches.
+4. **Retired-tokens check** — grep for tokens in `Product/_workflow/retired-tokens.json`; report hits with their replacement (e.g., *"`IGameStateProvider` was retired 2026-04-30; use `IStateScope` instead"*).
+5. **Reverse graph** — compute "who references this" from the union of all `references:` fields. Exposed via `/builder:deps <path>` (§5.10a).
+6. **Git-derived dates** — `last-updated` per doc on demand from `git log -1 --format=%cs <path>`. (Front-matter dates were retired in PR 1; git is the source of truth.)
 
-**Findings are reported, not tracked.** The linter writes a transient report (stdout / a generated file under `.claude/`); it does not append entries to any ledger. Fix findings in place. The expanded responsibilities (structure check, header–body sync, reverse graph, retired-tokens validation, git-derived dates) land in PR 3+4 of the simplification rollout — see `PLANS/simplify-doc-workflow.md`.
+**Findings are reported, not tracked.** The linter writes a stdout report; it does not append entries to any ledger. Fix in place.
+
+**Hardening (PR 3+4 of the simplification rollout — see `PLANS/simplify-doc-workflow.md`).** The linter must:
+- Exit non-zero on internal errors (file not found, parse failure).
+- Emit a structured summary line (`lint: P passed, F failed, S skipped`) so absence-of-output = visible failure.
+- Include a smoke-test fixture under `.claude/skills/builder/lint/fixtures/` validating that broken-reference + structure-violation cases are flagged.
+- Distinguish *findings* (continue-on-error) from *infrastructure failures* (exit-on-error).
+
+### 5.10a Reverse-graph query — `/builder:deps`
+
+`/builder:deps <path>` answers two questions about a single doc:
+
+- **Forward**: what does this doc reference? (read from front matter `references:`.)
+- **Reverse**: who references this? (computed by the linter walking the full tree.)
+
+Output is a stdout table. Use when you're about to edit a Model and want to know its blast radius without opening every dependent file.
 
 ### 5.11 Adding a new feature
 

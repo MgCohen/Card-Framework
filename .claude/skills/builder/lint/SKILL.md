@@ -23,9 +23,28 @@ Workflow context: `Product/_workflow/PRODUCT-BUILDER.md` §5.10 (path/references
 
 User input: `$ARGUMENTS` (default: `--all`)
 
-- `--all` — run all checks (archive integrity + path/convention checks)
+- `--all` — run all checks
 - `--archive-only` — only archive integrity checks (rules A1–A4)
 - `--paths-only` — only path-and-convention checks (rules S1–S4)
+- `--structure-only` — only Model structure check (rule M1)
+- `--tokens-only` — only retired-tokens check (rule T1)
+
+## Rule index
+
+- **S1** — every path reference in `Product/` resolves.
+- **S2** — every `references:` entry resolves to an existing, non-archived file.
+- **S3** — no relative paths (`../`, `./`, `/`-prefixed) in links or `references:`.
+- **S4** — filename hygiene (ASCII, no URL encoding).
+- **A1–A4** — archive integrity (forward-pointer, no stale inbound, status/location agreement, successor presence). See §5.14.
+- **M1** — Model structure: every Model has the canonical sections (Problem, Concepts, Contracts, Invariants, Examples, Open follow-ups, then `---` divider, then Options considered, Rationale, Consequences, optional ADR), in canonical order. Empty sections may carry the stub `*n/a — purely descriptive Model.*` but cannot be reordered or omitted.
+- **T1** — retired tokens: any token in `Product/_workflow/retired-tokens.json` appearing outside `_archive/` and `sessions/` surfaces with its replacement.
+
+## Hardening (§5.10)
+
+- Exit non-zero on internal errors (file not found, parse failure).
+- Emit a structured summary line at end of report: `lint: P passed, F failed, S skipped`.
+- Distinguish *findings* (continue-on-error, accumulate and report) from *infrastructure failures* (exit-on-error, abort with diagnostic).
+- Smoke-test fixtures live under `.claude/skills/builder/lint/fixtures/` — one Model with a broken `references:` entry, one with a structure violation. CI / manual run against fixtures verifies the linter still flags them.
 
 ## Performance rule
 
