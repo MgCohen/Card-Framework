@@ -1,36 +1,60 @@
 ---
 type: model
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 builds-on: root
 tags: [#zones, #model]
 ---
 
 # Zone Model
 
-This document outlines the conceptual model for zones after the decisions in [Zone Model Decisions](features/zones/models/01-zone-model.md).
+This document outlines the conceptual model for zones. The internal sub-questions left open in earlier drafts ("Open Questions Left For Later") were settled in session-20260501-1602; see ADR-0001 (zone shape), ADR-0002 (visibility), and ADR-0003 (insertion API) for the locked verdicts.
 
 Related docs:
 
 - [Core Glossary](ledgers/GLOSSARY.md)
 - [Entity, Definition, And Instance Model](features/entities/models/01-definition-instance-model.md)
-- [Zone Model Decisions](features/zones/models/01-zone-model.md)
+- [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md)
+- [ADR-0002 — Visibility model](features/zones/decisions/0002-visibility-model.md)
+- [ADR-0003 — Insertion API](features/zones/decisions/0003-insertion-api.md)
+- [ADR-0005 — Objects over IDs](decisions/0005-objects-over-ids.md)
 
 ## Model Summary
 
-A zone is a simulation model that contains or groups instances and knows how to organize those contents.
+A zone is a group of cards. It carries identity, a definition that describes how it organizes its contents, an optional owner, and the runtime data that backs its behavior (membership and any per-zone-type values like a counter or recipe progress).
 
 The working model is:
 
-> Zone = definition + zone instance + contents + organization behavior + visibility + change bookkeeping.
+> Zone = thin object (id + definition + owner) + contents slice + per-zone-type runtime slice.
 
-Zones are not only containers. They can represent structured game concepts like hands, decks, discard piles, battlefields, stacks, shops, card packs, production slots, and temporary areas.
+Zones are groups of cards. They can represent structured game concepts like hands, decks, discard piles, battlefields, stacks, shops, and production slots. **Card packs are not zones** — a pack is an entity that, when activated, generates new card instances; it does not contain pre-existing cards. **Reward offers, drafts, and choice surfaces are not zones either** — those are decisions, modeled through the action/decision system.
 
-Zones should not own broad gameplay legality. A larger game/action rules layer should decide whether an actor may move an instance into, out of, or within a zone. Once a move is approved, the zone owns how its contents are arranged and what bookkeeping happens.
+Zones should not own broad gameplay legality. A larger game/action rules layer decides whether an actor may move an instance into, out of, or within a zone. Once a move is approved, the zone owns how its contents are arranged and what bookkeeping happens.
 
-## Zone Definitions And Zone Instances
+**Zones do not have stats.** A zone can carry runtime values (a counter, recipe progress) but does not participate in the entity-variable bridge or modifier-stack machinery — it has no `EntityVariableState`, no `IReadOnlyEntity` polymorphism, no modifiers. The moment a concept needs stats with modifier stacks, it is no longer a zone — it is a different entity that may have a zone associated with it.
 
-Like other entities, zones should have definitions and instances.
+## Zone Shape
+
+A zone is a thin domain object with three structural fields:
+
+```text
+Zone {
+  Id:         Identifier<Instance>   // shared namespace with cards
+  Definition: ZoneDefinition         // authored config (type, capacity, ordering, insertion, visibility policy)
+  Owner:      Actor?                 // optional; the Actor that owns this zone
+}
+```
+
+The zone shares the `Identifier<Instance>` namespace with cards. This makes targeting work uniformly: an effect that picks "a card or a zone" handles both through the same ID space without a typed disambiguation step.
+
+Zone runtime state lives in two kinds of slice:
+
+1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone object. Holds an ordered list of `ContentEntry { InstanceId, SlotKey?, GroupKey? }`. The same shape supports ordered lists (hand, deck), slotted zones (battlefield with rows), and grouped piles. Interpretation of `SlotKey` and `GroupKey` lives in the zone definition.
+2. **Per-zone-type runtime slices** — game-authored. Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape across zone types.
+
+Zone configuration lives on the `ZoneDefinition`: capacity, ordering rules, insertion behavior, default visibility policy. Different zone types vary by definition data, not by class hierarchy.
+
+See [ADR-0001](features/zones/decisions/0001-zone-shape.md) for full reasoning.
 
 ### Zone Definition
 
@@ -44,11 +68,10 @@ Examples:
 - MTG stack zone definition.
 - Stacklands physical stack zone definition.
 - Shop row zone definition.
-- Card pack zone definition.
 
-### Zone Instance
+### Zone Object (Runtime)
 
-The runtime zone in a session.
+The runtime zone in a session — a `Zone` value carrying its `Id`, `Definition`, and `Owner`.
 
 Examples:
 
@@ -145,11 +168,61 @@ A Stacklands-style physical stack zone may define:
 
 Recipe matching, timers, production, automatic combat, and work are game systems that may observe or query the stack zone. The visual pile can be handled by presentation, but the fact that those instances are grouped together belongs to simulation.
 
+## Read API
+
+Per [ADR-0005](decisions/0005-objects-over-ids.md), framework APIs prefer the zone object over its ID. The zone is used directly as a slice key, and utility methods on the zone take state per call. There is no `Zones` injected service.
+
+```text
+// slice access (zone is the key)
+state.Get<ZoneContentsState>(zone)
+state.Get<PileState>(zone)               // game-authored per-zone-type slice
+
+// utility methods on the zone (sugar for slice reads)
+zone.GetCard(state, slot)
+zone.Contents(state)
+zone.Count(state)
+zone.IndexOf(state, card)
+zone.IsFull(state)                       // reads definition.Capacity vs current count
+```
+
+The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state per call, so a zone reference is timeless and can be passed across scope boundaries safely.
+
+For reverse queries — "what zone is this card in?" — the framework maintains a derived `CardLocationIndex` slice keyed by card `InstanceId` → `Zone`. The index is updated atomically by the same mutators that write `ZoneContentsState`, so it is always consistent.
+
+## Insertion API
+
+A single payload carries zone insertion, with optional override fields for game effects that need to bypass zone defaults. See [ADR-0003](features/zones/decisions/0003-insertion-api.md) for full reasoning.
+
+```text
+InsertCardPayload {
+  Zone:            Zone
+  Card:            StateEntity
+  Position?:       InsertPosition          // null = use zone definition's default
+  BypassCapacity?: bool                    // null/false = respect default
+}
+
+InsertPosition =
+  | Top
+  | Bottom
+  | AtIndex(int)
+  | AtSlot(SlotKey)
+```
+
+Static factories provide call-site readability without payload sprawl:
+
+- `InsertCardPayload.AtTop(zone, card)`
+- `InsertCardPayload.AtBottom(zone, card)`
+- `InsertCardPayload.AtIndex(zone, card, i)`
+- `InsertCardPayload.AtSlot(zone, card, slotKey)`
+- `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
+
+The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertOptions` and forwards them to the insert side.
+
+"Forced" at the mutation level means bypassing zone defaults. The separate axis — "this insertion can't be cancelled by replacement effects" — lives at the `GameAction` / trigger-fold layer, not here.
+
 ## Visibility Model
 
-Visibility should not be a single boolean.
-
-The early model should separate two channels:
+Visibility uses two channels:
 
 
 | Channel               | Question It Answers                                                                | Example                                                                        |
@@ -158,18 +231,59 @@ The early model should separate two channels:
 | Detail Visibility     | Given a known instance ID, can this actor see its definition and variable data?    | A face-down card may be visible as an instance but hide its definition.        |
 
 
-Later, visibility may include more channels:
+### Zone visibility policy (definition-only)
 
-- Count visibility.
-- Order visibility.
-- Group visibility.
-- Definition visibility.
-- Variable visibility.
-- Modifier visibility.
-- Relationship visibility.
-- History visibility.
+The zone's default visibility policy lives on the `ZoneDefinition` as authored data. The policy expresses per-actor-role rules across the two channels — e.g., "visible to owner, count-only to others" (hand), "hidden to all" (deck contents), "visible to all" (battlefield). The policy is static per zone definition; runtime variation comes only from the per-card flag.
 
-Actor/player/ownership semantics are not finalized yet, so this doc only establishes the need for per-viewer visibility.
+### Per-card visibility flag
+
+Per-card runtime overrides live on a per-card state slice as enum:
+
+```text
+CardVisibility =
+  | Hidden          // nobody sees details (e.g., MTG morph face-down)
+  | VisibleToOwner  // only the actor in the Owner relationship sees details
+  | VisibleToAll    // everyone sees details (face-up override)
+```
+
+An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+
+### Rules-side read
+
+Rules read visibility through the card object:
+
+```text
+card.IsVisibleTo(state, actor)
+```
+
+Visibility-conditional rules and triggers branch on this read. The predicate combines the zone's policy and the per-card flag.
+
+### Server / client model
+
+The server is omniscient and stores canonical state with no visibility filtering. Visibility is applied as a **send-time filter** at the network boundary. The server only sends to a client what that actor is allowed to see:
+
+- **Full data** — actor can see the card; client renders normally.
+- **ID only** — actor knows a card exists but not what it is; client renders a hidden-card placeholder.
+- **Nothing** — actor doesn't know the card exists (e.g., opponent's deck contents); client only knows the count if the zone policy reveals it.
+
+### ID-swap on re-hide (per-actor transport alias)
+
+When a previously-revealed card transitions back to hidden relative to a specific actor, the server generates a fresh ephemeral ID for that actor's view, so the client can't correlate with old data. The simulation-side `InstanceId` stays stable forever; the alias map exists only at the transport boundary.
+
+This preserves the entities Model invariant ("zone movement preserves the same instance") on the server while supporting privacy across reveal-then-hide cycles. Triggers, effects, and slices reference the canonical InstanceId; ID translation happens only at network send-time.
+
+See [ADR-0002](features/zones/decisions/0002-visibility-model.md) for full reasoning.
+
+## History Filtering
+
+The server records a single canonical `HistoryEnvelope` stream with full InstanceIds and full data. Per-actor history views are produced at the transport boundary by applying two transformations:
+
+- **ID translation.** Canonical InstanceIds → per-actor ephemeral IDs (using the same alias map as live state).
+- **Detail gating.** Card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. **Movement entries** (`ZoneContentInserted`, `ZoneContentRemoved`, relocate) are always sent — the *fact* of movement is public.
+
+For genuinely-secret movements (where even the fact must be hidden from observers), the game models the interaction differently — the framework does not provide a "secret history" mode.
+
+See [ADR-0002](features/zones/decisions/0002-visibility-model.md) §History.
 
 ## Zone Movement
 
@@ -229,32 +343,29 @@ Some game-specific zone types may incorporate spatial or reward behavior later, 
 | Rules Stack    | Pending spell/ability instances  | Ordered stack, usually top-insertion                 | Usually public details                             | Priority, legal additions, resolution.            |
 | Physical Stack | Card/resource instances          | Stack order/group                                    | Depends on game                                    | Recipes, timers, work, combat.                    |
 | Shop Row       | Offer instances                  | Indexed list                                         | Usually public details                             | Purchase rules, refresh rules, pricing.           |
-| Card Pack      | Generated or contained instances | Hidden bundle or reveal sequence                     | May hide contents until opened                     | Pack opening and generation rules.                |
 
 
-## Open Questions Left For Later
+Note: card packs are *not* zones. A pack is an entity with a generator effect; opening it executes an effect that creates new card instances and places them somewhere. Reward offers, drafts, and choice surfaces are also not zones — they flow through the action/decision system.
 
-- Are zones always entity instances, or can some zones be lightweight session records?
-- Is zone membership best represented as a variable, relationship, Store slice, or zone-owned collection?
-- How do actor, player, owner, controller, and viewer differ?
-- How do game/action rules query zone organization without delegating legality to the zone?
-- What does a forced/override insertion API look like?
-- What is the exact visibility query API?
-- How should history record hidden movement?
-- How should generated rewards and choices relate to zones?
-- How should spatial rule systems attach to zone content?
+## Deferred
+
+- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The `SlotKey?` field in `ContentEntry` is the available hook for game-specific spatial use; the framework does not commit to spatial semantics until a real game forces the requirements. See `bl-spatial-rule-attachment` in `BACKLOG.md`.
+- **Per-actor asymmetric reveals** — visibility states like "card visible to player A but not player B" are not first-class in the visibility model; games that need them model the reveal as a transient game-state slice. Per-actor map shape on the visibility flag was rejected as YAGNI.
 
 ## Useful Invariants
 
-- Zones are simulation models.
-- Zones can be instances with definitions.
+- Zones are thin domain objects; their state lives in slices.
+- Zones share the `Identifier<Instance>` namespace with cards.
+- Zones do not have stats. Stat-bearing things are not zones.
 - Zones own contents, organization, capacity defaults, and change bookkeeping.
 - Zones do not own broad gameplay legality.
 - Zone membership does not replace an instance.
 - Stack concepts can be modeled as zones with custom organization.
 - Spatial placement is not required in the base zone model.
-- Visibility needs separate membership and detail channels.
+- Visibility uses membership and detail channels; rules read it via `card.IsVisibleTo(state, actor)`.
+- Server is canonical; visibility filtering happens at the transport boundary; ID-swap on re-hide is a per-actor alias.
 - Movement between zones is approved by game/action rules and organized by zones.
+- Card packs and reward offers are not zones.
 
 
 ---

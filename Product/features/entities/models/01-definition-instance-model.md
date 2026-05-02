@@ -251,7 +251,8 @@ Shape:
 - **`StateEntity<TDefinition>`** is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. It substitutes for plain `EntityInstance` in polymorphic APIs.
 - **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` (`AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload`, etc.). `IMutableEntity` calls produce the same payloads internally.
 - **Reads** use a per-rebuild effective-value cache; `Variable` enumeration is ordered by `Variable.Key` (ordinal) for determinism.
-- **Game-level state** (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside entity slices.
+- **Game-level state** (turn, phase, available actions, decisions) lives in plain Store slices alongside entity slices.
+- **Zones** are thin domain objects (not entities) sharing the `Identifier<Instance>` namespace with cards; their canonical state lives in `ZoneContentsState` (membership) and per-zone-type runtime slices (typed values like a counter). Zones do not participate in the entity-variable bridge or modifier-stack machinery. See [Zone Model](features/zones/models/01-zone-model.md) and [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md).
 - **Definition swap (transformation)** — `Definition` is on the handle, not in `EntityVariableState`. To transform, create a new `StateEntity<TNewDef>` for the same `InstanceId`. There is no state-level `SetDefinitionPayload`.
 
 Why this resolution:
@@ -295,12 +296,12 @@ These are good early invariants:
 
 ## Next Questions
 
-This model pushes the next important questions into the Zone and State docs:
+This model's zone-related follow-ups have been settled — see the Zone Model and ADRs in `features/zones/`:
 
-- Is a zone always an entity instance, or can some zones be lightweight session records?
-- Is zone membership a variable, relationship, Store slice, or combination?
-- How does ordered or grouped arrangement work inside zones?
-- How do visibility and ownership interact?
+- ~~Is a zone always an entity instance, or can some zones be lightweight session records?~~ → Resolved: zones are thin domain objects (not entities), state in slices. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~Is zone membership a variable, relationship, Store slice, or combination?~~ → Resolved: `ZoneContentsState` slice. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~How does ordered or grouped arrangement work inside zones?~~ → Resolved: `ContentEntry { InstanceId, SlotKey?, GroupKey? }`; interpretation lives in zone definition. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~How do visibility and ownership interact?~~ → Resolved: zone definition policy + per-card flag enum + per-actor transport alias. ([ADR-0002](features/zones/decisions/0002-visibility-model.md))
 
 
 ---

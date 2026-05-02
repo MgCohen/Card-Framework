@@ -6,6 +6,7 @@ tags: [#general, #questions]
 ---
 
 
+
 # Open Questions
 
 These are unresolved design questions worth answering before implementation or during small focused spikes.
@@ -27,7 +28,7 @@ Still open:
 
 ## Zones
 
-Status: initial answers captured in [Zone Model Decisions](features/zones/models/01-zone-model.md), then incorporated into [Zone Model](features/zones/models/01-zone-model.md).
+Status: high-level direction captured in [Zone Model](features/zones/models/01-zone-model.md). Internal sub-questions settled in session-20260501-1602: zone shape ([ADR-0001](features/zones/decisions/0001-zone-shape.md)), visibility model ([ADR-0002](features/zones/decisions/0002-visibility-model.md)), insertion API ([ADR-0003](features/zones/decisions/0003-insertion-api.md)). Spatial rule attachment deferred to backlog (`bl-spatial-rule-attachment`).
 
 - ~~What zone traits are mandatory in core?~~ → Zones are responsibility-based models (contents, arrangement, capacity, insertion/removal behavior, visibility, change bookkeeping), not a fixed trait checklist. (docs 11, 12)
 - ~~How should spatial board positions relate to zone membership?~~ → Spatial placement is outside the core zone model; it is view-defined or game-specific. (docs 11, 12)
@@ -37,7 +38,7 @@ Status: initial answers captured in [Zone Model Decisions](features/zones/models
 - ~~How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?~~ → Deferred to the action/decision model; may or may not be zones depending on game. (docs 11, 12)
 
 Still open:
-- id: oq-zone-internal-opens | **Zone model internal open questions** — nine questions within `zones/01-zone-model.md` "Open Questions Left For Later" have no follow-up model: zone-as-entity vs lightweight record, membership storage model, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, and spatial rule attachment. Several (membership storage, visibility API, actor semantics) are blocking for any non-trivial game. ([zones/01-zone-model.md](features/zones/models/01-zone-model.md))
+- ~~id: oq-zone-internal-opens | **Zone model internal open questions** — nine questions within `zones/01-zone-model.md` "Open Questions Left For Later" have no follow-up model: zone-as-entity vs lightweight record, membership storage model, actor/owner/controller semantics, visibility query API, forced insertion API, zone organisation query API, history of hidden movement, generated reward zones, and spatial rule attachment.~~ → Resolved session-20260501-1602: 8 of 9 settled; spatial rule attachment deferred (see `bl-spatial-rule-attachment` in BACKLOG). See [ADR-0001 zone shape](features/zones/decisions/0001-zone-shape.md), [ADR-0002 visibility model](features/zones/decisions/0002-visibility-model.md), [ADR-0003 insertion API](features/zones/decisions/0003-insertion-api.md), and updated [Zone Model](features/zones/models/01-zone-model.md). Cross-cutting: [ADR-0005 Objects over IDs](decisions/0005-objects-over-ids.md). Actor/Player/Owner terminology refined in glossary; Controller and Viewer dropped as non-framework concepts.
 - id: oq-attachment-storage | **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model. ([effects/03-ongoing-effects §6](features/effects/models/03-ongoing-effects.md))
 
 ## Rules And Scheduling
