@@ -86,7 +86,9 @@ Examples:
 
 ### Zone Object (Runtime)
 
-The runtime zone in a session — a `Zone` value carrying its `Id`, `Definition`, and `Owner`.
+The runtime zone in a session — a `Zone` value carrying its `Id` and `Definition`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
+
+Zone storage is **game-authored**: the framework does not provide a generic `ZoneMapState` registry. Game code holds Zone objects in its own state slices (e.g., `GameZonesState { Zone P1Hand, Zone P1Deck, ... }`) or in a `Dictionary` keyed however the game prefers. Framework operations take Zone objects as parameters; they don't look them up generically. (See `bl-zone-registry` in `BACKLOG.md` if this becomes a real need.)
 
 Examples:
 
@@ -254,13 +256,9 @@ The zone's default visibility policy lives on the `ZoneDefinition` as authored d
 
 ### Per-card visibility flag
 
-Per-card runtime overrides live on `CardVisibilityState` keyed by `InstanceId`:
+Per-card runtime overrides live on `CardVisibilityState` (defined in the [Card Model § Card Visibility](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `InstanceId`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
 
-```csharp
-public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
-```
-
-An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+Per-card overrides flow through `SetCardVisibilityMutation` (with `Hide` / `ShowAll` / `ShowToOwner` factories — see Card Model § Mutations).
 
 ### Rules-side read
 
@@ -289,7 +287,7 @@ Per the [Card Model](features/cards/models/01-card-model.md), every card carries
 - `InstanceId` — stable across the card's lifetime; used for variable storage, modifier storage, history, server-internal subscriptions.
 - `CardRef` — temporary; the slice key in `CardMapState` and the reference used in `ZoneContentsState`. Rotates on every move and on every visibility transition.
 
-When a card hides, `HideCardMutation { Card, NewRef }` rotates the `CardRef` server-side: `CardMapState` swaps the old ref out and the new ref in, every `ZoneContentsState` containing the old ref swaps it for the new ref, and `CardVisibilityState[card.InstanceId]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
+When a card hides, `SetCardVisibilityMutation.Hide(card)` rotates the `CardRef` server-side: `CardMapState` swaps the old ref out and the new ref in, every `ZoneContentsState` containing the old ref swaps it for the new ref, and `CardVisibilityState[card.InstanceId]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
 
 The simulation-side `InstanceId` stays stable forever (preserves the entities Model invariant). Triggers, effects, attachments, and history all reference the `Card` object or its `InstanceId` — they are unaffected by ref rotation.
 

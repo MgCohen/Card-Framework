@@ -87,7 +87,7 @@ The instance should not duplicate every definition field. It should reference it
 
 There should not be a separate conceptual model called "identity." The instance is the thing. An instance may have an `Instance ID` so systems can look it up, reference it, serialize it, or include it in history.
 
-The `Instance ID` can be a typed record, integer, GUID-like value, or package-specific reference. That is an implementation detail. Conceptually, it is just a value associated with the instance.
+The `Instance ID` is typed as `Identifier<Instance>` and is stable across the instance's lifetime. The framework provides `InstanceId.NewId()` for generating fresh values; mutations that create instances (e.g., `CreateCardMutation`) carry the generated `InstanceId` in the payload for replay determinism.
 
 Default rule:
 

@@ -22,14 +22,16 @@ Related docs:
 
 A Card is a thin handle over the entity bridge:
 
-> Card = `StateEntity<TCardDef>` + `IReference` + state-side properties (current `CardRef`, `Owner`).
+> Card = `StateEntity<CardDefinition>` + `IReference` + state-side accessors for `CardRef` and `Owner`.
 
 The handle itself is stateless beyond its `InstanceId` and Definition reference. All mutable card data — variables, modifiers, current ref, owner, visibility — lives in Store slices. Reads happen by passing state into accessor methods (`card.GetRef(state)`, `card.GetOwner(state)`).
+
+The framework is **data-driven**: there is one `Card` class. Different card types (Fireball, Goblin, etc.) are different `CardDefinition` instances with their own data fields and effect recipes — not different C# classes. The `Card` handle reads typed definition data through the entity bridge.
 
 ## Card Class
 
 ```csharp
-public abstract class Card : StateEntity<CardDefinition>, IReference
+public sealed class Card : StateEntity<CardDefinition>, IReference
 {
     public InstanceId Id => InstanceId;     // satisfies IReference
 
@@ -38,18 +40,17 @@ public abstract class Card : StateEntity<CardDefinition>, IReference
 
     public Actor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(this);
+
+    public override bool Equals(object? obj) =>
+        obj is Card other && InstanceId.Equals(other.InstanceId);
+
+    public override int GetHashCode() => InstanceId.GetHashCode();
 }
 ```
 
-Game-specific card subclasses extend `Card` (or `StateEntity<TConcreteDef>` directly) and pin the typed definition:
+Card-typed card variants (Fireball, Goblin, etc.) are not separate C# classes — they are distinct `CardDefinition` instances. A "Fireball" card is a `Card` handle whose definition is a `CardDefinition` configured with Fireball-specific data and effect recipes. Per the data-driven model, the framework provides one `Card` type; game content lives in definitions, not in subclasses.
 
-```csharp
-public sealed record FireballDefinition : CardDefinition { /* ... */ }
-
-public sealed class Fireball : Card { /* typed access via StateEntity<CardDefinition> bridge */ }
-```
-
-The class is a handle, not a record. There is at most one `Card` instance per `InstanceId` in the running engine — referenced from `CardMapState` and shared by all framework code that operates on that card.
+The class is a handle, not a record. Equality is overridden to use `InstanceId` so the same card can be looked up reliably by Card object across handle re-creation (e.g., snapshot rehydration). There is at most one *live* `Card` instance per `InstanceId` in the running engine — referenced from `CardMapState` and shared by all framework code that operates on that card.
 
 ## CardRef
 
@@ -79,14 +80,18 @@ public sealed record CardMapState : IState
     public ImmutableDictionary<CardRef, Card> Cards { get; init; }
         = ImmutableDictionary<CardRef, Card>.Empty;
 
+    public ImmutableDictionary<Card, CardRef> RefByCard { get; init; }
+        = ImmutableDictionary<Card, CardRef>.Empty;
+
     public Card GetCard(CardRef @ref) => Cards[@ref];
 
-    public CardRef RefOf(Card card) =>
-        Cards.First(kv => kv.Value.InstanceId == card.InstanceId).Key;
+    public CardRef RefOf(Card card) => RefByCard[card];
 }
 ```
 
 The map holds `Card` objects directly (not `InstanceId` values). Lookups are one-hop. The Card object's lifetime is owned by the map — when a card is created, its handle is constructed and inserted; when destroyed, removed.
+
+The parallel `RefByCard` index makes `RefOf(card)` O(1) — important because `card.GetRef(state)` is called inside every mutation that rotates the ref. The index uses `Card`'s `InstanceId`-based equality so it remains correct across handle re-creation. Mutators that write `CardMapState` update both dictionaries atomically.
 
 ## OwnershipState
 
@@ -105,12 +110,45 @@ public sealed record OwnershipState : IState
 
 Owner mutations go through the Store like any other state change — there is no direct `card.Owner = ...` mutation path. Cards / zones without an owner simply have no entry in the slice; `OwnerOf(...)` returns null.
 
-## Mutations
+## Card Visibility
 
-All card lifecycle operations are composite mutations. The ones that write the map require a fresh `CardRef` to be passed in via the payload — this ensures determinism across all sub-mutators within the composite and supports replay.
+Visibility uses a per-card runtime override on top of the zone's default policy (the policy itself lives on `ZoneDefinition` — see [Zones ADR-0002](features/zones/decisions/0002-visibility-model.md)). The override is a state slice keyed by `InstanceId`:
 
 ```csharp
-public sealed record CreateCardMutation(Card Card, CardRef NewRef) : CompositeAction;
+public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
+
+public sealed record CardVisibilityState : IState
+{
+    public ImmutableDictionary<InstanceId, CardVisibility> Overrides { get; init; }
+        = ImmutableDictionary<InstanceId, CardVisibility>.Empty;
+
+    public CardVisibility? OverrideFor(InstanceId id) =>
+        Overrides.TryGetValue(id, out var v) ? v : null;
+}
+```
+
+An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+
+Rules read effective visibility through the card object: `card.IsVisibleTo(state, actor)` combines the zone policy and per-card override.
+
+## Mutations
+
+All card lifecycle operations are typed `: CompositeAction`. As CompositeActions, they pass through their own trigger fold — game effects can intercept create / move / set-visibility / destroy via before/after triggers (see the triggers feature). The ones that write the map require a fresh `CardRef` to be passed in via the payload — this ensures determinism across all sub-mutators within the composite and supports replay.
+
+```csharp
+public sealed record CreateCardMutation(
+    CardDefinition Definition,
+    InstanceId NewInstanceId,
+    CardRef NewRef,
+    Zone? IntoZone = null,
+    InsertPosition Position = default) : CompositeAction
+{
+    public static CreateCardMutation Of(CardDefinition definition)
+        => new(definition, InstanceId.NewId(), CardRef.NewRef());
+
+    public static CreateCardMutation Into(CardDefinition definition, Zone zone)
+        => new(definition, InstanceId.NewId(), CardRef.NewRef(), zone);
+}
 
 public sealed record MoveCardMutation(
     Card Card,
@@ -130,31 +168,52 @@ public sealed record MoveCardMutation(
         => new(card, CardRef.NewRef(), source, destination, new AtIndex(index));
 }
 
-public sealed record HideCardMutation(Card Card, CardRef NewRef) : CompositeAction
-{
-    public static HideCardMutation Of(Card card) => new(card, CardRef.NewRef());
-}
-
-public sealed record ShowCardMutation(
+public sealed record SetCardVisibilityMutation(
     Card Card,
     CardRef NewRef,
-    CardVisibility ShowAs = CardVisibility.VisibleToAll) : CompositeAction
+    CardVisibility Visibility) : CompositeAction
 {
-    public static ShowCardMutation Of(Card card, CardVisibility showAs = CardVisibility.VisibleToAll)
-        => new(card, CardRef.NewRef(), showAs);
+    public static SetCardVisibilityMutation Hide(Card card)
+        => new(card, CardRef.NewRef(), CardVisibility.Hidden);
+
+    public static SetCardVisibilityMutation ShowAll(Card card)
+        => new(card, CardRef.NewRef(), CardVisibility.VisibleToAll);
+
+    public static SetCardVisibilityMutation ShowToOwner(Card card)
+        => new(card, CardRef.NewRef(), CardVisibility.VisibleToOwner);
 }
 
 public sealed record DestroyCardMutation(Card Card) : CompositeAction;
 ```
 
-`DestroyCardMutation` does not need a `NewRef` — it only removes from `CardMapState`.
+`DestroyCardMutation` does not need a `NewRef` — it only removes from `CardMapState`. `CreateCardMutation` takes the `Definition` (not a pre-built `Card`) — the framework constructs the `Card` handle inside the composite, where the Store reference is available.
 
 ### Composite expansion (in prose, not normative API)
 
-- **CreateCardMutation** — inserts `(NewRef, Card)` into `CardMapState`; initializes the card's `EntityVariableState` slice from `Definition.BaseValues`; if the card enters a zone immediately, also inserts `NewRef` into that zone's `ZoneContentsState`.
-- **MoveCardMutation** — removes `card.GetRef(state)` from `Source.ZoneContentsState`; rotates the entry in `CardMapState` (`oldRef → NewRef`); inserts `NewRef` into `Destination.ZoneContentsState` at `Position`.
-- **HideCardMutation** / **ShowCardMutation** — rotates the entry in `CardMapState`; swaps `oldRef → NewRef` in any `ZoneContentsState` containing the card; writes `CardVisibilityState[card.InstanceId]`.
+- **CreateCardMutation** — constructs the `Card` handle from `(NewInstanceId, Definition, store)`; inserts `(NewRef, Card)` into `CardMapState` (and updates `RefByCard`); initializes the card's `EntityVariableState` slice from `Definition.BaseValues`; if `IntoZone` is non-null, inserts `NewRef` into that zone's `ZoneContentsState` at `Position`.
+- **MoveCardMutation** — removes `card.GetRef(state)` from `Source.ZoneContentsState`; rotates the entry in `CardMapState` (`oldRef → NewRef`); inserts `NewRef` into `Destination.ZoneContentsState` at `Position`. **Precondition:** `Card` must currently be in `Source` (mutator throws if not — see `oq-move-validation-execution-drift` in `OPEN-QUESTIONS.md` for the deferred concurrency question).
+- **SetCardVisibilityMutation** — rotates the entry in `CardMapState`; swaps `oldRef → NewRef` in any `ZoneContentsState` containing the card; writes `CardVisibilityState[card.InstanceId] = Visibility`.
 - **DestroyCardMutation** — removes the entry from `CardMapState`; removes the card from any `ZoneContentsState`; removes per-card slices keyed by `InstanceId` (variables, modifiers, visibility); fires the cleanup hook (per `oq-entity-destruction`, still open).
+
+### Construction helper
+
+For the common case of "create a card and use it immediately," a Store extension provides sugar:
+
+```csharp
+public static class StoreExtensions
+{
+    public static Card CreateCard(this Store store, CardDefinition definition, Zone? intoZone = null)
+    {
+        var ref_ = CardRef.NewRef();
+        store.Execute(new CreateCardMutation(definition, InstanceId.NewId(), ref_, intoZone));
+        return store.State.Get<CardMapState>().GetCard(ref_);
+    }
+}
+
+// Use:
+var card = store.CreateCard(fireballDefinition, p1Hand);
+store.Execute(MoveCardMutation.AtTop(card, p1Hand, battlefield));
+```
 
 ## Read API
 

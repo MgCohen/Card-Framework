@@ -36,14 +36,19 @@ For the dual-ID model (`InstanceId` + `CardRef`):
 For the relationship between Card and the entity bridge:
 
 - **A — Card is a separate type, not on the bridge.** Rejected: the bridge handles variables, modifiers, definition typing — duplicating that for cards is throw-away work.
-- **B — Card extends `StateEntity<TCardDef>`.** Card is a typed handle on the bridge with additional state-reading methods (`GetRef`, `GetOwner`). Chosen.
+- **B — Card extends `StateEntity<CardDefinition>`.** Card is a non-generic handle on the bridge with additional state-reading methods (`GetRef`, `GetOwner`). Chosen — see "Card is non-generic" below.
+
+For the Card type's generic parameter:
+
+- **A — Generic `Card<TDef>` with per-card-type subclasses** (`Fireball : Card<FireballDefinition>`). Rejected: pushes the framework toward a class-per-card-type model.
+- **B — Non-generic `Card : StateEntity<CardDefinition>`; per-card variants are different `CardDefinition` instances, not different C# classes.** Chosen — aligns with the framework's data-driven design (game content lives in definitions, not subclasses).
 
 ## Decision
 
-**Card is a class extending `StateEntity<TCardDef>` and implementing `IReference`.** It is a thin handle — no mutable data on the class itself. All mutable card state (variables, modifiers, current ref, owner, visibility) lives in Store slices.
+**Card is a non-generic class extending `StateEntity<CardDefinition>` and implementing `IReference`.** It is a thin handle — no mutable data on the class itself. All mutable card state (variables, modifiers, current ref, owner, visibility) lives in Store slices. Per-card-type variants (Fireball, Goblin, etc.) are distinct `CardDefinition` instances; the framework provides one `Card` class.
 
 ```csharp
-public abstract class Card : StateEntity<CardDefinition>, IReference
+public sealed class Card : StateEntity<CardDefinition>, IReference
 {
     public InstanceId Id => InstanceId;
 
@@ -52,18 +57,30 @@ public abstract class Card : StateEntity<CardDefinition>, IReference
 
     public Actor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(this);
+
+    public override bool Equals(object? obj) =>
+        obj is Card other && InstanceId.Equals(other.InstanceId);
+
+    public override int GetHashCode() => InstanceId.GetHashCode();
 }
 ```
 
-**`CardMapState` is the canonical "this card exists" slice.** Maps `CardRef` to `Card`. Holds `Card` objects directly (one Card per `InstanceId`). Replaces the engine-side handle registry — putting the registration on the Store gives snapshot/rollback for free.
+Equality is overridden to use `InstanceId` so the same card can be looked up reliably across handle re-creation (snapshot rehydration, etc.) and so `Card`-keyed dictionaries (`CardMapState.RefByCard`) work correctly.
+
+**`CardMapState` is the canonical "this card exists" slice.** Maps `CardRef → Card` and the parallel reverse index `Card → CardRef`. Holds `Card` objects directly (one live Card handle per `InstanceId`). Replaces the engine-side handle registry — putting the registration on the Store gives snapshot/rollback for free.
 
 ```csharp
 public sealed record CardMapState : IState
 {
     public ImmutableDictionary<CardRef, Card> Cards { get; init; }
         = ImmutableDictionary<CardRef, Card>.Empty;
+
+    public ImmutableDictionary<Card, CardRef> RefByCard { get; init; }
+        = ImmutableDictionary<Card, CardRef>.Empty;
 }
 ```
+
+The reverse index makes `RefOf(card)` O(1) — important because `card.GetRef(state)` is read inside every mutation that rotates the ref. Mutators write both dictionaries atomically.
 
 **`CardRef` is a temporary reference that rotates** on every move (per Zones ADR-0003) and on every visibility transition (per Zones ADR-0002). It is **not** an `Identifier<T>` — it is deliberately unstable.
 
@@ -75,12 +92,16 @@ public readonly record struct CardRef(Guid Value)
 ```
 
 **Two IDs coexist:**
-- `InstanceId` — stable across the card's lifetime. Used for variable storage, modifier storage, ownership, visibility, history, all server-internal subscriptions.
+- `InstanceId` — stable across the card's lifetime. Used for variable storage, modifier storage, ownership, visibility, history, all server-internal subscriptions. `InstanceId.NewId()` factory generates fresh values.
 - `CardRef` — temporary. Used as the `CardMapState` key, in `ZoneContentsState`, in client-visible projections.
 
 **Ownership lives on a generic `OwnershipState` slice** keyed by `InstanceId` and applicable to any `IReference` instance (cards, zones, future addressable entities). Owner reads go through `card.GetOwner(state)` or `zone.GetOwner(state)`.
 
-**Mutations** that write `CardMapState` (`Create`, `Move`, `Hide`, `Show`) carry the new `CardRef` as a payload field. This ensures all sub-mutators within the composite see the same value and supports deterministic replay — the recorded payload in history carries the ref directly.
+**`CardVisibilityState` slice** holds per-card visibility overrides as `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`); absent entry = use zone policy. See [Card Model § Card Visibility](features/cards/models/01-card-model.md).
+
+**Card construction** is owned by the framework. Game code provides a `CardDefinition`; `CreateCardMutation(Definition, NewInstanceId, NewRef, IntoZone?)` constructs the `Card` handle inside the composite (where the Store reference is available). Game code never calls `new Card(...)` directly.
+
+**Mutations** that write `CardMapState` (`Create`, `Move`, `SetCardVisibility`) carry the new `CardRef` as a payload field. This ensures all sub-mutators within the composite see the same value and supports deterministic replay — the recorded payload in history carries the ref directly. `SetCardVisibilityMutation` collapses what would otherwise be separate `Hide` and `Show` mutations into one operation parameterized by target visibility (with `Hide`/`ShowAll`/`ShowToOwner` factories).
 
 ## Consequences
 
