@@ -2,10 +2,10 @@
 type: adr
 status: accepted
 last-updated: 2026-05-01
-tags: [#adr, #zones, #visibility, #history]
+tags: [#adr, #zones, #visibility, #history, #cards]
 ---
 
-# ADR-0002 — Visibility model: definition policy + per-card flag + per-actor transport alias
+# ADR-0002 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
 
 Date: 2026-05-01
 Context-doc: features/zones/models/01-zone-model.md
@@ -21,18 +21,21 @@ The zone Model settled the two-channel visibility model (membership visibility a
 4. What shape is the per-card runtime flag?
 5. How is movement that some viewers can't see recorded in history?
 
-The user's framing: server is omniscient; visibility is a send-time filter. "Visible to client" = "client has the card's data." Hidden cards may be sent as count-only or as ID-only with no data. Re-hiding a previously-revealed card swaps its InstanceId at the transport boundary so the client can't correlate with old data.
+Initial framing: server is omniscient; visibility is a send-time filter. "Visible to client" = "client has the card's data." Hidden cards may be sent as count-only or as ID-only with no data.
+
+A guiding principle surfaced during the design pass: **the simulation should play the same locally and over the network. The only allowed difference is information being cut to actors who shouldn't see it — not data being changed per actor.** This forecloses the original "per-actor transport alias" mechanism (which changed IDs per actor) in favour of server-side `CardRef` rotation (canonical state changes; all observers see the same IDs; visibility filter only cuts data, never alters IDs).
 
 ## Options considered
 
+For the visibility query API:
 - **A — Predicates only, no framework-provided filter view.** Rejected for boundary use: presentation and network would re-implement filtering at every call site.
 - **B — Snapshot-only filter, no runtime predicates.** Rejected: rules genuinely branch on visibility ("when opponent reveals X, draw a card"); a predicate primitive is unavoidable.
 - **C — Predicates + transport-side filter built on the same primitives.** Chosen.
 
-For ID-swap mechanism:
-- **A — Per-actor transport alias** (server keeps stable canonical InstanceId; per-actor alias map at the network boundary). Chosen.
-- **B — Simulation-level ID reissue** (mutate InstanceId on re-hide; cascade through slices, triggers, effects). Rejected: invasive; breaks the "InstanceId stable across moves" invariant; forces every subscriber to follow ID changes.
-- **C — No framework support.** Rejected: privacy across reveal cycles is a recurring pattern that games would reinvent badly.
+For the privacy mechanism (re-hide tracking):
+- **A — Per-actor transport alias.** Server keeps stable canonical `InstanceId`; per-actor alias map at the network boundary; clients receive aliased IDs. Rejected: changes data per actor (the ID one client sees ≠ canonical ID), violates the "same locally and networked" principle, requires transport-only machinery that doesn't run locally.
+- **B — Simulation-level `InstanceId` reissue.** Mutate `InstanceId` on re-hide; cascade through slices, triggers, effects. Rejected: invasive; breaks the "InstanceId stable across moves" invariant; forces every subscriber to follow ID changes.
+- **C — Two IDs: stable `InstanceId` + ephemeral `CardRef` rotated server-side.** Server canonical state has both IDs. `InstanceId` is stable forever (used for variable storage, modifier storage, history, server-internal subscriptions). `CardRef` is ephemeral and rotates on every visibility transition (and on every move per ADR-0003). All observers see the same `CardRef` — local and remote alike. The privacy filter cuts data, not IDs. Chosen.
 
 For zone visibility policy:
 - **A — Definition-only.** Chosen. Most games don't need runtime-mutable zone-wide visibility transitions. The per-card flag covers per-card runtime variation.
@@ -45,7 +48,7 @@ For per-card flag shape:
 - **D — Three-value enum `{ Hidden, VisibleToOwner, VisibleToAll }`; absent entry = use zone policy.** Chosen.
 
 For history filtering:
-- **A — Single canonical history; transport translates IDs and gates card-detail entries on visibility.** Chosen.
+- **A — Single canonical history; transport translates rotated `CardRef`s and gates card-detail entries on visibility.** Chosen.
 - **B — Per-actor history streams generated already-filtered.** Rejected: duplicates history N times; replay/debug/AI all need the canonical stream.
 
 ## Decision
@@ -54,22 +57,47 @@ For history filtering:
 
 **Zone visibility policy is authored on the `ZoneDefinition`.** The policy expresses per-actor-role rules across the two channels — e.g., "visible to owner, count-only to others" (hand), "hidden to all" (deck contents), "visible to all" (battlefield). The policy is static; runtime variation comes only from the per-card flag.
 
-**Per-card flag** lives on a per-card state slice as enum `{ Hidden, VisibleToOwner, VisibleToAll }`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+**Per-card flag** lives on `CardVisibilityState` keyed by `InstanceId` as enum `{ Hidden, VisibleToOwner, VisibleToAll }`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner (per the Card Model); collapses to `Hidden` if no Owner.
 
-**Rules read visibility via the card object:** `card.IsVisibleTo(state, actor)` delegates to the slice. Visibility-conditional rules and triggers branch on this read.
+```csharp
+public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
 
-**Re-hide via per-actor transport alias.** Simulation-side `InstanceId` stays stable forever (preserves the entities Model invariant: "zone movement preserves the same instance"). At the network boundary, the server maintains a per-actor `InstanceId → EphemeralId` map. When a card transitions to "newly hidden" relative to actor X, the server generates a fresh ephemeral ID for that actor's view. Triggers, effects, slices, and history all reference the canonical InstanceId; ID translation happens only in the transport layer.
+public sealed record CardVisibilityState : IState
+{
+    public ImmutableDictionary<InstanceId, CardVisibility> Overrides { get; init; }
+        = ImmutableDictionary<InstanceId, CardVisibility>.Empty;
 
-**History is a single canonical record on the server.** `HistoryEnvelope` entries use canonical InstanceIds and full data. Per-actor transport applies two transformations:
+    public CardVisibility? OverrideFor(InstanceId id) =>
+        Overrides.TryGetValue(id, out var v) ? v : null;
+}
+```
 
-- **ID translation** — canonical InstanceIds → per-actor ephemeral IDs (using the same alias map as live state).
-- **Detail gating** — card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. Movement entries (`ZoneContentInserted`, `ZoneContentRemoved`, relocate) are always sent — the *fact* of movement is public.
+**Rules read visibility via the card object:** `card.IsVisibleTo(state, actor)` delegates to the slice and combines with the zone's policy. Visibility-conditional rules and triggers branch on this read.
+
+**Re-hide via server-side `CardRef` rotation** (per Card Model). The simulation-side `InstanceId` is stable forever (preserves the entities Model invariant). The `CardRef` is the temporary client-visible reference and rotates on every visibility transition. When a card hides:
+
+1. A new `CardRef` is generated by the dispatching mutation (`HideCardMutation { Card, NewRef }`).
+2. `CardMapState` swaps the entry: old ref out, new ref in (same Card object).
+3. Every `ZoneContentsState` containing the old ref swaps it for the new ref.
+4. `CardLocationIndex` rebinds.
+5. `CardVisibilityState[card.InstanceId]` updates to the new visibility level.
+
+All observers — local and networked — see the canonical new `CardRef`. There is no per-actor ID variation. The visibility filter at the transport boundary cuts the *data* sent (variables, modifiers, effective values) to actors who can't see the card, leaving the `CardRef` itself untouched.
+
+`ShowCardMutation` runs the same rotation (conservative policy: every transition rotates). This prevents observers from learning continuity across reveal cycles.
+
+**Per ADR-0003 (insertion API), every move also rotates the `CardRef`.** This is the same mechanism — `MoveCardMutation { Card, NewRef, ... }` carries a fresh ref. Hide and move share the privacy property: an observer who briefly saw a card cannot identify it later by its old ref.
+
+**History is a single canonical record on the server.** `HistoryEnvelope` entries use canonical `InstanceId`s and full data. Per-actor transport applies two transformations:
+
+- **CardRef translation in entries** — when an entry references a card by `CardRef` (e.g., `ZoneContentInserted(zone, ref)`), the transport ensures the ref shown matches the current canonical ref the actor sees. Since all actors see the same canonical ref, this is identity-translation in most cases — but for actors who didn't have the old ref (because they couldn't see the card before), the rotation still appears as "a card with this new ref entered the zone."
+- **Detail gating** — card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. Movement entries (`ZoneContentInserted`, `ZoneContentRemoved`, relocate, ref rotation) are always sent — the *fact* of movement and ref rotation is public.
 
 For genuinely-secret movements (where even the fact must be hidden from observers), the game models the interaction differently — not via a special "secret history" mode in the framework.
 
 ## Consequences
 
-- **Enables:** server-side rules can branch on visibility with a one-line predicate; transport filtering is a single layer over canonical state and history; reveal-then-hide privacy works without breaking simulation-side invariants.
-- **Constrains:** the zone definition's visibility policy is static — runtime whole-zone visibility transitions are expressed by mutating per-card flags, not by mutating zone state. If a game needs both, that's a future ADR.
-- **Reverts/replaces:** the Open Questions in `features/zones/models/01-zone-model.md` "what is the exact visibility query API?" and "how should history record hidden movement?" are answered here.
+- **Enables:** server-side rules can branch on visibility with a one-line predicate; the same `CardRef` rotation runs locally and over the wire — no per-actor ID divergence; reveal-then-hide privacy works without breaking simulation-side invariants on `InstanceId`; the framework's transport filter is purely a *data cutter*, not a transformer.
+- **Constrains:** server-internal subscriptions (triggers, effects, attachments, history references intended for subscriber dispatch) must use `Card` objects or `InstanceId` — never `CardRef` — otherwise rotations break them. Client-visible state and projections must use `CardRef` — otherwise the privacy mechanism doesn't apply.
+- **Reverts:** the original ADR-0002 selected per-actor transport alias for the privacy mechanism. This was reversed in the same session per the "play the same locally vs networked" principle. The `Ephemeral Instance ID` glossary entry that referred to the old transport-alias model is deprecated; the framework no longer maintains a per-actor alias map.
 - **Audit:** asymmetric reveals (visible to one specific opponent only) are deferred — a game that needs them models the reveal as a transient game-state slice ("opponent X currently knows card Y") separate from the canonical visibility flag.

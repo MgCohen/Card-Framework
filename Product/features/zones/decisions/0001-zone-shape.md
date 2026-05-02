@@ -27,22 +27,44 @@ User constraint surfaced during the design pass: zones are groups of cards. They
 
 ## Decision
 
-A **zone** is a thin object with three structural fields: `Id` (`Identifier<Instance>`), `Definition` (a `ZoneDefinition`), and optional `Owner` (`Actor`). The zone shares the `Identifier<Instance>` namespace with cards so targeting and references work uniformly.
+A **zone** is a class implementing `IReference` with two structural fields: `Id` (`InstanceId`) and `Definition` (a `ZoneDefinition`). The zone shares the `Identifier<Instance>` namespace with cards (and any other `IReference`-implementing entity) so targeting and references work uniformly.
 
-Zone runtime state lives in two kinds of slice:
+```csharp
+public sealed class Zone : IReference
+{
+    public InstanceId Id { get; }
+    public ZoneDefinition Definition { get; }
 
-1. **`ZoneContentsState`** (framework-owned, generic). Keyed by the zone object. Holds an ordered `IReadOnlyList<Card>`. When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds those fields on its own design pass — the framework does not pre-define hooks for them. Defer-by-default keeps the core shape minimal.
-2. **Per-zone-type runtime slices** (game-authored). Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape.
+    public Actor? GetOwner(IStateScope state) =>
+        state.Get<OwnershipState>().OwnerOf(this);
+
+    public IEnumerable<Card> GetCards(IStateScope state)
+    {
+        var contents = state.Get<ZoneContentsState>(this);
+        var map = state.Get<CardMapState>();
+        return contents.Cards.Select(map.GetCard);
+    }
+    // ... other state-reading methods
+}
+```
+
+Zone is a class (handle), not a record. There is one `Zone` instance per `InstanceId` in the running engine, shared by all framework code that operates on that zone. Mutable zone data (contents, owner, per-zone-type values) lives in slices.
+
+Zone runtime state lives across:
+
+1. **`ZoneContentsState`** (framework-owned, generic). Keyed by the zone. Holds an ordered `ImmutableList<CardRef>` referencing cards via their current `CardRef` (per Card Model — refs rotate on every move). When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds those fields on its own design pass — the framework does not pre-define hooks for them. Defer-by-default keeps the core shape minimal.
+2. **`OwnershipState`** (framework-owned, generic across all `IReference`). Holds `InstanceId → Actor`. Both Cards and Zones read ownership through this slice.
+3. **Per-zone-type runtime slices** (game-authored). Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape.
 
 Zone configuration (capacity, ordering, insertion behavior, default visibility policy) lives on the **`ZoneDefinition`** as authored data. Different zone types vary by definition, not by class hierarchy.
 
-Per ADR-0005, framework APIs take the zone object directly: `state.Get<ZoneContentsState>(zone)`, `zone.GetCard(state, slot)`. The zone is used as a slice key; utility methods on the zone take state per call.
+Per ADR-0005, framework APIs take the zone object directly: `state.Get<ZoneContentsState>(zone)`, `zone.GetCards(state)`. The zone is used as a slice key; utility methods on the zone take state per call.
 
-Reverse-query aggregates (e.g., a `CardLocationIndex` keyed by card → zone) may be maintained as derived slices, kept in sync atomically by the same mutators that write `ZoneContentsState`.
+Reverse-query aggregates (e.g., `CardLocationIndex` keyed by `CardRef → Zone`) are maintained as derived slices, kept in sync atomically by the same mutators that write `ZoneContentsState`.
 
 ## Consequences
 
-- **Enables:** zones participate in targeting and references uniformly with cards (one ID namespace); membership has a single canonical home; per-zone-type runtime values have a typed home; no modifier-stack baggage.
-- **Constrains:** zones can never carry stats with modifier stacks. A game concept that needs stat machinery must be modeled as a different entity (an actor, a system entity) that has a zone associated with it, not as a zone with stats.
+- **Enables:** zones and cards both implement `IReference` and share the `InstanceId` namespace, so polymorphic targeting and reference handling work uniformly; membership has a single canonical home; per-zone-type runtime values have a typed home; no modifier-stack baggage on zones.
+- **Constrains:** zones can never carry stats with modifier stacks. A game concept that needs stat machinery must be modeled as a different entity (an actor, a system entity) that has a zone associated with it, not as a zone with stats. Zone owner is read-only on the handle (mutations go through `OwnershipState`).
 - **Reverts/replaces:** the Open Questions in `features/zones/models/01-zone-model.md` "are zones always entity instances, or can some zones be lightweight session records?" and "is zone membership best represented as a variable, relationship, Store slice, or zone-owned collection?" are answered here.
 - **Audit:** the entities Model line "Game-level state (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside the entity slices" is reaffirmed by this ADR — zones are slice-records, not entities.

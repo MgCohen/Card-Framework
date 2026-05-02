@@ -14,6 +14,7 @@ Related docs:
 
 - [Core Glossary](ledgers/GLOSSARY.md)
 - [Entity, Definition, And Instance Model](features/entities/models/01-definition-instance-model.md)
+- [Card Model](features/cards/models/01-card-model.md)
 - [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md)
 - [ADR-0002 — Visibility model](features/zones/decisions/0002-visibility-model.md)
 - [ADR-0003 — Insertion API](features/zones/decisions/0003-insertion-api.md)
@@ -35,22 +36,36 @@ Zones should not own broad gameplay legality. A larger game/action rules layer d
 
 ## Zone Shape
 
-A zone is a thin domain object with three structural fields:
+A zone is a class implementing `IReference` with two structural fields:
 
-```text
-Zone {
-  Id:         Identifier<Instance>   // shared namespace with cards
-  Definition: ZoneDefinition         // authored config (type, capacity, ordering, insertion, visibility policy)
-  Owner:      Actor?                 // optional; the Actor that owns this zone
+```csharp
+public sealed class Zone : IReference
+{
+    public InstanceId Id { get; }
+    public ZoneDefinition Definition { get; }
+
+    public Actor? GetOwner(IStateScope state) =>
+        state.Get<OwnershipState>().OwnerOf(this);
+
+    public IEnumerable<Card> GetCards(IStateScope state)
+    {
+        var contents = state.Get<ZoneContentsState>(this);
+        var map = state.Get<CardMapState>();
+        return contents.Cards.Select(map.GetCard);
+    }
+    // ... other state-reading methods
 }
 ```
 
-The zone shares the `Identifier<Instance>` namespace with cards. This makes targeting work uniformly: an effect that picks "a card or a zone" handles both through the same ID space without a typed disambiguation step.
+Zone is a class (handle), not a record. There is one `Zone` instance per `InstanceId` in the running engine, shared by all framework code that operates on that zone. Mutable zone data (contents, owner, per-zone-type values) lives in slices.
 
-Zone runtime state lives in two kinds of slice:
+The zone shares the `Identifier<Instance>` namespace with cards (and any other `IReference`-implementing entity). This makes targeting work uniformly: an effect that picks "a card or a zone" takes `IReference` and handles both through the same ID space.
 
-1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone object. Holds an ordered list of cards (`IReadOnlyList<Card>`). When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds fields to the contents shape on its own design pass — the framework doesn't pre-define those hooks.
-2. **Per-zone-type runtime slices** — game-authored. Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape across zone types.
+Zone runtime state lives across:
+
+1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone. Holds an ordered `ImmutableList<CardRef>` referencing cards via their current `CardRef`. Per the [Card Model](features/cards/models/01-card-model.md), `CardRef` rotates on every move — the contents list is updated atomically by the same mutators that rotate the ref. When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds fields on its own design pass — the framework doesn't pre-define those hooks.
+2. **`OwnershipState`** — generic, framework-owned, applicable to any `IReference` instance. `Dictionary<InstanceId, Actor>`. Both Cards and Zones read ownership through this slice.
+3. **Per-zone-type runtime slices** — game-authored. Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape across zone types.
 
 Zone configuration lives on the `ZoneDefinition`: capacity, ordering rules, insertion behavior, default visibility policy. Different zone types vary by definition data, not by class hierarchy.
 
@@ -172,22 +187,21 @@ Recipe matching, timers, production, automatic combat, and work are game systems
 
 Per [ADR-0005](decisions/0005-objects-over-ids.md), framework APIs prefer the zone object over its ID. The zone is used directly as a slice key, and utility methods on the zone take state per call. There is no `Zones` injected service.
 
-```text
+```csharp
 // slice access (zone is the key)
-state.Get<ZoneContentsState>(zone)
-state.Get<PileState>(zone)               // game-authored per-zone-type slice
+state.Get<ZoneContentsState>(zone);
+state.Get<PileState>(zone);              // game-authored per-zone-type slice
 
 // utility methods on the zone (sugar for slice reads)
-zone.GetCard(state, slot)
-zone.Contents(state)
-zone.Count(state)
-zone.IndexOf(state, card)
-zone.IsFull(state)                       // reads definition.Capacity vs current count
+zone.GetCards(state);                    // resolves CardRefs through CardMapState
+zone.Count(state);
+zone.IsFull(state);                      // reads definition.Capacity vs current count
+zone.GetOwner(state);                    // reads OwnershipState
 ```
 
 The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state per call, so a zone reference is timeless and can be passed across scope boundaries safely.
 
-For reverse queries — "what zone is this card in?" — the framework maintains a derived `CardLocationIndex` slice keyed by card `InstanceId` → `Zone`. The index is updated atomically by the same mutators that write `ZoneContentsState`, so it is always consistent.
+For reverse queries — "what zone is this card in?" — the framework maintains a derived `CardLocationIndex` slice keyed by `CardRef → Zone` (per the [Card Model](features/cards/models/01-card-model.md)). The index is updated atomically by the same mutators that write `ZoneContentsState`.
 
 ## Insertion API
 
@@ -219,7 +233,7 @@ Static factories provide call-site readability:
 - `InsertCardPayload.Default(zone, card)` — explicit "use zone default"
 - `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
 
-The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side.
+The composite `MoveCardMutation` (remove + insert as one logical move, defined in the [Card Model](features/cards/models/01-card-model.md)) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. It also carries a fresh `CardRef` — every move rotates the ref per the conservative privacy policy.
 
 "Forced" at the mutation level means bypassing zone defaults. The separate axis — "this insertion can't be cancelled by replacement effects" — lives at the `GameAction` / trigger-fold layer, not here.
 
@@ -240,13 +254,10 @@ The zone's default visibility policy lives on the `ZoneDefinition` as authored d
 
 ### Per-card visibility flag
 
-Per-card runtime overrides live on a per-card state slice as enum:
+Per-card runtime overrides live on `CardVisibilityState` keyed by `InstanceId`:
 
-```text
-CardVisibility =
-  | Hidden          // nobody sees details (e.g., MTG morph face-down)
-  | VisibleToOwner  // only the actor in the Owner relationship sees details
-  | VisibleToAll    // everyone sees details (face-up override)
+```csharp
+public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
 ```
 
 An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
@@ -255,7 +266,7 @@ An absent entry on the slice means "use the zone's policy default." `VisibleToOw
 
 Rules read visibility through the card object:
 
-```text
+```csharp
 card.IsVisibleTo(state, actor)
 ```
 
@@ -263,26 +274,33 @@ Visibility-conditional rules and triggers branch on this read. The predicate com
 
 ### Server / client model
 
-The server is omniscient and stores canonical state with no visibility filtering. Visibility is applied as a **send-time filter** at the network boundary. The server only sends to a client what that actor is allowed to see:
+The server is omniscient and stores canonical state. Visibility is applied as a **send-time filter** that **cuts data**, never alters identity. The server only sends to a client what that actor is allowed to see:
 
 - **Full data** — actor can see the card; client renders normally.
-- **ID only** — actor knows a card exists but not what it is; client renders a hidden-card placeholder.
+- **CardRef only** — actor knows a card exists at this `CardRef` but not what it is; client renders a hidden-card placeholder.
 - **Nothing** — actor doesn't know the card exists (e.g., opponent's deck contents); client only knows the count if the zone policy reveals it.
 
-### ID-swap on re-hide (per-actor transport alias)
+The same filter runs locally and over the network — there is no per-actor ID divergence. All observers see the same canonical `CardRef` for a card; the only difference is whether they receive the card's data behind that ref.
 
-When a previously-revealed card transitions back to hidden relative to a specific actor, the server generates a fresh ephemeral ID for that actor's view, so the client can't correlate with old data. The simulation-side `InstanceId` stays stable forever; the alias map exists only at the transport boundary.
+### Re-hide via server-side CardRef rotation
 
-This preserves the entities Model invariant ("zone movement preserves the same instance") on the server while supporting privacy across reveal-then-hide cycles. Triggers, effects, and slices reference the canonical InstanceId; ID translation happens only at network send-time.
+Per the [Card Model](features/cards/models/01-card-model.md), every card carries two IDs:
+
+- `InstanceId` — stable across the card's lifetime; used for variable storage, modifier storage, history, server-internal subscriptions.
+- `CardRef` — temporary; the slice key in `CardMapState` and the reference used in `ZoneContentsState`. Rotates on every move and on every visibility transition.
+
+When a card hides, `HideCardMutation { Card, NewRef }` rotates the `CardRef` server-side: `CardMapState` swaps the old ref out and the new ref in, every `ZoneContentsState` containing the old ref swaps it for the new ref, `CardLocationIndex` rebinds, and `CardVisibilityState[card.InstanceId]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
+
+The simulation-side `InstanceId` stays stable forever (preserves the entities Model invariant). Triggers, effects, attachments, and history all reference the `Card` object or its `InstanceId` — they are unaffected by ref rotation.
 
 See [ADR-0002](features/zones/decisions/0002-visibility-model.md) for full reasoning.
 
 ## History Filtering
 
-The server records a single canonical `HistoryEnvelope` stream with full InstanceIds and full data. Per-actor history views are produced at the transport boundary by applying two transformations:
+The server records a single canonical `HistoryEnvelope` stream with full `InstanceId`s and full data. Per-actor history views are produced at the transport boundary by applying detail gating:
 
-- **ID translation.** Canonical InstanceIds → per-actor ephemeral IDs (using the same alias map as live state).
-- **Detail gating.** Card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. **Movement entries** (`ZoneContentInserted`, `ZoneContentRemoved`, relocate) are always sent — the *fact* of movement is public.
+- **CardRef-bearing entries are passed through** — entries that reference cards by `CardRef` (e.g., `ZoneContentInserted(zone, ref)`, `CardRefRotated(oldRef, newRef)`) are sent to all observers. Since all observers see the same canonical `CardRef`, no translation is needed; the ref shown matches what the actor sees in live state.
+- **Detail gating** — card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. **Movement entries** and **ref rotations** are always sent — the *fact* of movement and rotation is public.
 
 For genuinely-secret movements (where even the fact must be hidden from observers), the game models the interaction differently — the framework does not provide a "secret history" mode.
 
@@ -358,16 +376,16 @@ Note: card packs are *not* zones. A pack is an entity with a generator effect; o
 
 ## Useful Invariants
 
-- Zones are thin domain objects; their state lives in slices.
+- Zones are thin handles implementing `IReference`; their state lives in slices.
 - Zones share the `Identifier<Instance>` namespace with cards.
 - Zones do not have stats. Stat-bearing things are not zones.
 - Zones own contents, organization, capacity defaults, and change bookkeeping.
 - Zones do not own broad gameplay legality.
-- Zone membership does not replace an instance.
+- Zone membership references cards by their current `CardRef`; refs rotate on every move (per the Card Model).
 - Stack concepts can be modeled as zones with custom organization.
 - Spatial placement is not required in the base zone model.
 - Visibility uses membership and detail channels; rules read it via `card.IsVisibleTo(state, actor)`.
-- Server is canonical; visibility filtering happens at the transport boundary; ID-swap on re-hide is a per-actor alias.
+- Server is canonical; visibility filtering at the transport boundary cuts data, never alters identity. Privacy across reveal-then-hide cycles is achieved by server-side `CardRef` rotation that all observers see.
 - Movement between zones is approved by game/action rules and organized by zones.
 - Card packs and reward offers are not zones.
 

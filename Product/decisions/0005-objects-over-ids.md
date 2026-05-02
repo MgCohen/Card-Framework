@@ -25,7 +25,25 @@ The zone-model design pass (session-20260501-1602) surfaced this concretely. Zon
 
 ## Decision
 
-**Framework APIs prefer objects.** Code holds and passes domain objects (`Zone`, `StateEntity<TDef>`, `Player`, `Actor`, etc.); methods on those objects perform the queries and dispatches that previously took raw `Identifier<T>` values. Slice access uses the object as the key (e.g., `state.Get<ZoneContentsState>(zone)`).
+**Framework APIs prefer objects.** Code holds and passes domain objects (`Zone`, `Card`, `StateEntity<TDef>`, `Player`, `Actor`, etc.); methods on those objects perform the queries and dispatches that previously took raw `Identifier<T>` values. Slice access uses the object as the key (e.g., `state.Get<ZoneContentsState>(zone)`).
+
+**`IReference` is the framework marker** for objects that carry an identity in the `Identifier<Instance>` namespace. Anything addressable in the framework — Zones, Cards (via `IReadOnlyEntity` ⊃ `IReference`), and any future addressable entity — implements it. Polymorphic APIs that take "any addressable thing" type their parameter as `IReference`.
+
+```csharp
+public interface IReference
+{
+    InstanceId Id { get; }
+}
+```
+
+The hierarchy:
+- `IReference` — base; carries `Id` only.
+- `IReadOnlyEntity` extends `IReference` — entity-bridge handle; also exposes variables, modifiers, definition typing.
+- `IMutableEntity` extends `IReadOnlyEntity` — entity-bridge handle that also writes.
+
+Concrete implementations:
+- `Zone` → `IReference` directly.
+- `Card` (which extends `StateEntity<TCardDef>`) → `IReadOnlyEntity` (and thus `IReference` transitively).
 
 `Identifier<T>` is reserved for:
 
@@ -33,6 +51,7 @@ The zone-model design pass (session-20260501-1602) surfaced this concretely. Zon
 - **Network transport** — wire form for remote play and replay.
 - **Persistence** — definition IDs, instance IDs in storage.
 - **Type-mismatch boundaries** — places where the object isn't reachable (e.g., a payload deserialized before its target object exists).
+- **Stable subscription keys** — long-lived subscriptions (triggers, ongoing effects, attachments) reference cards by `InstanceId` so they survive `CardRef` rotations.
 
 Existing `Identifier<T>` types stay; this ADR is behavioral, not a rename. The convention is enforced by code review and by Model docs that describe their APIs in object-first terms.
 
