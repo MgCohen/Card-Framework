@@ -3,7 +3,7 @@ description: Structured Q-by-Q design walk for non-mechanical Model edits. Enume
 allowed-tools: Read, Write, Edit, Glob, Grep
 ---
 
-You are running a design pass. This workflow settles open design questions before any doc edits happen. **Design unit ≠ patch unit** — this skill produces locked verdicts, not Model edits. Patches land in a follow-up session once all Qs settle.
+You are running a design pass. This workflow settles open design questions through a structured Q-by-Q walk. The output is a locked decision list captured in the session note. Patches and edits are not part of the walk itself, but they can follow immediately in the same session — the goal is to clear the air and build shared context, not to gate later work.
 
 ## Phase 1 — Setup
 
@@ -82,17 +82,17 @@ Repeat steps 4–6 for each Q in sequence. Do not advance to the next Q until th
       - <Model or ADR path> — <what changes>
       ```
    5. **Session note** (strip) — `📝 Session note: Part 1 "Decisions settled" + "Active question going out" updated`. If no in-progress session: `⚠️ No in-progress session note — update manually`.
-   6. **Closing prompt** (italic) — `_Start a fresh session to apply these patches._`
+   6. **Closing prompt** (italic) — `_Decisions locked — ready to keep iterating._`
 
    **No prose preamble** — output begins at the H1.
 
 8. **Update the session note** (the `status: in-progress` file found in step 2). Append to the relevant sections of Part 1:
    - **Decisions settled** — each locked Q in the shape `Q<N> = <option> — <implication>`, one bullet per Q.
-   - **Work done** — add the line: `Design pass only — no doc deltas this session (zero Models/ADRs touched). Patches deferred to a fresh session per "design unit ≠ patch unit."`
+   - **Work done** — add a one-line summary of the design pass: `Design pass on <topic> — N decisions locked.` Subsequent patch/edit work in the same session appends normally.
    - **Active question going out** — the patch cascade: which Models and ADRs need updating, and in what order.
 
 ## Notes
 
-- Do not edit any Model doc, ADR, or feature file during this skill. The design-pass output is the locked decision list and the session-note update. All other edits come after, in a separate session.
+- Do not edit any Model doc, ADR, or feature file during the Q-by-Q walk itself — patches mid-walk would race the verdicts. The design-pass output is the locked decision list and the session-note update. Once the walk closes, follow-on edits and patches can land in the same session.
 - Questions foreclosed by an earlier verdict may be skipped — but state the skip explicitly: `Q<N> = skipped — foreclosed by Q<M> verdict`.
 - If no session note is in-progress, complete the walk and render the closing summary, but skip step 8 and surface a warning that the session note must be updated manually.
