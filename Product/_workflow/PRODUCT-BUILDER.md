@@ -362,47 +362,9 @@ One paragraph.
 - Reverts/replaces: ADR-NNNN
 ```
 
-### 4.6 Session note
+### 4.6 Snapshot (opt-in milestone)
 
-Two parts, each capped at ~one screen (~50 lines). If either overflows, the content belongs in a numbered doc or an ADR, not the session note.
-
-*Active question coming in* mirrors the active question in `SESSION-CHECKPOINT.md` at session start; *active question going out* is what the refreshed checkpoint will hold at session end.
-
-```markdown
-# Session NN — <date>
-
-<front matter: type=session>
-
-## Part 1 — Content (cap ~50 lines)
-
-### Active question coming in
-One line.
-
-### Work done
-- doc features/<feature>/models/NN written
-- alignment debt opened on docs X/Y/Z
-- ADR-NNNN landed
-
-### Decisions settled
-- ADR-NNNN: <one line>
-
-### Active question going out
-One line — what the next session opens with.
-
-## Part 2 — Links & open threads (cap ~50 lines)
-
-### Followups created
-- alignment debt: ...
-- new open question (promoted): ...
-
-### Ephemeral questions (scratch, not promoted)
-- Things we chewed on but answered in-session.
-- Kept here for traceability; not a durable record.
-
-### References
-- Docs touched: ...
-- Related sessions: ...
-```
+Mandatory per-session notes were retired (see `PLANS/simplify-doc-workflow.md` decision #6). The live spine is `SESSION-CHECKPOINT.md` — updated continuously as work happens. When the user wants to freeze the current state as a referenceable milestone, `/builder:snapshot` copies the checkpoint into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` with `type: snapshot` front matter and a *"Frozen — do not edit"* header. Snapshots are sparse and opt-in; most sessions produce none. Legacy per-session notes live in `Product/_archive/sessions/` as historical record.
 
 ### 4.7 Checkpoint
 
@@ -452,54 +414,22 @@ Once-per-project phase before §5.1 applies. Output is a working `Product/` skel
 4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
 6. **Seed `ledgers/OPEN-ITEMS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
-7. **Install the pre-push hook.** `.githooks/pre-push` is tracked in the repo. Run `git config core.hooksPath .githooks` once after cloning. The hook checkpoints any in-progress session note (see §5.3) into a small commit before every push — so a broken conversation can always be resumed via `/builder:start-session`.
+7. *(retired)* Pre-push hook for in-progress session notes is gone. With no per-session artifact, there is no in-flight skeleton to checkpoint.
 8. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
 9. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
 
 A bootstrap session usually fits in one sitting. If it sprawls, the project is too big or the vision isn't clear yet — pause and split.
 
-### 5.1 Starting a session
+### 5.1–5.3 Sessions
 
-Open `SESSION-CHECKPOINT.md`. Take stock — note the entry context: the active question, alignment debt, PR feedback, or whatever brought you here. That's it. No commitment to a single direction.
+**`SESSION-CHECKPOINT.md` is the only spine.** No open/close lifecycle, no per-session artifact, no schema. The agent keeps the checkpoint current as work happens — *during* the session, not just at its boundary.
 
-### 5.2 During a session
+- **`/builder:start-session`** — read-only briefing. Reads CHECKPOINT + ledgers, prints "where we are / suggested threads," waits for direction. Creates no artifact.
+- **During** — branch freely. Address inline if small; spawn a doc (Spike / Model / Sample) if it deserves one; promote durable opens to `ledgers/OPEN-ITEMS.md`; ephemeral mid-conversation questions live in CHECKPOINT's `## Scratch` section. When a Model edit cascades, run the linter and fix in place (§5.7). When a major decision settles, write an ADR. New vocabulary patches `GLOSSARY.md`. Feature scope shifts refresh `FEATURE-MAP.md`.
+- **`/builder:end-session`** — interactive triage routine. Runs the linter, freshness check (CHECKPOINT vs touched files), and chat-log scan for unsaved sketches. Surfaces findings as prompts (fix / defer to OPEN-ITEMS / ignore). Creates no artifact.
+- **`/builder:snapshot`** — opt-in only. When the user wants to freeze the current state as a milestone, copies CHECKPOINT into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md`. Otherwise nothing lands there.
 
-Sessions branch. That's normal, not an exception. As work surfaces sub-problems, sketches, or new questions:
-
-- **Address inline** if it's small and feeds the active thread.
-- **Spawn a doc** if it deserves one. Pick the doc type from §2:
-  - Open-ended exploration / prior-art survey → **Spike** (in `spikes/`).
-  - System needs design (decisions, structure, or both) → **Model**.
-  - New concrete reference instance → **Sample** (in `support/samples/`).
-- **Capture for later** if it's out of scope: promote to `ledgers/OPEN-ITEMS.md` so it doesn't get lost.
-
-When a major decision settles → write an ADR (in `features/<feature>/decisions/` for feature-scoped, `decisions/` for project-scoped).
-When a Model edit cascades to other docs → run the linter to identify affected dependents; fix in place (see §5.7).
-When concrete work is deferred ("build this later" / "revisit when X") → append to `ledgers/OPEN-ITEMS.md` with a trigger condition.
-When a spike concludes or graduates → update its status and add forward links.
-New vocabulary → patch `ledgers/GLOSSARY.md` and append to its changelog.
-When a feature gains/loses a Model or shifts dependencies → refresh `ledgers/FEATURE-MAP.md`.
-
-Branch freely; the session log captures the trail. Returning to the original thread after a detour is normal — just record both in the session note.
-
-### 5.3 Ending a session
-
-The session note records the **trail**, not a linear narrative: what was created, what was touched, what branched, what was answered, what's still open.
-
-1. Write `sessions/session-NN.md` (two parts, ~50 lines each cap).
-2. Refresh `SESSION-CHECKPOINT.md` with the landing state (rewrite, don't append).
-3. Update `ledgers/OPEN-ITEMS.md` — delete resolved entries (resolving doc owns the answer); add new opens.
-4. Update `ledgers/GLOSSARY.md` changelog if vocabulary changed.
-5. Commit + PR on `claude/<topic>` branch.
-
-**Session note lifecycle.** Session notes are gitignored while in-progress (avoids noise on main). `/builder:end-session` force-adds them at close. The `pre-push` hook (§5.0 step 7) additionally checkpoints the in-progress note into a small commit before every push — so if a conversation crashes before end-session runs, `/builder:start-session` can still detect and resume the dangling skeleton.
-
-Session-note `status:` values:
-
-- **`in-progress`** — open session; gitignored; pre-push hook commits as checkpoint.
-- **`completed`** — closed session, work landed on its branch; force-added at end-session; merge-pass picks it up and adds to `merged[]` on the main branch.
-- **`merged`** — completed session whose branch has been merged into main by merge-pass.
-- **`discarded`** — session was a no-op, schema test, or otherwise shouldn't pollute the workflow record. Set by `/builder:start-session`'s orphan-cleanup pass (for empty leftover skeletons) or by `/builder:end-session --discard` (for deliberately throwaway sessions). merge-pass skips these entirely — they never enter `merged[]`. Use `--discard` for schema-validation runs, abandoned starts, and any session whose work shouldn't be cited as a checkpoint reference.
+Legacy per-session notes (mandatory schema, in-progress / completed / merged / discarded states, parallel-session merge-pass machinery) were retired — see `PLANS/simplify-doc-workflow.md` decision #6 for the rationale. Old notes are preserved in `Product/_archive/sessions/`.
 
 ### 5.4 Reopening a settled decision
 
@@ -671,7 +601,7 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
 | **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity), `/builder:rebuild-feature-map` |
 | **Every session end** | `/builder:end-session` |
-| **After parallel sessions complete** (manual) | `/builder:merge-pass` — merges completed `claude/<topic>` branches into `main`, re-projects checkpoint. Run from `main`. See `merge-pass.md §When to run merge-pass`. |
+| **Milestone snapshot** (opt-in) | `/builder:snapshot` — freeze CHECKPOINT into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` |
 | **PR merge to main** | `builder-drift-detection` (CI mode) |
 
 
