@@ -202,19 +202,16 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Drop §5.7, §5.8, §5.9 from `PRODUCT-BUILDER.md`; add the one-paragraph "detected, not tracked" rule.
 - Drop `debt: N opened` assertion from session-note template.
 
-**PR 3 — ADR consolidation**
-- Triage every ADR (project-wide vs feature-internal vs obsolete).
-- Migrate feature-internal ADR content into Model provenance sections.
-- Archive migrated ADR files with forward links to the absorbing Model section.
-- Move surviving cross-cutting ADRs to `Product/decisions/` (if not already there).
-- Delete empty `features/<feature>/decisions/` directories.
-- Update `PRODUCT-BUILDER.md` §4.5 + §5 to reflect new ADR scope.
-
-**PR 4 — strict template + linter hardening**
-- Update Model template (§4.3) with canonical section order; mark required sections.
-- Extend linter with structure check, header-body consistency, reverse graph, git-derived dates.
-- Harden linter against silent failures.
-- Add `/builder:deps <path>` command.
+**PR 3+4 — strict template + linter + per-feature Model/ADR rollout** *(merged per G3)*
+- *Commit 1:* define strict Model template (new front matter, canonical section order, provenance shape that absorbs feature-internal ADRs); update §4.3 of `PRODUCT-BUILDER.md`; update §4.5 for new ADR scope; update §5 cross-references.
+- *Commit 2:* extend linter — structure check, header-body reference sync, reverse graph, git-derived dates, retired-tokens validation; harden against silent failures; add `/builder:deps <path>`.
+- *Commits 3..N (one per feature):* for each `features/<name>/`:
+  - Rewrite every Model into the new template.
+  - Fold each sibling feature-internal ADR into the relevant Model's provenance section.
+  - Archive ADR file to global archive (per G2 location convention) with forward link to absorbing Model section.
+  - Move any cross-cutting ADRs to `Product/decisions/` (if mis-filed under a feature).
+  - Delete empty `features/<feature>/decisions/` directory.
+- *Commit final:* sweep for orphan references, run linter, fix anything left.
 
 **PR 5a — ledger consolidation**
 - Create `Product/ledgers/OPEN-ITEMS.md`; merge `OPEN-QUESTIONS.md` + `BACKLOG.md` content (drop strikethrough archive — those entries are already resolved).
@@ -233,9 +230,9 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Remove pre-push hook for in-progress session notes (`.githooks/pre-push`).
 - Existing session notes in `Product/sessions/` stay as historical record — no migration.
 
-Order: PR 1 → PR 2 → PR 5a → PR 5b → PR 4 → PR 3.
+Order: PR 1 → PR 2 → PR 5a → PR 5b → PR 3+4.
 
-Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then ledger consolidation (decoupled, frees up session-note discussion). Then session lightening (decoupled, high relief). Then linter/template (introduces enforcement). Then ADR migration last (uses the new linter/template to validate migrated Models).
+Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then ledger consolidation (decoupled). Then session lightening (decoupled, high relief). Finally the combined template + linter + per-feature Model/ADR rollout — the heaviest PR, but coherent because Model rewrites and ADR folds happen in lockstep per feature.
 
 Or collapse to one PR if we trust the diff. TBD when sketching.
 
@@ -344,7 +341,7 @@ To lock one-by-one before edit work starts. Each gets a verdict line appended be
 |---|---|---|
 | G1 | CURRENT.md freshness enforcement (discipline / soft warn / pre-commit) | **locked: soft warn at end-session.** Keep `end-session`'s existing chat-log scan for unsaved sketches — high value, preserve. Add a freshness check: compare CURRENT's git timestamp against touched `Product/features/**` and `Product/ledgers/**` files; warn (don't block) if CURRENT is stale. Escalate to pre-commit hook only if soft warn proves insufficient. |
 | G2 | Existing session notes — leave or quarantine | **locked: move legacy notes to global archive + add README.** Move all existing `Product/sessions/session-*.md` to `Product/_archive/sessions/` (provisional location — see future considerations on archive strategy). Leaves `Product/sessions/` empty so the first on-demand snapshots aren't anchored to legacy style. Add a one-line README in `Product/sessions/` explaining: *"Snapshots are opt-in milestones via `/builder:snapshot`. Legacy per-session notes archived to `Product/_archive/sessions/`."* |
-| G3 | ADR migration hand-work — triage scope | open |
+| G3 | ADR migration hand-work — triage scope | **locked: one big PR, staged commit-by-feature, combined with Model template rollout.** PR 3 and PR 4 merge: define new strict Model template + harden linter as the first commit, then walk feature-by-feature — for each feature, one commit that rewrites every Model into the new template *and* folds sibling ADRs into the provenance sections in the same pass. Project-wide ADRs (cross-cutting) stay in top-level `Product/decisions/`. Feature-internal ADR files archived with a forward link to the absorbing Model section after fold. |
 | G4 | Retired-tokens registry — who writes it now | open |
 | G5 | `end-session` linter integration — gate or soft | open |
 | G6 | `AGENTS.md` + root `CLAUDE.md` — final reference sweep | open |
