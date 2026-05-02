@@ -84,6 +84,37 @@ Cascade is detected on demand by the linter, not tracked.
 
 The OPEN-QUESTIONS ledger absorbs the one edge case (cascade-needs-design vs cascade-is-mechanical) — no separate machinery.
 
+### 6. Lighten session workflow — checkpoint is the only spine
+
+Session notes were earned by one bad day and grew disproportionate to actual use. Audit of the commit log: every recent `sessions/` commit is *writing* a note or fixing its metadata; almost none read one back to recover content. The five jobs session notes did:
+
+- Active-question handoff → checkpoint does this.
+- Decision audit trail → git history + commit messages + Model provenance (per #3 ADR collapse) do this.
+- Sub-problem / scratch trail → unique value, but rarely re-read; lives in live conversation transcript.
+- Citation anchor → commit SHA / Model section / OPEN-QUESTIONS id work fine.
+- Projection input for parallel-sessions merge → built for a workflow that didn't pan out.
+
+Four of five jobs are double-bookkept. Cut.
+
+**New shape:**
+
+- **One live working doc** (`SESSION-CHECKPOINT.md`, or rename to `CURRENT.md`). Continuously updated as decisions land — not at end-of-session. No open/close lifecycle, no `started-at`, no `parent`, no `head/merged/batch`, no schema-version.
+- **`/builder:start-session`** — lightweight. Reads CURRENT + ledgers, prints "where we are / what's next." Creates no artifact.
+- **`/builder:end-session`** (rename: `/builder:wrap`) — runs linter, ensures CURRENT is current, exits. Creates no artifact.
+- **`/builder:snapshot`** — opt-in. When user says "this state is a milestone," copies CURRENT into `sessions/<date>-<slug>.md`. Otherwise nothing lands there.
+- **`Product/sessions/`** becomes a sparse milestone archive. Existing notes stay as historical record — no migration.
+
+**Kills:**
+- Session-note schema (§4.6).
+- Session lifecycle states (in-progress / completed / merged / discarded).
+- `--discard` flag.
+- Pre-push hook for in-progress note checkpointing.
+- Orphan-cleanup pass in start-session.
+- §5.3 collapses to a paragraph.
+- `PLANS/parallel-sessions.md` → mark `status: abandoned`. Merge machinery was built around session notes; nothing to merge except git itself.
+
+**Discipline shift:** the rule changes from *"session note is the trail; checkpoint is the spine"* to *"checkpoint is the only spine; agent keeps it current as work happens."* Slightly more discipline mid-session, much less ceremony around boundaries.
+
 ---
 
 ## Linter responsibilities (consolidated)
@@ -133,7 +164,20 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Harden linter against silent failures.
 - Add `/builder:deps <path>` command.
 
-Order: PR 1 → PR 2 → PR 4 → PR 3 (do ADR migration last so the linter and template are in place to validate the migrated Models).
+**PR 5 — session workflow lightening**
+- Strip `SESSION-CHECKPOINT.md` front matter (drop schema-version / head / merged / batch).
+- Rewrite `/builder:start-session` skill — read-only briefing, no artifact creation, no orphan cleanup.
+- Rewrite `/builder:end-session` skill (rename to `/builder:wrap` if desired) — runs linter, validates checkpoint freshness, exits. No session-note creation.
+- Add `/builder:snapshot` skill — opt-in copy of CURRENT into `sessions/<date>-<slug>.md`.
+- Drop §4.6 (session-note template) from PRODUCT-BUILDER.md.
+- Collapse §5.3 (Ending a session) to a paragraph.
+- Mark `PLANS/parallel-sessions.md` `status: abandoned`.
+- Remove pre-push hook for in-progress session notes (`.githooks/pre-push`).
+- Existing session notes in `Product/sessions/` stay as historical record — no migration.
+
+Order: PR 1 → PR 2 → PR 5 → PR 4 → PR 3.
+
+Rationale for ordering: front matter rename first (mechanical, repo-wide). Then ALIGNMENT-DEBT retirement (decoupled). Then session lightening (decoupled, high relief). Then linter/template (introduces enforcement). Then ADR migration last (uses the new linter/template to validate migrated Models).
 
 Or collapse to one PR if we trust the diff. TBD when sketching.
 
