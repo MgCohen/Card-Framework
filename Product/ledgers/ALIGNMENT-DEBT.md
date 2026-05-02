@@ -37,6 +37,11 @@ Driven by [ADR-0005](decisions/0005-objects-over-ids.md). The ADR established th
 - id: ad-20260501-046 | status: open | source: decisions/0005-objects-over-ids.md | target: features/actions/models/02-availability-snapshot.md | reason: same as above — ActionTemplate records carry `InstanceId`; boundary-correct but should be documented as such with a note distinguishing internal-API construction from wire shape
 - id: ad-20260501-047 | status: open | source: decisions/0005-objects-over-ids.md | target: features/presentation/models/01-presentation-loop.md | reason: presentation cache uses `Dictionary<InstanceId, IReadOnlyList<PileId>>` and method signatures like `CanDrag(InstanceId card)`, `OnDrop(InstanceId card, PileId destination)`. Presentation is the consumer of wire-form snapshots, so IDs are boundary-correct here; verify and add a note documenting that this is the boundary side
 
+### Cascade — IEffectScope shape (session-20260501-1710-entity-modifier-api)
+
+- id: ad-20260502-001 | status: open | source: features/effects/models/04-effect-flow.md | target: features/effects/models/01-async-dispatch.md §IEffectScope | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
+- id: ad-20260502-002 | status: open | source: features/effects/models/04-effect-flow.md | target: features/actions/models/01-command-pipeline.md §IEffectScope (~line 2028) | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
+
 ### Linter findings — 2026-05-01
 
 - ~~id: ad-20260501-039 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-117b41c9.plan.md | reason: S1 — broken path reference: Docs/SabberStone-Architecture-Analysis.md does not exist~~ → resolved 2026-05-01 (auto debt-pass: removed broken Docs/ link reference)

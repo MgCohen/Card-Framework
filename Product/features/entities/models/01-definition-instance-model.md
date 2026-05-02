@@ -249,7 +249,7 @@ Shape:
 
 - **Per-entity variables** are canonical `EntityVariableState` slices in the Store (`BaseValues`, `ModifierStacks` keyed by `InstanceId`).
 - **`StateEntity<TDefinition>`** is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. It substitutes for plain `EntityInstance` in polymorphic APIs.
-- **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` (`AddModifierPayload`, `SetBaseValuePayload`, `AddEntityVariablePayload`, etc.). `IMutableEntity` calls produce the same payloads internally.
+- **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` against six bridge payloads (see "Mutation API conventions" below). `IMutableEntity` calls produce the same payloads internally.
 - **Reads** use a per-rebuild effective-value cache; `Variable` enumeration is ordered by `Variable.Key` (ordinal) for determinism.
 - **Game-level state** (turn, phase, available actions, decisions) lives in plain Store slices alongside entity slices.
 - **Zones** are thin domain handles (classes implementing `IReference`, not entities) sharing the `Identifier<Instance>` namespace with cards; their canonical state lives in `ZoneContentsState` (membership), `OwnershipState` (owner), and per-zone-type runtime slices (typed values like a counter). Zones do not participate in the entity-variable bridge or modifier-stack machinery. See [Zone Model](features/zones/models/01-zone-model.md) and [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md).
@@ -261,6 +261,29 @@ Why this resolution:
 - One source of truth, no duplicate state, no two-way sync.
 - Snapshot/rollback (doc 23, 29) covers per-entity variables for free.
 - Modifier ordering, source attribution (doc 24 continuous-effects cleanup), atomic batches (doc 19 command-as-batch), and coalesced subscriber notifications (doc 27 presentation loop) all come from the Store + bridge.
+
+### Mutation API conventions
+
+The bridge defines six payloads for entity-variable mutations (sealed records, in `Scaffold.Entities.States`):
+
+```csharp
+AddModifierPayload(InstanceId EntityId, Variable Variable, VariableModifier Modifier, ModifierId ModifierId, ModifierSource? Source = null)
+RemoveModifierPayload(InstanceId EntityId, Variable Variable, ModifierId ModifierId)
+RemoveModifiersBySourcePayload(InstanceId EntityId, ModifierSource Source)
+SetBaseValuePayload(InstanceId EntityId, Variable Variable, VariableValue Value)
+AddEntityVariablePayload(InstanceId EntityId, Variable Variable, VariableValue InitialValue)
+RemoveEntityVariablePayload(InstanceId EntityId, Variable Variable)
+```
+
+`EntityVariableState.BaseValues` is *override-only*. Reads fall back to `definition.TryGetDefaultValue(var)` for any variable not in the map; a freshly-spawned instance has an empty `BaseValues` and inherits everything from its definition. `WithModifier` inserts ascending by `Modifier.Order` (FIFO ties); `WithoutModifiersFromSource` sweeps by `(Source, Tag)` equality.
+
+Card Framework conventions on top of these primitives:
+
+- **Mutation surface.** Handlers prefer the `IMutableEntity` surface on `StateEntity` — obtain a handle from the engine's `IEntityRegistry` (`ctx.Entities.Get<TDef>(id)`) and call its mutator methods. Raw `ctx.Store.Execute(payload)` is the documented fallback for `SetBaseValuePayload` / `RemoveModifiersBySourcePayload` (which `IMutableEntity` doesn't expose), batch authoring, history-replay tooling, and paths that hold an `InstanceId` without a handle. See [`entities/02-runtime-surface.md` §4](features/entities/models/02-runtime-surface.md) for the full handler-side surface.
+- **`AddEntityVariablePayload` discipline.** Reserved for variables *not* declared in the entity's definition — per-instance ad-hoc state (token counters, custom buff bookkeeping). Definition-declared variables stay as definition defaults until a `SetBaseValuePayload` overrides the base or an `AddModifierPayload` stacks a modifier. The slice's `WithVariable` is a no-op when the variable already exists in `BaseValues`, encoding this rule on the storage side.
+- **`SetBaseValuePayload` discipline.** Live, but reserved for *out-of-band* base changes: definition-default override at instance creation, level-up / progression hooks, save-state load, authoring tools. Effect-tracked changes always go through modifiers so source attribution and removal are preserved.
+- **`ModifierSource` convention.** `Source` is the attachment entity's `InstanceId` — equipment instance, aura entity, status-effect entity, ongoing-effect attachment (per [`effects/03`](features/effects/models/03-ongoing-effects.md)). Cleanup-on-source-death is a uniform `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.Id))` per affected target. `Tag` defaults to 0 and is opt-in author disambiguation when one source contributes multiple modifier groups that may need partial removal.
+- **`ModifierId` generation.** Modifier ids must be deterministic for replay and multiplayer. Handlers obtain modifier entries from the engine-provided `IModifierFactory` (`ctx.Modifiers.Create(key, modifier, source)`) — the factory generates a deterministic id from an engine-owned counter (snapshotted with engine state, restored on `LoadSnapshot`) and returns a fully-populated `EntityModifierEntry`. `EntityModifierEntry` carries optional `Id`/`Source`; when set, `IMutableEntity.AddModifier` honours them. Constructing entries directly via `new EntityModifierEntry(key, modifier)` falls back to `ModifierId.New()` (`Guid.NewGuid()`) and is forbidden in framework / handler code.
 
 ### Engine responsibilities (bridge boundary)
 

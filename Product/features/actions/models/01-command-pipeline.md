@@ -2057,22 +2057,20 @@ public sealed record HealActorCommand : GameAction
 
 public sealed class HealActorHandler : ICommandHandler<HealActorCommand, HealResult>
 {
-    public Task<HealResult> Handle(HealActorCommand command, ResolutionScope scope)
+    public Task<HealResult> Handle(HealActorCommand command, IHandlerContext ctx)
     {
-        var current = scope.GetVariable<int>(command.Target, "life");
-        var max = scope.GetVariable<int>(command.Target, "max_life");
+        var target = ctx.Entities.Get<ActorDefinition>(command.Target);
+        var current = target.GetVariable<int>(Vars.Life);
+        var max = target.GetVariable<int>(Vars.MaxLife);
         var next = Math.Min(current + command.Amount, max);
         var actual = next - current;
 
-        scope.Emit(new ActorHealedSignal(
-            source: command.Source,
-            target: command.Target,
-            amount: actual));
-
-        scope.Apply(new SetVariableMutation<int>(
-            instance: command.Target,
-            key: "life",
-            value: next));
+        // Direct base-value write — Q3: out-of-band base mutation is acceptable for "current life" tracking.
+        // Games modelling damage as a modifier stack would dispatch RemoveModifierPayload(...) here instead.
+        ctx.Store.Execute(new SetBaseValuePayload(
+            EntityId: command.Target,
+            Variable: Vars.Life,
+            Value: new IntVariableValue(next)));
 
         return Task.FromResult(new HealResult
         {

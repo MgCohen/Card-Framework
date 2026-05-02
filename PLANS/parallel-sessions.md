@@ -202,7 +202,7 @@ After cutover, all new sessions use v2 schema. v1 history is preserved but never
 | 5. Build `/builder:merge-pass` | Full spec from §4.7. | Largest scope; deserves its own session. |
 | 6. Live test single-machine | Two branches on one machine, close both as separate sessions, run merge-pass. | Iron out edge cases. |
 | 7. Live test cross-machine | Repeat 6 from two physical machines via push/pull. | Final acceptance. |
-| 8. Documentation | Update `_workflow/PRODUCT-BUILDER.md` with parallel-session model, merge-pass cadence, schema reference. Update `REPORT-STYLE.md` with merge-pass report template. | Lock convention into workflow doc. |
+| 8. Documentation | Update `_workflow/PRODUCT-BUILDER.md` with parallel-session model, merge-pass cadence, schema reference. Render templates live inline in each skill (REPORT-STYLE.md retired). | Lock convention into workflow doc. |
 
 ## 7. Worked example (full simulation)
 

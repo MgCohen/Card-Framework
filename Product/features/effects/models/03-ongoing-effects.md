@@ -56,13 +56,16 @@ public sealed class HealOverTimeDefinition : EntityDefinition
     {
         triggers.OnAfter<TurnStartSignal>(
             condition: (_, _) => true,
-            react: (_, ctx) =>
+            react: (_, scope) =>
             {
-                var remaining = ctx.State.GetVariable(self, Vars.TurnsRemaining);
-                ctx.Dispatch(new HealActorAction { Target = ctx.GetHost(self), Amount = HealAmount });
-                ctx.Dispatch(new SetVariableAction { Target = self, Key = Vars.TurnsRemaining, Value = remaining - 1 });
+                // Read via the entity handle — IReadOnlyEntity surface
+                var attachment = scope.Entities.Get<HealOverTimeDefinition>(self);
+                var remaining = attachment.GetVariable<int>(Vars.TurnsRemaining);
+
+                scope.Dispatch(new HealActorAction { Target = scope.GetHost(self), Amount = HealAmount });
+                scope.Dispatch(new DecrementTurnsRemainingAction { Target = self });   // handler does the SetBaseValuePayload write
                 if (remaining - 1 <= 0)
-                    ctx.Dispatch(new DestroyEntityAction { Target = self });
+                    scope.Dispatch(new DestroyEntityAction { Target = self });
             },
             owner: self);
     }
@@ -111,6 +114,8 @@ The full turn lifecycle design is a separate topic (task 12 — game lifecycle).
 All entities have a **framework-level Cleanup hook** that is called automatically when the entity is destroyed. Cleanup calls `Unregister` on all subscriptions owned by that entity.
 
 This is a lifecycle guarantee, not a trigger reaction. An attachment does not need an `OnAfter<DestroyEntityAction>` subscription to clean up its triggers — destruction handles it.
+
+The canonical cleanup verb for modifiers contributed by an attachment entity is `RemoveModifiersBySourcePayload(target.Id, new ModifierSource(attachment.Id))`, dispatched per affected target by the attachment's destruction handler (or by the framework Cleanup hook). Per [`entities/01` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md), `ModifierSource.Source` is the attachment's `InstanceId`, so this sweep is uniform across equipment, auras, status effects, and other ongoing-effect attachments.
 
 The exact lifecycle design (what "destroyed" means, when Cleanup fires relative to the destruction envelope, what happens to in-flight dispatches that reference the destroyed entity) is a **deferred topic** — entity lifecycle needs a dedicated design pass. The pattern here relies on Cleanup existing; the mechanism is not fully specified yet.
 
