@@ -24,6 +24,11 @@ Resolved entries get strikethrough plus resolution note:
 
 ## Entries
 
+### Cascade — IEffectScope shape (session-20260501-1710-entity-modifier-api)
+
+- id: ad-20260502-001 | status: open | source: features/effects/models/04-effect-flow.md | target: features/effects/models/01-async-dispatch.md §IEffectScope | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
+- id: ad-20260502-002 | status: open | source: features/effects/models/04-effect-flow.md | target: features/actions/models/01-command-pipeline.md §IEffectScope (~line 2028) | reason: IEffectScope interface sketch missing `IEntityRegistry Entities` and `IModifierFactory Modifiers` fields added in effects/04 §4.3
+
 ### Linter findings — 2026-05-01
 
 - ~~id: ad-20260501-039 | status: open | source: linter | target: support/prior-art/card-game-base-architecture-117b41c9.plan.md | reason: S1 — broken path reference: Docs/SabberStone-Architecture-Analysis.md does not exist~~ → resolved 2026-05-01 (auto debt-pass: removed broken Docs/ link reference)

@@ -135,7 +135,10 @@ The shape this gives us:
 ```csharp
 public interface IEffectScope
 {
-    IStateScope State { get; }    // Scaffold; read-only
+    IStateScope       State     { get; }    // Scaffold; read-only
+    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
+
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
     void Cancel(string? reason = null);
     void Replace(GameAction next);   // before-fold only: swap the intercepted command
@@ -143,6 +146,8 @@ public interface IEffectScope
 ```
 
 - **`State`** — Scaffold `IStateScope`. Effects read slices to choose what to dispatch next. They cannot mutate; they have no `Store` reference.
+- **`Entities`** — engine entity registry, same surface as on `IHandlerContext`. Effects use `ctx.Entities.Get<TDef>(id)` to obtain `IReadOnlyEntity` handles for variable reads (`entity.GetVariable<int>(Vars.Attack)`). Effects do not mutate entities; mutation goes through `Dispatch`-ed actions whose handlers do the writes.
+- **`Modifiers`** — modifier-entry factory, same surface as on `IHandlerContext`. Effects that need to construct a modifier entry to pass into a `GameAction`'s payload (e.g. an `ApplyAuraAction { Buff = scope.Modifiers.Create(...) }`) use it here so the deterministic id is allocated by the effect even though the install happens in the action's handler.
 - **`Dispatch`** — runs the action immediately and inline (before-fold → handler → after-fold → envelope published) per `01-async-dispatch.md` §7. The effect awaits each result before continuing.
 - **`Cancel`** — explicit early-out for the effect itself (the effect has decided it cannot continue, e.g. a precondition no longer holds after a prior dispatch). In the trigger context (before-fold), cancels the intercepted command. Distinct from the before-fold cancelling an individual `GameAction` via result; [see §7](#7-cancellation).
 - **`Replace`** — before-fold only: signals the pipeline to discard the intercepted command and dispatch `next` as a fresh command through its own fold. Calling `Replace` in an after-fold trigger is a no-op (the command already executed); the pipeline implementation asserts or warns.
@@ -152,14 +157,19 @@ public interface IEffectScope
 ```csharp
 public interface IHandlerContext
 {
-    Store              Store    { get; }   // Scaffold; read + execute mutators
-    IAvailableActions  Actions  { get; }   // mid-execution snapshot writes
-    ICommandAwaiter    Resolver { get; }   // register and resolve decision awaits
+    Store              Store     { get; }   // Scaffold; read + execute mutators
+    IAvailableActions  Actions   { get; }   // mid-execution snapshot writes
+    ICommandAwaiter    Resolver  { get; }   // register and resolve decision awaits
+    IEntityRegistry    Entities  { get; }   // entity handle lookup / spawn / destroy
+    IModifierFactory   Modifiers { get; }   // deterministic modifier-entry construction
 }
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`. Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
 - **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line in pile-counter §9.4 is replaced by a single `ctx.Store.Execute(new MoveCardPayload(...))` call.
+- **Entity-variable mutations.** For modifier / variable / structural mutations against entity slices, prefer the `IMutableEntity` surface on a `StateEntity<TDef>` handle obtained via `ctx.Entities.Get<TDef>(id)`. Build modifier entries through the `Modifiers` factory and pass them to `entity.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for `SetBaseValuePayload` / `RemoveModifiersBySourcePayload` (not exposed on `IMutableEntity`), batch authoring, history-replay tooling, and handle-less paths. Full handler-side surface in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+- **`Entities`** — engine entity registry. `Spawn<TDef>(definition)` allocates a deterministic `InstanceId`, registers the canonical `EntityVariableState.Empty` slice via `EntityStateFactory`, and returns a handle. `Get<TDef>(id)` / `TryGet<TDef>(id, out)` / `Has(id)` cover lookup; `Destroy(id)` disposes the handle and unregisters the slice. See [`entities/02` §5](features/entities/models/02-runtime-surface.md).
+- **`Modifiers`** — modifier-entry factory. `Create(key, modifier, source)` returns a fully-populated `EntityModifierEntry` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing `EntityModifierEntry` directly is forbidden in handler / framework code — the no-id constructor falls back to `ModifierId.New()` (`Guid.NewGuid()`), which breaks replay and multiplayer determinism.
 
 > **Follow-up.** `IHandlerContext` aggregates three services into one parameter. An alternative is to constructor-inject the services on each handler and drop the context type entirely — fewer indirections, friendlier to DI, lets each handler declare exactly what it needs. Whether that scales better across games (more handlers? more services? composition with abilities?) is undesigned. Revisit when a second game stresses the surface; recorded in [§9](#9-open-follow-ups).
 
