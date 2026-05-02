@@ -150,6 +150,17 @@ Likely shape: linter generates `Product/ledgers/FEATURE-MAP.md` from `references
 
 Defer until the locked cleanup lands and the user wants to do the graph work in earnest on this project.
 
+### Archive strategy overall
+
+Today archives are scattered: per-feature `archive/` subfolders (per §5.14), `RESEARCH_BACKUP/` at repo root, and now `Product/_archive/sessions/` (provisional, per G2). No coherent story. Worth a focused pass after the locked cleanup lands:
+
+- Single global archive root vs. per-area archive subfolders?
+- What goes where (decisions, models, samples, sessions, raw research)?
+- Lint rules (§5.14 archive integrity) need updating to whatever the new shape is.
+- Possibly migrate `RESEARCH_BACKUP/` into the new structure.
+
+Defer until decisions #1–#7 land and the doc shape is stable.
+
 ### MCP-backed CURRENT.md for cross-machine / parallel sessions
 
 Earlier proposal: store CURRENT in an MCP server so multiple sessions / machines share one source of truth. Hydrate at session start, push back at session end.
@@ -332,7 +343,7 @@ To lock one-by-one before edit work starts. Each gets a verdict line appended be
 | # | Gap | Status |
 |---|---|---|
 | G1 | CURRENT.md freshness enforcement (discipline / soft warn / pre-commit) | **locked: soft warn at end-session.** Keep `end-session`'s existing chat-log scan for unsaved sketches — high value, preserve. Add a freshness check: compare CURRENT's git timestamp against touched `Product/features/**` and `Product/ledgers/**` files; warn (don't block) if CURRENT is stale. Escalate to pre-commit hook only if soft warn proves insufficient. |
-| G2 | Existing session notes — leave or quarantine | open |
+| G2 | Existing session notes — leave or quarantine | **locked: move legacy notes to global archive + add README.** Move all existing `Product/sessions/session-*.md` to `Product/_archive/sessions/` (provisional location — see future considerations on archive strategy). Leaves `Product/sessions/` empty so the first on-demand snapshots aren't anchored to legacy style. Add a one-line README in `Product/sessions/` explaining: *"Snapshots are opt-in milestones via `/builder:snapshot`. Legacy per-session notes archived to `Product/_archive/sessions/`."* |
 | G3 | ADR migration hand-work — triage scope | open |
 | G4 | Retired-tokens registry — who writes it now | open |
 | G5 | `end-session` linter integration — gate or soft | open |
