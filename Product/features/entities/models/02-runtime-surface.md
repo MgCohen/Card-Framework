@@ -28,6 +28,8 @@ The handle is a thin object over a per-instance `EntityVariableState` slice in t
 
 `StateEntity<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityVariableState` rows; handles are re-created from the registry on `LoadSnapshot`.
 
+**`InstanceId` vs `ActorId`.** This handle is keyed on `InstanceId` — a typed reference into the Store (`Identifier<Instance>`). `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). An actor that is *also* an entity (a player with health/mana variables) carries both ids; system / AI / environment actors have an `ActorId` but no `InstanceId`. See [`GLOSSARY.md`](../../../ledgers/GLOSSARY.md) — `Actor`, `ActorId`, `Instance ID` rows.
+
 ---
 
 ## 2. Read API — `IReadOnlyEntity<TDef>`
@@ -465,7 +467,9 @@ Definitions can be Unity assets, code-constructed at boot, or hybrid. The Card F
 
 ---
 
-## 8. Worked Example — Equip/Unequip
+## 8. Worked Examples
+
+### 8.1 Equip / Unequip — single-handler mutation
 
 A villager with `Attack = 1` (definition default) equips a sword granting `+3 attack`; effective attack reads as `4`. On unequip, the sword's modifier is swept and effective attack reverts to `1`.
 
@@ -531,6 +535,64 @@ public sealed class UnequipSwordHandler : ICommandHandler<UnequipSwordCommand, U
 ```
 
 For attachment models where the sword *itself* is the attached entity (per [`effects/03` §2](features/effects/models/03-ongoing-effects.md)), the framework Cleanup hook performs the source-sweep automatically on `Destroy` — the explicit `RemoveModifiersBySourcePayload` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
+
+### 8.2 Apply-aura — modifier built in effect, installed in handler
+
+When a modifier comes from an effect orchestrator (target selection, pre-conditions, choosing parameters) but the install lands in a separate action's handler, the modifier entry travels through the action payload as a value. The factory call sits in the effect (so the deterministic `ModifierId` is allocated at the right point in the command stream); the handler just installs the pre-built entry.
+
+```csharp
+// Action payload — carries the pre-built modifier across the boundary.
+public sealed record ApplyDamageAmpAction(
+    InstanceId          Target,
+    EntityModifierEntry Modifier) : GameAction;
+
+public sealed record ApplyResult(InstanceId Target) : CommandResult;
+
+// Effect — picks target, builds the buff, dispatches the install action.
+public sealed class ApplyDamageAmpEffect : Effect
+{
+    public override async Task Execute(IEffectScope scope)
+    {
+        var pick = await scope.Dispatch<RequestTargetResult>(new RequestTargetAction
+        {
+            Filter = EnemyFilter.InRange(scope.SourceInstance, range: 3),
+        });
+        if (pick.Target is null) return;
+
+        // Built in the effect — id is deterministic, source is this effect's host.
+        var ampBuff = scope.Modifiers.Create(
+            Vars.DamageDealt,
+            new IntAddModifier { Amount = 2, Order = 200 },
+            new ModifierSource(scope.SourceInstance));
+
+        await scope.Dispatch<ApplyResult>(new ApplyDamageAmpAction
+        {
+            Target   = pick.Target.Value,
+            Modifier = ampBuff,
+        });
+    }
+}
+
+// Handler — installs the pre-built entry. No id allocation here; the factory
+// already produced one in the effect.
+public sealed class ApplyDamageAmpHandler : ICommandHandler<ApplyDamageAmpAction, ApplyResult>
+{
+    public Task<ApplyResult> Handle(ApplyDamageAmpAction cmd, IHandlerContext ctx)
+    {
+        var enemy = ctx.Entities.Get<EnemyDefinition>(cmd.Target);
+        enemy.AddModifier(cmd.Modifier);
+        return Task.FromResult(new ApplyResult(cmd.Target));
+    }
+}
+```
+
+Why the factory call belongs in the effect, not the handler:
+
+- **Determinism is per-decision-point, not per-handler-call.** The id is allocated at the moment the effect *decides* to install the buff. Re-running the same effect against the same state must produce the same id. If the handler called the factory, the id would shift if upstream effects added intervening modifiers.
+- **The modifier is part of the action's identity.** It's serialized into the history envelope; debugger / replay tooling can render "ApplyDamageAmp targeted goblin#42 with buff M-7" as a complete record.
+- **Handlers stay narrow.** They install what they're told, validate the target, and return. They don't make modifier-shape decisions.
+
+Use this pattern whenever the buff parameters depend on effect-side state (target choice, source attribution, computed magnitude) but the install must be a discrete observable command (replay, network sync, history clarity). For self-contained "buff this entity right now" cases where there's no target picking or pre-computation, the equip/unequip pattern in §8.1 — single handler doing build + install — is simpler.
 
 ---
 
