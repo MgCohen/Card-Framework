@@ -18,9 +18,13 @@ name: Auto debt-pass
 # the system self-corrects on the next PR. The check is sub-second.
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
+  # TEMPORARILY DISABLED — auto-fire on merged PRs commented out while we
+  # rethink the workflow ceremony (see workflow audit, claude/simplify-doc-workflow-Osa5c).
+  # To re-enable, uncomment the `pull_request:` block below.
+  #
+  # pull_request:
+  #   types: [closed]
+  #   branches: [main]
   workflow_dispatch:
 
 jobs:
