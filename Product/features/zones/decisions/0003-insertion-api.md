@@ -41,7 +41,7 @@ A single `InsertCardPayload` carries the operation:
 record InsertCardPayload(
   Zone Zone,                                      // destination zone (object, per ADR-0005)
   Card Card,                                      // the card to insert
-  InsertPosition Position = default,              // DefaultPosition uses zone definition
+  InsertPosition? Position = null,                // null = use zone definition's default
   bool BypassCapacity = false);                   // false = respect zone's default capacity
 ```
 
@@ -68,12 +68,13 @@ var index = payload.Position switch {
 
 The zone definition decides which positions are meaningful for that zone type — explicit `AtIndex(i)` outside the zone's index range is an authoring error.
 
-Static factories provide call-site readability:
+Static factories provide call-site readability for the position axis:
 - `InsertCardPayload.AtTop(zone, card)`
 - `InsertCardPayload.AtBottom(zone, card)`
 - `InsertCardPayload.AtIndex(zone, card, i)`
 - `InsertCardPayload.Default(zone, card)` — explicit "use zone default"
-- `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
+
+The `BypassCapacity` axis uses C#'s `with` expression rather than a separate `Force` factory — `InsertCardPayload.AtTop(zone, card) with { BypassCapacity = true }`. This avoids method-explosion (no `Force × Position` cartesian product) and keeps the override self-documenting at the call site.
 
 The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. A relocate that pushes to top of destination uses `RelocateInstanceMutation { Source, Destination, Card, Position: new AtTop() }`.
 

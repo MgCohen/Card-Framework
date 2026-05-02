@@ -22,11 +22,11 @@ Related docs:
 
 ## Model Summary
 
-A zone is a group of cards. It carries identity, a definition that describes how it organizes its contents, an optional owner, and the runtime data that backs its behavior (membership and any per-zone-type values like a counter or recipe progress).
+A zone is a group of cards. It carries identity, a definition that describes how it organizes its contents, and the runtime data that backs its behavior (membership and any per-zone-type values like a counter or recipe progress). Optional ownership lives on a separate `OwnershipState` slice (read via `zone.GetOwner(state)`).
 
 The working model is:
 
-> Zone = thin object (id + definition + owner) + contents slice + per-zone-type runtime slice.
+> Zone = thin handle (id + definition) + contents slice + per-zone-type runtime slice + (optional) entry in OwnershipState.
 
 Zones are groups of cards. They can represent structured game concepts like hands, decks, discard piles, battlefields, stacks, shops, and production slots. **Card packs are not zones** — a pack is an entity that, when activated, generates new card instances; it does not contain pre-existing cards. **Reward offers, drafts, and choice surfaces are not zones either** — those are decisions, modeled through the action/decision system.
 
@@ -88,7 +88,7 @@ Examples:
 
 The runtime zone in a session — a `Zone` value carrying its `Id` and `Definition`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
 
-Zone storage is **game-authored**: the framework does not provide a generic `ZoneMapState` registry. Game code holds Zone objects in its own state slices (e.g., `GameZonesState { Zone P1Hand, Zone P1Deck, ... }`) or in a `Dictionary` keyed however the game prefers. Framework operations take Zone objects as parameters; they don't look them up generically. (See `bl-zone-registry` in `BACKLOG.md` if this becomes a real need.)
+Zone storage is **game-authored**: the framework does not provide a generic `ZoneMapState` registry. Game code holds Zone objects in its own state slices (e.g., `GameZonesState { Zone P1Hand, Zone P1Deck, ... }`) or in a `Dictionary` keyed however the game prefers. Framework operations take Zone objects as parameters; they don't look them up generically.
 
 Examples:
 
@@ -213,7 +213,7 @@ A single payload carries zone insertion, with optional override fields for game 
 record InsertCardPayload(
   Zone Zone,
   Card Card,
-  InsertPosition Position = default,    // DefaultPosition uses zone definition
+  InsertPosition? Position = null,    // null = use zone definition's default
   bool BypassCapacity = false);
 ```
 
@@ -227,13 +227,14 @@ sealed record AtBottom         : InsertPosition;
 sealed record AtIndex(int Idx) : InsertPosition;
 ```
 
-Static factories provide call-site readability:
+Static factories provide call-site readability for the position axis:
 
 - `InsertCardPayload.AtTop(zone, card)`
 - `InsertCardPayload.AtBottom(zone, card)`
 - `InsertCardPayload.AtIndex(zone, card, i)`
 - `InsertCardPayload.Default(zone, card)` — explicit "use zone default"
-- `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
+
+The `BypassCapacity` axis uses a C# `with` expression: `InsertCardPayload.AtTop(zone, card) with { BypassCapacity = true }`. No separate `Force` factory.
 
 The composite `MoveCardMutation` (remove + insert as one logical move, defined in the [Card Model](features/cards/models/01-card-model.md)) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. It also carries a fresh `CardRef` — every move rotates the ref per the conservative privacy policy.
 

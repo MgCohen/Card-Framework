@@ -8,7 +8,7 @@ tags: [#cards, #model]
 
 # Card Model
 
-A Card is the framework's representation of a card-shaped game entity. It uses the entity bridge (`StateEntity<TCardDef>`) for variables and modifiers, lives canonically in `CardMapState` keyed by a temporary `CardRef`, and exposes its current ref and owner through state-reading methods.
+A Card is the framework's representation of a card-shaped game entity. It uses the entity bridge (`StateEntity<CardDefinition>`) for variables and modifiers, lives canonically in `CardMapState` keyed by a temporary `CardRef`, and exposes its current ref and owner through state-reading methods.
 
 Related docs:
 
@@ -48,7 +48,7 @@ public sealed class Card : StateEntity<CardDefinition>, IReference
 }
 ```
 
-Card-typed card variants (Fireball, Goblin, etc.) are not separate C# classes — they are distinct `CardDefinition` instances. A "Fireball" card is a `Card` handle whose definition is a `CardDefinition` configured with Fireball-specific data and effect recipes. Per the data-driven model, the framework provides one `Card` type; game content lives in definitions, not in subclasses.
+Card variants (Fireball, Goblin, etc.) are not separate C# classes — they are distinct `CardDefinition` instances. A "Fireball" card is a `Card` handle whose definition is a `CardDefinition` configured with Fireball-specific data and effect recipes. Per the data-driven model, the framework provides one `Card` type; game content lives in definitions, not in subclasses.
 
 The class is a handle, not a record. Equality is overridden to use `InstanceId` so the same card can be looked up reliably by Card object across handle re-creation (e.g., snapshot rehydration). There is at most one *live* `Card` instance per `InstanceId` in the running engine — referenced from `CardMapState` and shared by all framework code that operates on that card.
 
@@ -141,7 +141,7 @@ public sealed record CreateCardMutation(
     InstanceId NewInstanceId,
     CardRef NewRef,
     Zone? IntoZone = null,
-    InsertPosition Position = default) : CompositeAction
+    InsertPosition? Position = null) : CompositeAction
 {
     public static CreateCardMutation Of(CardDefinition definition)
         => new(definition, InstanceId.NewId(), CardRef.NewRef());
@@ -188,6 +188,10 @@ public sealed record DestroyCardMutation(Card Card) : CompositeAction;
 
 `DestroyCardMutation` does not need a `NewRef` — it only removes from `CardMapState`. `CreateCardMutation` takes the `Definition` (not a pre-built `Card`) — the framework constructs the `Card` handle inside the composite, where the Store reference is available.
 
+For `BypassCapacity = true` (force-effects bypassing zone defaults), use a record `with` expression rather than a separate factory: `MoveCardMutation.AtTop(card, src, dst) with { BypassCapacity = true }`. Same pattern applies to `InsertCardPayload`.
+
+`InsertPosition` is nullable on the `CreateCardMutation` payload; `null` means "use the destination zone's default insertion behavior." `MoveCardMutation` takes `InsertPosition` non-null because callers always pass an explicit position via the factories — game code that wants the destination's default uses `new DefaultPosition()` explicitly.
+
 ### Composite expansion (in prose, not normative API)
 
 - **CreateCardMutation** — constructs the `Card` handle from `(NewInstanceId, Definition, store)`; inserts `(NewRef, Card)` into `CardMapState` (and updates `RefByCard`); initializes the card's `EntityVariableState` slice from `Definition.BaseValues`; if `IntoZone` is non-null, inserts `NewRef` into that zone's `ZoneContentsState` at `Position`.
@@ -206,7 +210,7 @@ public static class StoreExtensions
     {
         var ref_ = CardRef.NewRef();
         store.Execute(new CreateCardMutation(definition, InstanceId.NewId(), ref_, intoZone));
-        return store.State.Get<CardMapState>().GetCard(ref_);
+        return store.Get<CardMapState>().GetCard(ref_);
     }
 }
 
@@ -223,16 +227,7 @@ Reading a card from a `CardRef`:
 var card = state.Get<CardMapState>().GetCard(someRef);
 ```
 
-Reading the cards in a zone:
-
-```csharp
-public IEnumerable<Card> GetCards(this Zone zone, IStateScope state)
-{
-    var contents = state.Get<ZoneContentsState>(zone);
-    var map = state.Get<CardMapState>();
-    return contents.Cards.Select(map.GetCard);
-}
-```
+Reading the cards in a zone — see `Zone.GetCards(state)` defined on the Zone class in [Zone Model § Zone Shape](features/zones/models/01-zone-model.md).
 
 Reading a card's current ref or owner:
 
@@ -246,6 +241,6 @@ var owner = card.GetOwner(state);  // Actor or null
 - One `Card` object per `InstanceId` in the running engine — referenced from `CardMapState` and shared.
 - `InstanceId` is stable across the card's lifetime; `CardRef` rotates on every move and visibility transition.
 - All mutable card state (variables, modifiers, current ref, owner, visibility) lives in slices.
-- Server-internal references (triggers, ongoing effects, attachments, history) use the `Card` object or its `InstanceId` — never `CardRef`.
-- Client-visible state and projections (zones, indices, history sent to clients) reference cards by `CardRef`.
+- Server-internal references (triggers, ongoing effects, attachments, history-side identity such as `CardRefRotated`) use the `Card` object or its `InstanceId` — never the rotating `CardRef`.
+- Client-visible state and projections (zones, indices, history entries naming a current location like `ZoneContentInserted`) reference cards by `CardRef`.
 - `CardRef` rotation is the framework's privacy mechanism; observers see refs change but never receive data they aren't allowed to see.
