@@ -31,7 +31,7 @@ A **zone** is a thin object with three structural fields: `Id` (`Identifier<Inst
 
 Zone runtime state lives in two kinds of slice:
 
-1. **`ZoneContentsState`** (framework-owned, generic). Keyed by the zone object. Holds an ordered list of `ContentEntry { InstanceId, SlotKey?, GroupKey? }`. The same shape supports ordered lists, slotted zones, and grouped piles — interpretation lives in the zone definition.
+1. **`ZoneContentsState`** (framework-owned, generic). Keyed by the zone object. Holds an ordered `IReadOnlyList<Card>`. When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds those fields on its own design pass — the framework does not pre-define hooks for them. Defer-by-default keeps the core shape minimal.
 2. **Per-zone-type runtime slices** (game-authored). Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape.
 
 Zone configuration (capacity, ordering, insertion behavior, default visibility policy) lives on the **`ZoneDefinition`** as authored data. Different zone types vary by definition, not by class hierarchy.

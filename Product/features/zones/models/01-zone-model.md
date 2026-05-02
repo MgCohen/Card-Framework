@@ -49,7 +49,7 @@ The zone shares the `Identifier<Instance>` namespace with cards. This makes targ
 
 Zone runtime state lives in two kinds of slice:
 
-1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone object. Holds an ordered list of `ContentEntry { InstanceId, SlotKey?, GroupKey? }`. The same shape supports ordered lists (hand, deck), slotted zones (battlefield with rows), and grouped piles. Interpretation of `SlotKey` and `GroupKey` lives in the zone definition.
+1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone object. Holds an ordered list of cards (`IReadOnlyList<Card>`). When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds fields to the contents shape on its own design pass — the framework doesn't pre-define those hooks.
 2. **Per-zone-type runtime slices** — game-authored. Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape across zone types.
 
 Zone configuration lives on the `ZoneDefinition`: capacity, ordering rules, insertion behavior, default visibility policy. Different zone types vary by definition data, not by class hierarchy.
@@ -193,30 +193,33 @@ For reverse queries — "what zone is this card in?" — the framework maintains
 
 A single payload carries zone insertion, with optional override fields for game effects that need to bypass zone defaults. See [ADR-0003](features/zones/decisions/0003-insertion-api.md) for full reasoning.
 
-```text
-InsertCardPayload {
-  Zone:            Zone
-  Card:            StateEntity
-  Position?:       InsertPosition          // null = use zone definition's default
-  BypassCapacity?: bool                    // null/false = respect default
-}
-
-InsertPosition =
-  | Top
-  | Bottom
-  | AtIndex(int)
-  | AtSlot(SlotKey)
+```csharp
+record InsertCardPayload(
+  Zone Zone,
+  Card Card,
+  InsertPosition Position = default,    // DefaultPosition uses zone definition
+  bool BypassCapacity = false);
 ```
 
-Static factories provide call-site readability without payload sprawl:
+`InsertPosition` is a sealed record hierarchy — each variant is its own type, so cases-with-data and cases-without-data don't share a single enum:
+
+```csharp
+abstract record InsertPosition;
+sealed record DefaultPosition  : InsertPosition;
+sealed record AtTop            : InsertPosition;
+sealed record AtBottom         : InsertPosition;
+sealed record AtIndex(int Idx) : InsertPosition;
+```
+
+Static factories provide call-site readability:
 
 - `InsertCardPayload.AtTop(zone, card)`
 - `InsertCardPayload.AtBottom(zone, card)`
 - `InsertCardPayload.AtIndex(zone, card, i)`
-- `InsertCardPayload.AtSlot(zone, card, slotKey)`
+- `InsertCardPayload.Default(zone, card)` — explicit "use zone default"
 - `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
 
-The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertOptions` and forwards them to the insert side.
+The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side.
 
 "Forced" at the mutation level means bypassing zone defaults. The separate axis — "this insertion can't be cancelled by replacement effects" — lives at the `GameAction` / trigger-fold layer, not here.
 
@@ -349,7 +352,8 @@ Note: card packs are *not* zones. A pack is an entity with a generator effect; o
 
 ## Deferred
 
-- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The `SlotKey?` field in `ContentEntry` is the available hook for game-specific spatial use; the framework does not commit to spatial semantics until a real game forces the requirements. See `bl-spatial-rule-attachment` in `BACKLOG.md`.
+- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The framework does not pre-define a hook for this; a spatial-rules game's design pass adds the appropriate fields to the contents shape (or a parallel slice) when the requirements are concrete. See `bl-spatial-rule-attachment` in `BACKLOG.md`.
+- **Slot / group structure on contents** — battlefields with fixed rows or grouped piles. Same logic as spatial: no pre-defined hook; games add the fields when forced. The current contents shape is a flat `IReadOnlyList<Card>`.
 - **Per-actor asymmetric reveals** — visibility states like "card visible to player A but not player B" are not first-class in the visibility model; games that need them model the reveal as a transient game-state slice. Per-actor map shape on the visibility flag was rejected as YAGNI.
 
 ## Useful Invariants

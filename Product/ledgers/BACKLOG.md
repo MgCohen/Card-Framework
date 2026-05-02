@@ -67,7 +67,7 @@ Done entries get strikethrough plus link to the PR/commit that closed them:
   References: `.claude/commands/builder/debt-pass.md`, [Layer 3 fifth run](https://github.com/MgCohen/Card-Framework/actions/runs/25193791092) (lost ~$1.49 of work).
   Status: open
 
-- id: bl-spatial-rule-attachment | **Spatial rule attachment surface for zones** — when a game (Stacklands-style) needs spatial coordinates as rules data rather than presentation layout, the framework must commit to where spatial info attaches. The locked zone shape provides a `SlotKey?` field on `ContentEntry` (in `ZoneContentsState`) as the available hook, but the framework does not commit to spatial semantics (adjacency rules, multi-card spatial interactions, grid topology). When forced by a real game, decide between: spatial-as-`SlotKey`-interpretation in zone definitions, parallel `SpatialState` slice keyed by card, or per-card position variable.
+- id: bl-spatial-rule-attachment | **Spatial rule attachment surface for zones** — when a game (Stacklands-style) needs spatial coordinates as rules data rather than presentation layout, the framework must commit to where spatial info attaches. The current zone contents shape is a flat `IReadOnlyList<Card>` — there is no pre-defined hook. When forced by a real game, decide between: extending `ZoneContentsState` with per-entry structure (slot/coord field), introducing a parallel `SpatialState` slice keyed by card, or per-card position variable.
   Trigger: first spatial-rules game (Stacklands-like) reaches design-pass.
   References: `Product/features/zones/models/01-zone-model.md` §Deferred, `Product/features/zones/decisions/0001-zone-shape.md`, session-20260501-1602-zone-model-internal-opens.
   Status: open

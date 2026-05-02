@@ -24,43 +24,58 @@ A separate axis — "this insertion can't be cancelled by replacement effects" �
 
 ## Options considered
 
-- **A — Single payload with optional override fields.** `InsertCardPayload { Zone, Card, Position?, BypassCapacity? }`. Null/default = use zone definition's default behavior; explicit values override. Sugar via static factories: `InsertCardPayload.AtTop(zone, card)`, `InsertCardPayload.ForceAt(zone, card, slot)`. Chosen.
+- **A — Single payload with optional override fields.** `InsertCardPayload { Zone, Card, Position, BypassCapacity }`. `Position` and `BypassCapacity` defaults mean "use zone definition's default"; explicit values override. Sugar via static factories. Chosen.
 - **B — Two payloads.** `InsertCardPayload` for standard, `ForceInsertCardPayload` for overrides. Rejected: duplicates mutator logic; effects pick which payload to use; framework grows two parallel paths for one concept.
 - **C — Multiple targeted payloads.** `InsertAtTopPayload`, `InsertAtBottomPayload`, `InsertAtSlotPayload`, `ForceInsertPayload`. Rejected: reads nicely at call sites but multiplies framework surface; forces a "which payload?" decision on every call.
+
+For the `Position` field shape:
+- **Discriminated union mixing parameterless and parameterized variants** (e.g., `Top | Bottom | AtIndex(int) | AtSlot(SlotKey)`). Rejected: structurally awkward — cases-with-data and cases-without-data on the same type read as "functions on an enum" in C#, even when expressed as a sealed hierarchy in trivia.
+- **Enum + optional `Index` field** (`enum InsertMode { ZoneDefault, Top, Bottom, AtIndex }; int? Index`). Rejected: invalid combinations are constructible (`Mode = Top, Index = 5`); flat shape but loses type safety.
+- **Sealed record hierarchy.** `abstract record InsertPosition; sealed record AtTop/AtBottom/AtIndex(int)/DefaultPosition`. Each variant is its own type with its own data. Chosen.
 
 ## Decision
 
 A single `InsertCardPayload` carries the operation:
 
-```text
-InsertCardPayload {
-  Zone:           Zone           // the destination zone (per ADR-0005, object not Id)
-  Card:           StateEntity    // the card to insert
-  Position?:      InsertPosition // null = use zone definition's default
-  BypassCapacity?:bool           // null/false = respect default; true = override
-}
+```csharp
+record InsertCardPayload(
+  Zone Zone,                                      // destination zone (object, per ADR-0005)
+  Card Card,                                      // the card to insert
+  InsertPosition Position = default,              // DefaultPosition uses zone definition
+  bool BypassCapacity = false);                   // false = respect zone's default capacity
 ```
 
-`InsertPosition` is a discriminated union:
+`InsertPosition` is a sealed record hierarchy — each variant is its own type, so cases-with-data and cases-without-data don't share a single enum (which would mix "function on enum" semantics awkwardly):
 
-```text
-InsertPosition =
-  | Top
-  | Bottom
-  | AtIndex(int)
-  | AtSlot(SlotKey)
+```csharp
+abstract record InsertPosition;
+sealed record DefaultPosition  : InsertPosition;     // use zone definition's insertion behavior
+sealed record AtTop            : InsertPosition;     // first position
+sealed record AtBottom         : InsertPosition;     // last position
+sealed record AtIndex(int Idx) : InsertPosition;     // explicit index
 ```
 
-The zone definition decides which positions are meaningful for that zone type — inserting `AtSlot` on an unslotted zone is an authoring error.
+Pattern matching at the consumer side stays clean:
 
-Static factories provide call-site readability without payload sprawl:
+```csharp
+var index = payload.Position switch {
+  AtTop          => 0,
+  AtBottom       => contents.Count,
+  AtIndex at     => at.Idx,
+  DefaultPosition => zone.Definition.DefaultInsertion.Resolve(contents),
+};
+```
+
+The zone definition decides which positions are meaningful for that zone type — explicit `AtIndex(i)` outside the zone's index range is an authoring error.
+
+Static factories provide call-site readability:
 - `InsertCardPayload.AtTop(zone, card)`
 - `InsertCardPayload.AtBottom(zone, card)`
 - `InsertCardPayload.AtIndex(zone, card, i)`
-- `InsertCardPayload.AtSlot(zone, card, slotKey)`
+- `InsertCardPayload.Default(zone, card)` — explicit "use zone default"
 - `InsertCardPayload.Force(...)` — variant that sets `BypassCapacity = true`
 
-The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertOptions` and forwards them to the insert side. A relocate that wants to push to top of destination uses `RelocateInstanceMutation { Source, Destination, Card, InsertPosition: Top }`.
+The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. A relocate that pushes to top of destination uses `RelocateInstanceMutation { Source, Destination, Card, Position: new AtTop() }`.
 
 ## Consequences
 
