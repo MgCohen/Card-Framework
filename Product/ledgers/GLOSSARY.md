@@ -1,7 +1,7 @@
 ---
 type: glossary
 status: settled
-last-updated: 2026-04-29
+last-updated: 2026-05-01
 tags: [#general, #glossary]
 ---
 
@@ -17,9 +17,10 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | Game            | The authored ruleset and content domain for a playable card-based experience. | Magic-like TCG, Slay-like deckbuilder, Stacklands-like spatial sim, card-based RPG or board game.                        |
 | Game Definition | Authored configuration that declares a game's starting assumptions.           | Card types, zone definitions, turn/time model, rule modules, starting state templates, presentation defaults, presets.   |
 | Session         | One running simulation instance of a game definition.                         | Match, combat encounter, full roguelike run, board simulation, replayed scenario, test case.                             |
-| Actor           | Entity or system capable of owning, controlling, viewing, or deciding things.  | Human, AI, enemy, automated worker, environment, neutral market, automatic rules system. Actors can also be entities when they need variables — the game maintains the `ActorId → InstanceId` mapping. |
+| Actor           | Framework base type — anything that can own instances. | Human player, AI, enemy, automated worker, environment, neutral market, automatic rules system, "the world." Actors can also be entities when they need variables — the game maintains the `ActorId → InstanceId` mapping. |
 | ActorId         | Identifier of an actor (`Identifier<Actor>`). Distinct from `InstanceId`.     | Used for command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor action queries (`GetActionsFor(ActorId)`). System / AI / environment actors have an `ActorId` but no `InstanceId`. |
-| Player          | Game-specific actor representing a player seat or participant.                | Use when a game has player seats, ownership, priority, score, deck ownership, or client association.                     |
+| Player          | Kind/subtype of Actor representing a seated participant. Game-specific. | Use when a game has player seats, ownership, priority, score, deck ownership, or client association. Other Actor kinds — `World`, `Environment`, `Market` — are also valid. |
+| Owner           | The Actor that owns an instance. Named concept, not a framework type. | Implementation: an `Actor`-typed field on entities/zones that have ownership. Not framework-mandated on every instance — games that don't need ownership ignore it. |
 
 
 ## Entity Model
@@ -30,8 +31,9 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | Entity              | Any runtime object the simulation may need to reference.                                         | Card instance, zone instance, player/actor, relic, equipment, resource, villager, enemy, stack entry, token, card pack. Every entity should have a base definition.       |
 | Definition          | Authored base data shared by instances.                                                          | Fireball card definition, Iron Sword equipment definition, Hand zone definition, Villager definition, Berry Bush resource definition. Definitions should have stable IDs. |
 | Instance            | Runtime entity created from a definition.                                                        | `Instance = definition + instance ID + current relationships + modifiers`. Zone movement preserves the same instance by default.                                          |
-| Identifier\<T\>     | Base record providing both value and reference utility for all ID types in the framework.        | Used for `InstanceId`, `DefinitionId`, `ZoneId`, `ActorId`, chain IDs, etc. Replaces ad-hoc per-concept ID types.                                                        |
-| Instance ID         | Identifier of a runtime entity in the Store (`Identifier<Instance>`). Distinct from `ActorId`.            | Cards, zones, attachments have `InstanceId`s without being actors. An entity-backed actor (e.g. a player with health/mana variables) carries both an `ActorId` and an `InstanceId`; the game maintains the mapping.                                                                                       |
+| Identifier\<T\>     | Base record providing both value and reference utility for stable ID types in the framework.        | Used for `InstanceId`, `DefinitionId`, `ActorId`, chain IDs, etc. Reserved for boundaries — serialization, persistence, network, type-mismatch fallback. Within the simulation, prefer the object (per [ADR-0005](../decisions/0005-objects-over-ids.md)).                                                        |
+| Instance ID         | Stable identifier of a runtime entity in the Store (`Identifier<Instance>`). Distinct from `ActorId`. Never changes for the lifetime of the instance. `InstanceId.NewId()` factory generates fresh values.            | Used for variable storage (`EntityVariableState`), modifier storage, ownership, history, and all server-internal subscriptions (triggers, ongoing effects, attachments). Stable across moves, hides, and reveals — distinct from `CardRef` which rotates. Cards, zones, attachments have `InstanceId`s without being actors. An entity-backed actor (e.g. a player with health/mana variables) carries both an `ActorId` and an `InstanceId`; the game maintains the mapping. Mutations that create instances (e.g., `CreateCardMutation`) carry the generated `InstanceId` in the payload for replay determinism. |
+| IReference          | Framework marker interface for objects that carry an identity in the `Identifier<Instance>` namespace. | `interface IReference { InstanceId Id; }`. `Zone` implements directly; `Card` (as `StateEntity<CardDefinition>`) via `IReadOnlyEntity` ⊃ `IReference`. Polymorphic targeting APIs take `IReference`. |
 | Definition ID       | Stable authored identifier of a definition. Typed as `Identifier<Definition>`.                  | Used for save/load, replay, debugging, networking, validation, and cross-reference from instances to definitions.                                                         |
 | Variable            | Key-value entry on a definition or instance.                                                     | `VariableKey -> VariableValue`. Keys like `cost`, `attack`, `zone`, or `recipe_progress` are game/preset/schema-defined, not hardcoded by the base framework.             |
 | Base Value          | Value supplied by the base definition before runtime changes.                                    | Example: a card definition has base `cost = 3`.                                                                                                                           |
@@ -40,6 +42,11 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | Relationship        | Directed or structured link between entities.                                                    | Owner, controller, in-zone, attached-to, equipped-by, stacked-on, targeting, source-of-effect, parent-child.                                                              |
 | Attachment          | Instance connected to another instance through a relationship.                                   | Equipment attached to a character, aura attached to a card, token stacked on a resource. Attachments are usually their own instances.                                     |
 | Composition Handler | System that calculates meaning from multiple related instances.                                  | Equipment stats, aura bonuses, stack recipe progress. May be game-specific or preset-specific.                                                                            |
+| Card                | Framework handle for a card-shaped game entity. Non-generic `sealed class Card : StateEntity<CardDefinition>, IReference`. Lives in `CardMapState` keyed by `CardRef`. | Thin handle (no mutable data on the class itself); variables/modifiers via the entity bridge, current ref via `card.GetRef(state)`, owner via `card.GetOwner(state)`. Per-card-type variants (Fireball, Goblin, etc.) are different `CardDefinition` instances, not different C# subclasses (data-driven). Card overrides `Equals`/`GetHashCode` by `InstanceId`. See [Card Model](../features/cards/models/01-card-model.md). |
+| CardRef             | Temporary reference to a card. Rotates on every move and on every visibility transition. Not an `Identifier<T>`. | `readonly record struct CardRef(Guid Value)`; `CardRef.NewRef()` factory. Used as the `CardMapState` key, in `ZoneContentsState`, in client-visible projections. The framework's privacy mechanism — observers see refs change but receive no data they aren't allowed to see. |
+| CardMapState        | Single canonical slice mapping `CardRef → Card` plus the parallel reverse index `Card → CardRef`. Replaces the engine-side handle registry. | Two `ImmutableDictionary` fields kept in sync by mutators. Snapshot/rollback works for free. Reverse index makes `RefOf(card)` O(1). One Card object per `InstanceId` in the running engine. |
+| OwnershipState      | Generic framework slice mapping `InstanceId → Actor`. Applicable to any `IReference` instance (Cards, Zones). | Reads through `card.GetOwner(state)` or `zone.GetOwner(state)`. Cards/zones without an owner have no entry in the slice. |
+| CardVisibilityState | Per-card visibility slice keyed by `InstanceId`, holding `CardVisibility` enum overrides. | Absent entry = use the zone's policy default. |
 
 
 ## Zones And Location
@@ -47,15 +54,21 @@ This glossary establishes working language for the Card Framework. Terms may be 
 
 | Term            | Short Definition                                                                       | Examples / Notes                                                                                                                                                                         |
 | --------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Zone            | Simulation model that contains or groups instances and organizes those contents.         | Deck, hand, discard, battlefield, rules stack, physical stack, shop row, card pack, production slot. Zones can have definitions and instances.                                            |
-| Zone Membership | Relationship or zone-owned state saying an instance is currently in a zone.             | Does not define the instance. It can trigger rules and may have ordering/grouping inside the zone.                                                                                       |
-| Zone Movement   | State change that moves an entity between zones or changes its position within a zone. | May trigger effects, update visibility, change modifiers, or be blocked. Does not create a new instance by default.                                                                      |
+| Zone            | Thin domain handle (`class Zone : IReference`) grouping cards. Carries `(Id, Definition)`; owner via `OwnershipState`; contents via `ZoneContentsState`. Shares the `Identifier<Instance>` namespace with cards. | Deck, hand, discard, battlefield, rules stack, physical stack, shop row, production slot. **Not** card packs (entities with generator effects), reward offers, or drafts (decisions). Zones do not have stats; stat-bearing things are not zones. |
+| ZoneDefinition  | Authored config for a zone type — capacity, ordering rules, insertion behavior, default visibility policy. | Hand definition, deck definition, MTG-stack definition. Different zone types vary by definition data, not by class hierarchy. |
+| ZoneContentsState | Generic framework-owned slice keyed by zone, holding ordered membership as `ImmutableList<CardRef>`. | Flat list of `CardRef`s. Refs rotate on every move (per Card Model). Slot keys, group keys, spatial coordinates, and other per-entry structure are not pre-defined hooks — a game adds those fields on its own design pass when forced by real requirements. |
+| Zone Membership | Zone-owned state saying a card is currently in a zone. Canonically lives in `ZoneContentsState` as a list of `CardRef`s. | Does not define the card. It can trigger rules and may have ordering inside the zone. |
+| Zone Movement   | State change that moves an entity between zones or changes its position within a zone. | May trigger effects, update visibility, change modifiers, or be blocked. Does not create a new instance by default. |
 | Position        | Address, ordering, or game-specific placement inside a zone.                           | Top of deck, third card in hand, battlefield slot, stack depth. World-space placement is only core simulation data if a game-specific spatial system makes it so.                         |
 | Stack           | Ambiguous term that must be qualified by context.                                      | Could mean Magic-like rules stack, physical card stack, or scheduler data structure.                                                                                                     |
 | Membership Visibility | Whether an actor can know which instance IDs are in a zone and how they are arranged. | Example: a player sees their hand contents; an opponent may only see a count. |
 | Detail Visibility | Whether an actor can resolve definition and variable data for a known instance ID. | Example: a face-down card may be visible as an instance but hide its definition and variables. |
-| Zone Capacity | Default organizational limit for a zone. | Capacity can be overridden or ignored by game/action rules when an effect forces a move. |
-| RelocateInstanceMutation | Composite `StateMutation` encapsulating a remove-then-insert as one logical zone move. | Preferred over two raw mutations for common move operations. Intermediate state is not exposed. |
+| Card Visibility | Per-card runtime flag enum `{ Hidden, VisibleToOwner, VisibleToAll }` on `CardVisibilityState` keyed by `InstanceId`. Absent entry = use zone policy default. Defined in [Card Model § Card Visibility](../features/cards/models/01-card-model.md). | Override on top of zone definition's policy. `VisibleToOwner` requires Owner; collapses to `Hidden` if no Owner. Read via `card.IsVisibleTo(state, actor)`. Mutated via `SetCardVisibilityMutation`. |
+| SetCardVisibilityMutation | Composite `CompositeAction` collapsing what would otherwise be separate Hide and Show mutations. Carries `(Card, NewRef, CardVisibility)`. | Static factories: `Hide(card)`, `ShowAll(card)`, `ShowToOwner(card)`. Every transition rotates the `CardRef` (conservative privacy policy). |
+| ~~Ephemeral Instance ID~~ | **Deprecated.** Was a per-actor transport alias under the original Q6.2 lock; superseded by server-side `CardRef` rotation per [Zones ADR-0002](../features/zones/decisions/0002-visibility-model.md). | The framework no longer maintains a per-actor alias map. Privacy across reveal cycles is achieved by `CardRef` rotation that all observers see. |
+| Zone Capacity | Default organizational limit for a zone. | Capacity can be overridden or ignored by game/action rules when an effect forces a move via `InsertCardPayload { BypassCapacity = true }`. |
+| InsertCardPayload | Single payload for zone insertion with optional override fields: `{ Zone, Card, Position, BypassCapacity }`. | `Position` is a sealed record hierarchy: `DefaultPosition`, `AtTop`, `AtBottom`, `AtIndex(int)`. Static factories provide call-site sugar. Used inside the composite `MoveCardMutation`. |
+| MoveCardMutation | Composite `CompositeAction` encapsulating a remove-then-insert as one logical zone move. Carries `(Card, NewRef, Source, Destination, Position, BypassCapacity)`. | Every move rotates the `CardRef` (per the conservative privacy policy). Internally: removes old ref from source's `ZoneContentsState`, rotates `CardMapState`, inserts new ref into destination at `Position`. Static factories: `MoveCardMutation.AtTop / AtBottom / AtIndex`. Replaces the older `RelocateInstanceMutation` name. |
 
 
 ## Rules And Flow
@@ -108,17 +121,25 @@ This glossary establishes working language for the Card Framework. Terms may be 
 | Networking   | Optional transport layer for commands, decisions, history, and snapshots. | Should attach to stable simulation boundaries later.                                                                 |
 
 
+## Conventions
+
+- **Objects over IDs.** Framework APIs prefer domain objects (`Zone`, `Card`, `StateEntity`, `Player`, `Actor`) over raw `Identifier<T>` values. IDs are reserved for boundaries — serialization, persistence, network transport, type-mismatch fallbacks, and stable subscription keys (triggers/effects/attachments use `InstanceId` so they survive `CardRef` rotations). Within the simulation, code holds and passes the object; the object is also used as the key for slice access (`state.Get<X>(zone)`). See [ADR-0005](../decisions/0005-objects-over-ids.md).
+- **`CardRef` vs `InstanceId`.** Server-internal references (triggers, effects, attachments, history dispatch) use `Card` objects or `InstanceId` — never `CardRef`. Client-visible state (zones, indices, projections) uses `CardRef`. The split is the framework's privacy mechanism: rotating `CardRef` on hide/move propagates through client-visible state without breaking server-internal subscribers.
+
 ## Nuance Notes
 
 - Variables are key-value based. The base framework should not hardcode variable names; games, presets, schemas, or authoring packages define them.
-- "Identity" is not a separate core concept. Use `Instance`; use `Identifier<T>` for all ID/reference values across the framework.
+- "Identity" is not a separate core concept. Use `Instance`; use `Identifier<T>` for boundary forms (serialization, transport).
 - Zone membership does not define an instance. Zone movement preserves the same instance by default.
-- Zones are richer organization models, not just fixed trait bags.
+- Zones are thin domain objects; their state lives in slices. They do not have stats — stat-bearing things are not zones.
+- Card packs are not zones — they are entities with generator effects. Reward offers and drafts are decisions, not zones.
 - Zones do not own broad gameplay legality; game/action rules decide whether movement is allowed.
 - Spatial placement is not a base zone concern unless a game-specific spatial system makes it simulation data.
 - UI creates `PlayerIntent`s and reacts to state/history; it should not mutate simulation state directly.
 - History envelopes preserve why state changes happened, not only what changed.
+- History is canonical on the server; per-actor views are produced at the transport boundary by ID translation + detail-visibility gating. Movement entries are always sent (fact-of-movement is public); card-detail entries are gated on visibility.
 - `StateChange` entries are produced automatically by the state layer; `GameSignal` entries must be emitted explicitly by handlers via `scope.Emit(...)` for meanings the layer cannot infer.
 - Every entity should have a base definition, including generated tokens or temporary system entities.
 - Attachments and equipment are usually separate instances connected through relationships, not hidden fields on the host.
 - `CommandReaction` (post-result pipeline hooks) is removed. Follow-up commands return from `GameRules.Evaluate`.
+- `Controller` and `Viewer` are not framework concepts. Controller is a generic system term; visibility queries take an `Actor` parameter directly with no typed `Viewer` wrapper.

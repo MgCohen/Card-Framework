@@ -87,7 +87,7 @@ The instance should not duplicate every definition field. It should reference it
 
 There should not be a separate conceptual model called "identity." The instance is the thing. An instance may have an `Instance ID` so systems can look it up, reference it, serialize it, or include it in history.
 
-The `Instance ID` can be a typed record, integer, GUID-like value, or package-specific reference. That is an implementation detail. Conceptually, it is just a value associated with the instance.
+The `Instance ID` is typed as `Identifier<Instance>` and is stable across the instance's lifetime. The framework provides `InstanceId.NewId()` for generating fresh values; mutations that create instances (e.g., `CreateCardMutation`) carry the generated `InstanceId` in the payload for replay determinism.
 
 Default rule:
 
@@ -251,7 +251,9 @@ Shape:
 - **`StateEntity<TDefinition>`** is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. It substitutes for plain `EntityInstance` in polymorphic APIs.
 - **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` against six bridge payloads (see "Mutation API conventions" below). `IMutableEntity` calls produce the same payloads internally.
 - **Reads** use a per-rebuild effective-value cache; `Variable` enumeration is ordered by `Variable.Key` (ordinal) for determinism.
-- **Game-level state** (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside entity slices.
+- **Game-level state** (turn, phase, available actions, decisions) lives in plain Store slices alongside entity slices.
+- **Zones** are thin domain handles (classes implementing `IReference`, not entities) sharing the `Identifier<Instance>` namespace with cards; their canonical state lives in `ZoneContentsState` (membership), `OwnershipState` (owner), and per-zone-type runtime slices (typed values like a counter). Zones do not participate in the entity-variable bridge or modifier-stack machinery. See [Zone Model](features/zones/models/01-zone-model.md) and [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md).
+- **Cards** are `StateEntity<TCardDef>` handles (classes; the bridge handle is a class, not a record) that also implement `IReference`. The canonical "this card exists" record is in `CardMapState` keyed by `CardRef` — replacing what would otherwise be the engine-side handle registry (`InstanceId → handle`). Putting that registration on the Store gives snapshot/rollback for free. Cards carry two IDs: stable `InstanceId` (used for variable storage, modifier storage, ownership, history, server-internal subscriptions) and ephemeral `CardRef` (the slice key in `CardMapState`, used in zone contents and client-visible state; rotates on every move and visibility transition). See [Card Model](features/cards/models/01-card-model.md) and [Card ADR-0001](features/cards/decisions/0001-card-shape.md).
 - **Definition swap (transformation)** — `Definition` is on the handle, not in `EntityVariableState`. To transform, create a new `StateEntity<TNewDef>` for the same `InstanceId`. There is no state-level `SetDefinitionPayload`.
 
 Why this resolution:
@@ -287,7 +289,7 @@ Card Framework conventions on top of these primitives:
 
 These are integration concerns the engine owns. None require further Scaffold work.
 
-- **Handle registry and re-hydration.** `StateEntity` is not a `State`; only `EntityVariableState` slices are in `SaveSnapshot()`. The engine keeps an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` handles after `LoadSnapshot`. A snapshot rolling back to a state where an entity still existed will re-create its canonical row; the engine re-issues handles for those ids.
+- **Handle registry and re-hydration.** `StateEntity` is a class (handle), not state itself. For cards, the `InstanceId → handle` registry is held on the Store as `CardMapState` (keyed by `CardRef`, value is the `Card` handle) — see the [Card Model](features/cards/models/01-card-model.md). `LoadSnapshot` rehydrates the map directly; the engine no longer maintains a separate registry. For entity kinds that don't have a corresponding map slice, the engine still re-creates handles on snapshot load using the `EntityVariableState` slices and a definition lookup.
 - **Disposal on entity death.** Calling `StateEntity.Dispose()` releases the per-instance Store listener. The engine calls this on the entity-removal path so short-lived tokens do not retain handlers.
 - **Single mutator registration per Store.** `EntityBridgeContext.RegisterMutators(store)` runs once per Store at engine bootstrap; a duplicate call throws `DuplicateMutatorRegistrationException`.
 - **Structural-change subscription is diff-based.** Per-mutation granularity (an `Added` and a `Removed` for a remove-and-re-add inside one batch) requires subscribing to the `EntityVariableState` slice directly and diffing. The bridge's `SubscribeToVariableStructuralChanges` is the coalesced view, which is what continuous-effects cleanup actually wants.
@@ -318,12 +320,12 @@ These are good early invariants:
 
 ## Next Questions
 
-This model pushes the next important questions into the Zone and State docs:
+This model's zone-related follow-ups have been settled — see the Zone Model and ADRs in `features/zones/`:
 
-- Is a zone always an entity instance, or can some zones be lightweight session records?
-- Is zone membership a variable, relationship, Store slice, or combination?
-- How does ordered or grouped arrangement work inside zones?
-- How do visibility and ownership interact?
+- ~~Is a zone always an entity instance, or can some zones be lightweight session records?~~ → Resolved: zones are thin domain objects (not entities), state in slices. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~Is zone membership a variable, relationship, Store slice, or combination?~~ → Resolved: `ZoneContentsState` slice. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~How does ordered or grouped arrangement work inside zones?~~ → Resolved: `ContentEntry { InstanceId, SlotKey?, GroupKey? }`; interpretation lives in zone definition. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~How do visibility and ownership interact?~~ → Resolved: zone definition policy + per-card flag enum + per-actor transport alias. ([ADR-0002](features/zones/decisions/0002-visibility-model.md))
 
 
 ---
@@ -435,7 +437,7 @@ Implication:
 
 Three engine-side responsibilities follow from the bridge boundary (none require further Scaffold work):
 
-- **Handle re-hydration after `LoadSnapshot`.** Snapshots contain canonical `EntityVariableState` slices, not handles. The engine maintains an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` references after load.
+- **Handle re-hydration after `LoadSnapshot`.** For cards, the registry lives on the Store as `CardMapState` (keyed by `CardRef`, value is the `Card` handle); snapshot load rehydrates the map directly. For entity kinds without a corresponding map slice, the engine maintains an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` references after load.
 - **Disposal on entity death.** The engine calls `StateEntity.Dispose()` on the entity-removal path so the Store listener is released; short-lived tokens otherwise leak handlers.
 - **Structural-change subscriptions are diff-based.** A single `ExecuteBatch` that removes and re-adds the same variable produces no net `Added`/`Removed` event. For per-mutation granularity, subscribe to the `EntityVariableState` slice directly and diff. (Coalesced view is the right default for continuous-effects cleanup — doc 24.)
 

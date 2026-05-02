@@ -769,6 +769,16 @@ Four rules are checked on every lint run. Findings become ledger entries (source
 
 `/builder:archive` automates the mechanical move: flips status, writes the four front-matter fields, `git mv`s the file into `archive/`, runs `/builder:lint`, and opens a single-commit PR. If `archive/` doesn't exist yet, it creates it with a `.gitkeep` before the move. See `.claude/commands/builder/archive.md` for the skill spec.
 
+#### Pre-merge mutability carve-out
+
+The archive convention applies to ADRs (and Models) that have been **merged to `main`**. Decisions still in an open PR — not yet landed in long-term project history — may be edited or rewritten in place during the same iteration. Reasons:
+
+- A decision that's never reached `main` has not been published as a settled contract; reworking it within the PR is normal review-driven iteration, not a reversal.
+- Strict archive on every PR-internal change would create archive churn during normal iteration and pollute `archive/` with WIP versions.
+- `last-updated` bumps and PR commit history are sufficient signal for in-flight changes.
+
+Once a decision lands on `main`, the archive convention applies in full: a later reversal requires marking the original `Superseded` and moving it to `archive/` with `superseded_by` pointing at the replacement.
+
 ---
 
 ## 6. Cross-cutting infrastructure
