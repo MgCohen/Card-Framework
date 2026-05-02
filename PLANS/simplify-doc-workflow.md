@@ -75,14 +75,14 @@ Sections may be empty with a stub (`*n/a — purely descriptive Model.*`) but ca
 
 Cascade is detected on demand by the linter, not tracked.
 
-- Retire `Product/ledgers/ALIGNMENT-DEBT.md` (kept as archive, no new entries).
+- Retire `Product/ledgers/ALIGNMENT-DEBT.md` (move to `Product/_archive/ledgers/ALIGNMENT-DEBT.md`; preserve content; no new entries).
 - Retire `/builder:debt-pass` skill.
 - Retire `.github/workflows/debt-pass.yml` (already disabled in PR #82; this step deletes the file).
 - Retire `PLANS/auto-debt-pass.md` (mark `status: abandoned`).
-- Drop §5.7, §5.8, §5.9 (cascade walking on supersession) from PRODUCT-BUILDER.md.
-- Replace with a one-paragraph rule: *"Cascade is detected, not tracked. Run the linter or `/builder:deps`. Fix in place. If a cascade needs design judgment rather than a mechanical edit, open an OPEN-QUESTIONS entry."*
+- Drop §5.5, §5.7, §5.8, §5.9 (alignment-debt-as-focus + cascade walking) from PRODUCT-BUILDER.md.
+- Replace with a one-paragraph rule: *"Cascade is detected, not tracked. Run the linter or `/builder:deps`. Fix in place. If a cascade needs design judgment rather than a mechanical edit, open an OPEN-ITEMS entry."*
 
-The OPEN-QUESTIONS ledger absorbs the one edge case (cascade-needs-design vs cascade-is-mechanical) — no separate machinery.
+The OPEN-ITEMS ledger absorbs the one edge case (cascade-needs-design vs cascade-is-mechanical) — no separate machinery.
 
 ### 6. Lighten session workflow — checkpoint is the only spine
 
@@ -100,9 +100,9 @@ Four of five jobs are double-bookkept. Cut.
 
 - **One live working doc** (`SESSION-CHECKPOINT.md`, or rename to `CURRENT.md`). Continuously updated as decisions land — not at end-of-session. No open/close lifecycle, no `started-at`, no `parent`, no `head/merged/batch`, no schema-version.
 - **`/builder:start-session`** — lightweight. Reads CURRENT + ledgers, prints "where we are / what's next." Creates no artifact.
-- **`/builder:end-session`** (rename: `/builder:wrap`) — runs linter, ensures CURRENT is current, exits. Creates no artifact.
+- **`/builder:end-session`** — runs linter + freshness check + chat-log scan, surfaces findings as interactive prompts (per G5). Creates no artifact. Name kept (rename has churn cost).
 - **`/builder:snapshot`** — opt-in. When user says "this state is a milestone," copies CURRENT into `sessions/<date>-<slug>.md`. Otherwise nothing lands there.
-- **`Product/sessions/`** becomes a sparse milestone archive. Existing notes stay as historical record — no migration.
+- **`Product/sessions/`** becomes a sparse milestone archive. Legacy per-session notes move to `Product/_archive/sessions/` (per G2) — `sessions/` starts empty so first snapshots aren't anchored to legacy style.
 
 **Kills:**
 - Session-note schema (§4.6).
@@ -180,7 +180,11 @@ Deferred — solves a problem that doesn't exist today (solo work, one machine, 
 5. **Reverse graph** — compute "who references this" from the union of all `references:` fields. Expose as `/builder:deps <path>`.
 6. **Git-derived dates** — `last-updated` per doc on demand from `git log`.
 
-Step zero before adding new responsibilities: **harden the linter** (track `bl-debt-pass-gha-silent-failure` lessons — make sure it always produces signal, never fails silently).
+Step zero before adding new responsibilities: **harden the linter against silent failures.** Concretely:
+- Explicit non-zero exit code on any internal error (file not found, parse failure, etc.) — no silent catch-and-continue.
+- Structured output (machine-readable summary line: `lint: P passed, F failed, S skipped`) so absence of output = visible failure.
+- Smoke test against a known-broken fixture committed under `.claude/skills/builder/lint/fixtures/` — at least one Model with a broken `references:` and one with a structure violation. CI or manual run validates the linter still flags them.
+- Continue-on-error for *findings* (so one broken doc doesn't stop the rest of the scan), but exit-on-error for *infrastructure failures* (missing input dir, malformed front matter the linter itself can't parse). The two failure modes need different treatment.
 
 ---
 
@@ -198,7 +202,7 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - Delete `.github/workflows/debt-pass.yml`.
 - Mark `PLANS/auto-debt-pass.md` `status: abandoned`.
 - Remove `/builder:debt-pass` skill.
-- Archive `Product/ledgers/ALIGNMENT-DEBT.md` (move to `Product/ledgers/archive/` or similar; preserve content).
+- Archive `Product/ledgers/ALIGNMENT-DEBT.md` → `Product/_archive/ledgers/ALIGNMENT-DEBT.md` (preserve content).
 - Drop §5.7, §5.8, §5.9 from `PRODUCT-BUILDER.md`; add the one-paragraph "detected, not tracked" rule.
 - Drop `debt: N opened` assertion from session-note template.
 
@@ -208,10 +212,10 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 - *Commits 3..N (one per feature):* for each `features/<name>/`:
   - Rewrite every Model into the new template.
   - Fold each sibling feature-internal ADR into the relevant Model's provenance section.
-  - Archive ADR file to global archive (per G2 location convention) with forward link to absorbing Model section.
-  - Move any cross-cutting ADRs to `Product/decisions/` (if mis-filed under a feature).
+  - Archive ADR file to `Product/_archive/decisions/<feature>/<NNNN>-<slug>.md` (preserves feature scoping in archive); ADR keeps a forward link to the absorbing Model section.
+  - Move any cross-cutting ADRs to `Product/decisions/` (criterion per #3 — applies framework-wide, cited from multiple features, deserves a one-pager).
   - Delete empty `features/<feature>/decisions/` directory.
-- *Commit final:* sweep for orphan references, run linter, fix anything left.
+- *Commit final:* run linter against full tree; resolve any reference-resolution failures (broken paths, missing references, structure violations).
 
 **PR 5a — ledger consolidation**
 - Create `Product/ledgers/OPEN-ITEMS.md`; merge `OPEN-QUESTIONS.md` + `BACKLOG.md` content (drop strikethrough archive — those entries are already resolved).
@@ -222,13 +226,13 @@ One PR per locked decision is too granular; one PR for everything is too risky. 
 **PR 5b — session workflow lightening**
 - Strip `SESSION-CHECKPOINT.md` front matter (drop schema-version / head / merged / batch).
 - Rewrite `/builder:start-session` skill — read-only briefing, no artifact creation, no orphan cleanup.
-- Rewrite `/builder:end-session` skill (rename to `/builder:wrap` if desired) — runs linter, validates checkpoint freshness, exits. No session-note creation.
+- Rewrite `/builder:end-session` skill — runs linter + freshness check + chat-log scan; surfaces findings as interactive prompts (per G5). Preserves existing chat-log scan for unsaved sketches (per G1). No session-note creation. Name kept.
 - Add `/builder:snapshot` skill — opt-in copy of CURRENT into `sessions/<date>-<slug>.md`.
 - Drop §4.6 (session-note template) from PRODUCT-BUILDER.md.
-- Collapse §5.3 (Ending a session) to a paragraph.
+- Collapse §5.1–§5.3 (start / during / end of session) to a single paragraph: *"checkpoint is the only spine; agent keeps it current as work happens."*
 - Mark `PLANS/parallel-sessions.md` `status: abandoned`.
 - Remove pre-push hook for in-progress session notes (`.githooks/pre-push`).
-- Existing session notes in `Product/sessions/` stay as historical record — no migration.
+- Move existing session notes `Product/sessions/session-*.md` → `Product/_archive/sessions/` (per G2). Add `Product/sessions/README.md` with the cutover note.
 
 **PR 6 — root instruction refresh** *(follow-up per G6)*
 - Update `AGENTS.md` to reflect the steady-state workflow (no debt-pass, no session lifecycle, OPEN-ITEMS, etc.).
@@ -251,9 +255,9 @@ Or collapse to one PR if we trust the diff. TBD when sketching.
 |---|---|---|---|
 | `bootstrap` | Edit (medium) | all | Update once-per-project scaffold to new shape |
 | `start-session` | Edit (shrink) | #6 | Read-only briefing; no artifact creation, no orphan cleanup |
-| `end-session` | Edit (shrink) | #6 | Runs linter, ensures CURRENT fresh, exits. No session-note write. Drop `--discard`. Keep name |
-| `new` | Edit | #3, #4 | Drop session + (feature-internal) ADR templates from picker. Pre-stub strict Model sections |
-| `design-pass` | Edit (light) | #6, #7 | Output shifts to CURRENT.md scratch; promoted opens go to OPEN-ITEMS |
+| `end-session` | Edit (shrink) | #6, #1, #5 | Runs linter + freshness check + chat-log scan for unsaved sketches; surfaces findings as interactive prompts (fix / defer to OPEN-ITEMS / ignore). No session-note write. Drop `--discard`. Keep name |
+| `new` | Edit | #3, #4 | Drop session + (feature-internal) ADR templates from picker. For Models: writes the canonical section headers as empty stubs with `*n/a — fill in*` placeholders so the agent fills content into the predetermined structure |
+| `design-pass` | Edit (light) | #7 | No in-flight persistence — verdicts live in conversation context; on user "apply," patches go directly into affected Model(s) in one follow-up turn |
 | `archive` | Edit (light) | #5, #6 | Drop ALIGNMENT-DEBT integration; session lifecycle awareness gone |
 | `promote-glossary` | Edit (light) | #6 | Drop branch-annotation from changelog; possibly absorb retired-tokens append (see G4) |
 | `merge-pass` | Delete | #6 | Parallel sessions abandoned |
@@ -265,7 +269,7 @@ Or collapse to one PR if we trust the diff. TBD when sketching.
 | Skill | Action | Driven by | Notes |
 |---|---|---|---|
 | `builder/lint` | Edit (significant) | #1, #2, #4, #5 | Drop ALIGNMENT-DEBT writes (becomes a report). Add: structure check, header-body sync, reverse graph + `/builder:deps`, git-derived `last-updated`, retired-tokens validation. **Step zero: harden against silent failures** |
-| `builder/lint-workspace/` | Keep / archive | — | Eval workspace; not in critical path |
+| `builder/lint-workspace/` | Keep in place | — | Eval data tied to lint-skill iteration history; lives next to the skill, not a doc artifact |
 
 ### Hooks / GHA
 
@@ -285,6 +289,24 @@ Or collapse to one PR if we trust the diff. TBD when sketching.
 | `sample.md` | Edit (light) — front-matter cleanup | #1, #2 |
 | `checkpoint.md` | Edit (heavy) — strip lifecycle metadata; add `## Scratch` | #6 |
 | `session.md` | Delete | #6 |
+
+### Other workflow docs (`Product/_workflow/`)
+
+| Doc | Action |
+|---|---|
+| `REFERENCE-CONVENTIONS.md` | Edit (light) — collapse to one `references:` field per #1; drop `builds-on:` discussion |
+| `EMOJI-LEGEND.md` | Keep as-is |
+| `retired-tokens.json` | Keep — writer changes from debt-pass to `/builder:promote-glossary` per G4 |
+
+### Project content (`Product/general/`, `Product/support/`)
+
+| Area | Action |
+|---|---|
+| `general/*.md` (VISION, ARCHITECTURE, ROADMAP, RECOMMENDATIONS, etc.) | Subject to PR 1 front-matter rename only; content unchanged |
+| `support/samples/*` | Subject to PR 1 front-matter rename; otherwise unchanged |
+| `support/prior-art/*` | Same |
+| `Product/spikes/*` | Same |
+| `Product/decisions/*` (project-wide ADRs) | Subject to PR 1 front-matter rename; otherwise unchanged (these are the surviving ADR home per #3) |
 
 ### Ledgers (`Product/ledgers/`)
 
@@ -309,9 +331,12 @@ Or collapse to one PR if we trust the diff. TBD when sketching.
 |---|---|
 | §3 Front matter | Rewrite — `references:`, drop `last-updated:` and `builds-on:` |
 | §4 Templates | Rewrite — strict Model structure, ADR scope change, drop session template |
-| §5.0 Bootstrap | Edit — new ledger shape, drop pre-push install |
-| §5.1–§5.3 Sessions | Collapse heavy — to a paragraph |
+| §5.0 Bootstrap | Edit — new ledger shape (OPEN-ITEMS only), drop pre-push install, drop ALIGNMENT-DEBT init |
+| §5.1 Starting a session | Collapse — one sentence: "read CURRENT + ledgers; see what's next" |
+| §5.2 During a session | Collapse — one paragraph: "agent keeps CURRENT current as work happens; ephemerals to `## Scratch`; design walks hold verdicts in context" |
+| §5.3 Ending a session | Collapse — one paragraph: "`/builder:end-session` runs linter + freshness check + chat-log scan; surfaces findings interactively" |
 | §5.4 Reopening decisions | Edit (light) — supersession survives; cascade walk on-demand |
+| §5.5 Alignment-debt as focus | Delete entirely — debt-pass is gone |
 | §5.6 Status gates | Keep |
 | §5.7–§5.9 Cascade machinery | Delete — replaced by one paragraph |
 | §5.10 Linter | Rewrite — expanded responsibilities |
@@ -350,7 +375,7 @@ To lock one-by-one before edit work starts. Each gets a verdict line appended be
 | G4 | Retired-tokens registry — who writes it now | **locked: `/builder:promote-glossary` writes it on rename.** Existing `<old-term> -> <new-term>` syntax extended to also append `Product/_workflow/retired-tokens.json` (term, retired date, replacement, one-line context). Add `--rename-only` mode for token renames that don't touch GLOSSARY (rare). Linter consumes the registry for actionable error messages ("X was retired YYYY-MM-DD; use Y instead"). |
 | G5 | `end-session` linter integration — gate or soft | **locked: interactive triage.** There is no "closing" a session anymore (no per-session artifact to gate). `end-session` is just a routine bundle — runs linter + freshness check + chat-log scan for unsaved sketches. Findings surface as interactive prompts: *"linter found N issues; freshness check found M; chat scan found K unsaved sketches — fix now / defer to OPEN-ITEMS / ignore?"* Agent waits for direction per category. Not a refusal-style gate; an interaction point that the user routes through. |
 | G6 | `AGENTS.md` + root `CLAUDE.md` — final reference sweep | **locked: separate follow-up PR after main cleanup.** Land all cleanup PRs first; then one small PR refreshes both root instruction files against the steady-state workflow. Avoids rewriting the same sections multiple times as decisions land in different PRs, and produces a single coherent before/after diff. |
-| G7 | `design-pass` output discipline — new target shape | **locked: no in-flight persistence — conversation context is the buffer.** Design-pass walks Q-by-Q, locks verdicts in the active conversation, never writes to a buffer file mid-walk. Verdicts often revise during a walk (you discover something's wrong while answering a later Q); persisting in-flight wastes tokens and forces buffer rewrites. When the walk concludes, the user decides whether to apply — patches go directly into the affected Model(s) in one pass. If a walk gets interrupted, verdicts evaporate; that's correct (locks were tentative, re-walking refines). Same risk profile as `## Scratch` ephemerals. |
+| G7 | `design-pass` output discipline — new target shape | **locked: no in-flight persistence — conversation context is the buffer.** Design-pass walks Q-by-Q, locks verdicts in the active conversation, never writes to a buffer file mid-walk. Verdicts often revise during a walk (you discover something's wrong while answering a later Q); persisting in-flight wastes tokens and forces buffer rewrites. **Apply trigger:** when the walk concludes and the user says "apply" (or equivalent), the agent patches each affected Model in a single follow-up turn. If a walk gets interrupted before apply, verdicts evaporate; that's correct (locks were tentative, re-walking refines). Same risk profile as `## Scratch` ephemerals. |
 
 ---
 
@@ -365,6 +390,13 @@ User flagged additional thoughts coming. Add them here as they land before we mo
 ## Out of scope for this pass
 
 - Drift detection (post-merge code-vs-contract automation, §5.12). Orthogonal; not affected by these changes.
-- Parallel-sessions plan (`PLANS/parallel-sessions.md`). Stays as-is — its merge model survives this simplification, just with fewer things to merge.
-- Bootstrapping ceremony (§5.0). Not affected.
 - Status state machine (§5.13). Not affected.
+- §5.14 Archive convention (per-feature `archive/`). Light edit only; broader archive rethink deferred to future considerations.
+
+## Success criteria
+
+Done when **all** of:
+1. PRs 1, 2, 5a, 5b, 3+4, 6 merged to main.
+2. `/builder:lint` passes against the full `Product/` tree (no broken references, no structure violations, no unresolved retired tokens).
+3. One real working session (any new design or implementation work) runs cleanly under the new shape — start with `/builder:start-session`, work, end with `/builder:end-session` — without falling back to deleted commands or stale conventions.
+4. `AGENTS.md` and root `CLAUDE.md` describe the steady-state workflow (no stale references to deleted artifacts).
