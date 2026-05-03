@@ -1,6 +1,11 @@
-# <feature> — feature
+---
+type: feature
+status: draft
+references: [<upstream features, or the literal `root`>]
+tags: []
+---
 
-<front matter: type=feature, status=draft>
+# <feature> — feature
 
 ## Purpose
 What this feature is and why it exists. One paragraph.

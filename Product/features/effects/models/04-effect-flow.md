@@ -442,5 +442,4 @@ Pinned by this Model and referenceable from downstream docs:
 - [features/effects/models/02-replacement-prevention.md](features/effects/models/02-replacement-prevention.md) — `FoldResult.Cancel`, `Task`-returning pipeline
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions`, snapshot scope discriminator
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — gateway, `IIntentMapper`, command pipeline
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; §9.4–9.5 carry alignment debt against this Model
-- [ledgers/ALIGNMENT-DEBT.md](ledgers/ALIGNMENT-DEBT.md) — cascade entries from this Model (S15 §6 patch discharged S16)
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; §9.4–9.5 stress this Model

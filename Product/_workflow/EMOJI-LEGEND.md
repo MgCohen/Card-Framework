@@ -7,7 +7,7 @@ tags: [#workflow, #meta]
 
 # Emoji Legend
 
-**Purpose.** Single source of truth for emoji used as section anchors across workflow chat reports (e.g., start-session, end-session) and committed artifacts (session notes, doc-type templates). Strict 1:1 mapping between emoji and workflow concept — every grep for an emoji returns exactly one concept.
+**Purpose.** Single source of truth for emoji used as section anchors across workflow chat reports (e.g., start-session, end-session) and committed artifacts (`SESSION-CHECKPOINT.md`, opt-in snapshots in `sessions/`, doc-type templates). Strict 1:1 mapping between emoji and workflow concept — every grep for an emoji returns exactly one concept.
 
 **Scope.** Both ephemeral chat output and committed `.md` artifacts. Skills and templates reference this doc as the canonical legend; do not redefine emojis elsewhere.
 
@@ -34,15 +34,13 @@ The design rule is **precision over parsimony**. Add slots for any concept that 
 | ✅ | locked | both | doc/section sealed against further changes |
 | 🛑 | blocker | both | work halted, awaiting decision/intervention |
 | ⏳ | deferred / awaiting | both | parked for later, or awaiting external action (e.g., automated discharge) |
-| 📝 | session note reference | both | path or mention of `sessions/<session-id>.md` |
+| 📝 | scratch / ephemeral notes | both | `SESSION-CHECKPOINT.md ## 📝 Scratch` section; mid-conversation questions not yet promoted to OPEN-ITEMS |
 | 📊 | stat line / counts | both | numeric summary (`12/5`, `6 entries`) |
-| 🕐 | session outcome / carry-over | chat only | the bridge line between sessions (start-session 🕐 Last session, end-session 🕐 Outcome) |
+| 🕐 | session bridge / outcome | chat only | bridge line between sessions (start-session 🕐 Last session, end-session 🕐 Outcome) |
 | 📤 | commit/push action | chat only | end-session commit/push report line |
 | 🔄 | resume signal | chat only | re-entering a pre-created skeleton that was never closed (start-session) |
 | 🔒 | locked design decision | chat only | settled verdict from a design-pass walk |
 | 🧹 | cleanup action | chat only | start-session orphan-skeleton sweep surfacing |
-| 🔀 | branch / parallel-session info | chat only | start-session and end-session branch-mode strip |
-| 📦 | backlog reference | chat only | start-session backlog table heading |
 | 🔍 | artifact / sketch review | chat only | end-session unsaved-body review table (interfaces, protocols, sketches discussed in conversation) |
 
 **Scope:**
@@ -73,6 +71,8 @@ Documented to make drift visible. If you find yourself reaching for one of these
 - ☑️ / ✔️ — visual collision with ✅.
 - 👉 / ✋ — italic `_Confirm or pivot._` line carries the prompt without an emoji.
 - Multi-codepoint / ZWJ emoji (👨‍💻, 🏳️‍🌈) — tokenize unpredictably (5+ tokens), rendering varies.
+- 🔀 — *retired 2026-05-03.* Was "branch / parallel-session info"; parallel-session machinery was retired in the doc-workflow simplification (PR 5b). No successor concept.
+- 📦 — *retired 2026-05-03.* Was "backlog reference"; the BACKLOG ledger merged into OPEN-ITEMS. Open-items references use ❓.
 
 ---
 
@@ -105,3 +105,4 @@ If any test fails, use bold prose anchors instead.
 - **2026-04-30** — initial legend (9 entries: 🎯 📋 ❓ ⚠️ ✅ 🛑 ⏳ 📝 📊).
 - **2026-05-01** — absorbed chat-only extensions from retired `REPORT-STYLE.md`. Added 🕐 📤 🔄 🔒 🧹 🔀 📦 with a `Scope: chat only` tag. 🔒 moved from §4 (excluded) to §2 — design-pass legitimized its use. ⏳ broadened from "deferred" to "deferred / awaiting" to cover the awaiting-automated-discharge case.
 - **2026-05-01** — added 🔍 (chat only) for end-session unsaved-body review table. Pre-existing in `end-session.md` step 2a but undocumented; absorbed during the post-retirement review.
+- **2026-05-03** — doc-workflow drift sweep. 🔀 and 📦 retired to §4 (parallel sessions and BACKLOG retired upstream). 📝 reframed from "session note reference" to "scratch / ephemeral notes" (current use is `SESSION-CHECKPOINT.md ## 📝 Scratch`; session notes themselves are retired). 🕐 reworded from "session outcome / carry-over" to "session bridge / outcome" — same role, snapshot-aware framing. §1 purpose paragraph dropped the "session notes" mention.

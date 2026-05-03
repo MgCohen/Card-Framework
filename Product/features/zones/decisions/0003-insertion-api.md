@@ -75,7 +75,7 @@ Static factories provide call-site readability for the position axis:
 
 The `BypassCapacity` axis uses C#'s `with` expression rather than a separate `Force` factory — `InsertCardPayload.AtTop(zone, card) with { BypassCapacity = true }`. This avoids method-explosion (no `Force × Position` cartesian product) and keeps the override self-documenting at the call site.
 
-The composite `RelocateInstanceMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. A relocate that pushes to top of destination uses `RelocateInstanceMutation { Source, Destination, Card, Position: new AtTop() }`.
+The composite `MoveCardMutation` (remove + insert as one logical move) carries the same `InsertPosition` and `BypassCapacity` and forwards them to the insert side. A move that pushes to top of destination uses `MoveCardMutation { Source, Destination, Card, Position: new AtTop() }`.
 
 ## Consequences
 
