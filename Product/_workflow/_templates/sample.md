@@ -1,6 +1,11 @@
-# <sample name> — sample
+---
+type: sample
+status: draft
+references: [<upstream features or models, or the literal `root`>]
+tags: []
+---
 
-<front matter: type=sample, status=draft>
+# <sample name> — sample
 
 ## Subject
 The concrete thing this sample describes, in plain language. No design-doc terminology.

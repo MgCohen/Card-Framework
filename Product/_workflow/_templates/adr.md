@@ -1,10 +1,13 @@
+---
+type: adr
+status: proposed
+references: [<related models or features>]
+tags: []
+---
+
 # ADR-NNNN — <title>
 
-<front matter: type=adr, status=proposed>
-
-Date: 2026-04-29
-Context-doc: features/<feature>/models/NN-<title>.md
-Proposal: features/<feature>/models/NN-<title>.md
+Context-doc: `Product/features/<feature>/models/NN-<slug>.md` (or whichever Model surfaced the decision)
 
 ## Context
 Two paragraphs max.

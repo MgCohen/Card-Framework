@@ -1,6 +1,11 @@
-# <name> — spike
+---
+type: spike
+status: active
+references: [<upstream models or features, or the literal `root`>]
+tags: []
+---
 
-<front matter: type=spike, status=active>
+# <name> — spike
 
 ## Premise
 What we're exploring and why. One paragraph.
