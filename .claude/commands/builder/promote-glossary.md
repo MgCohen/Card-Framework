@@ -31,18 +31,15 @@ If the form is ambiguous, ask. Don't guess.
    - YYYY-MM-DD — added `<term>` / updated `<term>`. <one-line reason>.
    ```
 
-4. **Patch the in-progress session note.** Append to Part 1 "Work done": `- glossary: added/updated <term>`.
+4. **Show the diffs**, get confirmation, then write. (The term change is git-evident in `GLOSSARY.md`; nothing else needs to be written to a ledger or to CHECKPOINT.)
 
-5. **Show the diffs**, get confirmation, then write.
-
-6. **Render the result.**
+5. **Render the result.**
 
    **Mode A — Add term:**
 
    1. **Title** (H1) — `` # Glossary: added `<term>` ``
    2. **Definition** (blockquote) — `> <one-line definition>`
    3. **Section** (bold prose) — `**Section:** <glossary section name>`
-   4. **Session note** (strip) — `📝 Session note: Part 1 "Work done" updated`
 
    **Mode B — Update term:**
 
@@ -63,17 +60,13 @@ If the form is ambiguous, ask. Don't guess.
 
 4. **Surface the cascade.** Print:
    - Number of files containing `<old-term>`.
-   - Whether the count is ≥ the §5.8 threshold of 5 — if so, the resulting cascade entries will trigger automated debt-pass on next GHA fire (informational; no session is forced into pass-mode).
    - The grouped file list (by feature folder).
 
-5. **Offer to scaffold ledger entries.** Ask the user: "Open one alignment-debt entry per affected file?" If yes:
-   - Append entries to `Product/ledgers/ALIGNMENT-DEBT.md`. One entry per `(source=GLOSSARY rename, target=<file>)` pair, status `open`, today's date, reason `term renamed: <old> → <new>`.
-   - Append `debt: N opened` to the session note's Part 1.
+5. **Offer to scaffold ledger entries.** Ask the user: "Open one OPEN-ITEMS entry per affected file?" If yes:
+   - Append entries to `Product/ledgers/OPEN-ITEMS.md`. One entry per `(source=GLOSSARY rename, target=<file>)` pair, kind `task`, today's date, reason `term renamed: <old> → <new>`.
    - **Do not auto-edit the affected files.** That's `builder-rename-cascade` skill (Tier 2).
 
-6. **Patch the session note.** Append to Part 1 "Work done": `- glossary: renamed <old> → <new> (<N> files affected)`.
-
-7. **Render the result.**
+6. **Render the result.**
 
    **Mode C — Rename term:**
 
@@ -81,23 +74,21 @@ If the form is ambiguous, ask. Don't guess.
    2. **Section** (bold prose) — `**Section:** <glossary section name>`
    3. **Reason** (bold prose, optional) — `**Reason:** <why renamed>`
    4. **Cascade stat strip** — `📊 Cascade: <N> files affected`. Append ` · ⏳ awaiting automated discharge` when N ≥ 5 (informational; no pass-mode forcing).
-   5. **Debt opened / Affected files** (H3 + table):
+   5. **OPEN-ITEMS entries opened / Affected files** (H3 + table):
       ```
-      ### 📋 Debt opened
+      ### 📋 OPEN-ITEMS entries opened
       | Folder | Files |
       |---|---|
       | <folder> | <files> |
       ```
-      Heading switches to `### 📊 Affected files` if the user declined debt scaffolding.
-   6. **Session note** (strip) — `` 📝 Session note: Part 1 "Work done" updated `` (append `· <N> debt entries opened` when scaffolded).
+      Heading switches to `### 📊 Affected files` if the user declined ledger scaffolding.
 
    **Empty/edge states:**
 
    | Section | Empty / edge render |
    |---|---|
    | Cascade (0 files affected) | `📊 Cascade: 0 files affected — no follow-up needed`; omit the §5 file table |
-   | Debt scaffolding declined | switch §5 heading to `### 📊 Affected files`; add `⏳ Debt scaffolding declined` strip below the table |
-   | Cascade < 5 | drop the ` · ⏳ awaiting automated discharge` clause from the stat strip |
+   | Ledger scaffolding declined | switch §5 heading to `### 📊 Affected files`; add `⏳ Ledger scaffolding declined` strip below the table |
 
    **No `🎯 Next steps` section.** Promote-glossary is one-shot. **No `📚` emoji** (excluded from the legend).
 

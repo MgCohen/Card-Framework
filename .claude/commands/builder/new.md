@@ -53,28 +53,23 @@ User input: `$ARGUMENTS`
 
 10. **Write the file.** Show the planned diff first; on confirm, write.
 
-11. **Patch the in-progress session note.** Find the session with `status: in-progress` via `grep -rl 'status: in-progress' Product/sessions/`. If multiple match, use the most recently modified (`ls -t`). Append a line to its Part 1 "Work done" section: `- <type> <relative path> created`. Skip this step for `plan` type — plans don't get session-noted.
-
-12. **Render the result.**
+11. **Render the result.**
 
     Result-strip pattern:
     - **Verb:** `Created`
     - **Subject:** the relative target path (in backticks)
     - **Metadata:** `(<type>, <status>)` for Model / ADR / spike / sample (status omitted for `plan` — no front matter)
-    - **Session-note strip:** always rendered *except* for `plan` type
+
+    The act of creating the file is git-evident; nothing else needs to be written to a ledger or to CHECKPOINT.
 
     **Examples:**
 
     ```
     **Created:** `Product/features/engine/models/04-evaluation-loop.md` (Model, draft)
-
-    📝 Session note: Part 1 "Work done" updated
     ```
 
     ```
     **Created:** `Product/decisions/0009-async-snapshot-pipeline.md` (ADR, proposed)
-
-    📝 Session note: Part 1 "Work done" updated
     ```
 
     ```

@@ -113,22 +113,12 @@ git add Product/features/<feature>/archive/<filename>
 ### 9. Run /builder:lint --archive-only
 
 Run the lint check immediately after the move. If any findings are reported, print them and ask whether to:
-- **Continue** — open the PR with the findings already in `ALIGNMENT-DEBT.md` (lint wrote the entries)
+- **Continue** — open the PR with the findings surfaced in the PR body for manual cleanup
 - **Abort** — `git reset HEAD` the staged changes and stop for manual fix
 
 Most common finding after a fresh archive: rule A2 (stale inbound links from non-successor docs). Surface the specific links and flag which docs need updating.
 
-### 10. Update the in-progress session note
-
-Find the latest `Product/sessions/session-NN.md` with status `in-progress`. Append to its Part 1 "Work done" section:
-
-```
-- archived Product/features/<feature>/<relative-doc-path> → archive/<filename> (status: <Superseded|Cancelled>)
-```
-
-If no in-progress session note exists, skip silently (session note is not required for this skill).
-
-### 11. Single commit
+### 10. Single commit
 
 ```bash
 git commit -m "Archive <feature>/<filename> — <Superseded|Cancelled>
@@ -138,11 +128,11 @@ git commit -m "Archive <feature>/<filename> — <Superseded|Cancelled>
 https://claude.ai/code/<session>"
 ```
 
-Stage only the files touched by this skill: source removal, target creation, optional `.gitkeep`, `ALIGNMENT-DEBT.md` (if lint opened entries), session note (if patched).
+Stage only the files touched by this skill: source removal, target creation, and optional `.gitkeep`.
 
 Never use `git add -A`, `--force`, `--amend`, or `--no-verify`.
 
-### 12. Push and open PR
+### 11. Push and open PR
 
 ```bash
 git push -u origin claude/archive-<feature>-<slug>-YYYY-MM-DD
@@ -162,7 +152,7 @@ Moves `<source path>` into `<feature>/archive/` per the §5.14 archive conventio
 - **Reason:** <reason>
 
 ## Lint
-<Zero findings | N findings — see ALIGNMENT-DEBT.md entries opened>
+<Zero findings | N findings — see "Stale inbound links" below>
 
 ## Stale inbound links to fix before merging
 - `<doc path>` line N — `[text](../archive/<filename>)` should update to `[text](<successor path>)`
