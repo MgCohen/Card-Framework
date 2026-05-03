@@ -12,7 +12,7 @@ This document pins the catalog of state slices the framework owns, the pattern f
 Builds on:
 
 - [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) — Scaffold `IStateScope`/`Store` binding, mutation discipline
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` service injection, `IAvailableActions`
+- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRulesRuntime<T>` service injection, `IAvailableActions`
 
 ---
 
@@ -50,9 +50,9 @@ public sealed record AvailableActionsState(
     AvailableActionsSnapshot Snapshot) : BaseState;
 ```
 
-- **Purpose.** Holds the current available-actions snapshot published by `GameRules.OnQueueDrained`.
+- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime.OnQueueDrained`.
 - **Written by.** `IAvailableActions` service (framework-internal mutator). Game authors write through the service, never directly.
-- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRules.OnQueueDrained` for re-build.
+- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.OnQueueDrained` for re-build.
 - **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()`.
 
 ### 3.2 `EngineState`
@@ -123,7 +123,7 @@ The factory registers framework-owned slices internally at `Build`. Game authors
 All consumers read state through `IStateScope.Get<TState>()` regardless of tier:
 
 ```csharp
-// GameRules reading game-authored slice
+// GameRulesRuntime reading game-authored slice
 var piles = state.Get<PilesState>().Piles.Values;
 
 // Trigger condition reading framework-owned slice
@@ -152,7 +152,7 @@ foreach (var pile in scope.GetAll<PileState>()) { … }                      // 
 
 ## 6. Subscriptions
 
-Slice-level subscriptions go through the `Store` directly (effects and `GameRules` see only `IStateScope`, which is read-only). The handler signature is uniform across every channel:
+Slice-level subscriptions go through the `Store` directly (effects and `GameRulesRuntime` see only `IStateScope`, which is read-only). The handler signature is uniform across every channel:
 
 ```csharp
 Action<IReference, TState, StateChangeEvent> handler;
@@ -265,7 +265,7 @@ For the entity-side specifics (factory output flowing into raw `AddModifierPaylo
 - [features/effects/models/04-effect-flow.md §4.2](features/effects/models/04-effect-flow.md) — `Store.Execute<TPayload>` + `Mutator<TState, TPayload>`
 - [features/entities/models/02-runtime-surface.md §3](features/entities/models/02-runtime-surface.md) — entity-handle subscriptions
 - [features/entities/models/02-runtime-surface.md §4.5](features/entities/models/02-runtime-surface.md) — entity-side batch composition
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `IAvailableActions` service, `GameRules` constructor
+- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `IAvailableActions` service, `GameRulesRuntime<T>` constructor
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — snapshot production, `IAvailableActions.Set`
 - [support/samples/pile-counter.md](support/samples/pile-counter.md) — working example of game-authored slices (`PilesState`, `LastMoveState`)
 - [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — `HistoryEnvelope` typed definition

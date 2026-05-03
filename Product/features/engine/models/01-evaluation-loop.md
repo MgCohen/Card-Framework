@@ -47,9 +47,9 @@ public interface ICommandPipeline
 }
 ```
 
-### GameRules
+### Rules layer (`GameRulesDefinition` + `GameRulesRuntime<T>`)
 
-The game's rules brain. Called after each command resolves. Reads the current game state (zones, variables, phase) and returns the commands that should run next — if any. Also called when the queue empties.
+The game's rules brain. Split into two cooperating types: `GameRulesDefinition` (pure `[SerializeField]` data, asset-friendly) and `GameRulesRuntime<TDefinition>` (stateful runtime brain with services + game-specific subsystems). The runtime is called after each command resolves — reads the current game state (zones, variables, phase) and returns the commands that should run next — if any. Also called when the queue empties. Throughout this doc, `GameRules` in code sketches denotes the runtime; see [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) for the canonical split.
 
 ### GameEngine
 

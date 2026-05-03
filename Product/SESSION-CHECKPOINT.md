@@ -11,13 +11,15 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Workflow drift cleanup sweep landed (PR #92, merged). Six commits propagated the doc-workflow simplification rollout into the canonical workflow doc, templates, and builder skill files; rewrote the `_templates/checkpoint.md` shape to match what we actually maintain; populated `Product/_workflow/retired-tokens.json` with 15 high-confidence tokens for `/builder:lint` T1; and restored the rich chat-render shape in `start-session.md` + `end-session.md` (the regression PR 5b introduced when it stripped REPORT-STYLE templates alongside the lifecycle machinery). Per-bullet keep/re-source/drop mapping for the chat-template restoration is in commit 6's body. Prior design work — `oq-engine-builder` two-layer split (DI installer + `IGameFactory`) and `engine/05-game-factory.md` — remains the most recent design move.
+Design pass on `oq-gamerules-runtime-definition` — 4 decisions locked. Split `GameRules` into `GameRulesDefinition` (pure `[SerializeField]` data) + `GameRulesRuntime<TDefinition>` (stateful, DI-resolved, holds services + game subsystems). Factory uses container open-generic resolution. Single-phase construction with typed `Definition` on the base. Per-match lifecycle, engine-managed disposal. Patch cascade pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
+
+Doc-workflow simplification rollout fully landed earlier; `oq-engine-builder` design pass landed `engine/05-game-factory.md`.
 
 ---
 
 ## 🎯 Active focus
 
-*Between threads.* Workflow drift sweep just landed; design-side `oq-game-definition` (definition-declared slice schema + `GameDefinition` bundle) is queued as the next natural pass. `oq-gamerules-runtime-definition` is a smaller follow-up that could land first if the goal is to clear a known incompatibility before more weight piles on `engine/05`.
+Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply the runtime/definition split across `engine/02`, `engine/05`, glossary, pile-counter §9.8, and OPEN-ITEMS. Then `oq-game-definition` (Track B from the engine-builder pass) is the next natural design thread.
 
 ---
 
@@ -26,7 +28,7 @@ Workflow drift cleanup sweep landed (PR #92, merged). Six commits propagated the
 See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
 - `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
-- `oq-gamerules-runtime-definition` — reconcile `GameRules` constructor-injected service shape (engine/02) with serializable-data shape (engine/05). Tightly scoped follow-up from the engine-builder pass.
+- `oq-engine-match-lifecycle` — engine `StartMatch` / `FinishMatch` hooks for symmetric bootstrap/teardown, runtime disposal, end-of-match signal. Surfaced from the gamerules runtime/definition pass.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 
 ---
