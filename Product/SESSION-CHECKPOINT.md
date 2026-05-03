@@ -11,15 +11,15 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Design pass on `oq-gamerules-runtime-definition` — 4 decisions locked. Split `GameRules` into `GameRulesDefinition` (pure `[SerializeField]` data) + `GameRulesRuntime<TDefinition>` (stateful, DI-resolved, holds services + game subsystems). Factory uses container open-generic resolution. Single-phase construction with typed `Definition` on the base. Per-match lifecycle, engine-managed disposal. Patch cascade pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
+Design pass on `oq-engine-match-lifecycle` — 7 decisions locked. Match lifecycle lives on `GameEngine` directly (`StartMatch` / `FinishMatch` / `Lifecycle` / `Dispose`); `StartMatch` flips Built→Started + emits `MatchStartedSignal` (no automatic drain, no bootstrap list); `FinishMatch(MatchOutcome)` is the primitive, framework-owned `EndMatchCommand` + handler delegates to it; `MatchOutcome` is an abstract record with sealed subtypes (`Win`, `Loss`, `Draw`, `Aborted`); on end, queue tail drains naturally and runtime's `OnIncomingCommand` handles any game-specific reject policy; `engine.Dispose()` releases engine-internal holdings only (runtime, internal services) — the per-match DI scope is owned by a higher app/game-flow layer; async-effect cancellation deferred to a follow-up. Patch cascade pending: new `engine/06-match-lifecycle.md`, plus edits to `engine/01`, `engine/02`, `engine/04`, `engine/05`, pile-counter §9.6, glossary, OPEN-ITEMS.
 
-Doc-workflow simplification rollout fully landed earlier; `oq-engine-builder` design pass landed `engine/05-game-factory.md`.
+Prior pass on `oq-gamerules-runtime-definition` — patch cascade still pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
 
 ---
 
 ## 🎯 Active focus
 
-Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply the runtime/definition split across `engine/02`, `engine/05`, glossary, pile-counter §9.8, and OPEN-ITEMS. Then `oq-game-definition` (Track B from the engine-builder pass) is the next natural design thread.
+Patch cascade for two design passes: (1) `oq-engine-match-lifecycle` (new doc + edits across `engine/01`, `engine/02`, `engine/04`, `engine/05`, pile-counter §9.6, glossary, OPEN-ITEMS), (2) `oq-gamerules-runtime-definition` (the prior pending cascade across `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS). After both land, `oq-game-definition` (Track B from the engine-builder pass) is the next design thread.
 
 ---
 
