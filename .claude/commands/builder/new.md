@@ -20,7 +20,7 @@ User input: `$ARGUMENTS`
 
    If the user-supplied form doesn't match, print the expected forms and ask. Do not guess.
 
-2. **Validate feature** (Model / feature ADR only). The folder `Product/features/<feature>/` must exist. If it doesn't, print the available features and ask. Do not create new feature folders here — that's `/builder:new-feature` (Tier 2). If `Product/features/<feature>/archive/` does not exist, create it with a `.gitkeep` before writing the new doc (silent, no user prompt needed).
+2. **Validate feature** (Model / feature ADR only). The folder `Product/features/<feature>/` must exist. If it doesn't, print the available features and ask. Do not create new feature folders here — feature creation follows the `PRODUCT-BUILDER.md` §5.11 ceremony (folder + feature root stub + FEATURE-MAP update + CHECKPOINT note) and is done manually. If `Product/features/<feature>/archive/` does not exist, create it with a `.gitkeep` before writing the new doc (silent, no user prompt needed).
 
 3. **Pick the counter** (Model and ADR only).
    - For Models: `ls Product/features/<feature>/models/` → find max `NN-` prefix → increment, pad to 2 digits.
@@ -42,11 +42,10 @@ User input: `$ARGUMENTS`
 
 7. **Read the template** from `Product/_workflow/_templates/<type>.md` (no template for plan — emit a minimal H1 + status line).
 
-8. **Pre-fill front matter.** Replace the template's `<front matter: ...>` placeholder with real YAML:
+8. **Pre-fill front matter.** As of the templates sweep (2026-05-03), Spike / Feature / Model / Sample / ADR / Archive / Checkpoint templates already contain real YAML front matter — fill in the placeholders rather than constructing the block from scratch:
    - `type:` matches the doc type.
    - `status:` `draft` for Model/ADR/spike/plan/sample. (ADRs may go straight to `proposed` if the user wants — ask if not specified.)
-   - `last-updated:` today's ISO date.
-   - `builds-on:` for Models — prompt the user for paths or `root`. Empty list `[]` is forbidden.
+   - `references:` for Models — prompt the user for paths or `root`. Empty list `[]` is forbidden. (No `last-updated:` field; git is the source of truth per `PRODUCT-BUILDER.md` §3.)
    - `tags:` lowercase hashtag list. Suggest based on type and feature.
 
 9. **Replace the title placeholder.** Template H1s look like `# <subject> — model`. Substitute in the user's title.
@@ -81,6 +80,6 @@ User input: `$ARGUMENTS`
 ## Notes
 
 - Don't write any content body beyond the template scaffolding. The author writes the content.
-- Don't touch ledgers from this command — `ALIGNMENT-DEBT.md` and `FEATURE-MAP.md` updates are Tier 2 commands' responsibility.
+- Don't touch ledgers from this command — `FEATURE-MAP.md` and `OPEN-ITEMS.md` updates are the author's responsibility (per the §5.11 feature-creation ceremony, FEATURE-MAP rows are added when a feature is promoted from `considered` to `draft`; OPEN-ITEMS entries land when durable opens surface). Glossary edits go through `/builder:promote-glossary`.
 - If the user passes `feature` for an ADR scope but means `general`, suggest the correction; don't silently route.
 - Plan files are not workflow-specified per `PRODUCT-BUILDER.md` §4.8; this command writes a thin shell only.
