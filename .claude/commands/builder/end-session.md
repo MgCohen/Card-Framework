@@ -5,6 +5,10 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 
 You are running the end-of-session routine. There is no "closing" a session — `SESSION-CHECKPOINT.md` is the live spine and is updated continuously as work happens. This skill is a routine bundle: run integrity checks, surface findings, ask the user what to do per category. **Interactive triage**, not a state gate.
 
+## Output discipline
+
+**No prose preamble. No mid-step narration.** Output begins at the H1 of the triage report in step 4. Tool calls in steps 1–3 are silent until step 4's render begins. Emoji anchors follow `Product/_workflow/EMOJI-LEGEND.md`.
+
 ## Steps
 
 ### 1. Linter
@@ -24,43 +28,80 @@ If `$touched` is non-empty, CHECKPOINT may be stale relative to recent work.
 
 ### 3. Chat-log scan for unsaved sketches
 
-Read the conversation transcript of the current session. Classify each artifact (Model body, ADR shape, contract sketch, glossary term) as:
+Read the conversation transcript of the current session. Identify every artifact that has a concrete shape in the conversation — interfaces, protocols, records, model decisions, pseudocode, named contract shapes, ADR-worthy choices.
 
-- **Accepted** — user committed to it, but check it lands in a canonical file.
-- **Not accepted** — user explicitly rejected it.
-- **Uncertain** — neither clear; surface for confirmation.
+For each artifact, classify it:
+- **Accepted** — the user gave an explicit positive verdict on the shape, or it was used/referenced as authoritative in subsequent turns.
+- **Not accepted** — the shape was proposed but rejected, or explicitly set aside.
+- **Uncertain** — discussed but no clear verdict; or left open by design.
 
-For each Accepted artifact, grep the relevant Product file to verify it actually landed. If not, it's an unsaved sketch.
+Then, for each Accepted artifact, check its canonical `Product/` file (if one exists) and determine whether the shape is already captured accurately.
 
-### 4. Interactive triage
+### 4. Render the triage report
 
-Surface all three categories as one prompt to the user. Format:
+Surface all three categories as one prompt. Render order is fixed — follow exactly.
+
+**1. Title** (H1) — `# Session wrap`.
+
+**2. Linter findings** (H2 + table when findings exist) —
 
 ```
-# Session wrap
+## ⚠️ Linter findings
+| Rule | Doc | Detail |
+|---|---|---|
+| <rule> | <path:line> | <short detail> |
+```
 
-## Linter findings
-<N findings, table from /builder:lint output. Or "Clean — no findings.">
+Empty state (collapses the table): `✅ Linter clean — no findings`.
 
-## Freshness check
-<CHECKPOINT is stale relative to: list of touched files. Or "CHECKPOINT is current.">
+**3. Freshness check** (H2 + body) —
 
-## Unsaved sketches
-<K artifacts that the conversation accepted but aren't in any Product file. Or "All accepted artifacts are saved.">
+```
+## 🕐 Freshness check
+CHECKPOINT is stale relative to:
+- `<path>` — touched <duration> after last CHECKPOINT edit
+- `<path>` — touched <duration> after last CHECKPOINT edit
+```
 
-For each category:
-- Fix now (apply edits in this turn).
-- Defer to OPEN-ITEMS (open an entry).
-- Ignore.
+Empty state: `🕐 CHECKPOINT is current`.
 
-What's the call?
+**4. Sketches found this session** (H2 + table — load-bearing; this is what gates whether unsaved interfaces actually get persisted) —
+
+```
+## 🔍 Sketches found this session
+| Artifact | Verdict | File match |
+|---|---|---|
+| `IHandlerRegistry` interface | ✅ Accepted | ❌ Not in file |
+| `GameEngineBuilder` builder pattern | ✅ Accepted | ✅ Matches engine/01 §6 |
+| `ICommandPipeline` stub | ⚠️ Uncertain | ❌ Not in file |
+| Queue ordering sketch | ❌ Not accepted | — |
+
+_Review and correct if needed. Accepted + not-in-file items will be written when you route them to "Fix now"._
+```
+
+Empty state (collapses the table): `🔍 No sketches surfaced — operational session with no design work`.
+
+**5. Routing prompt** (H2 + bullet list + italic closing) —
+
+```
+## 🎯 What's next
+
+For each category above:
+- **Fix now** — apply edits in this turn (refresh CHECKPOINT, save sketches to canonical files, fix lint findings).
+- **Defer to OPEN-ITEMS** — append a paragraph entry per item to `Product/ledgers/OPEN-ITEMS.md`.
+- **Ignore** — do nothing. The user is taking responsibility for the gap.
+
+_What's the call?_
 ```
 
 ### 5. Act on user direction
 
 For each category the user routes:
-- **Fix now** — apply edits in the current conversation (refresh CHECKPOINT, save sketches to canonical files, fix lint findings).
-- **Defer to OPEN-ITEMS** — append a paragraph entry per item to `Product/ledgers/OPEN-ITEMS.md`.
+- **Fix now** — apply edits in the current conversation:
+  - **Sketches → canonical file.** Use the exact shape from the conversation — do not paraphrase a typed interface; write the interface. If no canonical file exists, create one via `/builder:new` first.
+  - **Linter findings.** Apply the mechanical fix (broken-reference repair, structure violation, etc.) per the rule's guidance.
+  - **CHECKPOINT freshness.** Update `## Where we stopped` and the active-focus framing.
+- **Defer to OPEN-ITEMS** — append a paragraph entry per item to `Product/ledgers/OPEN-ITEMS.md` following the §6 entry shape (`id`, optional `kind`, **Title** — paragraph framing, References).
 - **Ignore** — do nothing. The user is taking responsibility for the gap.
 
 Don't refuse or block. The user routes; you execute.
@@ -71,3 +112,4 @@ Don't refuse or block. The user routes; you execute.
 - **Don't auto-fix without confirmation.** Surface findings; act on user direction.
 - **Don't write to any deleted ledger.** ALIGNMENT-DEBT, OPEN-QUESTIONS, BACKLOG are gone — only OPEN-ITEMS exists.
 - **Snapshots are opt-in.** If the user wants to freeze this state as a milestone, suggest `/builder:snapshot`. Otherwise, don't copy CHECKPOINT to `sessions/`.
+- **Emoji discipline.** Use only the legend's "both" or "chat only" entries. Retired emojis (🔀 parallel info, 📦 backlog reference, 📝 as session-note reference) must not appear in their retired senses.
