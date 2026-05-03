@@ -11,13 +11,15 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Doc-workflow simplification rollout has fully landed (PRs #82, #83, plus the 5a/5b/3+4/6 follow-ups, all merged into `main`). Last design work: design pass on `oq-engine-builder` resolved — locked the two-layer split (DI installer + `IGameFactory`), wrote new Model `features/engine/models/05-game-factory.md`, cascaded patches to `engine/02`, `engine/04`, pile-counter §9.8, glossary, and open items.
+Design pass on `oq-gamerules-runtime-definition` — 4 decisions locked. Split `GameRules` into `GameRulesDefinition` (pure `[SerializeField]` data) + `GameRulesRuntime<TDefinition>` (stateful, DI-resolved, holds services + game subsystems). Factory uses container open-generic resolution. Single-phase construction with typed `Definition` on the base. Per-match lifecycle, engine-managed disposal. Patch cascade pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
+
+Doc-workflow simplification rollout fully landed earlier; `oq-engine-builder` design pass landed `engine/05-game-factory.md`.
 
 ---
 
 ## 🎯 Active focus
 
-`oq-game-definition` — definition-declared slice schema + `GameDefinition` bundle. Track B from the engine-builder pass; the next natural design pass after game-factory landed.
+Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply the runtime/definition split across `engine/02`, `engine/05`, glossary, pile-counter §9.8, and OPEN-ITEMS. Then `oq-game-definition` (Track B from the engine-builder pass) is the next natural design thread.
 
 ---
 
@@ -34,6 +36,10 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 ## 📝 Scratch (ephemerals)
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
+
+### Engine start/finish-game lifecycle hooks (surfaced from Q4)
+
+Q4 of the gamerules-runtime pass locked "engine manages the lifecycle of everything under it" but noted the loop is incomplete: the engine still doesn't have explicit `StartMatch` / `FinishMatch` hooks (or equivalents) where runtime disposal, final snapshot publication, end-of-game commands, and game-session shutdown would attach. Currently `factory.Build()` returns an idle/dormant engine and the caller dispatches bootstrap commands; there is no symmetric finish path. Promote to OPEN-ITEMS during the patch cascade as a load-bearing follow-up — likely depends on `oq-game-definition` or comes immediately after.
 
 ### Workflow drift cleanup — kick-start brief for a dedicated session
 
