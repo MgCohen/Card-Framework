@@ -27,7 +27,7 @@ The handle is a thin object over a per-instance `EntityVariableState` slice in t
 
 `StateEntity<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityVariableState` rows; handles are re-created from the registry on `LoadSnapshot`.
 
-**`InstanceId` vs `ActorId`.** This handle is keyed on `InstanceId` — a typed reference into the Store (`Identifier<Instance>`). `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). An actor that is *also* an entity (a player with health/mana variables) carries both ids; system / AI / environment actors have an `ActorId` but no `InstanceId`. See [`GLOSSARY.md`](../../../ledgers/GLOSSARY.md) — `Actor`, `ActorId`, `Instance ID` rows.
+**`InstanceId` vs `ActorId`.** This handle is keyed on `InstanceId` — a typed reference into the Store (`Identifier<Instance>`). `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). An actor that is *also* an entity (a player with health/mana variables) carries both ids; system / AI / environment actors have an `ActorId` but no `InstanceId`. See [`GLOSSARY.md`](ledgers/GLOSSARY.md) — `Actor`, `ActorId`, `Instance ID` rows.
 
 ---
 
