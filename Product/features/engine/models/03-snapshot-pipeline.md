@@ -141,7 +141,9 @@ The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., eac
 
 ---
 
-## 5. `GameRules` Shape Change — Services Injected
+## 5. Rules Layer Shape — Services Injected
+
+> **Note:** This section is historical. The single-type `GameRules` shown below has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime). The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
 
 Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, queue, and snapshot writer) is a constructor-injected service.
 

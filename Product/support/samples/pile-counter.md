@@ -122,15 +122,15 @@ We will revisit those features against more elaborate sample games once the floo
 - **Distribution:** 3 cards per pile, even split.
 - **"Twice in a row" rule:** by card *instance* identity. Two cards sharing the same `Number` are still distinct.
 - **Empty piles:** allowed. An empty pile has score `0` and still has a target. Winning is possible with an empty pile if its target is `0`.
-- **Puzzle source:** an external **puzzle factory** produces a complete `(deck, deal, targets)` triple. Internally the factory uses random generation plus a solvability check, but that is opaque to the game — `GameRules` just receives the triple as setup input. No target generation, shuffling, or solvability logic lives inside the framework.
+- **Puzzle source:** an external **puzzle factory** produces a complete `(deck, deal, targets)` triple. Internally the factory uses random generation plus a solvability check, but that is opaque to the game — the runtime just receives the triple as setup input. No target generation, shuffling, or solvability logic lives inside the framework.
 - **Undo:** out of scope.
-- **Restart / new puzzle:** session-lifecycle concern, out of scope for `GameRules`.
+- **Restart / new puzzle:** session-lifecycle concern, out of scope for the runtime.
 
-All setup decisions are now resolved. We can sketch `GameRules` against this spec.
+All setup decisions are now resolved. We can sketch the rules layer against this spec.
 
 ---
 
-## 9. `GameRules` Implementation Sketch
+## 9. Rules Layer Implementation Sketch
 
 This is the working sketch of Pile Counter against the framework as of this writing. It informs (and is informed by) docs 25 and 27. When the framework changes, update this sketch first and propagate.
 
@@ -276,13 +276,25 @@ Both mutators fire from one `Store.Execute(payload)`. The handler does not enume
 ### 9.6 The rule
 
 ```csharp
-public sealed class PileCounterRules : GameRules
+// Authored data — Pile Counter has no per-mode knobs yet, so the definition
+// is empty. A future "Hard Mode" variant would add [SerializeField] fields here
+// (move limit, scoring multiplier, …) and ship as a separate definition asset.
+[Serializable]
+public sealed class PileCounterRulesDefinition : GameRulesDefinition
 {
-    public PileCounterRules(
-        IStateScope        state,
-        IAvailableActions  actions,
-        IIntakeQueue       pending)
-        : base(state, actions, pending) { }
+    public static readonly PileCounterRulesDefinition Default = new();
+}
+
+// Runtime brain — generic on its definition. No game-specific subsystems
+// (Pile Counter has no stack, no decks, no priority).
+public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
+{
+    public PileCounterRulesRuntime(
+        PileCounterRulesDefinition definition,
+        IStateScope                state,
+        IAvailableActions          actions,
+        IIntakeQueue               pending)
+        : base(definition, state, actions, pending) { }
 
     public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
     {
@@ -291,10 +303,7 @@ public sealed class PileCounterRules : GameRules
         return IntakeResult.Ok;
     }
 
-    public override IReadOnlyList<TriggerMatch> FilterTriggers(
-        IReadOnlyList<TriggerMatch> candidates,
-        GameCommand command, TriggerPhase phase)
-        => candidates;   // no triggers in this game
+    // FilterTriggers omitted — base class ships a virtual identity default.
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
     {
@@ -329,9 +338,9 @@ public sealed class PileCounterRules : GameRules
 }
 ```
 
-The constructor takes Scaffold's `IStateScope` (read-only). `State.Get<TState>()` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case.
+The runtime constructor takes its typed `PileCounterRulesDefinition` plus Scaffold's `IStateScope` (read-only) and the two side-effect services. `State.Get<TState>()` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case.
 
-The rule constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the rule does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](features/engine/models/03-snapshot-pipeline.md).
+The runtime constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the runtime does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](features/engine/models/03-snapshot-pipeline.md).
 
 Almost everything else Pile Counter cares about lives elsewhere — handler `Validate` for legality, mutators for state changes, presentation layer for affordances.
 
@@ -371,14 +380,14 @@ public interface IPuzzleFactory { Puzzle Create(); }
 public static class PileCounterBootstrap
 {
     // IGameFactory is DI-resolved; caller never sees VContainer.
-    // Per-game behaviors (handlers, mutators, GameRules implementations, IIntentMapper)
+    // Per-game behaviors (handlers, mutators, GameRulesRuntime implementations, IIntentMapper)
     // are registered in the game's VContainer installer (see PileCounterInstaller below).
     public static GameEngine Create(IPuzzleFactory puzzleFactory, IGameFactory gameFactory)
     {
         var puzzle = puzzleFactory.Create();
 
         return gameFactory.NewMatch()
-            .WithRules(PileCounterRules.Default)               // serializable data object
+            .WithRules(PileCounterRulesDefinition.Default)     // serializable data object
             .WithActors(new SoloPlayer(ActorId.Player1))       // Player : Actor baseline
             .WithInitialSlices(BuildInitialSlices(puzzle))
             .WithSeed(puzzle.Seed)
@@ -410,7 +419,7 @@ public sealed class PileCounterInstaller : IInstaller
         builder.Register<MoveCardHandler>         (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<PileMoveMutator>         (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<LastMoveMutator>         (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<PileCounterRules>        (Lifetime.Transient);
+        builder.Register<GameRulesRuntime<PileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient);
         builder.Register<PileCounterIntentMapper> (Lifetime.Singleton).AsImplementedInterfaces();
     }
 }
@@ -418,7 +427,7 @@ public sealed class PileCounterInstaller : IInstaller
 
 Match construction is a two-layer split (locked in [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md)):
 
-- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`, `Store`, and `IGameFactory`. The game's installer (`PileCounterInstaller` above) registers handlers, mutators, the rules implementation, and the intent mapper. Each runs once per app.
+- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`, `Store`, and `IGameFactory`. The game's installer (`PileCounterInstaller` above) registers handlers, mutators, the runtime against its definition's closed generic (`GameRulesRuntime<PileCounterRulesDefinition> → PileCounterRulesRuntime`), and the intent mapper. Each runs once per app.
 - **Per-match factory** — the bootstrap call site asks `IGameFactory` for a new game, supplying only per-match data: rules selection, actor catalog, initial slice values, RNG seed. VContainer never appears in this code.
 
 The two `Mutator<…, MoveCardPayload>` registrations in the installer are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build`. After `Build` returns the engine is idle and dormant — the first `Dispatch()` call triggers `Drain()`. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop.
@@ -442,7 +451,7 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **Four rejection paths:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect).
 - **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the rule + intent mapper through them.
 - **Engine intake order:** `pipeline.Validate` first (pipeline resolves handler, delegates to `handler.Validate`), then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
-- **`GameRules` is service-injected.** Scaffold `IStateScope`, `IAvailableActions`, `IIntakeQueue` on the constructor (three services — `IHandlerRegistry` removed per session-20260501-1132 Q2); methods take only ephemeral data ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)).
+- **Rules layer is split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime).** Definition is `[SerializeField]` data; runtime constructor takes the definition + Scaffold `IStateScope` + `IAvailableActions` + `IIntakeQueue` + any game-specific subsystems. Methods take only ephemeral data ([doc 25 §2](features/engine/models/02-gamerules-contract.md), [doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)). Factory uses container open-generic resolution to pair them per match ([doc 30 §Behavior resolution](features/engine/models/05-game-factory.md)).
 
 ---
 
@@ -455,7 +464,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 - ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>()`.
 - ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [04-effect-flow §4.4](features/effects/models/04-effect-flow.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
 - ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
-- ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRules` is now an abstract class ([doc 25 §2](features/engine/models/02-gamerules-contract.md), [doc 29 §5](features/engine/models/03-snapshot-pipeline.md)); virtual default is straightforward.
+- ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRulesRuntime<TDefinition>` ships a virtual identity default ([doc 25 §2 + §4](features/engine/models/02-gamerules-contract.md)); games with no eligibility logic don't override it.
 - ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md). No invented provider type.
 - ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
 

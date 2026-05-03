@@ -28,7 +28,7 @@ Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply th
 See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
 - `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
-- `oq-gamerules-runtime-definition` — reconcile `GameRules` constructor-injected service shape (engine/02) with serializable-data shape (engine/05). Tightly scoped follow-up from the engine-builder pass.
+- `oq-engine-match-lifecycle` — engine `StartMatch` / `FinishMatch` hooks for symmetric bootstrap/teardown, runtime disposal, end-of-match signal. Surfaced from the gamerules runtime/definition pass.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 
 ---
@@ -36,10 +36,6 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 ## 📝 Scratch (ephemerals)
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
-
-### Engine start/finish-game lifecycle hooks (surfaced from Q4)
-
-Q4 of the gamerules-runtime pass locked "engine manages the lifecycle of everything under it" but noted the loop is incomplete: the engine still doesn't have explicit `StartMatch` / `FinishMatch` hooks (or equivalents) where runtime disposal, final snapshot publication, end-of-game commands, and game-session shutdown would attach. Currently `factory.Build()` returns an idle/dormant engine and the caller dispatches bootstrap commands; there is no symmetric finish path. Promote to OPEN-ITEMS during the patch cascade as a load-bearing follow-up — likely depends on `oq-game-definition` or comes immediately after.
 
 ### Workflow drift cleanup — kick-start brief for a dedicated session
 
