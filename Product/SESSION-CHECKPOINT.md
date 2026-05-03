@@ -35,7 +35,41 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-- *(none right now)*
+### Workflow drift cleanup — kick-start brief for a dedicated session
+
+**The problem.** The doc-workflow simplification rollout (PRs 1, 2, 5a, 5b, 3+4, 6 — all merged into `main`) updated the canonical workflow surface (`Product/_workflow/PRODUCT-BUILDER.md`, ledgers, root docs) but didn't fully propagate to `.claude/commands/builder/*.md` and `.claude/skills/builder/*/SKILL.md`. The skill files still operate against the pre-simplification model in places — writing to retired ledgers, patching session notes that no longer have a lifecycle, prefilling deprecated front-matter fields. Running these skills as written would produce wrong outputs.
+
+**What's already done.** PR #90 (merged) + PR #91 (open) cover one slice:
+- `design-pass.md` — full session-note workflow refresh (CHECKPOINT replaces session note as durable spine).
+- `bootstrap.md` — `OPEN-QUESTIONS` → `OPEN-ITEMS` in the ledger seed list.
+- `new.md`, `promote-glossary.md`, `archive.md` — dropped in-progress session-note patches and `ALIGNMENT-DEBT` references in `promote-glossary`.
+
+**What's left (the actual drift).**
+
+1. *Front-matter conventions (PR 1 of the simplification — `builds-on` → `references`, drop `last-updated`).*
+   - `new.md` step 8 still prefills `last-updated:` (retired) and `builds-on:` (renamed to `references:`).
+   - Possibly other Models / templates still carry `last-updated:` in their front matter (not yet audited).
+
+2. *Session lifecycle (PR 5b — sessions retired, CHECKPOINT is the live spine).*
+   - `bootstrap.md` step 2 skeleton still includes a `sessions/` folder.
+   - `bootstrap.md` step 3 still lists `session.md` in the templates set.
+   - `bootstrap.md` step 7 still creates `session-01.md` with `status: in-progress`.
+   - `Product/_workflow/_templates/session.md` likely needs to retire (or its purpose redefined).
+
+3. *Possible additional drift (not yet audited).*
+   - `.claude/skills/builder/*/SKILL.md` — only `lint` was read this session; others might carry the same drift.
+   - `Product/_workflow/PRODUCT-BUILDER.md` itself — referenced by skill files; may have its own internal drift.
+   - `_templates/checkpoint.md` and `_templates/model.md` — verify they reflect current conventions.
+
+**How to approach the next session.**
+
+1. Start by auditing `Product/_workflow/PRODUCT-BUILDER.md`. It's the canonical source the skill files reference. If it's stale, fix it first — otherwise skill fixes will keep diverging.
+2. Run a retired-token grep across `.claude/`: `last-updated:`, `builds-on:`, `ALIGNMENT-DEBT`, `OPEN-QUESTIONS`, `BACKLOG`, `Part 1`, `status: in-progress`, `session-NN`. Categorize hits as legitimate (retired-ledger reminders, like `end-session.md`'s safety rail) vs. drift.
+3. Audit `_templates/` — retire `session.md` if session notes are gone; verify other templates reflect current front-matter and section conventions.
+4. Sweep affected files in concern-aligned batches — front-matter sweep, session-lifecycle sweep, retired-ledger sweep. Each can be its own PR.
+5. Re-run `/builder:lint` after the sweep to verify everything resolves cleanly.
+
+This is finish-the-rollout chore work. Once done, the workflow surface is internally consistent and the skill files won't quietly steer future sessions toward retired patterns.
 
 ---
 
