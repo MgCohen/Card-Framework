@@ -34,8 +34,8 @@ where `TState : BaseState`. This is settled in [04-effect-flow §4.1](features/e
 
 | Tier | Who defines | Who seeds | Who writes |
 |---|---|---|---|
-| **Framework-owned** | Framework | `GameEngineBuilder.Build()` auto-seeds | Framework-internal services / mutators only |
-| **Game-authored** | Game author | `builder.WithInitialSlices(...)` | Game-registered `Mutator<TState, TPayload>` |
+| **Framework-owned** | Framework | `IGameFactory.Build` auto-seeds (see [`engine/05`](features/engine/models/05-game-factory.md)) | Framework-internal services / mutators only |
+| **Game-authored** | Game author | `MatchSetup.InitialSlices` / `IMatchBuilder.WithInitialSlices(...)` | Game-registered `Mutator<TState, TPayload>` |
 
 Framework-owned slices are invisible to the game author at bootstrap — they are always present, always written by the framework, and readable by anyone via `IStateScope`. The current catalog is not a fixed ceiling; it reflects what the framework needs today and will grow or shrink as the framework matures.
 
@@ -99,19 +99,22 @@ Rules:
 - **Immutable.** All mutations produce a new record via `with { }` or a helper method (e.g. `WithCardMoved`).
 - **No cross-slice mutation.** A mutator owns one slice's output. It may read sibling slices through the `IStateScope scope` parameter on `Change`, but it never writes them.
 
-Slices are registered at bootstrap via mutators:
+Initial slice values flow into match construction through the factory; mutators are registered in the game's VContainer installer (the factory collection-resolves them at `Build`):
 
 ```csharp
-builder
+// Game installer (one-time, app-level):
+builder.Register<PileMoveMutator> (Lifetime.Singleton).AsImplementedInterfaces();
+builder.Register<LastMoveMutator> (Lifetime.Singleton).AsImplementedInterfaces();
+
+// Match construction (per match):
+factory.NewMatch()
     .WithInitialSlices(
         new PilesState(initialPiles),
         new LastMoveState(Move: null))
-    .WithMutators(
-        new PileMoveMutator(),    // Mutator<PilesState,    MoveCardPayload>
-        new LastMoveMutator());   // Mutator<LastMoveState, MoveCardPayload>
+    .Build();
 ```
 
-The engine registers framework-owned slices internally at `Build()`. Game authors never seed `AvailableActionsState`, `EngineState`, or `HistoryState`.
+The factory registers framework-owned slices internally at `Build`. Game authors never seed `AvailableActionsState`, `EngineState`, or `HistoryState`. See [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md) for the full match-construction contract.
 
 ---
 

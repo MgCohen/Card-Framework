@@ -3,16 +3,16 @@ description: Structured Q-by-Q design walk for non-mechanical Model edits. Enume
 allowed-tools: Read, Write, Edit, Glob, Grep
 ---
 
-You are running a design pass. This workflow settles open design questions through a structured Q-by-Q walk. The output is a locked decision list captured in the session note. Patches and edits are not part of the walk itself, but they can follow immediately in the same session — the goal is to clear the air and build shared context, not to gate later work.
+You are running a design pass. This workflow settles open design questions through a structured Q-by-Q walk. The output is a locked decision list captured in `SESSION-CHECKPOINT.md` (and propagated into the relevant Model's `## Options considered` / `## Rationale` sections when the patch cascade lands). Patches and edits are not part of the walk itself, but they can follow immediately in the same session — the goal is to clear the air and build shared context, not to gate later work.
 
 ## Phase 1 — Setup
 
-1. **Identify the topic.** The topic is either supplied by the user in the invocation argument (e.g., `/builder:design-pass §6 boundary redesign`) or derived from the active session note's "Active question coming in" section. If neither is present, ask the user to state the design question before proceeding.
+1. **Identify the topic.** The topic is either supplied by the user in the invocation argument (e.g., `/builder:design-pass §6 boundary redesign`) or derived from `SESSION-CHECKPOINT.md`'s "Active focus" section. If neither is present, ask the user to state the design question before proceeding.
 
 2. **Read relevant context.** In parallel:
-   - Find the in-progress session note (`Product/sessions/session-NN.md` — the file with `status: in-progress`)
+   - `Product/SESSION-CHECKPOINT.md` — active focus, scratch, recent context
    - Any Model docs, ADRs, or feature notes the user referenced or that the topic names
-   - `Product/ledgers/OPEN-QUESTIONS.md` for related open threads
+   - `Product/ledgers/OPEN-ITEMS.md` for related open threads
 
 3. **Open with a context summary + question list, then ask Q1 immediately.**
 
@@ -81,18 +81,17 @@ Repeat steps 4–6 for each Q in sequence. Do not advance to the next Q until th
       ### 🎯 Patch cascade
       - <Model or ADR path> — <what changes>
       ```
-   5. **Session note** (strip) — `📝 Session note: Part 1 "Decisions settled" + "Active question going out" updated`. If no in-progress session: `⚠️ No in-progress session note — update manually`.
+   5. **CHECKPOINT** (strip) — `📝 CHECKPOINT: "Where we stopped" + "Active focus" updated to reflect this design pass`.
    6. **Closing prompt** (italic) — `_Decisions locked — ready to keep iterating._`
 
    **No prose preamble** — output begins at the H1.
 
-8. **Update the session note** (the `status: in-progress` file found in step 2). Append to the relevant sections of Part 1:
-   - **Decisions settled** — each locked Q in the shape `Q<N> = <option> — <implication>`, one bullet per Q.
-   - **Work done** — add a one-line summary of the design pass: `Design pass on <topic> — N decisions locked.` Subsequent patch/edit work in the same session appends normally.
-   - **Active question going out** — the patch cascade: which Models and ADRs need updating, and in what order.
+8. **Update `SESSION-CHECKPOINT.md`.** The locked decisions move into the canonical Model when the patch cascade lands (Model's `## Options considered` / `## Rationale` sections). Until then, CHECKPOINT carries the durable record:
+   - **Where we stopped** — replace or append a one-line summary: `Design pass on <topic> — N decisions locked. Patch cascade pending: <list>.` Update again once patches land to reflect the cascade landing.
+   - **Active focus** — point at the patch cascade if pending, or at the next thread if the cascade lands in this same session.
+   - **Scratch** — only if mid-walk threads are worth holding (a sub-question that surfaced but didn't get covered, an architectural concern that opened a new open-item). Otherwise leave Scratch alone.
 
 ## Notes
 
-- Do not edit any Model doc, ADR, or feature file during the Q-by-Q walk itself — patches mid-walk would race the verdicts. The design-pass output is the locked decision list and the session-note update. Once the walk closes, follow-on edits and patches can land in the same session.
+- Do not edit any Model doc, ADR, or feature file during the Q-by-Q walk itself — patches mid-walk would race the verdicts. The design-pass output is the locked decision list and the CHECKPOINT update. Once the walk closes, follow-on edits and patches can land in the same session.
 - Questions foreclosed by an earlier verdict may be skipped — but state the skip explicitly: `Q<N> = skipped — foreclosed by Q<M> verdict`.
-- If no session note is in-progress, complete the walk and render the closing summary, but skip step 8 and surface a warning that the session note must be updated manually.

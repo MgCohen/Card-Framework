@@ -51,6 +51,8 @@ It is **not** a place for command-specific legality, action handlers, ability lo
 
 ## 2. The Interface
 
+> **Reconciliation pending — match-construction Model.** [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md) locks `GameRules` as a *serializable data object* (`[SerializeField]`-bearing, non-`UnityObject`) selected per match by data, not by type token. The constructor-injected service shape below is incompatible with serializable-data semantics. A follow-up will either split the type into a runtime wrapper (services) + definition (data), or move services from constructor to an `Initialize(IStateScope, IAvailableActions, IIntakeQueue)` hook called by `IGameFactory` after deserialization. The contract surface (intake / `FilterTriggers` / `Evaluate` / `OnQueueDrained`) is unchanged — only the wiring shifts.
+
 `GameRules` is an abstract class with constructor-injected services. Methods take only what's ephemeral to the call; stable engine handles (state access, intake queue, handlers, snapshot writer) are services held on the rule. See [doc 29 §5](features/engine/models/03-snapshot-pipeline.md) for the rationale.
 
 ```csharp
