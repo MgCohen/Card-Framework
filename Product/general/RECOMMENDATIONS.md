@@ -108,7 +108,7 @@ No network implementation yet, but define core concepts as if they may cross a w
 - Explicit command/decision envelopes.
 - Ordered history.
 - Snapshots.
-- Viewer-specific visibility.
+- Per-actor visibility.
 - Deterministic random source.
 
 ## Suggested First Vertical Slice
