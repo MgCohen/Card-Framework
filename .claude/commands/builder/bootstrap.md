@@ -57,7 +57,7 @@ Seven files extracted from `PRODUCT-BUILDER.md` §4.1–§4.7:
 - `Product/ledgers/BACKLOG.md` — empty, seeded with two known deferred items: "Tier 2 commands per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8" and "Tier 3 / hooks / skills as triggered."
 - `Product/ledgers/FEATURE-MAP.md` — initial table with one row per feature (status `draft`, model count `0`), plus an empty mermaid block.
 - `Product/ledgers/GLOSSARY.md` — minimal frame with `## Changelog` section ready.
-- `Product/ledgers/OPEN-QUESTIONS.md` — empty.
+- `Product/ledgers/OPEN-ITEMS.md` — empty (replaced the older OPEN-QUESTIONS / BACKLOG split per the simplification rollout).
 
 ### 5. Project-wide ADR scaffold
 
