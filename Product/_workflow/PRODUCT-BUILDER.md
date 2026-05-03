@@ -23,7 +23,7 @@ Top-level folders, in two groups:
 - **`decisions/`** — project-wide ADRs (cross-feature decisions, workflow choices).
 
 **Project-shaped** — content is the project itself:
-- **Operational** — live "what's happening right now" files (`README.md`, `SESSION-CHECKPOINT.md`) and the session log (`sessions/`).
+- **Operational** — live "what's happening right now" files (`README.md`, `SESSION-CHECKPOINT.md`) and opt-in milestone snapshots (`sessions/`, see §4.6).
 - **`general/`** — project orientation: vision, capability map, architecture direction, roadmap, recommendations. The thinking *about* what this product is.
 - **`features/`** — one folder per system being designed, each self-contained with its own Models, ADRs, and local numbering.
 - **`spikes/`** — ideation and exploration. Time-boxed investigations that may graduate into feature design, get archived, or stay as reference.
@@ -42,8 +42,9 @@ Product/
       model.md
       sample.md
       adr.md
-      session.md
+      archive.md             # front-matter shape sourced from §5.14
       checkpoint.md
+    retired-tokens.json      # registry consumed by /builder:lint T1
 
   ledgers/                   # workflow-shaped, project-content (opened daily)
     GLOSSARY.md              # canonical vocabulary
@@ -59,7 +60,7 @@ Product/
     RECOMMENDATIONS.md       # current synthesis
     # other orientation docs as the project surfaces them
 
-  sessions/                  # per-session narrative (append-only)
+  sessions/                  # opt-in milestone snapshots (see §4.6)
 
   features/                  # per-system design work; each feature has a root <feature>.md
     <feature-a>/
@@ -91,7 +92,7 @@ Product/
 
 **Feature roots** use the feature name (no counter): `features/engine/engine.md`. One per feature folder. Sits at the top, summarizes what's beneath. See §4.2.
 
-**Sessions** stay globally monotonic (`sessions/session-01.md`, `session-02.md`, …). Sessions are the chronological spine — they cross features by nature.
+**Snapshots** are timestamp-named (`sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md`) and opt-in — produced only when `/builder:snapshot` is invoked to freeze a milestone (see §4.6). The chronological spine is `SESSION-CHECKPOINT.md`, kept current as work happens; snapshots are sparse references, not a per-session log.
 
 **Spikes** stay flat with descriptive filenames (`spikes/scaffold-state-fit.md`, `spikes/sabberstone-patterns.md`). No counter — spikes don't have natural ordering and most are single-doc.
 
@@ -99,7 +100,7 @@ Product/
 
 ### Where cross-cutting docs live
 
-When a doc spans multiple systems (e.g., a terminology discussion touching naming hygiene broadly): it lives in the feature that triggered it and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references go to their canonical home: glossary / open questions / feature map → `ledgers/`; the workflow doc → `_workflow/`; project orientation → `general/`.
+When a doc spans multiple systems (e.g., a terminology discussion touching naming hygiene broadly): it lives in the feature that triggered it and gets `tags: [#cross-cutting]` in front matter so it's findable. Genuinely global references go to their canonical home: glossary / open items / feature map → `ledgers/`; the workflow doc → `_workflow/`; project orientation → `general/`.
 
 ### Feature names are project-specific
 
@@ -118,8 +119,8 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/models/` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
 | **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
-| **Session note** | What happened in one session (append-only) | `sessions/` | n/a (immutable) |
-| **Checkpoint** | Replaceable handoff for next session | `Product/` root | n/a (replaceable) |
+| **Snapshot** | Opt-in milestone freeze of `SESSION-CHECKPOINT.md` (see §4.6) | `sessions/` | n/a (frozen) |
+| **Checkpoint** | Live operational spine; updated continuously | `Product/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
 
 A Model is the unified design artifact: it describes a system **and** records the decisions baked into it (options weighed, rationale, consequences). The descriptive content sits at the top; provenance sits below a divider as track record.
@@ -134,7 +135,7 @@ Every doc starts with:
 
 ```yaml
 ---
-type: spike | feature | model | sample | adr | session | checkpoint | plan
+type: spike | feature | model | sample | adr | snapshot | checkpoint | plan
 status: <one of the type's status values>
 references: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
 tags: [#async, #triggers]                                 # optional
@@ -155,7 +156,7 @@ Feature roots derive their `Dependencies` section from the union of contained Mo
 
 ## 4. Templates
 
-**Source of truth.** Each fenced `markdown` block in §4.1–§4.7 is the canonical content for the corresponding file in `_workflow/_templates/` (7 templates: Spike, Feature, Model, Sample, ADR, Session, Checkpoint). Migration Phase 1 extracts these blocks into the templates directory; future workflow edits land here, then are re-extracted on next regen. Single source — no parallel content store. §4.8 (Plan) is descriptive prose only — no template file.
+**Source of truth.** Each fenced `markdown` block in §4.1–§4.5 and §4.7 is the canonical content for the corresponding file in `_workflow/_templates/` (6 templates with fenced blocks: Spike, Feature, Model, Sample, ADR, Checkpoint). The 7th template, `archive.md`, derives its front-matter shape from §5.14. Migration Phase 1 extracts these blocks into the templates directory; future workflow edits land here, then are re-extracted on next regen. Single source — no parallel content store. §4.6 (Snapshot) and §4.8 (Plan) are descriptive prose only — no template file.
 
 ### 4.1 Spike
 
@@ -391,22 +392,59 @@ Mandatory per-session notes were retired (see `PLANS/simplify-doc-workflow.md` d
 
 ### 4.7 Checkpoint
 
-Keep the current shape; add a rule.
+`SESSION-CHECKPOINT.md` is the **live operational spine** — kept current as work happens, not refreshed only at session boundaries. No open/close lifecycle, no schema. Sections are short; detail lives in feature docs and `OPEN-ITEMS.md` entries.
 
 ```markdown
-# Research Session Checkpoint
+---
+type: checkpoint
+tags: [#checkpoint]
+---
 
-<front matter: type=checkpoint>
+# Session Checkpoint
 
-**Last updated:** YYYY-MM-DD (session NN)
-**Replaceable.** History lives in `sessions/`. Never append here.
+**Live spine.** This is the single source of truth for "where we are." Updated continuously as work happens. No open/close lifecycle.
+
+---
 
 ## Where we stopped
-## The active open question (singular)
-## Other still-open
-## Suggested next steps
-## Artifacts to read on resume
+
+<one paragraph synthesizing the most recent design move and what just landed>
+
+---
+
+## 🎯 Active focus
+
+`<oq-id or thread name>` — <one-sentence focus framing>
+
+---
+
+## ❓ Open items snapshot
+
+See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
+
+- `<oq-id>` — <short framing>
+- `<oq-id>` — <short framing>
+- `<oq-id>` — <short framing>
+
+---
+
+## 📝 Scratch (ephemerals)
+
+*Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
+
+<scratch entries, or empty>
+
+---
+
+## How to use this file
+
+- **Update continuously as work happens** — agent keeps this current; not refreshed only at session end.
+- **Keep it short** — if it grows past two screens, trim. Detail belongs in feature docs and OPEN-ITEMS entries.
+- **`## Scratch`** is for ephemerals — things being chewed on right now. Promote to OPEN-ITEMS if they survive a session.
+- **No artifact created at session end.** `/builder:snapshot` makes an opt-in milestone copy in `sessions/` when the user asks.
 ```
+
+**No `last-updated:` field.** Git is the source of truth (§3). The "Where we stopped" paragraph carries enough recency context for a reader picking the file up cold.
 
 ### 4.8 Plan
 
@@ -431,15 +469,14 @@ A session is a **branching unit**, not a linear one. It opens with an entry cont
 
 Once-per-project phase before §5.1 applies. Output is a working `Product/` skeleton with enough orientation to start session 02 with a real question.
 
-1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (extracted from §4.1–§4.7). Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledger: `ledgers/OPEN-ITEMS.md`, plus `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog).
+1. **Create the skeleton.** `_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`, `spikes/`, `support/{samples,prior-art}/`, `sessions/`. Drop the 7 doc-type templates into `_workflow/_templates/` (Spike, Feature, Model, Sample, ADR, Checkpoint extracted from §4.1–§4.5 + §4.7; Archive front-matter shape per §5.14). Seed `_workflow/retired-tokens.json` as `[]`. Drop this spec at `_workflow/PRODUCT-BUILDER.md`. Initialize empty ledger: `ledgers/OPEN-ITEMS.md`, plus `ledgers/FEATURE-MAP.md` (stub with empty mermaid block), `ledgers/GLOSSARY.md` (with empty changelog). Create `SESSION-CHECKPOINT.md` from the §4.7 template.
 2. **Write `general/VISION.md` first.** What is this project? Non-goals. Principles. One paragraph each. This is the only doc that has no upstream — everything else builds on it.
 3. **Identify candidate features.** Don't write Feature docs yet — just commit to the names. Create empty `features/<feature>/` folders for each. Cheap to add or rename later; expensive to thrash on once Models nest.
 4. **Seed `ledgers/FEATURE-MAP.md`.** Add a row per candidate feature from step 3 with status `considered`. The map carries both pre-folder candidates and current state — it replaces a separate capability inventory.
 5. **Write `general/ARCHITECTURE.md` and `general/ROADMAP.md`.** Direction and sequencing. Both stay terse — they'll be revised as feature design lands.
 6. **Seed `ledgers/OPEN-ITEMS.md`.** The durable questions you can already name from day one (state ownership, async story, multiplayer, etc.). Don't try to be exhaustive.
-7. *(retired)* Pre-push hook for in-progress session notes is gone. With no per-session artifact, there is no in-flight skeleton to checkpoint.
-8. **Open `sessions/session-01.md`.** This first session *is* the bootstrap. Active question coming in: *"what is this project?"* Active question going out: *"what's the first feature we model?"*
-9. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in session 02.
+7. **Seed `SESSION-CHECKPOINT.md`.** Active focus: *"what is this project?"* Suggested-threads section points at the orientation work above. The checkpoint becomes the live spine for subsequent sessions.
+8. **Don't write feature design yet.** No Feature roots, Models, ADRs, or Samples. Bootstrap is purely orientation. Feature design starts in the next session.
 
 A bootstrap session usually fits in one sitting. If it sprawls, the project is too big or the vision isn't clear yet — pause and split.
 
@@ -456,9 +493,9 @@ Legacy per-session notes (mandatory schema, in-progress / completed / merged / d
 
 ### 5.4 Reopening a settled decision
 
-**ADR.** Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in the session log.
+**ADR.** Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`), set the old ADR's status to `superseded by NNNN`, note the reason in `SESSION-CHECKPOINT.md` (and an OPEN-ITEMS entry if the supersession leaves loose ends).
 
-**Model.** Don't edit the old Model. Either write a new Model that replaces the contract, or extend a later-numbered Model that already covers the same surface. Set the old Model's status to `superseded by NN-<slug>` and apply the §4.3 superseded-status convention (one-line header, body kept for record). Note the reason in the session log.
+**Model.** Don't edit the old Model. Either write a new Model that replaces the contract, or extend a later-numbered Model that already covers the same surface. Set the old Model's status to `superseded by NN-<slug>` and apply the §4.3 superseded-status convention (one-line header, body kept for record). Note the reason in `SESSION-CHECKPOINT.md` (and an OPEN-ITEMS entry if loose ends remain).
 
 In both cases, run the linter to surface affected dependents (see §5.7).
 
@@ -557,7 +594,7 @@ When a new feature is requested or designed:
 2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
 3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `references:` pointing at upstream Models (or `root` if genuinely foundational).
 4. **Update orientation.** Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new row + dependency edges. Patch `general/ROADMAP.md` if scheduling shifts.
-5. **Record in session note.** Content section: `feature: <name> created` — visible event in the trail.
+5. **Record in `SESSION-CHECKPOINT.md`.** Note the new feature in the "Where we stopped" paragraph or the active-focus framing — visible event in the live spine.
 6. **Begin design.** From this point, the feature's evolution follows the standard per-session flow (§5.1+).
 
 
@@ -636,12 +673,11 @@ A feature progresses through these phases. Each phase corresponds to one or more
 |---------|-------------|
 | **Project start (once)** | `/builder:bootstrap` |
 | **Every session start** | `/builder:start-session` |
-| **Mid-session, on demand** | `/builder:new`, `/builder:new-feature`, `/builder:settle-decision`, `/builder:open-debt`, `/builder:close-debt`, `/builder:add-to-backlog`, `/builder:promote-glossary`, `/builder:abandon-model`, `/builder:supersede-cascade`, `/builder:check-drift`, `/builder:archive` (retire a doc to `archive/`) |
-| **Status transitions** | `/builder:settle` (research gate), `/builder:implement` (build gate) |
-| **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity), `/builder:rebuild-feature-map` |
+| **Mid-session, on demand** | `/builder:new` (scaffold a doc from a template), `/builder:promote-glossary` (add or rename a glossary term), `/builder:design-pass` (structured Q-by-Q design walk), `/builder:archive` (retire a doc to `archive/`), `/builder:deps` (forward + reverse references for one doc) |
+| **Periodic / on demand** | `/builder:lint` (reference staleness + archive integrity + retired-tokens) |
 | **Every session end** | `/builder:end-session` |
 | **Milestone snapshot** (opt-in) | `/builder:snapshot` — freeze CHECKPOINT into `Product/sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` |
-| **PR merge to main** | `builder-drift-detection` (CI mode) |
+| **PR merge to main** | `builder-drift-detection` (CI mode — see `OPEN-ITEMS.md` `bl-drift-detection`) |
 
 
 ### 5.14 Archive convention
@@ -709,13 +745,13 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 
 | File | Role | Cadence |
 |------|------|---------|
-| `SESSION-CHECKPOINT.md` | Current working surface; active focus + focus questions; references OPEN-ITEMS entries by id+link | End of every session |
+| `SESSION-CHECKPOINT.md` | Live operational spine; active focus + focus questions; references OPEN-ITEMS entries by id+link | Continuously updated as work happens |
 | `_workflow/PRODUCT-BUILDER.md` | This doc, once accepted | When workflow conventions change |
 | `ledgers/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
 | `ledgers/OPEN-ITEMS.md` | Durable ledger of loose ends — questions, deferred work, known TODOs. Self-contained paragraph entries. Resolution = delete the entry (resolving doc owns the answer) | Append on durable open; delete on resolution |
 | `ledgers/FEATURE-MAP.md` | Bird's-eye view: feature index table, mermaid dependency graph, model-level breakdown. Hand-maintained v1; auto-generated v2 | When a Model lands, a Feature ships, or dependencies shift |
 | `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
-| `sessions/session-NN.md` | Per-session narrative (append-only). Two parts, each capped ~one screen: (1) content — active question in/out, work done, decisions settled; (2) links + ephemeral/followup questions | End of every session |
+| `sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` | Opt-in milestone snapshot — frozen copy of `SESSION-CHECKPOINT.md` at a referenceable point. `type: snapshot` front matter; *"Frozen — do not edit"* header. See §4.6. | When `/builder:snapshot` is invoked |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
 | `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
