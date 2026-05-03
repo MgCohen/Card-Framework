@@ -1,7 +1,7 @@
 ---
 type: sample
 status: locked
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
+references: [features/engine/models/02-gamerules-contract.md, features/engine/models/05-game-factory.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-flow.md]
 tags: [#sample, #pile-counter]
 ---
 
@@ -363,26 +363,26 @@ public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
 public sealed record Puzzle(
     IReadOnlyList<Card>                                    Deck,
     IReadOnlyDictionary<PileId, IReadOnlyList<InstanceId>> Deal,
-    IReadOnlyDictionary<PileId, int>                       Targets);
+    IReadOnlyDictionary<PileId, int>                       Targets,
+    int                                                    Seed);
 
 public interface IPuzzleFactory { Puzzle Create(); }
 
 public static class PileCounterBootstrap
 {
-    public static GameEngine Create(IPuzzleFactory factory, IObjectResolver container)
+    // IGameFactory is DI-resolved; caller never sees VContainer.
+    // Per-game behaviors (handlers, mutators, GameRules implementations, IIntentMapper)
+    // are registered in the game's VContainer installer (see PileCounterInstaller below).
+    public static GameEngine Create(IPuzzleFactory puzzleFactory, IGameFactory gameFactory)
     {
-        var puzzle = factory.Create();
+        var puzzle = puzzleFactory.Create();
 
-        // GameEngineBuilder holds match configuration — initial state, handler/mutator lists,
-        // match-specific data (players, seed). VContainer resolves framework services.
-        var builder = new GameEngineBuilder()
+        return gameFactory.NewMatch()
+            .WithRules(PileCounterRules.Default)               // serializable data object
+            .WithActors(new SoloPlayer(ActorId.Player1))       // Player : Actor baseline
             .WithInitialSlices(BuildInitialSlices(puzzle))
-            .WithHandlers<MoveCardHandler>()
-            .WithMutators<PileMoveMutator, LastMoveMutator>()  // Mutator<PilesState/LastMoveState, MoveCardPayload>
-            .WithRule<PileCounterRules>()
-            .WithIntentMapper<PileCounterIntentMapper>();
-
-        return builder.Build(container);
+            .WithSeed(puzzle.Seed)
+            .Build();
     }
 
     private static IEnumerable<BaseState> BuildInitialSlices(Puzzle p)
@@ -397,15 +397,31 @@ public static class PileCounterBootstrap
         yield return new PilesState(piles);
         yield return new LastMoveState(Move: null);
         // AvailableActionsState, EngineState, and HistoryState are framework-owned slices
-        // auto-seeded by GameEngineBuilder.Build() — game authors never yield them here.
-        // See features/engine/models/04-gamestate-slices.md §4.
+        // auto-seeded by IGameFactory.Build() — game authors never yield them here.
+        // See features/engine/models/04-gamestate-slices.md §3 and features/engine/models/05-game-factory.md.
+    }
+}
+
+// Separate file — registered once at app startup.
+public sealed class PileCounterInstaller : IInstaller
+{
+    public void Install(IContainerBuilder builder)
+    {
+        builder.Register<MoveCardHandler>         (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<PileMoveMutator>         (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<LastMoveMutator>         (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<PileCounterRules>        (Lifetime.Transient);
+        builder.Register<PileCounterIntentMapper> (Lifetime.Singleton).AsImplementedInterfaces();
     }
 }
 ```
 
-`GameEngineBuilder` is a match-configuration object — it holds the lists of handlers, mutators, rules, and initial state, plus any match-specific data (players, seed). It does not wire services itself; `Build(container)` delegates service resolution to VContainer. The game registers its types in a VContainer installer; the framework registers its own services (`IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`) in the framework installer. `GameRules` and `IIntentMapper` implementations declare their dependencies as constructor parameters — VContainer injects them normally.
+Match construction is a two-layer split (locked in [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md)):
 
-The two `Mutator<…, MoveCardPayload>` registrations are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build()`. After `Build` returns the engine is idle and dormant — the first `Dispatch()` call triggers `Drain()`. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop.
+- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`, `Store`, and `IGameFactory`. The game's installer (`PileCounterInstaller` above) registers handlers, mutators, the rules implementation, and the intent mapper. Each runs once per app.
+- **Per-match factory** — the bootstrap call site asks `IGameFactory` for a new game, supplying only per-match data: rules selection, actor catalog, initial slice values, RNG seed. VContainer never appears in this code.
+
+The two `Mutator<…, MoveCardPayload>` registrations in the installer are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build`. After `Build` returns the engine is idle and dormant — the first `Dispatch()` call triggers `Drain()`. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop.
 
 ---
 

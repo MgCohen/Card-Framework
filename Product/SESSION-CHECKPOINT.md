@@ -11,21 +11,22 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Mid-rollout of the doc-workflow simplification (`PLANS/simplify-doc-workflow.md`). Six PRs in flight (front-matter rename → ALIGNMENT-DEBT retirement → ledger consolidation → session lightening → template + linter + per-feature ADR rollout → root-doc refresh).
+Doc-workflow simplification rollout has fully landed (PRs #82, #83, plus the 5a/5b/3+4/6 follow-ups, all merged into `main`). Last design work: design pass on `oq-engine-builder` resolved — locked the two-layer split (DI installer + `IGameFactory`), wrote new Model `features/engine/models/05-game-factory.md`, cascaded patches to `engine/02`, `engine/04`, pile-counter §9.8, glossary, and open items.
 
 ---
 
 ## 🎯 Active focus
 
-Land the simplification cleanup PRs in order, then resume design work on the active open items below.
+`oq-game-definition` — definition-declared slice schema + `GameDefinition` bundle. Track B from the engine-builder pass; the next natural design pass after game-factory landed.
 
 ---
 
 ## ❓ Open items snapshot
 
-See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The two highest-leverage durable items right now:
+See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
-- `oq-engine-builder` — `GameEngineBuilder` construction protocol. Load-bearing for any game author.
+- `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
+- `oq-gamerules-runtime-definition` — reconcile `GameRules` constructor-injected service shape (engine/02) with serializable-data shape (engine/05). Tightly scoped follow-up from the engine-builder pass.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 
 ---

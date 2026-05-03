@@ -17,6 +17,8 @@ The orchestrator: evaluation loop, the GameRules contract, and the snapshot prod
 - `features/engine/models/01-evaluation-loop.md` — orchestrator and evaluation loop (formerly doc 20).
 - `features/engine/models/02-gamerules-contract.md` — GameRules contract: shape, zero-state, services (formerly doc 25).
 - `features/engine/models/03-snapshot-pipeline.md` — snapshot production pipeline (formerly doc 29).
+- `features/engine/models/04-gamestate-slices.md` — GameState slice catalog: framework-owned vs game-authored tiers, store subscriptions, atomic batches.
+- `features/engine/models/05-game-factory.md` — match construction: `IGameFactory`, `MatchSetup`, `IMatchBuilder`, two-layer split between DI installation and per-match factory.
 
 ## Public surface
 GameRules class, evaluation loop entry points, snapshot writer (`IAvailableActions`), state-pattern services. The actions pipeline calls into GameRules; presentation reads the snapshot from state.
