@@ -59,7 +59,7 @@ Start from the existing front matter, then:
 - Add `superseded_by: <path>` (iff Superseded; relative path from the `archive/` doc to the successor, e.g. `../models/02-new-model.md`).
 - Add `archived_on: <today's ISO date>`.
 - Add `reason: <one-line reason>`.
-- Keep all other original front-matter fields unchanged (`type`, `builds-on`, `tags`, `last-updated`, etc.).
+- Keep all other original front-matter fields unchanged (`type`, `references`, `tags`, etc.).
 
 ### 6. Build the archived doc body
 

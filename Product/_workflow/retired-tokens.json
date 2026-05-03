@@ -1,1 +1,92 @@
-[]
+[
+  {
+    "token": "builds-on:",
+    "replacement": "references:",
+    "retired": "2026-04-29",
+    "note": "front-matter rename (doc-workflow simplification PR 1)"
+  },
+  {
+    "token": "last-updated:",
+    "replacement": null,
+    "retired": "2026-04-29",
+    "note": "front-matter field retired (doc-workflow simplification PR 1); rely on git mtime"
+  },
+  {
+    "token": "OPEN-QUESTIONS.md",
+    "replacement": "OPEN-ITEMS.md",
+    "retired": "2026-04-30",
+    "note": "ledger merge — OPEN-QUESTIONS folded into OPEN-ITEMS (doc-workflow simplification PR 3+4)"
+  },
+  {
+    "token": "OPEN-QUESTIONS",
+    "replacement": "OPEN-ITEMS",
+    "retired": "2026-04-30",
+    "note": "ledger merge — OPEN-QUESTIONS folded into OPEN-ITEMS (doc-workflow simplification PR 3+4)"
+  },
+  {
+    "token": "BACKLOG.md",
+    "replacement": "OPEN-ITEMS.md",
+    "retired": "2026-04-30",
+    "note": "ledger merge — BACKLOG folded into OPEN-ITEMS (doc-workflow simplification PR 3+4)"
+  },
+  {
+    "token": "ALIGNMENT-DEBT.md",
+    "replacement": null,
+    "retired": "2026-04-29",
+    "note": "ledger retired entirely (doc-workflow simplification PR 2); historical record under Product/_archive/ledgers/"
+  },
+  {
+    "token": "ALIGNMENT-DEBT",
+    "replacement": null,
+    "retired": "2026-04-29",
+    "note": "concept retired with the ledger (doc-workflow simplification PR 2)"
+  },
+  {
+    "token": "IGameStateProvider",
+    "replacement": "IStateScope",
+    "retired": "2026-04-30",
+    "note": "engine service rename"
+  },
+  {
+    "token": "IEngineEvaluator",
+    "replacement": "GameRules",
+    "retired": "2026-04-30",
+    "note": "engine evaluator → GameRules plugin"
+  },
+  {
+    "token": "RelocateInstanceMutation",
+    "replacement": "MoveCardMutation",
+    "retired": "2026-05-01",
+    "note": "card-model rename"
+  },
+  {
+    "token": "SemanticEvent",
+    "replacement": "GameSignal",
+    "retired": "2026-04-30",
+    "note": "history-entry rename"
+  },
+  {
+    "token": "CommandPreHook",
+    "replacement": "OnBefore<T>",
+    "retired": "2026-04-30",
+    "note": "trigger-fold rename"
+  },
+  {
+    "token": "CommandReaction",
+    "replacement": null,
+    "retired": "2026-04-30",
+    "note": "post-result pipeline hook removed; follow-ups return from GameRules.Evaluate"
+  },
+  {
+    "token": "Ephemeral Instance ID",
+    "replacement": null,
+    "retired": "2026-04-30",
+    "note": "per-actor transport alias retired (zones ADR-0002); privacy via server-side CardRef rotation"
+  },
+  {
+    "token": "StateCommand",
+    "replacement": "StateMutation",
+    "retired": "2026-04-30",
+    "note": "state-mutation rename"
+  }
+]

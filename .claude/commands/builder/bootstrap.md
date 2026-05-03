@@ -15,7 +15,7 @@ User input: `$ARGUMENTS`
 
 ## Steps
 
-Walk the user interactively through the §5.0 8-step bootstrap from `PRODUCT-BUILDER.md`. Don't dump the whole tree at once — confirm each step.
+Walk the user interactively through the `PRODUCT-BUILDER.md` §5.0 bootstrap. Don't dump the whole tree at once — confirm each step.
 
 ### 1. Gather project info
 
@@ -28,9 +28,17 @@ Ask:
 
 ```
 Product/
-  general/
+  README.md
+  SESSION-CHECKPOINT.md
+  _workflow/
+    PRODUCT-BUILDER.md
+    EMOJI-LEGEND.md
+    REFERENCE-CONVENTIONS.md
+    retired-tokens.json
     _templates/
-    decisions/
+  ledgers/
+  decisions/
+  general/
   features/<feature>/
     models/
     decisions/
@@ -42,34 +50,34 @@ Product/
   sessions/
 ```
 
-Drop `.gitkeep` in every empty leaf so git tracks the structure. For each feature, `archive/` gets its own `.gitkeep` — it starts empty and receives docs only when a status flips to `Superseded` or `Cancelled` (§5.14).
+Drop `.gitkeep` in every empty leaf so git tracks the structure. For each feature, `archive/` gets its own `.gitkeep` — it starts empty and receives docs only when a status flips to `Superseded` or `Cancelled` (§5.14). `sessions/` gets a `.gitkeep` — it stays empty until `/builder:snapshot` is invoked (§4.6).
 
 ### 3. Drop templates into `_workflow/_templates/`
 
-Seven files extracted from `PRODUCT-BUILDER.md` §4.1–§4.7:
-- `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `session.md`, `checkpoint.md`.
+Seven files extracted from `PRODUCT-BUILDER.md` §4.1–§4.5 + §4.7 + §5.14:
+- `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `checkpoint.md`, `archive.md`.
 
-(§4.8 Plan and §6 ledger entry shapes are spec-only — no template files.)
+(§4.6 Snapshot and §4.8 Plan are descriptive prose only — no template files.)
+
+Also seed `_workflow/retired-tokens.json` as an empty array `[]`. The registry grows as renames land; `/builder:lint --tokens-only` reads it.
 
 ### 4. Initialize ledgers
 
-- `Product/ledgers/ALIGNMENT-DEBT.md` — empty, headers + entry-shape doc.
-- `Product/ledgers/BACKLOG.md` — empty, seeded with two known deferred items: "Tier 2 commands per `ProductBuilder/AI-FIRST-AUTOMATION.md` §8" and "Tier 3 / hooks / skills as triggered."
-- `Product/ledgers/FEATURE-MAP.md` — initial table with one row per feature (status `draft`, model count `0`), plus an empty mermaid block.
+- `Product/ledgers/OPEN-ITEMS.md` — empty, with the standard preamble (single ledger of loose ends; resolution = delete the entry).
+- `Product/ledgers/FEATURE-MAP.md` — stub with the feature index table (one row per candidate feature, status `considered`, model count `—`) and an empty mermaid block.
 - `Product/ledgers/GLOSSARY.md` — minimal frame with `## Changelog` section ready.
-- `Product/ledgers/OPEN-ITEMS.md` — empty (replaced the older OPEN-QUESTIONS / BACKLOG split per the simplification rollout).
 
 ### 5. Project-wide ADR scaffold
 
-Create `Product/decisions/0001-adopt-workflow.md` from a project template. The Card Framework ADR at `Product/decisions/0001-adopt-workflow.md` is the reference shape. Status `accepted`. Body should cite the new project's `_workflow/PRODUCT-BUILDER.md`.
+Create `Product/decisions/0001-adopt-workflow.md` from the ADR template (`_workflow/_templates/adr.md`). Status `accepted`. Body should cite the new project's `_workflow/PRODUCT-BUILDER.md`.
 
 ### 6. Write VISION.md
 
-`Product/general/VISION.md` from the supplied blurb. Front matter `type: reference`, `status: settled`. Don't elaborate — let the first session expand it.
+`Product/general/VISION.md` from the supplied blurb. Don't elaborate — let the first session expand it. Add `general/ARCHITECTURE.md` and `general/ROADMAP.md` as terse stubs (per §5.0 step 5); they thicken as feature design lands.
 
-### 7. Open session 01
+### 7. Seed `SESSION-CHECKPOINT.md`
 
-`Product/sessions/session-01.md` from the session template. Status `in-progress`. Active question coming in: *"what is this project?"*. Date: today.
+Create `Product/SESSION-CHECKPOINT.md` from the checkpoint template (`_workflow/_templates/checkpoint.md`). Active focus: *"what is this project?"*. The "Where we stopped" paragraph notes the bootstrap. The "Open items snapshot" links back to whatever durable items the user named in step 1.
 
 ### 8. Drop README
 
@@ -84,10 +92,11 @@ If the user wants — and if there's no existing `AGENTS.md` at repo root — dr
 Print:
 - `Filesystem ready. <N> features scaffolded.`
 - `Workflow doc: Product/_workflow/PRODUCT-BUILDER.md needs to be authored or copied — bootstrap doesn't ship it.`
-- `Next step: copy or write PRODUCT-BUILDER.md, then begin session 01.`
+- `Next step: copy or write PRODUCT-BUILDER.md, then run /builder:start-session.`
 
 ## Notes
 
-- **The workflow doc itself isn't shipped by this command.** Bootstrap creates the folders, templates, ledgers, and session-01 stub — but `PRODUCT-BUILDER.md` is project-meta and either gets copied from another project or authored fresh. Surface this clearly at the end.
+- **The workflow doc itself isn't shipped by this command.** Bootstrap creates the folders, templates, ledgers, and the SESSION-CHECKPOINT seed — but `PRODUCT-BUILDER.md` is project-meta and either gets copied from another project or authored fresh. Surface this clearly at the end.
 - Refuse aggressively if `Product/` is non-empty. Bootstrap is destructive-adjacent (creates many files); a wrong invocation could pollute an existing project.
 - The Card Framework version lives at `Product/_workflow/PRODUCT-BUILDER.md` and is the canonical reference for what "the workflow" means. New projects should either copy that or ship a project-specific variant.
+- Per the doc-workflow simplification rollout, mandatory per-session notes are retired. The bootstrap output is `SESSION-CHECKPOINT.md`, not a `session-01.md` artifact. The first interactive run starts with `/builder:start-session`.
