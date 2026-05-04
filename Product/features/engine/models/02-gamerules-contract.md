@@ -54,7 +54,8 @@ The factory pairs them via DI container open-generic resolution: a game installe
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Player input → command resolution | Game | `IIntentMapper` |
 | UI affordance projection | Game (presentation) | `AffordanceMap` (see doc 27) |
-| Game session lifecycle (start, end, pause) | Game | Separate `IGameSession` (out of scope here) |
+| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) |
+| Broader session lifecycle (pause, concede, disconnect, multi-match) | Game | External controller wrapping `GameEngine` (out of scope here) |
 
 ---
 
@@ -334,7 +335,7 @@ An earlier draft returned `DrainResult { Snapshot, Dispatch }` and let the engin
 - **Snapshot publication** — enumerate templates, call `Actions.Set(snapshot)`. May filter at the per-template level (e.g., suppress "twice in a row"). May call `Handlers.Validate` on demand to prune templates whose every binding fails — that's an opt-in, not a default.
 - **Phase advance** — emit `new AdvancePhaseCommand()` in `Dispatch`.
 - **Priority grant** — emit `new GrantPriorityCommand(activePlayer)` in `Dispatch`.
-- **End-of-game check** — emit `new EndGameCommand(...)` in `Dispatch` if the game is over.
+- **End-of-match check** — emit `new EndMatchCommand(outcome)` in `Dispatch` if the match is over. The framework-owned handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §4.2.
 - **One-shot games** — never publish past bootstrap; `OnQueueDrained` is a no-op (`return DrainResult.Empty;`).
 
 ### Handler types
@@ -449,10 +450,10 @@ For games with one rule module, extend `GameRulesRuntime<TDefinition>` directly.
 - **`IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces the choice. (Doc 26 Q11.)
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing).
 - **`GameRulesRuntime` composition** — module composition contract (provider/policy ordering, enable-disable). Service surface supports it mechanically; pin when first composed game forces it. Tracked as `oq-gamerules-composition`.
-- **Engine start/finish-game lifecycle** — the engine does not yet have explicit `StartMatch` / `FinishMatch` hooks where runtime disposal, end-of-game commands, and session shutdown attach. Surfaced from the runtime/definition design pass; promote to OPEN-ITEMS.
 
 ### Resolved
 
+- ~~Engine start/finish-match lifecycle~~ — resolved in [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md). `GameEngine` exposes `StartMatch` / `FinishMatch` / `Lifecycle` / `Dispose`; transitions are framework-owned `StartMatchCommand` / `EndMatchCommand` flowing through the normal pipeline; signals (`MatchStartedSignal`, `MatchEndedSignal`) land in normal envelopes.
 - ~~`GameRules` runtime/definition reconciliation~~ — split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime); factory uses DI container open-generic resolution. See §1 and §2 above.
 - ~~`FilterTriggers` default impl~~ — base ships a virtual identity default. See §4.
 - ~~`AvailableActionsSnapshot` ownership~~ — lives in `GameState.AvailableActions`; runtime writes through `Actions.Set` (doc 29 §2). Engine never auto-publishes.

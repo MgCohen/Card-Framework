@@ -59,14 +59,16 @@ public sealed record AvailableActionsState(
 
 ```csharp
 public sealed record EngineState(
-    bool           IsRunning,
-    GameCommand?   CurrentCommand) : BaseState;
+    EngineLifecycle Lifecycle,
+    bool            IsRunning,
+    GameCommand?    CurrentCommand) : BaseState;
 ```
 
-- **Purpose.** Tracks engine execution state — whether a drain is in progress and which command is currently executing. Load-bearing for inspection, debugging, and future replay/save support.
-- **Written by.** Engine internals (updated on drain start/stop and before/after each `pipeline.Execute`). Not writable by game authors.
-- **Read by.** Tooling, debugger, and any game logic that needs to know "is the engine currently draining?"
-- **Seeded.** `EngineState(IsRunning: false, CurrentCommand: null)` at `Build()`.
+- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate (engine/01 §3 / engine/06 §7), inspection, debugging, and future replay/save support.
+- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler` (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §4).
+- **Written by.** Engine internals only. The lifecycle field is written by the framework `StartMatchHandler` / `EndMatchHandler` via the framework mutator; the running flag and current command are updated on drain start/stop and before/after each `pipeline.Execute`. Not writable by game authors.
+- **Read by.** The engine's `Dispatch` lifecycle gate, tooling, debugger, and any game logic that needs to know "is the match active?" or "is the engine currently draining?".
+- **Seeded.** `EngineState(Lifecycle: EngineLifecycle.NotStarted, IsRunning: false, CurrentCommand: null)` at `Build()`.
 
 ### 3.3 `HistoryState`
 

@@ -69,15 +69,25 @@ public sealed class GameEngine
     private bool running;
 
     // Single entry point for all sources — player input, timers, trigger reactions.
-    // Pipeline validates first; GameRules.OnIncomingCommand decides scheduling.
-    public void Dispatch(GameCommand command)
+    // Lifecycle gate runs first (framework), then pipeline.Validate, then GameRules.OnIncomingCommand.
+    public IntakeResult Dispatch(GameCommand command)
     {
-        if (!pipeline.Validate(command, store, out _))
-            return;
+        // Lifecycle gate — see engine/06 §7.
+        var lifecycle = store.Get<EngineState>().Lifecycle;
+        if (lifecycle == EngineLifecycle.Ended)
+            return IntakeResult.Reject("MatchEnded");
+        if (lifecycle == EngineLifecycle.NotStarted
+            && command is not StartMatchCommand
+            && command is not EndMatchCommand)
+            return IntakeResult.Reject("MatchNotStarted");
+
+        if (!pipeline.Validate(command, store, out var reason))
+            return IntakeResult.Reject(reason);
         var result = rules.OnIncomingCommand(command, DispatchOrigin.PlayerIntent);
         if (!result.Accepted)
-            return;
+            return result;
         if (!running) Drain();
+        return result;
     }
 
     private void Drain()
@@ -112,6 +122,7 @@ Key points:
 - The loop evaluates **after every command**, not once at the end. This is what gives the engine per-step awareness.
 - `OnQueueDrained` is the hook for when a drain just finished: the work queue is empty, so the game can phase-advance, grant priority, publish available actions, or await input. It is not a generic "idle" or presentation concept.
 - `**OriginCommandId` threading:** the engine copies `OriginCommandId` from the just-executed command onto every evaluator follow-up. This means `PlayCardCommand` and `ExecuteCardCommand` (and any further chain members) all share the same `OriginCommandId`. The engine does this mechanically — the evaluator does not need to set it. `OriginCommandId` is the ID of the first command in the chain, not the original player request — though the first command's envelope separately records the originating request for correlation.
+- **Lifecycle gate**: framework rejects pre-`StartMatch` and post-`FinishMatch` dispatches uniformly. Only `StartMatchCommand` and `EndMatchCommand` are admitted from `NotStarted`; nothing is admitted from `Ended`. Match lifecycle in full — including the lifecycle commands and their handlers — lives in [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
 
 ---
 

@@ -11,15 +11,15 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Design pass on `oq-gamerules-runtime-definition` — 4 decisions locked. Split `GameRules` into `GameRulesDefinition` (pure `[SerializeField]` data) + `GameRulesRuntime<TDefinition>` (stateful, DI-resolved, holds services + game subsystems). Factory uses container open-generic resolution. Single-phase construction with typed `Definition` on the base. Per-match lifecycle, engine-managed disposal. Patch cascade pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
+Design pass on `oq-engine-match-lifecycle` landed — new `engine/06-match-lifecycle.md` written; cascade applied across `engine/01` (Dispatch lifecycle gate), `engine/02` (session-lifecycle framing flipped, `EndGameCommand` → `EndMatchCommand`, lifecycle open item moved to Resolved), `engine/03` (sample uses `EndMatchCommand` + `MatchOutcome.Win`), `engine/04` (`EngineState.Lifecycle` field), `engine/05` (return state, scope-ownership softened, Inv-9 narrowed, open follow-ups cleaned), pile-counter (`EndMatchCommand` rename, runtime takes `actors` ctor param, Q3 struck), glossary (5 new entries: `EngineLifecycle`, `MatchOutcome`, `StartMatchCommand`, `EndMatchCommand`, `MatchStartedSignal`, `MatchEndedSignal`), OPEN-ITEMS (`oq-engine-match-lifecycle` struck; `oq-effect-cancellation-on-match-end` added). Prior `oq-gamerules-runtime-definition` cascade also fully landed (audit found it was already mostly applied; only the lifecycle-overlap renames were outstanding, now done).
 
-Doc-workflow simplification rollout fully landed earlier; `oq-engine-builder` design pass landed `engine/05-game-factory.md`.
+Prior pass on `oq-gamerules-runtime-definition` — patch cascade still pending: `engine/02`, `engine/05`, glossary, pile-counter §9.8, OPEN-ITEMS.
 
 ---
 
 ## 🎯 Active focus
 
-Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply the runtime/definition split across `engine/02`, `engine/05`, glossary, pile-counter §9.8, and OPEN-ITEMS. Then `oq-game-definition` (Track B from the engine-builder pass) is the next natural design thread.
+`oq-game-definition` (Track B from the engine-builder pass) — `GameDefinition` bundle + definition-declared slice schema. Next design thread now that the lifecycle and runtime/definition cascades have landed.
 
 ---
 
@@ -28,8 +28,8 @@ Patch cascade for the `oq-gamerules-runtime-definition` design pass — apply th
 See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
 - `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
-- `oq-engine-match-lifecycle` — engine `StartMatch` / `FinishMatch` hooks for symmetric bootstrap/teardown, runtime disposal, end-of-match signal. Surfaced from the gamerules runtime/definition pass.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
+- `oq-effect-cancellation-on-match-end` — async-effect cancellation when the match ends mid-await. Surfaced from the lifecycle pass.
 
 ---
 

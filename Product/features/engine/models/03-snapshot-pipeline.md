@@ -242,7 +242,7 @@ public sealed class PileCounterRules : GameRules
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
         => State.Get<PilesState>().Piles.Values.All(p => p.Score == p.Target)
-            ? new[] { new EndGameCommand(Outcome.Win) }
+            ? new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) }
             : Array.Empty<GameAction>();
 
     public override DrainResult OnQueueDrained()
