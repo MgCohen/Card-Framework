@@ -43,12 +43,11 @@ Mid-conversation, the `EntityDefinition`-as-base question surfaced a deeper one:
 
 ### Kick-start brief — domain modeling session
 
-- **Goal.** Sketch every slice / state / aggregate the framework needs across cards, zones, players, mappings, before resuming `oq-game-definition` Stages 2–3.
-- **Inputs.** Q1 lock on `ISliceProvider<TInstance>` (informs what each definition kind will eventually declare); `engine/04` slice catalog (framework vs game-authored tiers); `cards/01`, `zones/01`, `entities/01` (current state surfaces); glossary.
+- **Goal.** Iterate on the saved domain model proposal before resuming `oq-game-definition` Stages 2–3.
+- **Starting input.** [`spikes/domain-model-proposal.md`](spikes/domain-model-proposal.md) — definition hierarchy, slice inventory by keying axis (framework / game-singleton / zone-keyed / actor-keyed / card-keyed), aggregates survey, factory loop pseudocode, open questions for Stage 2/3. Draft / exploratory; not approved or denied.
 - **Out of scope.** Commands, handlers, mutators, services, runtime composition.
-- **Output.** A domain model enumerating every slice, keyed by which definition kind owns it (card-keyed, zone-keyed, actor/player-keyed, game-singleton). Should reveal whether aggregates are needed, whether new states surface, and whether per-actor / per-player slice patterns exist beyond the current `Player : Actor` baseline.
-- **Why first.** Once we know what each definition kind owns, the per-kind `ISliceProvider` implementations (Stage 2) become mechanical, and `GameDefinition` shape + asset composition (Stage 3) can be designed against a concrete slice surface rather than a hypothetical one.
-- **Dependency.** Resolve the entities-bridge thread (above) first if pursuing — it changes the slice surface every definition kind would declare.
+- **Why first.** The proposal is the input to per-kind `ISliceProvider` implementations (Stage 2) and `GameDefinition` shape + asset composition (Stage 3). Iterate on the slice surface against the proposal rather than rebuild from scratch.
+- **Dependency.** The entities-bridge thread above is upstream — if pursued, it reshapes §1 hierarchy and §2.5 (card-keyed) of the proposal. Either resolve it first or take the proposal as-is and resume.
 
 ---
 
