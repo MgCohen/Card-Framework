@@ -19,6 +19,7 @@ The orchestrator: evaluation loop, the rules layer contract (`GameRulesDefinitio
 - `features/engine/models/03-snapshot-pipeline.md` — snapshot production pipeline (formerly doc 29).
 - `features/engine/models/04-gamestate-slices.md` — GameState slice catalog: framework-owned vs game-authored tiers, store subscriptions, atomic batches.
 - `features/engine/models/05-game-factory.md` — match construction: `IGameFactory`, `MatchSetup`, `IMatchBuilder`, two-layer split between DI installation and per-match factory; pairs `GameRulesDefinition` to `GameRulesRuntime<T>` via container open-generic resolution.
+- `features/engine/models/06-match-lifecycle.md` — match lifecycle: `EngineLifecycle` (`NotStarted`/`Started`/`Ended`), `StartMatch`/`FinishMatch`/`Dispose` surface, framework-owned `StartMatchCommand`/`EndMatchCommand` flowing through the normal pipeline, `MatchOutcome` hierarchy, `MatchStartedSignal`/`MatchEndedSignal`.
 
 ## Public surface
 `GameRulesDefinition` + `GameRulesRuntime<T>` (data + runtime split), `IGameFactory` / `MatchSetup` / `IMatchBuilder`, evaluation loop entry points, snapshot writer (`IAvailableActions`), state-pattern services. The actions pipeline calls into the runtime; presentation reads the snapshot from state.

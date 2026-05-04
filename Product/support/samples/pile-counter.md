@@ -100,7 +100,7 @@ This game forces the framework to express:
 
 - **Zones with stack ordering and a derived score.** The score is a *computed* per-zone value — the framework needs a way to expose this without forcing the game author to recompute it manually after every change. (Or to recompute manually but cleanly.)
 - **A single action type with legality rules.** Tests `OnIncomingCommand` rejection, `AvailableActions` (the gateway needs to tell the UI which moves are legal), and how legality interacts with the "can't move same card twice in a row" memory.
-- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch an `EndGameCommand` (or equivalent).
+- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
 - **Move history of size 1.** "Last card moved" is a sliver of state that doesn't fit on a card or a zone — it's *game-level* memory. Where does it live?
 
 This game does **not** test:
@@ -178,7 +178,9 @@ public sealed record MoveCardIntent(InstanceId Card, PileId Destination) : Playe
 
 // Engine commands (fully resolved)
 public sealed record MoveCardCommand(InstanceId Card, PileId From, PileId To) : GameCommand;
-public sealed record EndGameCommand(Outcome Outcome) : GameCommand;
+
+// EndMatchCommand is framework-owned (engine/06 §4.2). Pile Counter does not
+// declare its own end-of-match command; Evaluate dispatches the framework's.
 
 // Result
 public sealed record MoveCardResult(InstanceId MovedCard) : CommandResult;
@@ -187,8 +189,6 @@ public sealed record MoveCardResult(InstanceId MovedCard) : CommandResult;
 // Per [04-effect-flow §4.2](features/effects/models/04-effect-flow.md): one payload
 // fans out to every mutator registered for that payload type.
 public sealed record MoveCardPayload(InstanceId Card, PileId From, PileId To);
-
-public enum Outcome { Win }
 ```
 
 Note the framework primitive is **generic** `MoveCardCommand` — not `MoveTopCardCommand`. The "top only" rule is a Pile Counter constraint enforced in `Validate`, not a framework concept.
@@ -286,15 +286,22 @@ public sealed class PileCounterRulesDefinition : GameRulesDefinition
 }
 
 // Runtime brain — generic on its definition. No game-specific subsystems
-// (Pile Counter has no stack, no decks, no priority).
+// (Pile Counter has no stack, no decks, no priority). Holds a reference
+// to the solo player resolved from the seated-actor list at construction.
 public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
 {
+    private readonly Actor _player;
+
     public PileCounterRulesRuntime(
         PileCounterRulesDefinition definition,
         IStateScope                state,
         IAvailableActions          actions,
-        IIntakeQueue               pending)
-        : base(definition, state, actions, pending) { }
+        IIntakeQueue               pending,
+        IReadOnlyList<Actor>       actors)
+        : base(definition, state, actions, pending)
+    {
+        _player = actors.Single();
+    }
 
     public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
     {
@@ -309,7 +316,7 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
     {
         var piles = State.Get<PilesState>().Piles.Values;
         if (piles.All(p => p.Score == p.Target))
-            return new[] { new EndGameCommand(Outcome.Win) };
+            return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
         return Array.Empty<GameAction>();
     }
 
@@ -471,7 +478,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 ### Deferred (need decisions, not blocked)
 
 - **Q2 — Action pipeline cleanup.** The handler-lookup → validate → execute → trigger-fold flow is scattered across docs 18/19/22/25. Needs a dedicated doc that draws the full pipeline explicitly.
-- **Q3 — `EndGameCommand` semantics.** When the rule dispatches `EndGameCommand` from `Evaluate`, what does the engine do? Stop accepting commands? Tear down? Bleeds into session lifecycle (checkpoint #12).
+- ~~**Q3 — `EndGameCommand` semantics.**~~ Resolved by the `oq-engine-match-lifecycle` design pass. Pile Counter dispatches the framework-owned `EndMatchCommand(MatchOutcome.Win(player))`; the framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. Engine rejects subsequent dispatches via the lifecycle gate. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
 - **Q4 — Snapshot revision tag.** Useful for the UI to detect "I have a stale snapshot." Add when a concrete need surfaces (e.g., async render).
 
 ### Implementation details (non-blocking)
