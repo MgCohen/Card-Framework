@@ -37,6 +37,10 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
+### Pending thread — drop the entities bridge?
+
+Mid-conversation, the `EntityDefinition`-as-base question surfaced a deeper one: are the `com.scaffold.entities` + `com.scaffold.entities.states` packages adding value commensurate with their cost given the framework's redux-shaped direction? Sketches captured in [`spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — **draft / exploratory, not approved or denied**. User stepped back to think before deciding. If this lands, it's upstream of the domain modeling pass — `CardDefinition`'s base, what "card slices" means, and the Definition hierarchy all reshape. Resume here next session: either decide on the spike (open as `oq-drop-entities-bridge` design pass) or punt and proceed with the domain modeling pass against the current bridge.
+
 ### Kick-start brief — domain modeling session
 
 - **Goal.** Sketch every slice / state / aggregate the framework needs across cards, zones, players, mappings, before resuming `oq-game-definition` Stages 2–3.
@@ -44,6 +48,7 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 - **Out of scope.** Commands, handlers, mutators, services, runtime composition.
 - **Output.** A domain model enumerating every slice, keyed by which definition kind owns it (card-keyed, zone-keyed, actor/player-keyed, game-singleton). Should reveal whether aggregates are needed, whether new states surface, and whether per-actor / per-player slice patterns exist beyond the current `Player : Actor` baseline.
 - **Why first.** Once we know what each definition kind owns, the per-kind `ISliceProvider` implementations (Stage 2) become mechanical, and `GameDefinition` shape + asset composition (Stage 3) can be designed against a concrete slice surface rather than a hypothetical one.
+- **Dependency.** Resolve the entities-bridge thread (above) first if pursuing — it changes the slice surface every definition kind would declare.
 
 ---
 
