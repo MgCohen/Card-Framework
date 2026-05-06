@@ -1,12 +1,14 @@
 ---
 type: spike
-status: draft
+status: superseded
 tags: [#spike, #entities, #scaffold, #variables, #modifiers]
 ---
 
 # Entities-Bridge Replacement Sketch
 
-> **Status: draft / exploratory.** Sketches captured during the `oq-game-definition` domain modeling pass when the existing `Scaffold.Entities` + `Scaffold.Entities.States` packages started feeling like they were fighting the immutable / redux-shaped direction the framework is settling into. **Not approved, not denied** — captured for later iteration. No doc patches based on this spike yet.
+> **Status: superseded (2026-05-06).** Resolved in favor of keeping the bridge after the Plan A/B/C cascade landed. Five of this spike's strongest arguments have since been mooted: `IReadOnlyEntity`/`IMutableEntity` polymorphism deleted (Plan B), per-rebuild effective-value cache deleted (Plan C), `IEntityRegistry` replaced by `store.Catalog` + `StoreEntities.Spawn` (Plan A/B/C), dual mutation surface collapsed into the unified `IEntityVariableStorage` surface (Plan C), and `EntityDefinition` refactored off `ScriptableObject` to a plain `[Serializable] class` (no longer Unity-coupled). What remains is two ergonomic concerns — type-safe variable keys (`Variable<T>` vs `Variable + VariableValue<T>`) and the residual mutable-shaped storage surface over immutable slice writes — neither of which justifies a rewrite on its own. Future revisits would need fresh evidence (real friction in practice, a profiling result, an authoring concern the bridge can't accommodate). Moving forward, the framework consumes the post-Plan-C bridge as the foundation. See `Product/SESSION-CHECKPOINT.md` for the resolution context and `PLANS/Scaffold/scaffold-entities-states-rebuild.md` (Plan C, landed) for what shipped on the Scaffold side.
+
+> **Original status: draft / exploratory.** Sketches captured during the `oq-game-definition` domain modeling pass when the existing `Scaffold.Entities` + `Scaffold.Entities.States` packages started feeling like they were fighting the immutable / redux-shaped direction the framework is settling into. **Not approved, not denied** — captured for later iteration. No doc patches based on this spike yet.
 
 ## Why this came up
 
