@@ -54,6 +54,14 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.
 
+- id: bl-zone-visibility-custom-policy-serialization | kind: defer | **`ZoneVisibilityPolicy.Custom` serialization** — the named `ZoneVisibilityPolicy` cases (`AllPublic`, `AllHidden`, `OwnerSees`, `OwnerSeesOthersCount`, `OwnerCountOthersNothing`) round-trip cleanly through replay/save/network. The `Custom(Func<IActor, IActor?, VisibilityResult>)` escape hatch carries an arbitrary delegate that breaks serialization. Story: either (a) replace `Custom` with a registered-by-id resolver (game registers an `IZoneVisibilityResolver` keyed by id; `Custom(string ResolverId)` records the id), (b) drop `Custom` and force games to add a slice-based override mechanism, or (c) accept that `Custom` games can't replay/network. Surfaced by Q7 of the open-seams design pass (2026-05-06).
+  Trigger: first game uses `Custom`, OR networking/replay design forces serialization rules.
+  References: `Product/features/zones/models/01-zone-model.md` § Zone visibility policy.
+
+- id: bl-card-resolution-helper-shape | kind: defer | **CardRef → Card resolution helper location** — the two-hop resolution (`CardRef → CardMapState → Ref<Card> → Catalog → Card`) needs a single helper to avoid call-site verbosity. Candidate shapes: extension method on `Store` (`store.ResolveCard(cardRef)`), instance method on `CardRef` (`cardRef.Resolve(store)`), shared utility class. All work; choice is ergonomic. Surfaced by Q6 of the open-seams design pass (2026-05-06); deferred to code time.
+  Trigger: first concrete implementation requires picking a shape.
+  References: `Product/features/cards/models/01-card-model.md` § Resolution surfaces.
+
 ## Features yet to scaffold
 
 - id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.

@@ -18,7 +18,7 @@ This Model defines the **`GameDefinition`** bundle that owns the game-mode shape
 | Term | Definition |
 |---|---|
 | `GameDefinition` | Top-level bundle for a game-mode variant. Carries `Rules` (a `GameRulesDefinition`), `SharedZones` (the game-level zone layout), `CardCatalog` (the cards usable in this mode), `DefaultPlayerDefinition` (applied to all player actors unless overridden), and `GetInitialSlices()` (game-singleton slices). Implements `ISliceProvider`. |
-| `ISliceProvider` | Parameterless interface — `IEnumerable<BaseState> GetInitialSlices()`. Implemented on every framework definition kind (`CardDefinition`, `ZoneDefinition`, `PlayerDefinition`, `GameDefinition`) and on `EntityInstance<TDef>` itself (instance delegates to definition by default). |
+| `ISliceProvider` | Parameterless interface — `IEnumerable<BaseState> GetInitialSlices()`. Reached on Definition kinds via the framework parent `DefinitionWithSlices` (which CardDefinition / ZoneDefinition / PlayerDefinition inherit) and directly on `GameDefinition`. Reached on Instance kinds via the framework parent `InstanceWithSlices<TDef>` (which Card / Zone / Player inherit). The instance's default implementation delegates to the (protected) definition. |
 | Layout block | The `SharedZones` collection on `GameDefinition` and the `PerPlayerZones` collection on `PlayerDefinition`. The factory walks these at `Build` and spawns one `Zone` per shared-zone definition (game-level) and one `Zone` per `(player, perPlayerZone)` pair (per-player). |
 | `MatchSetup` overlay | Three optional fields on `MatchSetup` — `InitialSlices`, `ZoneOverlay`, `PlayerDefinitionOverlay` — that allow per-match deviations from the standard layout for tests, scripted scenarios, and asymmetric games. |
 | External slice keying | Convention: framework slices don't carry their own primary key; the factory keys slices externally using the spawned instance's `SelfRef` (or no key for game-singletons). Reference-shaped fields inside slice values are *data*, not keys. |
@@ -57,13 +57,11 @@ public interface ISliceProvider
 }
 ```
 
-The single, uniform interface for declaring initial slices. Implemented by:
+The single, uniform interface for declaring initial slices. Reached through the framework parents:
 
-- **`GameDefinition`** — game-singleton slices (no keying).
-- **`ZoneDefinition`** — per-zone slices, installed at `zone.SelfRef`.
-- **`PlayerDefinition`** — per-player non-variable slices, installed at `player.SelfRef`. Variables go in `EntityState` automatically via the bridge.
-- **`CardDefinition`** — per-card non-variable slices (rare; default is empty), installed at `card.SelfRef`.
-- **`EntityInstance<TDef>`** — default implementation delegates to `Definition.GetInitialSlices()`. Concrete entity-instance subclasses (`Card`, `Zone`, `Player`) override only when spawn-time customization is needed (rare).
+- **`GameDefinition`** — implements `ISliceProvider` directly. Game-singleton slices (no keying).
+- **`DefinitionWithSlices`** — framework parent (`: Scaffold.EntityDefinition, ISliceProvider`). `ZoneDefinition`, `PlayerDefinition`, `CardDefinition` inherit and override `GetInitialSlices()` to declare per-instance slices, installed at the instance's `SelfRef`.
+- **`InstanceWithSlices<TDef>`** — framework parent (`: Scaffold.EntityInstance<TDef>, ISliceProvider`). `Card`, `Zone`, `Player` inherit. The default implementation delegates to the (protected) `Definition.GetInitialSlices()`. Concrete entity-instance subclasses override only when spawn-time customization is needed (rare).
 
 The factory walks instances at spawn and installs returned slices at the instance's `SelfRef`. The interface is parameterless because slices don't carry their own primary key — the factory keys externally.
 
@@ -76,10 +74,10 @@ public abstract class GameDefinition
     // … other fields
 }
 
-public abstract class PlayerDefinition : Scaffold.EntityDefinition, ISliceProvider
+public abstract class PlayerDefinition : DefinitionWithSlices
 {
     public abstract IEnumerable<ZoneDefinition> PerPlayerZones { get; }
-    // … inherits ISliceProvider
+    // … inherits ISliceProvider via DefinitionWithSlices
 }
 ```
 
@@ -154,13 +152,21 @@ Each overlay entry is a `(ZoneDefinition, owner)` pair. Owner is the `IActor` th
 2. **Within step 2**, ordering is shared-zones → players → per-player-zones → overlay. Per-player zones spawn after their owning player so the structural ownership relationship is deterministic.
 3. **Manual `InitialSlices` overlay runs last** (step 5). Test scripts can install slices that reference any instance spawned in steps 2–4.
 
-### `EntityInstance<TDef>` instance-delegates-to-definition
+### `InstanceWithSlices<TDef>` instance-delegates-to-definition
 
 ```csharp
-public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinition
+// Scaffold (external)
+public class EntityInstance<TDef> where TDef : IEntityDefinition
 {
     public TDef                   Definition { get; }
     public IEntityVariableStorage Storage    { get; }
+}
+
+// Card Framework parent — adds ISliceProvider, hides Definition externally
+public class InstanceWithSlices<TDef> : Scaffold.EntityInstance<TDef>, ISliceProvider
+    where TDef : IEntityDefinition
+{
+    protected new TDef Definition => base.Definition;
 
     public virtual IEnumerable<BaseState> GetInitialSlices()
         => Definition is ISliceProvider provider
@@ -169,7 +175,7 @@ public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinitio
 }
 ```
 
-The default implementation lets the factory's spawn loop work instance-centric — `foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`. Concrete entity-instance subclasses override only when spawn-time customization is needed (e.g., a card spawned with custom seeded counters that aren't in the definition's defaults). Rare.
+The default implementation lets the factory's spawn loop work instance-centric — `foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`. Concrete entity-instance subclasses (`Card`, `Zone`, `Player` — all unsealed) override only when spawn-time customization is needed (e.g., a card spawned with custom seeded counters that aren't in the definition's defaults). Rare.
 
 ### Slices don't carry their primary key
 
@@ -290,7 +296,7 @@ The overlay replaces `Game.DefaultPlayerDefinition` for the specified actors. Ea
 
 1. **`ISliceProvider` is parameterless.** The interface contract is `IEnumerable<BaseState> GetInitialSlices()`. Implementers don't see the instance's ref; the factory keys externally.
 2. **Slices don't carry their primary key.** Storage is keyed by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice values are data, not keys.
-3. **`EntityInstance<TDef>` delegates to its definition by default.** Spawn-time override on the instance side is optional and rare.
+3. **`InstanceWithSlices<TDef>` delegates to its (protected) definition by default.** Spawn-time override on the instance side is optional and rare.
 4. **The factory walks per-spawn instances before game singletons.** Singleton slices that need actor refs as data start with default/null; setup commands populate after `StartMatch`.
 5. **Layout is declarative.** `GameDefinition.SharedZones` and `PlayerDefinition.PerPlayerZones` declare the standard layout; `MatchSetup.ZoneOverlay` is the per-match escape hatch.
 6. **Zone ownership is structural; card ownership is runtime.** Zones are assigned to actors at `Build` based on layout-block declarations and overlay; cards are tracked in `OwnershipState` (mutable). `OwnershipState` reverse direction is deferred (`bl-actor-ownership-reverse-index`).
@@ -304,4 +310,4 @@ The overlay replaces `Game.DefaultPlayerDefinition` for the specified actors. Ea
 - [`features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — `ZoneDefinition` shape; layout-block participation.
 - [`features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `CardDefinition` shape; per-card non-variable slices via `ISliceProvider`.
 - [`features/players/models/01-player-model.md`](features/players/models/01-player-model.md) — `PlayerDefinition` shape; per-player zones; variable bag for primary state.
-- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) + [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) — `EntityInstance<TDef>` and the `ISliceProvider` instance-delegates-to-definition default.
+- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) + [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) — `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes and the `ISliceProvider` instance-delegates-to-definition default.

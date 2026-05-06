@@ -145,6 +145,69 @@ Three benefits fall out of running lifecycle transitions through the pipeline:
 
 The cost is two framework-owned commands and handlers, registered by the framework's `EngineInstaller`.
 
+### 4.4 Match setup
+
+After `engine.StartMatch()` returns, the engine is in `Started` but the world is content-empty: zones spawned by `Build` exist but hold no cards; players exist with default variable values; game-singleton slices that needed actor refs (e.g. `TurnState.Active`) are still null. **Setup commands** are the framework's pattern for populating this content.
+
+There is no special framework primitive for setup — setup commands are ordinary `GameAction`s dispatched through the normal pipeline, identifiable only by *when* they run (between `StartMatchCommand` and the first player-driven action). The framework supports two dispatch paths; games may use either or both.
+
+#### Host-driven setup
+
+The simplest pattern: the host (the code that called `engine.StartMatch()`) dispatches setup commands directly after `StartMatch` returns.
+
+```csharp
+var engine = factory.Create(matchSetup);
+engine.StartMatch();                                   // dispatches StartMatchCommand
+
+// Host-driven setup commands
+foreach (var (zoneRef, cardDefs) in puzzle.InitialDeals)
+    foreach (var def in cardDefs)
+        engine.Dispatch(new CreateAndInsertCardCommand(def, zoneRef));
+
+engine.Dispatch(new BeginFirstTurnCommand(firstPlayer));
+
+// At this point, normal play begins.
+```
+
+Use this when the host knows the setup steps statically — solo puzzles, tutorials, scripted scenarios, tests.
+
+#### Runtime-driven setup
+
+Alternative: the `GameRulesRuntime` returns setup commands from its first `OnQueueDrained` callback. The drain after `StartMatchCommand` is the runtime's first opportunity to act; commands returned from `Evaluate` queue immediately and run before the host's next `Dispatch`.
+
+```csharp
+public class StandardMagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
+{
+    private bool setupComplete = false;
+
+    public override IEnumerable<GameCommand> Evaluate(GameState state)
+    {
+        if (setupComplete) yield break;
+
+        // Deal opening hands, decide first player, advance to first phase, …
+        foreach (var player in GetPlayers(state))
+            for (int i = 0; i < Definition.StartingHandSize; i++)
+                yield return new DrawCardCommand(player);
+
+        yield return new BeginFirstTurnCommand(ChooseFirstPlayer(state));
+
+        setupComplete = true;
+    }
+}
+```
+
+Use this when setup logic is rule-defined (depends on game data, varies by mode) rather than host-defined. The runtime owns the timing and the order; the host doesn't need to know what setup looks like.
+
+#### Recommended pattern
+
+For most games, **runtime-driven setup is the cleaner default** — it keeps setup logic next to the game's other rules, survives replay (the runtime re-runs the same logic deterministically given the same `Definition` and seed), and frees the host from needing to know game-specific setup details. Host-driven setup is the right call for tests and scripted scenarios where you specifically want to bypass the runtime's setup logic.
+
+Setup commands flow through the trigger fold like any other commands — `OnBefore<DrawCardCommand>` triggers fire on the opening-hand draws if any are registered. This is usually the desired behavior; games that need triggers to *not* fire during setup can guard via game state (e.g. a `SetupPhase` flag in `EngineState` or a per-game state slice).
+
+#### Naming convention
+
+Framework-owned commands carry the `MatchCommand` suffix (`StartMatchCommand`, `EndMatchCommand`). Game-authored setup commands have no required suffix; conventional names are `BeginFirstTurnCommand`, `DealOpeningHandsCommand`, `Setup<X>Command`. Choose names that read well in history envelopes — they appear in the canonical record alongside player actions.
+
 ---
 
 ## 5. `MatchOutcome`

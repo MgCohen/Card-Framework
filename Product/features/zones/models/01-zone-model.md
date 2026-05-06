@@ -35,30 +35,34 @@ Zones should not own broad gameplay legality. A larger game/action rules layer d
 
 ## Zone Shape
 
-A zone is an `EntityInstance<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`:
+A zone is an `InstanceWithSlices<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`:
 
 ```csharp
-public sealed class Zone : EntityInstance<ZoneDefinition>
+public class Zone : InstanceWithSlices<ZoneDefinition>
 {
     public Ref<Zone> SelfRef { get; init; }
 
     public Zone(ZoneDefinition def, IEntityVariableStorage storage) : base(def, storage) { }
 
-    public Actor? GetOwner(IStateScope state) =>
+    public IActor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(SelfRef);
 
-    public IEnumerable<Card> GetCards(IStateScope state)
+    public IEnumerable<CardRef> GetCardRefs(IStateScope state) =>
+        state.Get<ZoneContentsState>(SelfRef).Cards;
+
+    public IEnumerable<Card> GetCards(Store store)
     {
-        var contents = state.Get<ZoneContentsState>(this);
-        var map      = state.Get<CardMapState>();
-        var registry = state.Get<CardRegistry>();   // engine service
-        return contents.Cards.Select(refToCard => registry.Get(map.InstanceOf(refToCard)));
+        var contents = store.Get<ZoneContentsState>(SelfRef);
+        var map      = store.Get<CardMapState>();
+        return contents.Cards.Select(cardRef => store.Catalog.Resolve(map.InstanceOf(cardRef)));
     }
     // ... other state-reading methods
 }
 ```
 
-Zone is a class (handle), not a record. There is one `Zone` instance per `Ref<Zone>` in the running engine, held in `store.Catalog`. Mutable zone data (contents, owner, declared variables) lives in slices.
+Zone is a class (handle), not a record. It is **not sealed** (project convention: default to unsealed). There is one `Zone` instance per `Ref<Zone>` in the running engine, held in `store.Catalog`. Mutable zone data (contents, owner, declared variables) lives in slices.
+
+Note the read-API split: `GetCardRefs(IStateScope state)` returns the unstable `CardRef`s from the zone's slice (state-only); `GetCards(Store store)` performs the two-hop resolution (`CardRef → CardMapState → Ref<Card> → Catalog → Card`) and so requires `Store` access. State-only consumers (presentation projections, history filters) use the ref form; handler code that wants typed handles uses the resolved form.
 
 Cards, zones, and players all share the typed `Ref<T>` family — `Ref<Card>`, `Ref<Zone>`, `Ref<Player>` — all derived from the polymorphic `Reference` base. Targeting works uniformly: an effect that picks "a card or a zone" takes `Reference` and handles both through `Resolve`.
 
@@ -74,7 +78,7 @@ See [ADR-0001](features/zones/decisions/0001-zone-shape.md) for full reasoning.
 
 ### Zone Definition
 
-The authored base data for a kind of zone. `ZoneDefinition : Scaffold.EntityDefinition, ISliceProvider`. Carries authored configuration (capacity, ordering rules, insertion behavior, default visibility policy) plus a parameterless `GetInitialSlices()` that declares the per-zone slices to install at spawn (a `PileDefinition` returns `new PileState(Counter: 0, Target: Target)`; a `RecipeStackDefinition` returns `new RecipeStackState(Progress: 0, Active: null)`).
+The authored base data for a kind of zone. `ZoneDefinition : DefinitionWithSlices` (which inherits from `Scaffold.EntityDefinition` and implements `ISliceProvider`). Carries authored configuration (capacity, ordering rules, insertion behavior, default visibility policy) plus a parameterless `GetInitialSlices()` that declares the per-zone slices to install at spawn (a `PileDefinition` returns `new PileState(Counter: 0, Target: Target)`; a `RecipeStackDefinition` returns `new RecipeStackState(Progress: 0, Active: null)`).
 
 Examples:
 
@@ -87,7 +91,7 @@ Examples:
 
 ### Zone Object (Runtime)
 
-The runtime zone in a session — a `Zone : EntityInstance<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
+The runtime zone in a session — a `Zone : InstanceWithSlices<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
 
 `Zone` is held in `store.Catalog`. Zones are spawned during `Build` from layout blocks declared on `GameDefinition.SharedZones` (game-shared zones — stack, battlefield, market) and `PlayerDefinition.PerPlayerZones` (per-player zones — hand, deck, discard, instantiated once per player actor). Per-match deviations from the standard layout flow through the optional `MatchSetup.ZoneOverlay` escape hatch. See [Game Definition](features/engine/models/07-game-definition.md) for the zone-layout contract and the factory's spawn-walk.
 
@@ -191,18 +195,19 @@ Recipe matching, timers, production, automatic combat, and work are game systems
 Per [ADR-0005](decisions/0005-objects-over-ids.md), framework APIs prefer the zone object over its ID. The zone is used directly as a slice key, and utility methods on the zone take state per call. There is no `Zones` injected service.
 
 ```csharp
-// slice access (zone is the key)
-state.Get<ZoneContentsState>(zone);
-state.Get<PileState>(zone);              // game-authored per-zone-type slice
+// slice access (zone.SelfRef is the key)
+state.Get<ZoneContentsState>(zone.SelfRef);
+state.Get<PileState>(zone.SelfRef);      // game-authored per-zone-type slice
 
 // utility methods on the zone (sugar for slice reads)
-zone.GetCards(state);                    // resolves CardRefs through CardMapState
+zone.GetCardRefs(state);                 // CardRefs only (state-only, no resolution)
+zone.GetCards(store);                    // resolves CardRefs → Card via CardMapState + Catalog
 zone.Count(state);
 zone.IsFull(state);                      // reads definition.Capacity vs current count
 zone.GetOwner(state);                    // reads OwnershipState
 ```
 
-The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state per call, so a zone reference is timeless and can be passed across scope boundaries safely.
+The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state (or store, when resolution is needed) per call, so a zone reference is timeless and can be passed across scope boundaries safely.
 
 Reverse queries — "what zone is this card in?" — currently scan `ZoneContentsState` slices. A derived index slice can be added when a real consumer demands it; deferred to backlog (`bl-card-location-index`) until then.
 
@@ -254,7 +259,62 @@ Visibility uses two channels:
 
 ### Zone visibility policy (definition-only)
 
-The zone's default visibility policy lives on the `ZoneDefinition` as authored data. The policy expresses per-actor-role rules across the two channels — e.g., "visible to owner, count-only to others" (hand), "hidden to all" (deck contents), "visible to all" (battlefield). The policy is static per zone definition; runtime variation comes only from the per-card flag.
+The zone's default visibility policy lives on the `ZoneDefinition` as authored data. It is a sealed record hierarchy with named common cases plus a `Custom` escape hatch:
+
+```csharp
+public abstract record ZoneVisibilityPolicy
+{
+    // Public to every actor — battlefield, public discard.
+    public sealed record AllPublic                 : ZoneVisibilityPolicy;
+
+    // Hidden from every actor — sealed deck contents in some games.
+    public sealed record AllHidden                 : ZoneVisibilityPolicy;
+
+    // Owner sees full details; others see nothing — face-down hand in solo modes.
+    public sealed record OwnerSees                 : ZoneVisibilityPolicy;
+
+    // Owner sees full details; others see count only — standard hand.
+    public sealed record OwnerSeesOthersCount      : ZoneVisibilityPolicy;
+
+    // Owner sees count, others see nothing — standard deck.
+    public sealed record OwnerCountOthersNothing   : ZoneVisibilityPolicy;
+
+    // Game-specific resolution. The serialization story for arbitrary
+    // delegates is tracked as `bl-zone-visibility-custom-policy-serialization`.
+    public sealed record Custom(Func<IActor, IActor?, VisibilityResult> Resolve)
+        : ZoneVisibilityPolicy;
+}
+
+public sealed record VisibilityResult(
+    MembershipVisibility Membership,   // None | Count | Full
+    DetailVisibility     Detail);      // None | Outline | Full
+```
+
+Hand zone = `OwnerSeesOthersCount`. Deck zone = `OwnerCountOthersNothing`. Battlefield = `AllPublic`. The policy is static per zone definition; runtime variation comes only from the per-card flag.
+
+`card.IsVisibleTo(state, actor)` pattern-matches the policy from the zone's `ZoneDefinition`, combines with the per-card override (`CardVisibilityState`), and returns the effective visibility:
+
+```csharp
+public bool IsVisibleTo(IStateScope state, IActor actor)
+{
+    var override_ = state.Get<CardVisibilityState>().OverrideFor(SelfRef);
+    if (override_ is { } v) return ResolveOverride(v, actor, GetOwner(state));
+
+    var zone   = ResolveZone(state);   // game-side helper or framework lookup
+    return zone.Definition.Visibility switch
+    {
+        ZoneVisibilityPolicy.AllPublic                  => true,
+        ZoneVisibilityPolicy.AllHidden                  => false,
+        ZoneVisibilityPolicy.OwnerSees                  => actor.Equals(GetOwner(state)),
+        ZoneVisibilityPolicy.OwnerSeesOthersCount       => /* membership-only for non-owners */,
+        ZoneVisibilityPolicy.OwnerCountOthersNothing    => /* membership-only for owner */,
+        ZoneVisibilityPolicy.Custom c                   => c.Resolve(actor, GetOwner(state)).Allows,
+        _                                               => throw new InvalidOperationException(),
+    };
+}
+```
+
+The named cases serialize cleanly (constant cases) and round-trip through replay/save/network. `Custom` carries arbitrary resolution logic for game-specific rules (team-visible, faction-visible) but pays the serialization cost — see `bl-zone-visibility-custom-policy-serialization` in [`OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the deferred design of the Custom-serialization story.
 
 ### Per-card visibility flag
 
@@ -376,7 +436,7 @@ Note: card packs are *not* zones. A pack is an entity with a generator effect; o
 
 ## Useful Invariants
 
-- Zones are thin `EntityInstance<ZoneDefinition>` handles carrying `Ref<Zone> SelfRef`; their state lives in slices.
+- Zones are thin `InstanceWithSlices<ZoneDefinition>` handles carrying `Ref<Zone> SelfRef`; their state lives in slices.
 - Zones share the `Identifier<Instance>` namespace with cards.
 - Zones do not have stats. Stat-bearing things are not zones.
 - Zones own contents, organization, capacity defaults, and change bookkeeping.
