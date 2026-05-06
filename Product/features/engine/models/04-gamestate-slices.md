@@ -157,7 +157,7 @@ foreach (var pile in scope.GetAll<PileState>()) { … }                      // 
 Slice-level subscriptions go through the `Store` directly (effects and `GameRulesRuntime` see only `IStateScope`, which is read-only). The handler signature is uniform across every channel:
 
 ```csharp
-Action<IReference, TState, StateChangeEvent> handler;
+Action<Reference, TState, StateChangeEvent> handler;
 
 public enum StateChangeEvent {
     Created,   // slice registered for this reference
@@ -191,17 +191,17 @@ Use cases by channel:
 |---|---|---|
 | `Subscribe<TState>(handler)` | Presentation, projections watching a singleton | "Re-render when `TurnState` changes" |
 | `Subscribe<TState>(reference, handler)` | Per-instance view binding | "Re-render this pile's stack when its `PileState` changes" |
-| `SubscribeAllReferences<TState>` | Engine, broad projections | "Watch every entity's `EntityVariableState` for analytics" |
+| `SubscribeAllReferences<TState>` | Engine, broad projections | "Watch every entity's `EntityState` for analytics" |
 | `SubscribeAny` | Debugger, replay recorder | "Log every state change with reference + event type" |
 
-For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`, structural changes, `OnEntityRemoved`), use the typed surfaces on `IReadOnlyEntity<TDef>` and `StateEntity<TDef>` — see [`features/entities/models/02-runtime-surface.md` §3](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityVariableState>(entityId, …)` is the lowest-level uncoalesced view; entities/02 §3.3 documents when to reach for it.
+For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on `EntityInstance<TDef>` — see [`features/entities/models/02-runtime-surface.md` §3](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view; entities/02 §3.2 documents when to reach for it.
 
 ### 6.1 Lifetime
 
 The store does not return an `IDisposable` from these slice-level methods (unlike the entity handle's `Subscribe`, which does). Callers that need symmetric teardown hold the handler delegate and call `Unsubscribe` on disposal:
 
 ```csharp
-private readonly Action<IReference, PileState, StateChangeEvent> handHandler;
+private readonly Action<Reference, PileState, StateChangeEvent> handHandler;
 
 public HandView(Store store) {
     handHandler = (_, state, ev) => Render(state);
@@ -228,14 +228,14 @@ store.ExecuteBatch(IReadOnlyList<object> payloads);
 Guarantees:
 
 - **Single atomic commit.** All registered mutators for every payload run, then the runner's overlay commits in one shot. No half-applied state is observable to subscribers, mutators, or reads.
-- **One subscriber notification per affected slice per batch.** A slice that's mutated twice in the same batch fires `Updated` once after commit, with the final value. Per-variable and structural subscriptions on `IReadOnlyEntity<TDef>` follow the same coalescing rule.
+- **One subscriber notification per affected slice per batch.** A slice that's mutated twice in the same batch fires `Updated` once after commit, with the final value. Per-variable subscriptions on `IEntityVariableStorage` follow the same coalescing rule.
 - **Mixed payload types are allowed.** The same batch can carry framework payloads, entity payloads (`AddModifierPayload`, `SetBaseValuePayload`, …), and game-authored payloads. Each payload's registered mutators target their own slices.
 - **Reads inside the batch are not allowed.** `ExecuteBatch` runs the whole sequence before returning; mutators read sibling slices via the `IStateScope scope` parameter on `Mutator.Change`, but external read-mutate-read sequences must be split across separate `Execute` / `ExecuteBatch` calls.
 - **Ordering is the iteration order of the supplied list.** The runner processes payloads in the order they appear in `payloads`.
 
 Use cases: applying multiple modifiers from a single ability in one observable step; restoring entity and game-level state during snapshot load; history-replay reconstruction; any sequence where intermediate state should not be visible to subscribers.
 
-For the entity-side specifics (factory output flowing into raw `AddModifierPayload`, `IMutableEntity` not exposing batch composition), see [`features/entities/models/02-runtime-surface.md` §4.5](features/entities/models/02-runtime-surface.md).
+For the entity-side specifics (factory output flowing into raw `AddModifierPayload`, the storage adapter not exposing batch composition), see [`features/entities/models/02-runtime-surface.md` §4.5](features/entities/models/02-runtime-surface.md).
 
 ---
 

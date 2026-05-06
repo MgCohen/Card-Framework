@@ -1,12 +1,12 @@
 ---
 type: plan
-status: proposed
+status: landed
 tags: [#scaffold, #entities-states, #bridge, #cleanup]
 ---
 
 # Scaffold.Entities.States — bridge cleanup (pure-data trim, ClearModifiers first-class, read methods, factory consolidation)
 
-> **Plan C** of the Scaffold update sequence. Targeted cleanup of `com.scaffold.entities.states` after Plan B's implementation. Plan B landed far more than originally scoped — `EntityState` is already a `sealed record : State` with `With*` functional update methods, mutators already use `Mutator<TState, TPayload>` with immutable-return semantics, payloads are already `sealed record` with `Reference EntityRef`, and `StoreVariableStorage` is already a ~90 LOC thin adapter. Plan C finishes the job: trim `EntityState` to pure data (remove `ResolveEffectiveValues`), add `TryGetBase`/`GetModifiers`/`Variables` pure reads, add `WithoutAllModifiers` + `ClearModifiersPayload`, add `StoreEntities.Spawn`, consolidate factory/ops classes.
+> **Plan C** of the Scaffold update sequence — **landed** in [Scaffold#45](https://github.com/MgCohen/Scaffold/pull/45). Targeted cleanup of `com.scaffold.entities.states` after Plan B's implementation. Plan B landed far more than originally scoped — `EntityState` is already a `sealed record : State` with `With*` functional update methods, mutators already use `Mutator<TState, TPayload>` with immutable-return semantics, payloads are already `sealed record` with `Reference EntityRef`, and `StoreVariableStorage` is already a ~90 LOC thin adapter. Plan C finished the job: trimmed `EntityState` to pure data (removed `ResolveEffectiveValues`), added `TryGetBase`/`GetModifiers`/`Variables` pure reads, added `WithoutAllModifiers` + `ClearModifiersPayload`, added `StoreEntities.Spawn`, consolidated factory/ops classes.
 
 **Source spike:** [`Product/spikes/entities-state-unification.md`](../../Product/spikes/entities-state-unification.md) — locked decisions #1, #4, #6, #7, #14, #15, #18; final shapes §3.
 

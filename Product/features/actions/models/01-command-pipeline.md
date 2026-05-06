@@ -1740,7 +1740,7 @@ public sealed class CardDragController
         var request = new MoveInstanceToZoneRequest
         {
             Actor = cardView.ViewerActor,
-            SourceInstance = cardView.InstanceId,
+            SourceCard = cardView.CardRef,
             FromZone = cardView.CurrentZoneId,
             ToZone = targetZone.ZoneId,
             Input = pointer
@@ -1757,7 +1757,7 @@ Payload:
 public sealed record MoveInstanceToZoneRequest
 {
     public required ActorId Actor { get; init; }
-    public required InstanceId SourceInstance { get; init; }
+    public required CardRef SourceCard { get; init; }
     public required ZoneId FromZone { get; init; }
     public required ZoneId ToZone { get; init; }
     public PointerDropContext? Input { get; init; }
@@ -1786,7 +1786,7 @@ public sealed class IntentGateway : IIntentGateway
         GameCommand command = (match.CommandOverride
             ?? new PlayCardCommand(
                 actor: request.Actor,
-                source: request.SourceInstance,
+                source: ResolveCardRef(request.SourceCard),     // gateway resolves CardRef → Ref<Card>
                 fromZone: request.FromZone,
                 playZone: request.ToZone))
             with { OriginCommandId = commandChainId, OriginIntent = request };
@@ -1861,10 +1861,10 @@ Payload:
 ```csharp
 public readonly record struct GameActionId;
 
-// ADR-0005: ActorId, InstanceId, ZoneId, and other Identifier<T> values in GameCommand and GameAction
-// records are boundary-correct. GameCommands are the pipeline's wire form — they are dispatched,
-// serialized (history envelopes), and network-transported as-is. Handlers extract domain objects
-// from IDs via ctx.Entities.Get<TDef>(id) inside handler bodies.
+// ADR-0005: ActorId is boundary-correct (Identifier<Actor> for command attribution).
+// Ref<T> / Reference are the runtime-entity boundary form; Reference fields in GameCommand
+// and GameAction records are dispatched, serialized (history envelopes), and network-transported
+// as-is. Handlers resolve handles from refs via ctx.Store.Catalog.Resolve(ref) inside handler bodies.
 // Base for all pipeline-dispatchable types (GameAction, CompositeAction, GameSignal).
 public abstract record GameCommand;
 
@@ -1872,7 +1872,7 @@ public abstract record GameCommand;
 public abstract record GameAction : GameCommand
 {
     public required ActorId Actor { get; init; }
-    public required InstanceId Source { get; init; }
+    public required Reference Source { get; init; }
     public CommandChainId? OriginCommandId { get; init; }
     public PlayerIntent? OriginIntent { get; init; }  // set only on gateway-originated commands; carried by the first envelope for correlation
 }
@@ -1882,7 +1882,7 @@ public sealed record PlayCardCommand : GameAction
     public required ZoneId FromZone { get; init; }
     public required ZoneId PlayZone { get; init; }
 
-    public PlayCardCommand(ActorId actor, InstanceId source, ZoneId fromZone, ZoneId playZone)
+    public PlayCardCommand(ActorId actor, Ref<Card> source, ZoneId fromZone, ZoneId playZone)
     {
         Actor = actor;
         Source = source;
@@ -2034,8 +2034,8 @@ public sealed class ExecuteCardHandler : ICommandHandler<ExecuteCardCommand, Exe
 public interface IEffectScope
 {
     ActorId Actor { get; }
-    InstanceId SourceInstance { get; }
-    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    Reference Source { get; }
+    Store             Store     { get; }    // for catalog reads (`Catalog.Resolve`)
     IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
     Task<CommandResult> Dispatch(GameAction action);
 }
@@ -2051,7 +2051,7 @@ public sealed record HealActorCommand : GameAction
     public required ActorId Target { get; init; }
     public required int Amount { get; init; }
 
-    public HealActorCommand(ActorId actor, InstanceId source, ActorId target, int amount)
+    public HealActorCommand(ActorId actor, Reference source, ActorId target, int amount)
     {
         Actor = actor;
         Source = source;
@@ -2064,16 +2064,18 @@ public sealed class HealActorHandler : ICommandHandler<HealActorCommand, HealRes
 {
     public Task<HealResult> Handle(HealActorCommand command, IHandlerContext ctx)
     {
-        var target = ctx.Entities.Get<ActorDefinition>(command.Target);
-        var current = target.GetVariable<int>(Vars.Life);
-        var max = target.GetVariable<int>(Vars.MaxLife);
+        // Game maintains the ActorId → Ref<Player> mapping; resolve it then look up the handle.
+        var targetRef = ctx.GameState.Players[command.Target];
+        var target = ctx.Store.Catalog.Resolve(targetRef);
+        var current = target.Storage.GetVariable<int>(Vars.Life);
+        var max = target.Storage.GetVariable<int>(Vars.MaxLife);
         var next = Math.Min(current + command.Amount, max);
         var actual = next - current;
 
         // Direct base-value write — Q3: out-of-band base mutation is acceptable for "current life" tracking.
         // Games modelling damage as a modifier stack would dispatch RemoveModifierPayload(...) here instead.
         ctx.Store.Execute(new SetBaseValuePayload(
-            EntityId: command.Target,
+            EntityRef: targetRef,
             Variable: Vars.Life,
             Value: new IntVariableValue(next)));
 
@@ -2109,7 +2111,7 @@ public sealed class ResolutionScope
         history.Add(signal);
     }
 
-    public IEffectScope CreateEffectScope(ActorId actor, InstanceId source)
+    public IEffectScope CreateEffectScope(ActorId actor, Reference source)
     {
         return new EffectScope(actor, source, engine);
     }
@@ -2122,14 +2124,14 @@ Mutation and change:
 public abstract record StateMutation;
 
 public sealed record SetVariableMutation<T>(
-    InstanceId instance,
+    Reference instance,
     string key,
     T value) : StateMutation;
 
 public abstract record StateChange : HistoryEntry;
 
 public sealed record VariableChanged<T>(
-    InstanceId instance,
+    Reference instance,
     string key,
     T oldValue,
     T newValue) : StateChange;
@@ -2403,7 +2405,7 @@ The handler (or a helper) calls `Apply` **once** with a record that *means* “r
 public sealed record RelocateInstanceMutation(
     ZoneId From,
     ZoneId To,
-    InstanceId Instance,
+    Reference Instance,
     RelocateOptions? Options = null) : StateMutation;
 ```
 
@@ -2413,7 +2415,7 @@ The handler does not name `RelocateInstanceMutation` every time; the scope **cre
 
 ```csharp
 // Inside ResolutionScope
-public void RelocateInstance(ZoneId from, ZoneId to, InstanceId instance, RelocateOptions? options = null)
+public void RelocateInstance(ZoneId from, ZoneId to, Reference instance, RelocateOptions? options = null)
 {
     // Default: one Apply of RelocateInstanceMutation; `options` can carry non-default
     // placement for the exceptional cases.
@@ -2508,7 +2510,7 @@ public abstract record CompositeAction : GameCommand
 public sealed record MoveCardComposite(
     ZoneId From,
     ZoneId To,
-    InstanceId Card) : CompositeAction
+    Ref<Card> Card) : CompositeAction
 {
     public override void Execute(ResolutionScope scope)
     {

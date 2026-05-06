@@ -97,10 +97,10 @@ new Trigger<HealActorAction>(
 ```csharp
 public sealed class DrawOnHeal : Trigger<HealActorAction>
 {
-    private readonly InstanceId _self;
-    private readonly ActorId    _actor;
+    private readonly Reference _self;
+    private readonly ActorId   _actor;
 
-    public DrawOnHeal(InstanceId self, ActorId actor) { _self = self; _actor = actor; }
+    public DrawOnHeal(Reference self, ActorId actor) { _self = self; _actor = actor; }
 
     public override bool Validate(HealActorAction cmd, IEffectScope scope)
         => cmd.Target != _self;
@@ -117,9 +117,9 @@ Card abilities register and unregister through `ITriggerSystem`. This is the sur
 ```csharp
 public interface ITriggerSystem
 {
-    void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameCommand;
-    void OnAfter<T>(Trigger<T> trigger, InstanceId owner)  where T : GameCommand;
-    void RemoveAll(InstanceId owner);
+    void OnBefore<T>(Trigger<T> trigger, Reference owner) where T : GameCommand;
+    void OnAfter<T>(Trigger<T> trigger, Reference owner)  where T : GameCommand;
+    void RemoveAll(Reference owner);
 }
 ```
 
@@ -184,7 +184,7 @@ Reaction commands dispatched from inside a trigger go immediately into the same 
 
 ```csharp
 // "Whenever another card is healed, draw a card"
-var self   = myInstanceId;
+var self    = mySelfRef;     // Ref<TSubclass> — typed identity of the registering entity
 var myActor = myActorId;
 
 triggers.OnAfter<HealActorAction>(
@@ -236,14 +236,14 @@ Trigger subscriptions are registered per instance at runtime. The definition car
 ```csharp
 public abstract class AbilityDefinition
 {
-    public abstract void Register(ITriggerSystem triggers, InstanceId self);
-    public abstract void Unregister(ITriggerSystem triggers, InstanceId self);
+    public abstract void Register(ITriggerSystem triggers, Reference self);
+    public abstract void Unregister(ITriggerSystem triggers, Reference self);
 }
 
 // Example ability: "whenever another card is healed, draw a card"
 public sealed class WhenOtherHealedDrawAbility : AbilityDefinition
 {
-    public override void Register(ITriggerSystem triggers, InstanceId self)
+    public override void Register(ITriggerSystem triggers, Reference self)
     {
         triggers.OnAfter<HealActorAction>(
             new Trigger<HealActorAction>(
@@ -255,7 +255,7 @@ public sealed class WhenOtherHealedDrawAbility : AbilityDefinition
             owner: self);
     }
 
-    public override void Unregister(ITriggerSystem triggers, InstanceId self)
+    public override void Unregister(ITriggerSystem triggers, Reference self)
     {
         triggers.RemoveAll(self);
     }

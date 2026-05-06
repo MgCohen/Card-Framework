@@ -11,15 +11,15 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Design pass on `oq-game-definition` opened and suspended after Q1 — **Q1 locked**: `GameDefinition` bundle owns slice schema + initial-value instantiation. Mechanism is `ISliceProvider<TInstance>` (per-spawn-keyed; entity and zone definitions implement) + unparameterized `GameDefinition.GetInitialSlices()` for singletons; factory enumerates `(definition, instance)` pairs at `Build` and installs declared slices. Manual `WithInitialSlices(...)` overlay survives as test/script escape hatch. Cardinality lives in the spawn list, not the interface. Stages 2 (per-kind domain modeling: Card, Zone, Player, Game) and 3 (zone layout, `GameDefinition` shape, `MatchSetup` reshape, asset composition) deferred to a dedicated full-domain-modeling session before resuming. No doc patches land until the design pass completes.
+Plan A/B/C doc cascade **landed**. Scaffold-side Plan C (`com.scaffold.entities.states` bridge cleanup — `EntityState` pure-data trim, `ClearModifiersPayload` first-class, `StoreEntities.Spawn`, `EntityStateFactory` + `StateEntityOps` deleted) shipped in [Scaffold#45](https://github.com/MgCohen/Scaffold/pull/45). Project-side cascade rewrote every model doc that referenced the retired Scaffold types: GLOSSARY (added `Reference`/`Ref<T>`/`ICatalog`/`ICatalogged`/`EntityInstance<TDef>`/`EntityState`/`StoreVariableStorage`/`LocalVariableStorage`/`ModifierSource`/`StoreEntities.Spawn`; new "Retired terms" section listing 11 retired types), ADR-0005 amendment (Plan A/B/C cascade header; `Reference`/`Ref<T>` replace `IReference`/`InstanceId`), entities/01 + entities/02 (full bridge-section + handle-surface + lifecycle rewrite), cards/01 + cards/decisions/0001 (Card on `EntityInstance<CardDefinition>` with `Ref<Card> SelfRef`; `CardMapState` is now `CardRef → Ref<Card>` indirection layer; `CardRegistry` engine service for typed handle lookup), zones/01 + zones/decisions/0001 + zones/decisions/0002 (Zone on `EntityInstance<ZoneDefinition>` with `Ref<Zone> SelfRef`), engine/03 + engine/04 (slice-key shapes, ActionTemplate ref types), effects/01–04 + triggers/01 + actions/01 + actions/02 + presentation/01 (incidental sweep — `InstanceId` → `Ref<Card>` / `Reference` everywhere it appears in code samples, payload signatures, ADR-0005 boundary notes). Plan statuses in `PLANS/Scaffold/` flipped: A/B/C `landed`, D `partially-landed` (Phase 2 docs done; Phase 1 code migration deferred — repo is doc-models-only).
 
-Prior pass on `oq-engine-match-lifecycle` landed — new `engine/06-match-lifecycle.md` written; cascade applied across `engine/01` (Dispatch lifecycle gate), `engine/02` (session-lifecycle framing flipped, `EndGameCommand` → `EndMatchCommand`, lifecycle open item moved to Resolved), `engine/03` (sample uses `EndMatchCommand` + `MatchOutcome.Win`), `engine/04` (`EngineState.Lifecycle` field), `engine/05` (return state, scope-ownership softened, Inv-9 narrowed, open follow-ups cleaned), pile-counter (`EndMatchCommand` rename, runtime takes `actors` ctor param, Q3 struck), glossary (5 new entries: `EngineLifecycle`, `MatchOutcome`, `StartMatchCommand`, `EndMatchCommand`, `MatchStartedSignal`, `MatchEndedSignal`), OPEN-ITEMS (`oq-engine-match-lifecycle` struck; `oq-effect-cancellation-on-match-end` added). Prior `oq-gamerules-runtime-definition` cascade also fully landed.
+Prior pass on `oq-game-definition` Q1 locked (suspended after Q1 awaiting full domain modeling pass). Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
 
 ---
 
 ## 🎯 Active focus
 
-Full domain modeling pass — sketch every slice / state / aggregate the framework needs across cards, zones, players, mappings, from currently-locked decisions. Out of scope: commands, handlers, mutators, services, runtime composition (those are already designed). Output: a domain model that becomes the input to Stages 2 (per-kind `ISliceProvider` implementations) and 3 (zone layout, `GameDefinition` shape, `MatchSetup` reshape, asset composition) of the suspended `oq-game-definition` design pass. Open in a fresh session.
+Resolve the entities-bridge spike (next thread per the user's plan). With Plan A/B/C now landed and the doc cascade complete, the bridge is much cheaper than it was when the spike was drafted (~90 LOC adapter, no caching/multiplexing, identity-free base, slice is pure data). Decide: open `oq-drop-entities-bridge` as a design pass, or punt and proceed against the post-Plan-C bridge into the full domain modeling pass. After that thread resolves, the full domain modeling pass becomes the next active focus.
 
 ---
 
@@ -37,17 +37,17 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-### Pending thread — drop the entities bridge?
+### Pending thread — drop the entities bridge? (now upstream-ready)
 
-Mid-conversation, the `EntityDefinition`-as-base question surfaced a deeper one: are the `com.scaffold.entities` + `com.scaffold.entities.states` packages adding value commensurate with their cost given the framework's redux-shaped direction? Sketches captured in [`spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — **draft / exploratory, not approved or denied**. User stepped back to think before deciding. If this lands, it's upstream of the domain modeling pass — `CardDefinition`'s base, what "card slices" means, and the Definition hierarchy all reshape. Resume here next session: either decide on the spike (open as `oq-drop-entities-bridge` design pass) or punt and proceed with the domain modeling pass against the current bridge.
+Sketches in [`spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — **draft / exploratory, not approved or denied**. The cost-side calculus has shifted materially with Plan C landing: bridge is ~90 LOC, identity-free base, pure-data slice, single `ClearModifiersPayload` for atomic transitions. Whether the bridge still earns its keep against a redux-only model is the open question. Next session resumes here per the user's plan: either open `oq-drop-entities-bridge` as a design pass, or punt and proceed with the domain modeling pass against the post-Plan-C bridge.
 
-### Kick-start brief — domain modeling session
+### Kick-start brief — domain modeling session (queued behind bridge thread)
 
 - **Goal.** Iterate on the saved domain model proposal before resuming `oq-game-definition` Stages 2–3.
 - **Starting input.** [`spikes/domain-model-proposal.md`](spikes/domain-model-proposal.md) — definition hierarchy, slice inventory by keying axis (framework / game-singleton / zone-keyed / actor-keyed / card-keyed), aggregates survey, factory loop pseudocode, open questions for Stage 2/3. Draft / exploratory; not approved or denied.
 - **Out of scope.** Commands, handlers, mutators, services, runtime composition.
-- **Why first.** The proposal is the input to per-kind `ISliceProvider` implementations (Stage 2) and `GameDefinition` shape + asset composition (Stage 3). Iterate on the slice surface against the proposal rather than rebuild from scratch.
-- **Dependency.** The entities-bridge thread above is upstream — if pursued, it reshapes §1 hierarchy and §2.5 (card-keyed) of the proposal. Either resolve it first or take the proposal as-is and resume.
+- **Why first (after the bridge thread).** The proposal is the input to per-kind `ISliceProvider` implementations (Stage 2) and `GameDefinition` shape + asset composition (Stage 3). Iterate on the slice surface against the proposal rather than rebuild from scratch.
+- **Dependency.** The entities-bridge thread above is upstream — if it lands as "drop the bridge," it reshapes §1 hierarchy and §2.5 (card-keyed) of the proposal. Either resolve it first or take the proposal as-is and resume.
 
 ---
 

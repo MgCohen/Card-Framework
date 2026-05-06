@@ -39,7 +39,7 @@ Create attachment entity
 Attachments follow the same entity model as cards, tokens, and equipment (doc 10):
 
 - They have a `Definition` — the blueprint describing what they do.
-- They have an `InstanceId` — a stable runtime identity.
+- They have a typed `Ref<TAttachment>` — a stable runtime identity.
 - They carry variables — used for counters, remaining charges, elapsed turns, etc.
 - They are **findable and referenceable** by other game systems and effects.
 - Targetability (can other effects select them as targets?) is game-specific. The framework does not enforce it either way.
@@ -51,17 +51,17 @@ public sealed class HealOverTimeDefinition : EntityDefinition
     public int HealAmount  { get; init; }
     public int TurnCount   { get; init; }
 
-    // ADR-0005: `self` is a stable subscription key — entities use their InstanceId as the trigger owner
-    // so subscriptions survive CardRef rotations. Boundary-correct per ADR-0005 §Stable subscription keys.
-    public override void Register(ITriggerSystem triggers, InstanceId self, Context ctx)
+    // ADR-0005: `self` is a stable subscription key — entities use their typed Ref<T> as the trigger owner
+    // so subscriptions survive CardRef rotations. Boundary-correct per ADR-0005.
+    public override void Register(ITriggerSystem triggers, Ref<HealOverTime> self, Context ctx)
     {
         triggers.OnAfter<TurnStartSignal>(
             condition: (_, _) => true,
             react: (_, scope) =>
             {
-                // Read via the entity handle — IReadOnlyEntity surface
-                var attachment = scope.Entities.Get<HealOverTimeDefinition>(self);
-                var remaining = attachment.GetVariable<int>(Vars.TurnsRemaining);
+                // Read via the storage adapter
+                var attachment = scope.Store.Catalog.Resolve(self);
+                var remaining = attachment.Storage.GetVariable<int>(Vars.TurnsRemaining);
 
                 scope.Dispatch(new HealActorAction { Target = scope.GetHost(self), Amount = HealAmount });
                 scope.Dispatch(new DecrementTurnsRemainingAction { Target = self });   // handler does the SetBaseValuePayload write
@@ -116,7 +116,7 @@ All entities have a **framework-level Cleanup hook** that is called automaticall
 
 This is a lifecycle guarantee, not a trigger reaction. An attachment does not need an `OnAfter<DestroyEntityAction>` subscription to clean up its triggers — destruction handles it.
 
-The canonical cleanup verb for modifiers contributed by an attachment entity is `RemoveModifiersBySourcePayload(target.Id, new ModifierSource(attachment.Id))`, dispatched per affected target by the attachment's destruction handler (or by the framework Cleanup hook). Per [`entities/01` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md), `ModifierSource.Source` is the attachment's `InstanceId`, so this sweep is uniform across equipment, auras, status effects, and other ongoing-effect attachments.
+The canonical cleanup verb for modifiers contributed by an attachment entity is `RemoveModifiersBySourcePayload(target.SelfRef, new ModifierSource(attachment.SelfRef, 0))`, dispatched per affected target by the attachment's destruction handler (or by the framework Cleanup hook). The bulk variant `store.RemoveModifiersFromSource(source)` sweeps every entity in one call. Per [`entities/01` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md), `ModifierSource.Source` is the attachment's `Reference`, so this sweep is uniform across equipment, auras, status effects, and other ongoing-effect attachments.
 
 The exact lifecycle design (what "destroyed" means, when Cleanup fires relative to the destruction envelope, what happens to in-flight dispatches that reference the destroyed entity) is a **deferred topic** — entity lifecycle needs a dedicated design pass. The pattern here relies on Cleanup existing; the mechanism is not fully specified yet.
 
@@ -135,7 +135,7 @@ new CreateAndAttachAction
 ```
 
 The handler:
-1. Instantiates the entity (assigns `InstanceId`, initializes variables from the definition).
+1. Instantiates the entity via `StoreEntities.Spawn<TDef>` (allocates `Ref<T>`, registers the empty `EntityState` slice, registers the handle in the catalog).
 2. Associates it with the host (stored as a relationship on the host entity or in a dedicated attachment registry).
 3. Calls `definition.Register(triggers, newInstance, ctx)` to activate subscriptions.
 

@@ -1,17 +1,19 @@
 ---
 type: plan
-status: proposed
+status: partially-landed
 tags: [#project, #card-framework, #integration, #scaffold]
 ---
 
 # Card Framework — project integration (consume new Scaffold packages, project-side migration, ADR + model-doc cascade)
 
 > **Plan D** of the Scaffold update sequence. Project-side integration after Plans A/B/C land in the Scaffold repo. Builds the project's `Card` / `Zone` / `Player` layer on the new `EntityInstance<TDef>` foundation, wires the project's privacy/registry slices, migrates any existing project code that referenced now-deleted Scaffold types, amends ADR-0005, and cascades model docs to reflect the new shape.
+>
+> **Status as of 2026-05-06:** Phase 2 (documentation cascade — ADR-0005 amendment, GLOSSARY update, model doc sweep across `entities/`, `cards/`, `zones/`, `effects/`, `triggers/`, `engine/`, `actions/`, `presentation/`) is **landed**. Phase 1 (project runtime migration — `Card`/`Zone`/`Player` C# code, `CardMapState`/`CardRegistry` services) is **deferred** — the Card Framework repo is doc-models-only at this stage; runtime migration becomes relevant when the repo grows code.
 
 **Source spike:** [`Product/spikes/entities-state-unification.md`](../../Product/spikes/entities-state-unification.md) — locked decisions #11, #12, #15; final shapes §4 and §5; "What changes, where" project table; conceptual Profile B section.
 
 **Plan A + B status:** landed in [Scaffold#40](https://github.com/MgCohen/Scaffold/pull/40) as a single PR.
-**Plan C status:** assumed landed before this plan starts.
+**Plan C status:** landed in [Scaffold#45](https://github.com/MgCohen/Scaffold/pull/45).
 
 After Plans A/B/C, the Scaffold side provides:
 - `Ref<T>` (sealed record : `Reference`), `ICatalog` exposed via `Store.Catalog`, `ICatalogged` (Plan A).
