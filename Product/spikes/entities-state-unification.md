@@ -108,14 +108,39 @@ A previous draft proposed dropping `EntityInstance` entirely and treating "the e
 
 ---
 
+## Ratified during plan review (2026-05-05)
+
+These decisions resolve integration gaps between the spike's design and the current Scaffold.States codebase. They refine — but do not contradict — the locked decisions above. Most are folded directly into the "Final shapes" section; the rest are noted here.
+
+| # | Decision | Refines / adds |
+|---|---|---|
+| R1 | `Store.Catalog` is added inline to the existing `Store.cs` (which is `sealed`). Not a `partial` extension. The catalog is constructed in `Store`'s existing constructor; `StoreBuilder` is untouched. | Locked #17 |
+| R2 | `IRef : IReference`. Every existing `IReference`-typed Store API (`Get`, `Subscribe`, `RegisterSlice`, `Execute`, etc.) accepts `Ref<T>` automatically — no overloads. `IReference` may be retired in a later cascade pass. | new |
+| R3 | `IPayloadReference.GetReference()` return type stays `IReference`. Bridge payloads with an `IRef Target` field implement it as `return Target;` — works because of R2. | new |
+| R4 | Delete `BaseEntityInstance<TDefinition>`. Fold its responsibilities into `EntityInstance<TDef>` directly. | Locked #1 |
+| R5 | Rename `EntityVariableState` → `EntityState`. The trimmed `(Bases, Modifiers)` shape no longer needs "Variable" in the name; rename also signals the type is gutted vs. the prior 365 LOC version. | Locked #7 |
+| R6 | `StoreBuilder` is **not** modified. No `.WithCatalog()` step. The catalog is always present, constructed by `Store` itself. | Locked #17 |
+| R7 | Delete `EntityStateReference`. Slices keyed directly by `Ref<T>`; the wrapper has no role. | Locked #15 |
+| R8 | Drop `IEntityVariableStorage.TryGetEffective`. The handle folds modifiers on every read (`TryGetBase` + `GetModifiers`). The current `instanceEffectiveBag` cache in `LocalVariableStorage` is removed. Re-add a private cache only if profiling later requires it; do not put it back on the contract. | Locked #5 |
+| R9 | Strip `VariableBag`'s parent pointer. Today `LocalVariableStorage.WireToDefinition` wires the definition's bag as a parent for default lookup. Remove that linkage. Definition default-fallback lives at the handle level. Storage `Parent` is overlays only. | Locked #5 |
+| R10 | Replace `InstanceId(int)` with `Ref<T>(Guid)` everywhere — bridge payloads, factories, all current `InstanceId` usages. `InstanceId` is deleted at the end of Plan B. | Locked #13 |
+| R11 | `ModifierSource` becomes `readonly struct ModifierSource(IRef Source, int Tag)`. Polymorphic source identity matches the rest of the system. | new |
+| R12 | The no-key `Store.Get<TState>()` overload (which uses `Reference.Null` for global/singleton state) is preserved. Global slices coexist with ref-keyed slices. | new |
+| R13 | `Register(obj)` for `ICatalogged` is idempotent on same-object: a second call returns the existing `Ref<T>`. A different object with the same `Key` throws. | Locked #16 |
+| R14 | `Ref<T>.ToString()` returns `$"Ref<{typeof(T).Name}>({Id:N})"` for diagnostics. | new |
+
+---
+
 ## Final shapes
 
 ### 1. Scaffold.States — new primitives
 
 ```csharp
 // Marker for "anything that's a typed Ref". Polymorphic APIs take this when
-// they don't care about the underlying type.
-public interface IRef
+// they don't care about the underlying type. Extends the existing IReference
+// marker (R2) so every IReference-typed Store API accepts Ref<T> without
+// overloads.
+public interface IRef : IReference
 {
     Guid Id { get; }
 }
@@ -126,7 +151,9 @@ public readonly struct Ref<T> : IRef, IEquatable<Ref<T>>
     public Guid Id { get; }
     internal Ref(Guid id) { Id = id; }                  // catalog mints normally
     public static Ref<T> FromGuid(Guid id) => new(id);  // public escape hatch for cross-run rebuild
+
     // equality + hashing on Id
+    public override string ToString() => $"Ref<{typeof(T).Name}>({Id:N})";
 }
 
 // Optional: objects can self-identify. If implemented, the catalog uses Key as
@@ -148,17 +175,20 @@ public interface ICatalog
     void Unregister<T>(Ref<T> @ref);            // for handles that genuinely die
 }
 
-public partial class Store
+public sealed class Store    // existing declaration, unchanged — Catalog is added inline (R1)
 {
     public ICatalog Catalog { get; }    // sub-property; the catalog's API lives here
+    // ... existing members
 }
 ```
 
 Notes:
 
-- `Register` derives the ref's `Guid` from `obj.Key` if `obj` implements `ICatalogged`; otherwise mints a fresh `Guid.NewGuid()`. Auto-id is run-local — anything that needs cross-run survival must use `ICatalogged`.
+- `Catalog` is added **inline** to the existing `Store.cs` (which is `sealed`). Not a `partial` extension. The instance is constructed inside `Store`'s existing constructor (`this.Catalog = new Catalog();`); `StoreBuilder` is untouched (R1, R6).
+- `Register(obj)` for an `ICatalogged` object is **idempotent on same-object**: if `obj.Key` is already bound to the same `obj`, the existing `Ref<T>` is returned. If it's bound to a different object, `Register` throws — colliding `Key`s across distinct objects is a programmer error (R13). Non-`ICatalogged` registration mints a fresh `Guid.NewGuid()`. Auto-id is run-local — anything that needs cross-run survival must use `ICatalogged`.
 - The catalog is in-process side-state on the Store. NOT included in snapshots. `LoadSnapshot` does not touch it. Refs in restored slices still resolve to live handles registered in the current run.
 - Transformation, snapshot rebuild, and any other "I want this exact ref to point at a freshly-constructed object" path uses `AllocateRef` then `RegisterAt`.
+- Slice access works automatically: because `IRef : IReference` (R2), every existing `IReference`-typed Store API (`Get`, `Subscribe`, `RegisterSlice`, `Execute`, etc.) accepts `Ref<T>` without overloads. The no-key `Get<TState>()` overload (using `Reference.Null` for global/singleton state) is unchanged (R12).
 
 ### 2. Scaffold.Entities — refactored
 
@@ -186,6 +216,7 @@ public interface IEntityVariableStorage
 
 // EntityDefinition stays the authored asset. It is NOT in the storage chain;
 // it is consulted by the handle as the definition default-fallback after chain reads.
+// VariableBag's parent pointer is stripped (R9) — definition fallback lives at the handle level.
 public class EntityDefinition : IEntityDefinition
 {
     public bool TryGetDefaultValue(Variable key, out VariableValue value) => /* defaults lookup */;
@@ -193,7 +224,9 @@ public class EntityDefinition : IEntityDefinition
     // ... existing authoring API
 }
 
-// The single instance handle. Storage is injected. Definition lives here.
+// The single instance handle (R4 — BaseEntityInstance<TDefinition> is deleted; its
+// responsibilities — definition field, storage field, read accessors — are folded into
+// EntityInstance<TDef> directly). Storage is injected. Definition lives here.
 // The base class does NOT carry a SelfRef — identity is a registration concern, not an
 // entity-shape concern. Subclasses (Card, Zone) that are catalog-registered declare their
 // own typed Ref<TSubclass> as a field. Local-profile entities have no ref concept (correct,
@@ -243,6 +276,9 @@ public class EntityInstance<TDef> : IDisposable
 
 // Default in-memory storage. Single class covers BOTH the base case (Parent = null)
 // and the overlay/ghost case (Parent = some other storage). No separate OverlayStorage type.
+// R8: TryGetEffective is gone from the contract — folding happens at the handle.
+// R9: VariableBag's parent pointer to definition is stripped — bag is local data only;
+//      definition default-fallback lives at the handle, not at the storage or bag level.
 public sealed class LocalVariableStorage : IEntityVariableStorage
 {
     public IEntityVariableStorage? Parent { get; }
@@ -270,6 +306,10 @@ public static class Entities
 // The canonical immutable record stored in the Store, one per entity ref
 // (Ref<Card>, Ref<Zone>, etc., or the generic Ref<EntityInstance<TDef>> when no subclass exists).
 // Pure data — no live references. Wire-ready as-is. The slice key carries the identity.
+// R5: renamed from EntityVariableState → EntityState — the trimmed (Bases, Modifiers) shape
+// no longer needs "Variable" in the name; the rename signals the type is gutted vs. the
+// prior 365 LOC version.
+// R7: EntityStateReference is deleted — slices key directly by Ref<T>.
 public sealed record EntityState(
     ImmutableDictionary<Variable, VariableValue> Bases,
     ImmutableDictionary<Variable, ImmutableList<ActiveModifier>> Modifiers
@@ -297,14 +337,16 @@ public sealed record EntityState(
 }
 
 // Payloads — just data. Target is an IRef so payloads are kind-erased at the substrate
-// level; the bridge mutator does the typed slice access.
-public sealed record SetBaseValuePayload         (IRef Target, Variable Var, VariableValue Value) : IPayloadReference;
-public sealed record AddModifierPayload          (IRef Target, Variable Var, ActiveModifier Mod)  : IPayloadReference;
-public sealed record RemoveModifierPayload       (IRef Target, Variable Var, ModifierId ModId)    : IPayloadReference;
-public sealed record AddVariablePayload          (IRef Target, Variable Var, VariableValue Init)  : IPayloadReference;
-public sealed record RemoveVariablePayload       (IRef Target, Variable Var)                       : IPayloadReference;
-public sealed record ClearModifiersPayload       (IRef Target)                                     : IPayloadReference;
-public sealed record RemoveModifiersFromSourcePayload(IRef Target, ModifierSource Source)         : IPayloadReference;
+// level; the bridge mutator does the typed slice access. R3: GetReference() returns Target
+// directly — type-compatible because IRef : IReference (R2). R10: InstanceId is gone;
+// targets are Ref<T> (or any IRef). R11: ModifierSource now wraps an IRef, not InstanceId.
+public sealed record SetBaseValuePayload         (IRef Target, Variable Var, VariableValue Value) : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record AddModifierPayload          (IRef Target, Variable Var, ActiveModifier Mod)  : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record RemoveModifierPayload       (IRef Target, Variable Var, ModifierId ModId)    : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record AddVariablePayload          (IRef Target, Variable Var, VariableValue Init)  : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record RemoveVariablePayload       (IRef Target, Variable Var)                       : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record ClearModifiersPayload       (IRef Target)                                     : IPayloadReference { public IReference GetReference() => Target; }
+public sealed record RemoveModifiersFromSourcePayload(IRef Target, ModifierSource Source)         : IPayloadReference { public IReference GetReference() => Target; }
 
 // One mutator class with overloads (or seven tiny mutators) — each is a 1-2 line delegation
 // to the corresponding EntityState.With… method. ~60 LOC total.
@@ -550,21 +592,28 @@ Lives in the consumer project, not in any Scaffold package.
 
 | Change | Reason |
 |---|---|
-| Add `Ref<T>` (`readonly struct` wrapping `Guid`), `IRef` non-generic marker | Typed identity primitive used as slice keys and as cross-slice reference values |
+| Add `Ref<T>` (`readonly struct` wrapping `Guid`), `IRef : IReference` non-generic marker (R2) | Typed identity primitive used as slice keys and as cross-slice reference values; existing `IReference`-typed Store APIs accept `Ref<T>` for free |
 | Add `ICatalogged` for objects that self-identify (returns `Guid`) | Stable across-run keys for objects with natural identity (asset GUID, declared key) |
-| Add `ICatalog` and expose as `Store.Catalog` sub-property: `AllocateRef`, `RegisterAt`, `Register`, `Resolve`, `TryResolve`, `Unregister` | Catalog API scoped under its own surface; Store's own API stays focused on state/dispatch |
+| Add `ICatalog` and expose as `Store.Catalog` (inline property in existing `Store.cs`, not partial; R1, R6) | Catalog API scoped under its own surface; Store stays sealed and `StoreBuilder` is untouched |
 | Catalog state is **not** snapshotted | Snapshots roll back slice contents; catalog and live handles remain |
+| `IPayloadReference.GetReference()` return type unchanged (R3) | Payloads with `IRef Target` plug into existing mutator wiring via `return Target;` |
+| No-key `Get<TState>()` overload preserved (R12) | Global/singleton slices keyed by `Reference.Null` continue to work alongside ref-keyed slices |
 
 ### `com.scaffold.entities` (refactor)
 
 | Change | Reason |
 |---|---|
 | Add `Parent` + chain-walking reads (`TryGetBase`, `GetModifiers`) to `IEntityVariableStorage` | Overlays/ghosts as `Parent`-parametrized construction; deterministic modifier folding across chain |
+| Drop `TryGetEffective` from `IEntityVariableStorage` (R8) | Handle folds on every read; effective-value caching is dropped — re-add as private optimization only if profiling demands |
 | Remove `Subscribe(Variable, …)` and `SubscribeToVariableStructuralChanges(...)` from `IEntityVariableStorage` | Reactivity is substrate-specific |
+| Delete `BaseEntityInstance<TDefinition>` (R4) | Single `EntityInstance<TDef>` class absorbs definition field, storage field, read accessors |
 | Delete `IReadOnlyEntity` / `IMutableEntity` interfaces | Single `EntityInstance<TDef>` class makes them redundant; polymorphism uses `IRef` (or the typed handle) |
+| Strip `VariableBag`'s parent pointer (R9) | Definition default-fallback is handle-level only; storage `Parent` is overlays only — single layering mechanism |
 | `EntityDefinition` stays a definition — does **not** implement any source/storage interface | Definition is consulted by the handle, not part of the storage chain |
-| Simplify `LocalVariableStorage`: optional `Parent` ctor arg, drops subscription bookkeeping | Single class covers base + overlay |
+| Simplify `LocalVariableStorage`: optional `Parent` ctor arg, drops subscription bookkeeping, drops effective-value cache | Single class covers base + overlay |
 | `EntityInstance<TDef>` orchestrates: chain reads → definition fallback → modifier application | Default-value lookup lives at one well-defined level; modifier semantics are explicit |
+| `ModifierSource` reshape: `(IRef Source, int Tag)` (R11) | Polymorphic source identity matches the rest of the system; `InstanceId` is gone |
+| Replace `InstanceId(int)` with `Ref<T>(Guid)` everywhere; delete `InstanceId` at end of Plan B (R10) | Single identity primitive across runtime gameplay code |
 | Add `Entities.Local<TDef>(def)` factory | One-liner construction, no Store required |
 
 ### `com.scaffold.entities.states` (rebuild)
@@ -573,9 +622,10 @@ Lives in the consumer project, not in any Scaffold package.
 |---|---|
 | Delete `StateEntity<TDef>` | `EntityInstance<TDef>` + `StoreVariableStorage` covers it |
 | Delete current `StoreVariableStorage` (422 LOC) | Replaced by ~50 LOC thin adapter |
-| Reshape `EntityState` to pure `(Bases, Modifiers)` — drop the `Definition` reference and the `Id` field (key is the slice key, not duplicated in the value) | Wire-ready immutable record; definition lives on the handle |
+| Rename `EntityVariableState` → `EntityState` (R5) and reshape to pure `(Bases, Modifiers)` — drop the `Definition` reference and the `Id` field (key is the slice key, not duplicated in the value) | Wire-ready immutable record; definition lives on the handle; rename reflects the new shape |
+| Delete `EntityStateReference` (R7) | Slices keyed directly by `Ref<T>`; the wrapper has no role |
 | Add `ClearModifiersPayload` + matching mutator and `EntityState.WithoutAllModifiers` | First-class clear operation; replaces client-side batch synthesis |
-| Payloads target `IRef` (not a typed `InstanceId`) | Substrate-level kind-erasure; bridge mutator does typed slice access |
+| Payloads target `IRef` (not a typed `InstanceId`) — `GetReference() => Target` (R3, R10) | Substrate-level kind-erasure; bridge mutator does typed slice access; works because `IRef : IReference` |
 | Modifier folding walks the full `Parent` chain and merges by `Order`; first chain base or definition default anchors | Deterministic stacking; explicit modifier semantics |
 | Delete `EntityStateFactory`, `EntityBridgeContext`, `StoreInstanceIdExtensions`, `StateEntityOps` (folded into `StoreEntities` extension class) | Consolidation |
 | Add `store.Spawn<TDef>(def)` extension | One-liner construction; uses two-step register internally |
