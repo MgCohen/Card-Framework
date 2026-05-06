@@ -75,19 +75,19 @@ public abstract record ActionTemplate(
     EntityId? Source);
 
 public sealed record MoveCardTemplate(
-    InstanceId              Card,
-    IReadOnlyList<EntityId> Destinations)
+    Ref<Card>                Card,
+    IReadOnlyList<Reference> Destinations)
     : ActionTemplate(typeof(MoveCardCommand), Card);
 
 public sealed record CastSpellTemplate(
-    InstanceId                Spell,
-    IReadOnlyList<EntityId>   Targets,
+    Ref<Card>                 Spell,
+    IReadOnlyList<Reference>  Targets,
     IntRange?                 XCost,
     IReadOnlyList<ModeOption> Modes)
     : ActionTemplate(typeof(CastSpellCommand), Spell);
 ```
 
-> **ADR-0005 boundary note.** `InstanceId Card`, `InstanceId Spell`, and other `Identifier<T>` fields on `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives IDs from held objects (`card.Id`, `spell.Id`); the template stores the ID because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
+> **ADR-0005 boundary note.** `Ref<Card> Card`, `Ref<Card> Spell`, and other `Reference`-typed fields on `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives refs from held objects (`card.SelfRef`, `spell.SelfRef`); the template stores the ref because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
 
 Two simplifications from doc 28's draft:
 
@@ -113,8 +113,8 @@ public sealed class PileCounterIntentMapper : IIntentMapper
         _ => throw new InvalidOperationException($"unknown template: {template}")
     };
 
-    private static PileId LocateCard(PilesState piles, InstanceId card)
-        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.Id == card)).Key;
+    private static PileId LocateCard(PilesState piles, Ref<Card> card)
+        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.SelfRef.Equals(card))).Key;
 }
 ```
 

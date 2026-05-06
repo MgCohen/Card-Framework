@@ -1,12 +1,14 @@
 ---
 type: spike
-status: draft
+status: superseded
 tags: [#spike, #domain-model, #slices, #definitions, #aggregates]
 ---
 
 # Domain Model Proposal — Slices, Definitions, Aggregates
 
-> **Status: draft / exploratory.** Snapshot of the domain model proposal sketched during the `oq-game-definition` design pass after Q1 locked. **Not approved, not denied** — captured for iteration. Intended as the input to Stage 2 (per-kind `ISliceProvider` implementations) and Stage 3 (zone layout, `GameDefinition` shape, asset composition) of the suspended design pass.
+> **Status: superseded (2026-05-06).** Resolved by the domain modeling design pass; 13 questions locked and patched into the canonical Models. Locked decisions live in [`features/engine/models/07-game-definition.md`](features/engine/models/07-game-definition.md), [`features/players/models/01-player-model.md`](features/players/models/01-player-model.md), and the cascade across `entities/01`, `entities/02`, `cards/01`, `zones/01`, `engine/05`, plus glossary and ADR-0005 amendments. Key shifts from the proposal: the entities-bridge spike was resolved superseded (bridge stays); `Zone` and `Player` are on the bridge per cascade; `ISliceProvider` is parameterless and on both Definition and Instance (instance delegates to definition); `Actor` is `IActor` interface; ownership is two-tier (structural zone assignment + runtime `OwnershipState`); `MatchSetup` carries `(GameDefinition, Actors, Seed)` + three named overlays. Original proposal preserved below for historical context.
+
+> **Original status: draft / exploratory.** Snapshot of the domain model proposal sketched during the `oq-game-definition` design pass after Q1 locked. **Not approved, not denied** — captured for iteration. Intended as the input to Stage 2 (per-kind `ISliceProvider` implementations) and Stage 3 (zone layout, `GameDefinition` shape, asset composition) of the suspended design pass.
 
 ## Context
 

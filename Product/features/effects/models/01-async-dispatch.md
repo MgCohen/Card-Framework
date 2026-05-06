@@ -83,7 +83,7 @@ public sealed record RequestTargetAction : GameAction
 
 public sealed record RequestTargetResult : CommandResult
 {
-    public required InstanceId Target { get; init; }
+    public required Reference Target { get; init; }
 }
 ```
 
@@ -183,7 +183,7 @@ The effect interacts with the pipeline through an `IEffectScope`:
 ```csharp
 public interface IEffectScope
 {
-    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    Store             Store     { get; }    // for catalog reads (`Catalog.Resolve`)
     IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
 }

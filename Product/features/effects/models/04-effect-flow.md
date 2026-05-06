@@ -64,7 +64,7 @@ public abstract class Effect
 - **Internals are opaque to the framework.** The engine only needs `Execute(scope)`; how an effect is authored, parameterized, or composed is the authoring layer's concern.
 - **Many per definition.** A card can carry several effects (e.g. battlecry + deathrattle + ongoing aura). Each is a separate `Effect` with its own trigger condition. Subscription lifecycle is the trigger feature's concern (see open question on trigger subscription lifecycle).
 
-Effects can have per-instance state (counters, accumulators) but where that state lives — on the `Effect` object, on the entity's `EntityVariableState`, or on a dedicated slice — is deliberately undesigned at this level. The Model only pins the execution surface.
+Effects can have per-instance state (counters, accumulators) but where that state lives — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice — is deliberately undesigned at this level. The Model only pins the execution surface.
 
 ---
 
@@ -79,7 +79,7 @@ The state read/write surface is **not invented here** — we use the `com.scaffo
 public interface IStateScope
 {
     TState Get<TState>() where TState : BaseState;
-    TState Get<TState>(IReference? reference) where TState : BaseState;
+    TState Get<TState>(Reference? reference) where TState : BaseState;
     IEnumerable<TState> GetAll<TState>() where TState : BaseState;
 }
 
@@ -124,7 +124,7 @@ The framework hands handlers the concrete `Store`; they call `ctx.Store.Execute(
 
 The shape this gives us:
 
-- **`TPayload` types are boundary-correct for `Identifier<T>` use.** Mutator payloads are the Store's wire form — they persist, serialize, and transport analogously to `GameCommand`s. `InstanceId`, `PileId`, and similar `Identifier<T>` values in payload records are boundary-correct per [ADR-0005](decisions/0005-objects-over-ids.md). Handler code *building* a payload should derive IDs from held objects (`entity.Id`, `zone.Id`) rather than storing raw IDs in locals.
+- **`TPayload` types are boundary-correct for `Reference` / `Ref<T>` use.** Mutator payloads are the Store's wire form — they persist, serialize, and transport analogously to `GameCommand`s. `Ref<Card>`, `Ref<Zone>`, and the polymorphic `Reference` are boundary-correct in payload records per [ADR-0005](decisions/0005-objects-over-ids.md). Handler code *building* a payload should derive refs from held objects (`card.SelfRef`, `zone.SelfRef`) rather than storing raw refs in locals.
 - **Payload is a dedicated type, not the command.** A "last move" mutator takes a `LastMovePayload`, never `MoveCardCommand`. Payloads are framework-owned; commands are pipeline-owned.
 - **One payload, many mutators.** Mutators are registered per `TPayload` at engine bootstrap. When the handler dispatches one payload through `Store.Execute(payload)`, **every mutator registered for that payload type runs**, each producing its own slice's new state. The handler does not enumerate which mutators exist; the registry does.
 - **Mutators read sibling slices through `IStateScope`.** A mutator computing the new `LastMoveState` can look up the current `PilesState` via the `scope` parameter on `Change`.
@@ -136,7 +136,7 @@ The shape this gives us:
 public interface IEffectScope
 {
     IStateScope       State     { get; }    // Scaffold; read-only
-    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    Store             Store     { get; }    // for catalog reads only — no Execute
     IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
 
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
@@ -145,8 +145,8 @@ public interface IEffectScope
 }
 ```
 
-- **`State`** — Scaffold `IStateScope`. Effects read slices to choose what to dispatch next. They cannot mutate; they have no `Store` reference.
-- **`Entities`** — engine entity registry, same surface as on `IHandlerContext`. Effects use `ctx.Entities.Get<TDef>(id)` to obtain `IReadOnlyEntity` handles for variable reads (`entity.GetVariable<int>(Vars.Attack)`). Effects do not mutate entities; mutation goes through `Dispatch`-ed actions whose handlers do the writes.
+- **`State`** — Scaffold `IStateScope`. Effects read slices to choose what to dispatch next.
+- **`Store`** — exposed for catalog reads (`scope.Store.Catalog.Resolve(ref)`) only. Effects do not call `Execute`/`ExecuteBatch`; mutation goes through `Dispatch`-ed actions whose handlers do the writes. Use `scope.Store.Catalog.Resolve(cardRef)` or a typed registry to obtain handles for variable reads (`card.Storage.GetVariable<int>(Vars.Attack)`).
 - **`Modifiers`** — modifier-entry factory, same surface as on `IHandlerContext`. Effects that need to construct a modifier entry to pass into a `GameAction`'s payload (e.g. an `ApplyAuraAction { Buff = scope.Modifiers.Create(...) }`) use it here so the deterministic id is allocated by the effect even though the install happens in the action's handler.
 - **`Dispatch`** — runs the action immediately and inline (before-fold → handler → after-fold → envelope published) per `01-async-dispatch.md` §7. The effect awaits each result before continuing.
 - **`Cancel`** — explicit early-out for the effect itself (the effect has decided it cannot continue, e.g. a precondition no longer holds after a prior dispatch). In the trigger context (before-fold), cancels the intercepted command. Distinct from the before-fold cancelling an individual `GameAction` via result; [see §7](#7-cancellation).
@@ -157,19 +157,18 @@ public interface IEffectScope
 ```csharp
 public interface IHandlerContext
 {
-    Store              Store     { get; }   // Scaffold; read + execute mutators
+    Store              Store     { get; }   // Scaffold; read + execute mutators + catalog
     IAvailableActions  Actions   { get; }   // mid-execution snapshot writes
     ICommandAwaiter    Resolver  { get; }   // register and resolve decision awaits
-    IEntityRegistry    Entities  { get; }   // entity handle lookup / spawn / destroy
     IModifierFactory   Modifiers { get; }   // deterministic modifier-entry construction
 }
 ```
 
-- **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`. Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
+- **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`; resolve handles via `ctx.Store.Catalog.Resolve(ref)`; spawn entities via `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension). Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
 - **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line in pile-counter §9.4 is replaced by a single `ctx.Store.Execute(new MoveCardPayload(...))` call.
-- **Entity-variable mutations.** For modifier / variable / structural mutations against entity slices, prefer the `IMutableEntity` surface on a `StateEntity<TDef>` handle obtained via `ctx.Entities.Get<TDef>(id)`. Build modifier entries through the `Modifiers` factory and pass them to `entity.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for `SetBaseValuePayload` / `RemoveModifiersBySourcePayload` (not exposed on `IMutableEntity`), batch authoring, history-replay tooling, and handle-less paths. Full handler-side surface in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
-- **`Entities`** — engine entity registry. `Spawn<TDef>(definition)` allocates a deterministic `InstanceId`, registers the canonical `EntityVariableState.Empty` slice via `EntityStateFactory`, and returns a handle. `Get<TDef>(id)` / `TryGet<TDef>(id, out)` / `Has(id)` cover lookup; `Destroy(id)` disposes the handle and unregisters the slice. See [`entities/02` §5](features/entities/models/02-runtime-surface.md).
-- **`Modifiers`** — modifier-entry factory. `Create(key, modifier, source)` returns a fully-populated `EntityModifierEntry` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing `EntityModifierEntry` directly is forbidden in handler / framework code — the no-id constructor falls back to `ModifierId.New()` (`Guid.NewGuid()`), which breaks replay and multiplayer determinism.
+- **Entity-variable mutations.** For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+- **Spawn pathway.** `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02` §5](features/entities/models/02-runtime-surface.md).
+- **`Modifiers`** — modifier factory. `Create(key, modifier, source)` returns a fully-populated `ActiveModifier` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in handler / framework code — it breaks replay and multiplayer determinism.
 
 > **Follow-up.** `IHandlerContext` aggregates three services into one parameter. An alternative is to constructor-inject the services on each handler and drop the context type entirely — fewer indirections, friendlier to DI, lets each handler declare exactly what it needs. Whether that scales better across games (more handlers? more services? composition with abilities?) is undesigned. Revisit when a second game stresses the surface; recorded in [§9](#9-open-follow-ups).
 
@@ -381,7 +380,7 @@ public sealed class MoveCardHandler : ICommandHandler<MoveCardCommand, MoveCardR
     }
 }
 
-public sealed record MoveCardPayload(InstanceId Card, PileId From, PileId To);
+public sealed record MoveCardPayload(Ref<Card> Card, PileId From, PileId To);
 
 // Registered mutators — both fire from one MoveCardPayload.
 public sealed class PileMoveMutator : Mutator<PilesState, MoveCardPayload>
@@ -410,7 +409,7 @@ The previous sample §9.5 line `LastMoveMutator : IStateMutator<MoveCardCommand>
 ## 9. Open follow-ups
 
 - **Effect authoring & registration.** The "recipe" a definition holds for instantiating an `Effect` (data, code, graph, or hybrid) is deliberately undesigned. Tracked as a future authoring-feature Model.
-- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityVariableState`, or on a dedicated slice — is left to the ongoing-effects/authoring follow-up. `03-ongoing-effects.md` already settled the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
+- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice — is left to the ongoing-effects/authoring follow-up. `03-ongoing-effects.md` already settled the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
 - **`CommandResult` cancellation shape.** Flag on the base record vs. typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup.
 - **`IHandlerContext` vs. constructor-injected services on handlers.** Aggregating `Store`, `Actions`, `Resolver` into a context type is one option; constructor-injecting them per handler (and dropping the context entirely) is another. The latter declares each handler's needs explicitly and is friendlier to DI, but multiplies wiring cost as services grow. Decision is undesigned — revisit when a second game stresses the surface or when handler count crosses a threshold that makes the cost visible. Hooked from [§4.4](#44-ihandlercontext).
 - **`ICommandAwaiter` shape — full review.** The TCS-backed type-predicate shape is the simplest mechanic that satisfies the await/resume contract. It is **not load-bearing on this Model's invariants**, but it has not been stress-tested against: error/timeout semantics, multi-actor decisions, and suspension/resumption across engine ticks (save/load). Needs a focused review when the FSM-shaped state model in the next bullet lands. Hooked from [§4.5](#45-icommandawaiter).

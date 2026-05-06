@@ -14,87 +14,99 @@ Audience: handler authors, effect authors, presentation projections, replay/snap
 
 ---
 
-## 1. The Handle — `StateEntity<TDef>`
+## 1. The Handle — `EntityInstance<TDef>`
 
 Every entity at runtime is referenced through a typed handle:
 
 ```csharp
-StateEntity<TDef> : BaseEntityInstance<TDef>, IMutableEntity<TDef>, IDisposable
-    where TDef : IEntityDefinition
+public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinition
+{
+    public TDef                     Definition { get; }
+    public IEntityVariableStorage   Storage    { get; }
+
+    // Default: instance delegates to its definition for initial slices.
+    // Override in subclasses for spawn-time customization (rare).
+    public virtual IEnumerable<BaseState> GetInitialSlices()
+        => Definition is ISliceProvider provider
+            ? provider.GetInitialSlices()
+            : Array.Empty<BaseState>();
+}
 ```
 
-The handle is a thin object over a per-instance `EntityVariableState` slice in the Store. It exposes everything callers need: read access, mutation, subscriptions, identity. Callers never construct it directly — the engine's `IEntityRegistry` (§5) hands them out.
+`EntityInstance<TDef>` is identity-free at the base. Concrete subclasses (`Card`, `Zone`, `Player`) carry typed `Ref<TSubclass> SelfRef` — the stable runtime identity. Storage is `IEntityVariableStorage` — typically `StoreVariableStorage(store, selfRef)` for store-backed variables, or `LocalVariableStorage(parent)` for overlays.
 
-`StateEntity<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityVariableState` rows; handles are re-created from the registry on `LoadSnapshot`.
+The handle exposes everything callers need: read access, mutation, subscriptions, slice declaration. Concrete subclasses add their typed identity. Spawn through `store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) or the typed subclass helper (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`). Live handles are resolved from the catalog: `store.Catalog.Resolve(selfRef)`.
 
-**`InstanceId` vs `ActorId`.** This handle is keyed on `InstanceId` — a typed reference into the Store (`Identifier<Instance>`). `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). An actor that is *also* an entity (a player with health/mana variables) carries both ids; system / AI / environment actors have an `ActorId` but no `InstanceId`. See [`GLOSSARY.md`](ledgers/GLOSSARY.md) — `Actor`, `ActorId`, `Instance ID` rows.
+`EntityInstance<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityState` rows; handles are re-created from the catalog after `LoadSnapshot`.
+
+**`ISliceProvider` on both Definition and Instance.** Both `EntityDefinition` and `EntityInstance<TDef>` implement `ISliceProvider`. Default implementation on the instance delegates to the definition; this lets the factory's spawn loop work instance-centric (`foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`) without reaching back into definitions per spawn. Concrete subclasses override on the instance side only when spawn-time customization is needed (rare). See [Game Definition](features/engine/models/07-game-definition.md) for the factory's spawn-walk pseudocode.
+
+**Slices don't carry their own primary key.** Storage is keyed externally by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice *values* (e.g., `LastMoveState(Ref<Card>, From, To)`) are *data*, not keys. This convention applies uniformly across framework slices (`EntityState`, `ZoneContentsState`, `OwnershipState`, etc.).
+
+**`Ref<T>` vs `ActorId`.** Concrete subclasses carry `Ref<TSubclass> SelfRef` — typed runtime identity backed by `Guid`, allocated by `store.Catalog.AllocateRef<T>()`. `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). `Player` carries both — `ActorId` on the `IActor` interface, `Ref<Player>` on the entity handle. Non-entity actors (`World`, `Environment`, `Bot`, `Market`) implement `IActor` directly with just an `ActorId`. See [`GLOSSARY.md`](ledgers/GLOSSARY.md) — `IActor`, `ActorId`, `Ref<T>` rows.
 
 ---
 
-## 2. Read API — `IReadOnlyEntity<TDef>`
+## 2. Read API — `IEntityVariableStorage`
 
 ```csharp
-public interface IReadOnlyEntity<out TDef> where TDef : IEntityDefinition
+public interface IEntityVariableStorage
 {
-    InstanceId Id { get; }
+    IEntityVariableStorage? Parent { get; }
 
-    T    GetVariable<T>(Variable key);
+    bool TryGetBase(Variable key, out VariableValue value);
+    IEnumerable<ActiveModifier> GetModifiers(Variable key);
+    IEnumerable<Variable> Variables { get; }
+
     bool TryGetVariable<T>(Variable key, out T value);
+    T    GetVariable<T>(Variable key);
 
     IDisposable Subscribe(Variable key, Action<VariableValue> onChange);
     void        Unsubscribe(Variable key, Action<VariableValue> onChange);
-
-    IDisposable SubscribeToVariableStructuralChanges(
-        Action<VariableStructuralChange, Variable, VariableValue?> handler);
 }
 ```
+
+Read access flows through `entity.Storage`. The storage adapter resolves the effective value (definition default → instance base override → modifier fold) and exposes lower-level inspection (raw base, raw modifier list, key set). `StoreVariableStorage` is the store-backed adapter; `LocalVariableStorage(parent)` is the overlay adapter for previews or hypothetical states.
 
 **Inner-type reads.** `GetVariable<T>` and `TryGetVariable<T>` take the *inner* value type, not the wrapper:
 
 ```csharp
-int hp = entity.GetVariable<int>(Vars.Health);            // ✅
-FloatVariableValue v = entity.GetVariable<float>(Vars.Speed);  // ❌ wrong: ask for float, not the wrapper
+int hp = card.Storage.GetVariable<int>(Vars.Health);          // correct
+FloatVariableValue v = card.Storage.GetVariable<float>(Vars.Speed);  // wrong: ask for float, not the wrapper
 ```
 
-The handle resolves the effective value (definition default → instance base override → modifier fold) before unwrapping. Authors never see `VariableValue` subclasses on the read side unless they're working with structural-change events.
+Authors never see `VariableValue` subclasses on the read side unless they're working with the lower-level inspection methods.
 
-**Identity and definition.** `entity.Id` returns the `InstanceId`. `entity.Definition` (inherited from `BaseEntityInstance<TDef>`) returns the typed definition — useful for reading authored fields:
+**Identity and definition.** Concrete handles expose `SelfRef`. `card.Definition` returns the typed definition — useful for reading authored fields:
 
 ```csharp
-var villager = ctx.Entities.Get<VillagerDefinition>(id);
+var villager = store.Catalog.Resolve(villagerRef);
 VillagerJob job = villager.Definition.Job;   // authored field on the typed definition
 ```
 
-**Polymorphism.** Code that should work against either authoring instances or state-backed entities should hold the interface:
+**Polymorphism.** Code that should work against either store-backed or overlay-backed handles holds the storage interface or the entity handle:
 
 ```csharp
-void Inspect<TDef>(IReadOnlyEntity<TDef> e) where TDef : IEntityDefinition { ... }
+void Inspect<TDef>(EntityInstance<TDef> e) where TDef : IEntityDefinition { ... }
 ```
 
 ### 2.1 Direct slice access
 
-`GetVariable<T>` returns the **effective** value (with all modifiers applied). For raw inspection — base values without fold, full modifier stacks, single modifiers by id — read the canonical slice directly:
+`GetVariable<T>` returns the **effective** value (with all modifiers applied). For raw inspection — base values without fold, full modifier stacks, single modifiers by id — use the storage's pure-read methods or read the canonical slice directly:
 
 ```csharp
-EntityVariableState state = ctx.Store.Get<EntityVariableState>(entityId);
+// Through the storage adapter (preferred — works for both store-backed and overlay):
+if (card.Storage.TryGetBase(Vars.Attack, out var baseAttack)) { /* ... */ }
+IEnumerable<ActiveModifier> attackMods = card.Storage.GetModifiers(Vars.Attack);
 
-// Base value only (no modifier fold). Falls back to definition default if missing.
-VariableValue? baseAttack =
-    state.BaseValues.TryGetValue(Vars.Attack, out var bv)
-        ? bv
-        : (definition.TryGetDefaultValue(Vars.Attack, out var dv) ? dv : null);
-
-// Full modifier stack on a variable, ordered (ascending Modifier.Order, FIFO ties).
-IReadOnlyList<ActiveModifier> attackMods =
-    state.ModifierStacks.TryGetValue(Vars.Attack, out var stack)
-        ? stack
-        : Array.Empty<ActiveModifier>();
-
-// Single modifier by id.
-ActiveModifier? specific = attackMods.FirstOrDefault(m => m.Id.Equals(targetId));
+// Through the slice directly (debug, replay, projection layers):
+EntityState state = ctx.Store.Get<EntityState>(card.SelfRef);
+state.TryGetBase(Vars.Attack, out var bv);
+IEnumerable<ActiveModifier> mods = state.GetModifiers(Vars.Attack);  // pre-sorted by Order
+ActiveModifier? specific = mods.FirstOrDefault(m => m.Id.Equals(targetId));
 ```
 
-`ActiveModifier` carries `Id` (`ModifierId`), `Modifier` (`VariableModifier`), and optional `Source` (`ModifierSource?`). Slice-direct reads are the right tool for debug inspectors, history-replay tooling, and projection layers that need raw state. Gameplay code prefers the effective-value reads on the handle.
+`ActiveModifier` carries `Id` (`ModifierId`), `Modifier` (`VariableModifier`), and optional `Source` (`ModifierSource?`). Slice-direct reads are the right tool for debug inspectors, history-replay tooling, and projection layers that need raw state. Gameplay code prefers the effective-value reads on the storage adapter.
 
 ---
 
@@ -111,110 +123,101 @@ void        Unsubscribe(Variable key, Action<VariableValue> onChange);
 
 Fires whenever the effective value for `key` changes (after fold). The first callback fires synchronously with the current value when subscribing. Returns `IDisposable` that, when disposed, unregisters. Use this for "react to attack stat changes."
 
-### 3.2 Variable structural changes
+### 3.2 Slice-level subscription
+
+For every change to the entity's `EntityState` slice (per-mutation granularity), subscribe to the slice directly:
 
 ```csharp
-IDisposable SubscribeToVariableStructuralChanges(
-    Action<VariableStructuralChange, Variable, VariableValue?> handler);
-```
-
-Fires `Added` / `Removed` events when a variable enters or leaves the entity's effective key set. Coalesced over the atomic batch — a `Remove`-and-`Re-Add` of the same variable in one `ExecuteBatch` produces no event. Use this for "this entity now has a Stunned variable" / "the Stunned variable was removed."
-
-### 3.3 Per-mutation slice events (uncoalesced)
-
-For every `Add`/`Remove` event in a batch (not coalesced), subscribe to the slice directly:
-
-```csharp
-store.Subscribe<EntityVariableState>(entityId, (_, newState, ev) => {
+store.Subscribe<EntityState>(card.SelfRef, (oldState, newState, ev) => {
     // ev: StateChangeEvent.Updated | StateChangeEvent.Removed
-    // newState: the post-mutation slice
+    // newState: the post-mutation slice (or empty for removal)
 });
 ```
 
-This is the lowest-level surface — engines, debuggers, and replay tools use it. Presentation usually wants the coalesced channels above instead.
+This is the lowest-level surface — engines, debuggers, and replay tools use it. Presentation usually wants per-variable subscriptions for effective-value reactivity. Diff `oldState` against `newState` for "this entity now has a Stunned variable" / "the Stunned variable was removed" semantics.
+
+### 3.3 Atomic clears
+
+`ClearModifiers` dispatches a single `ClearModifiersPayload` rather than looping individual remove payloads — slice subscribers fire once for the bulk transition rather than N times. Use when wiping all modifiers on an entity (cleanse, reset, end-of-turn buff clear).
 
 ### 3.4 Entity removal
 
-```csharp
-event Action OnEntityRemoved;   // on StateEntity<TDef>
-```
+When a card / zone / player is destroyed, the slice is unregistered (`store.UnregisterSlice<EntityState>(selfRef)`) and the catalog entry is cleared. Slice subscribers receive a removal event; the handle is no longer resolvable through the catalog. Subscribers attached through the storage adapter are automatically released when the storage is disposed.
 
-Fires when the entity's canonical row is removed (via `Entities.Destroy(id)` or rollback past spawn). Subscribe when a long-lived consumer needs to react symmetrically to the spawn it bound against:
-
-```csharp
-entity.OnEntityRemoved += () => { /* tear down view, unbind, log, … */ };
-```
-
-The framework's per-variable and structural subscriptions are released automatically — manual `OnEntityRemoved` handling is only for callers that hold references beyond the entity itself (presentation views, telemetry).
+For long-lived consumers that need to react symmetrically to the spawn they bound against (presentation views, telemetry), watch the slice directly via `store.Subscribe<EntityState>(selfRef, ...)` and react to the removal event.
 
 ### 3.5 Lifetime
 
-`StateEntity.Dispose()` (called by `Entities.Destroy(id)`) tears down the underlying `StoreVariableStorage`, which clears every per-variable and structural subscription registered through the handle. Manual `Unsubscribe` / disposing the `IDisposable` from `Subscribe` is the correct discharge for shorter-lived listeners (e.g. presentation views unloading while the entity is still alive).
+The framework releases per-variable subscriptions when the storage adapter is disposed (typically on entity destroy). Manual `Unsubscribe` / disposing the `IDisposable` from `Subscribe` is the correct discharge for shorter-lived listeners (e.g. presentation views unloading while the entity is still alive).
 
 ---
 
 ## 4. Mutation API
 
-### 4.1 Default surface — `IMutableEntity<TDef>`
+### 4.1 Default surface — `IEntityVariableStorage`
 
-**Handlers and framework code prefer the entity handle over raw payloads.** Holding a `StateEntity<TDef>` and calling its mutator methods is the recommended default. Raw `ctx.Store.Execute(payload)` is the documented fallback only for batch authoring, history-replay tooling, and paths that hold an `InstanceId` but not a handle (see §4.2).
+**Handlers and framework code prefer the storage adapter over raw payloads.** Holding an `EntityInstance<TDef>` (or a concrete subclass like `Card`) and calling methods on its `Storage` is the recommended default. Raw `ctx.Store.Execute(payload)` is the documented fallback only for batch authoring, history-replay tooling, and paths that hold a `Ref<T>` but not a handle (see §4.2).
 
 ```csharp
-public interface IMutableEntity<TDef> : IReadOnlyEntity<TDef>
-    where TDef : IEntityDefinition
+public interface IEntityVariableStorage  // mutation surface (read members elided)
 {
-    bool       AddVariable(Variable key, VariableValue initialBase);
-    bool       RemoveVariable(Variable key);
+    bool        AddVariable(Variable key, VariableValue initialBase);
+    bool        RemoveVariable(Variable key);
+    void        SetBase(Variable key, VariableValue value);
 
-    ModifierId AddModifier(EntityModifierEntry entry);
-
-    bool       RemoveModifier(Variable key, ModifierId id);
-    void       ClearModifiers();
+    ModifierId  AddModifier(Variable key, VariableModifier modifier, ModifierSource? source = null);
+    bool        RemoveModifier(Variable key, ModifierId id);
+    void        RemoveModifiersFromSource(ModifierSource source);
+    void        ClearModifiers();
 }
 ```
 
 Each method synthesizes the corresponding bridge payload (per [`01-definition-instance-model.md` §"Mutation API conventions"](features/entities/models/01-definition-instance-model.md)) and dispatches it via `Store.Execute`. Card Framework conventions on top of this surface:
 
-- **Always build modifier entries through the `Modifiers` factory.** `ctx.Modifiers.Create(key, modifier, source)` returns an `EntityModifierEntry` with a deterministic `ModifierId` and the source attribution baked in. Constructing entries directly via `new EntityModifierEntry(key, modifier)` falls back to `ModifierId.New()` (`Guid.NewGuid()`) inside `AddModifier` and is forbidden in handler/framework code — replay and multiplayer determinism require deterministic ids. See §4.3.
-- **`AddVariable` returns `false` when the variable already exists.** It does not overwrite. Callers that want "set base value, creating the variable if missing" should branch: try `AddVariable`; if it returns `false`, dispatch `SetBaseValuePayload` directly (see §4.2).
+- **Always build modifier ids through the `Modifiers` factory.** `ctx.Modifiers.Create(key, modifier, source)` returns an `ActiveModifier` with a deterministic `ModifierId` baked in. The storage adapter's `AddModifier` overload accepts a fully-populated `ActiveModifier`; constructing the id ad-hoc via `Guid.NewGuid()` is forbidden in handler/framework code — replay and multiplayer determinism require deterministic ids. See §4.3.
+- **`AddVariable` returns `false` when the variable already exists.** It does not overwrite. Callers that want "set base value, creating the variable if missing" should branch: try `AddVariable`; if it returns `false`, call `SetBase`.
 - **`RemoveVariable` returns `true` when something was actually removed.** Includes both base values and any modifier stacks for that variable.
-- **`ClearModifiers` is bulk and atomic** — single `ExecuteBatch` containing one `RemoveModifierPayload` per active modifier. Use sparingly; prefer source-bulk removal for cleanup-on-attachment-death (§4.2).
+- **`ClearModifiers` is bulk and atomic** — dispatches a single `ClearModifiersPayload` rather than looping individual removes. One slice transition, one subscriber notification.
+- **`RemoveModifiersFromSource` is the cleanup-on-source-death hook** — equipment unequipped, attachment destroyed, ongoing-effect ended. Sweeps every modifier on this entity attributed to the source.
 
 ### 4.2 Raw payloads — when the handle isn't enough
 
-`IMutableEntity` does **not** expose `SetBaseValue` or `RemoveModifiersBySource`. For those, dispatch the raw payload through `ctx.Store.Execute(...)`:
+For batch composition, replay tooling, and paths without a handle, dispatch the raw payload through `ctx.Store.Execute(...)`:
 
 ```csharp
-// Out-of-band base value change (level-up, save load, authoring) — Q3
+// Out-of-band base value change (level-up, save load, authoring)
 ctx.Store.Execute(new SetBaseValuePayload(
-    entityId, Vars.MaxHealth, new IntVariableValue(50)));
+    villager.SelfRef, Vars.MaxHealth, new IntVariableValue(50)));
 
-// Sweep all modifiers from a single source (attachment death) — Q4
+// Sweep all modifiers from a single source (attachment death)
 ctx.Store.Execute(new RemoveModifiersBySourcePayload(
-    targetId, new ModifierSource(attachmentId)));
+    target.SelfRef, new ModifierSource(attachment.SelfRef, 0)));
+
+// Bulk sweep across all entities (e.g., aura that affects everyone)
+ctx.Store.RemoveModifiersFromSource(source);   // StoreEntities extension
 ```
 
 Other raw-payload cases:
 
 - Batch authoring (loading a card collection from JSON, applying a save snapshot).
 - History replay tooling that reconstitutes mutations from a recorded log.
-- Any path that holds an `InstanceId` but not a handle.
+- Any path that holds a `Ref<T>` but not a handle.
 
 ### 4.3 The `Modifiers` factory
 
 ```csharp
 public interface IModifierFactory
 {
-    EntityModifierEntry Create(
+    ActiveModifier Create(
         Variable key,
         VariableModifier modifier,
         ModifierSource? source = null);
 }
 ```
 
-The factory hides id allocation entirely. It generates a deterministic `ModifierId` from an engine-owned counter (snapshotted with engine state, restored on `LoadSnapshot`) and returns a fully-populated `EntityModifierEntry` with the id and source baked in. Handler code never names a `ModifierId` directly.
+The factory hides id allocation entirely. It generates a deterministic `ModifierId` from an engine-owned counter (snapshotted with engine state, restored on `LoadSnapshot`) and returns a fully-populated `ActiveModifier` with the id and source baked in. Handler code never names a `ModifierId` directly.
 
-`EntityModifierEntry` (Scaffold) carries optional `Id` and `Source` fields; when `AddModifier` receives an entry with these set, the bridge honours them and skips `ModifierId.New()`. The factory is the only sanctioned producer of pre-populated entries in framework code.
+The factory is the only sanctioned producer of pre-populated `ActiveModifier`s in framework code. The storage adapter's `AddModifier` accepts either a fully-populated `ActiveModifier` (which it honours unchanged) or the decomposed `(key, modifier, source)` shape.
 
 Two-step usage — build first, then install:
 
@@ -222,9 +225,9 @@ Two-step usage — build first, then install:
 var attackBuff = ctx.Modifiers.Create(
     Vars.Attack,
     new IntAddModifier { Amount = 3 },
-    new ModifierSource(sword.Id));
+    new ModifierSource(sword.SelfRef, 0));
 
-villager.AddModifier(attackBuff);
+villager.Storage.AddModifier(attackBuff);
 ```
 
 The local-binding step is intentional: it surfaces the modifier as a value the reader can name and reason about (passed through to triggers, logged, etc.), rather than a one-line side effect.
@@ -234,14 +237,14 @@ The local-binding step is intentional: it surfaces the modifier as a value the r
 Reserved for variables *not* declared in the entity's definition. Concrete case: a generated token gets a `corruption_level` counter unique to this token, not part of `TokenDefinition.DefinedVariables`.
 
 ```csharp
-var token = ctx.Entities.Spawn(new ImpDefinition());
-token.AddVariable(Vars.CorruptionLevel, new IntVariableValue(0));
+var (token, _) = ctx.Store.Spawn(new ImpDefinition());
+token.Storage.AddVariable(Vars.CorruptionLevel, new IntVariableValue(0));
 
 // later — increment the per-instance counter via a modifier
 var corruptionStep = ctx.Modifiers.Create(
     Vars.CorruptionLevel,
     new IntAddModifier { Amount = 1 });
-token.AddModifier(corruptionStep);
+token.Storage.AddModifier(corruptionStep);
 ```
 
 If `Vars.CorruptionLevel` were declared in `ImpDefinition.DefinedVariables`, calling `AddVariable` would return `false` (slice's `WithVariable` is a no-op when the key already exists in `BaseValues`). Definition-declared variables stay as definition defaults until written.
@@ -256,113 +259,132 @@ var atkBuff = ctx.Modifiers.Create(Vars.Attack,  new IntAddModifier { Amount = 2
 var defBuff = ctx.Modifiers.Create(Vars.Defense, new IntAddModifier { Amount = 1 }, source);
 
 ctx.Store.ExecuteBatch(new object[] {
-    new AddModifierPayload(target.Id, atkBuff.Key, atkBuff.Modifier!, atkBuff.Id!.Value, atkBuff.Source),
-    new AddModifierPayload(target.Id, defBuff.Key, defBuff.Modifier!, defBuff.Id!.Value, defBuff.Source),
+    new AddModifierPayload(target.SelfRef, atkBuff.Key, atkBuff.Modifier, atkBuff.Id, atkBuff.Source),
+    new AddModifierPayload(target.SelfRef, defBuff.Key, defBuff.Modifier, defBuff.Id, defBuff.Source),
     new IncrementTurnCounterPayload(),   // a game-authored payload writing a non-entity slice
 });
 ```
 
-The factory returns an `EntityModifierEntry` with `Id` and `Source` populated. When dropping to raw `AddModifierPayload` for batching, unpack those fields explicitly (the `!` operators are safe — factory output always sets them). Game authors who batch frequently can wrap this in a small helper.
+The factory returns an `ActiveModifier` with `Id` and `Source` populated. When dropping to raw `AddModifierPayload` for batching, unpack those fields explicitly. Game authors who batch frequently can wrap this in a small helper.
 
 Guarantees:
 
 - **Atomic commit.** All registered mutators for every payload run, then the runner's overlay commits in one shot. No half-applied state is observable.
-- **One slice update event per affected slice per batch.** `EntityVariableState`'s `StoreVariableStorage` rebuilds its caches once after the batch commits; per-variable subscribers fire once for changed values; structural subscribers see coalesced add/remove diffs (a remove-and-re-add of the same variable produces no event).
+- **One slice update event per affected slice per batch.** Slice subscribers fire once with the post-batch state; a remove-and-re-add of the same variable produces a single net event.
 - **Mixed payload types are allowed.** The same batch can carry entity payloads (`AddModifierPayload`, `SetBaseValuePayload`, …), game-authored payloads, and framework payloads. Each payload's mutators target their own slices.
 - **Reads inside the batch are not allowed.** `ExecuteBatch` runs the whole sequence before returning; there is no opportunity to read between payloads. Callers that need read-mutate-read sequences must split into separate `Execute` calls.
 - **Ordering is the iteration order of the supplied collection.** The runner processes payloads in the order they're enumerated.
 
 Use cases: applying multiple modifiers from a single ability in one observable step; restoring entity state during snapshot load; history-replay reconstruction; any sequence where intermediate state should not be visible to subscribers.
 
-The `IMutableEntity` surface does not expose batch composition — its methods each call `Store.Execute` for a single payload. To batch entity mutations alongside non-entity ones, drop to raw payloads as shown above. The factory still applies: build modifier entries through `ctx.Modifiers.Create(...)` and then construct `AddModifierPayload` from the entry's fields.
+The storage adapter does not expose batch composition — its methods each call `Store.Execute` for a single payload. To batch entity mutations alongside non-entity ones, drop to raw payloads as shown above. The factory still applies: build modifier entries through `ctx.Modifiers.Create(...)` and then construct `AddModifierPayload` from the entry's fields.
 
 ---
 
-## 5. Lifecycle — `IEntityRegistry`
+## 5. Lifecycle — `store.Catalog` and `StoreEntities.Spawn`
 
-The engine owns an `InstanceId → handle` registry. It's the single creation/destruction point for entities and the lookup surface for handlers, effects, and projections.
+The Store owns a `Catalog` (in-process side-state, not snapshotted) that holds live handles by `Ref<T>`. Spawn pathway is the `StoreEntities.Spawn<TDef>` extension (a Scaffold framework primitive); destroy is the matching unregister pathway. Per-kind registries (e.g., `CardRegistry`) sit on top when a game wants typed lookup helpers.
 
 ```csharp
-public interface IEntityRegistry
+// Scaffold framework primitive
+public static class StoreEntities
 {
-    StateEntity<TDef> Spawn<TDef>(TDef definition)              where TDef : IEntityDefinition;
-    StateEntity<TDef> Get<TDef>(InstanceId id)                  where TDef : IEntityDefinition;
-    bool              TryGet<TDef>(InstanceId id, out StateEntity<TDef> entity)
-                                                                where TDef : IEntityDefinition;
-    bool              Has(InstanceId id);
-    bool              Destroy(InstanceId id);
+    public static (EntityInstance<TDef> Instance, Ref<EntityInstance<TDef>> Ref)
+        Spawn<TDef>(this Store store, TDef def) where TDef : IEntityDefinition;
+}
+
+// Catalog (sub-property on Store)
+public interface ICatalog
+{
+    Ref<T> AllocateRef<T>() where T : class;
+    void   RegisterAt<T>(Ref<T> r, T obj) where T : class;
+    T      Resolve<T>(Ref<T> r) where T : class;
+    bool   Unregister<T>(Ref<T> r) where T : class;
 }
 ```
 
-The registry is exposed on both surfaces handlers and effects encounter:
+Project-side, typed subclass spawn helpers wrap `StoreEntities.Spawn` and return the typed handle:
 
 ```csharp
-// IHandlerContext (per effects/04 §4.4)
-IEntityRegistry Entities { get; }
+public sealed class Card : EntityInstance<CardDefinition>
+{
+    public Ref<Card> SelfRef { get; init; }
 
-// IEffectScope (per effects/04 §4.3)
-IEntityRegistry Entities { get; }
+    public static Card Spawn(Store store, CardDefinition def)
+    {
+        var (instance, r) = store.Spawn(def);
+        var card = new Card(...) { SelfRef = r.Cast<Card>() };
+        store.Catalog.RegisterAt(card.SelfRef, card);
+        return card;
+    }
+}
 ```
+
+Handlers and effects access the catalog through their context surfaces:
+
+```csharp
+// IHandlerContext / IEffectScope
+Store Store { get; }   // store.Catalog.Resolve(ref) for lookup
+```
+
+Game-specific registries (e.g., `CardRegistry` keyed `Ref<Card> → Card`) are engine services on top of the catalog when typed lookup is ergonomic.
 
 ### 5.1 Spawn
 
-`Entities.Spawn<TDef>(definition)`:
+`store.Spawn<TDef>(definition)`:
 
-1. Allocates a fresh `InstanceId` via the engine's deterministic `IInstanceIdGenerator`.
-2. Calls `EntityStateFactory.Create<TDef>(definition, store, instanceId)`, which:
-   - Registers an empty `EntityVariableState.Empty` slice keyed by the new id.
-   - Builds the per-instance `StoreVariableStorage` (subscribes to the slice, primes caches).
-   - Constructs the `StateEntity<TDef>` handle.
-3. Records the handle in the registry.
-4. Returns the handle.
+1. Allocates a fresh `Ref<EntityInstance<TDef>>` via `store.Catalog.AllocateRef<EntityInstance<TDef>>()`.
+2. Builds the per-instance `StoreVariableStorage(store, ref)`.
+3. Registers an empty `EntityState` slice keyed by the new ref.
+4. Constructs the `EntityInstance<TDef>` handle pairing `(definition, storage)`.
+5. Registers the handle in the catalog (`store.Catalog.RegisterAt(ref, instance)`).
+6. Returns `(instance, ref)`.
 
-The new entity inherits *all* its variable values from the definition (empty `BaseValues` map → reads fall back to `definition.TryGetDefaultValue(var)`). To override a base value at spawn time, dispatch `SetBaseValuePayload` immediately after spawn.
+The new entity inherits *all* its variable values from the definition (empty `BaseValues` map → reads fall back to `definition.TryGetDefaultValue(var)`). To override a base value at spawn time, call `instance.Storage.SetBase(...)` or dispatch `SetBaseValuePayload` immediately after spawn.
 
-### 5.2 Get / TryGet
+Typed subclass helpers (`Card.Spawn`) wrap this and additionally cast the ref to the typed subclass shape (`Ref<Card>`) and store it in `SelfRef`.
 
-`Get<TDef>(id)` throws if the id is unknown or the registered handle's definition type doesn't match `TDef`. Use `TryGet<TDef>` for tolerant lookup; it returns `false` on either failure.
+### 5.2 Resolve
 
-`Has(id)` is the cheapest existence check — no type parameter, no allocation, no exception.
+`store.Catalog.Resolve(ref)` returns the live handle, or throws if the ref is unknown. For tolerant lookup, use `TryResolve` (or check via your typed registry). Per-kind registries (`CardRegistry.Get(refOfCard)`) are typically thin wrappers that throw on unknown.
 
 ### 5.3 Destroy
 
-`Entities.Destroy(id)`:
+Destroying an entity:
 
-1. Calls `StateEntity.Dispose()` on the handle (releases the per-instance Store listener; fires the handle's `OnEntityRemoved` event; subscribers tear down).
-2. Calls `store.UnregisterSlice<EntityVariableState>(id)` (drops the canonical row).
-3. Removes the handle from the registry.
+1. Dispose any per-handle subscriptions (storage adapter, presentation views).
+2. Unregister the slice (`store.UnregisterSlice<EntityState>(ref)`).
+3. Unregister the catalog entry (`store.Catalog.Unregister(ref)`).
+4. Drop any per-kind registry entry.
 
-Returns `true` if something was destroyed, `false` if the id was unknown.
-
-The framework Cleanup hook (per [`effects/03` §5](features/effects/models/03-ongoing-effects.md)) handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.Id))`.
+The framework Cleanup hook (per [`effects/03` §5](features/effects/models/03-ongoing-effects.md)) handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` or via the bulk `store.RemoveModifiersFromSource(source)` extension.
 
 ### 5.4 Snapshot / restore
 
-Snapshots contain canonical `EntityVariableState` slices, never handles. On `LoadSnapshot`:
+Snapshots contain canonical `EntityState` slices, never handles. The catalog is in-process side-state and is repopulated alongside snapshot load:
 
-1. The engine walks the restored slices and reconstructs the registry.
-2. For each slice, the engine re-creates a `StateEntity<TDef>` via `EntityStateFactory.Create(...)` using the same `InstanceId` and the definition associated with that id.
-3. The mapping `InstanceId → definition` is engine-managed (typically a sibling slice that records "what was spawned" so the restore knows which `TDef` to instantiate).
+1. The engine walks the restored slices and reconstitutes catalog entries.
+2. For each slice, the engine re-creates an `EntityInstance<TDef>` using the same `Ref<T>` and the definition associated with that ref.
+3. The mapping `Ref<T> → definition` is engine-managed (typically a sibling slice that records "what was spawned" so the restore knows which `TDef` to instantiate).
 
-Snapshot rollback to a state where an entity still existed re-creates its row and re-issues the handle. Subscribers attached to old handles are gone — projections that need to bind on rollback must re-subscribe through `IEntityRegistry`.
+Snapshot rollback to a state where an entity still existed re-creates its row and re-issues the handle. Subscribers attached to old handles are gone — projections that need to bind on rollback must re-subscribe through the catalog.
 
 ---
 
-## 6. Read Consistency and Cache Rebuild
+## 6. Read Consistency
 
-The handle reads through a per-rebuild effective-value cache (`StoreVariableStorage.effectiveCache`). Cache invalidation is **eager and synchronous**:
+The storage adapter reads directly from the canonical `EntityState` slice through its pure-read methods (`TryGetBase`, `GetModifiers`, `Variables`). There is no per-handle effective-value cache — the slice is the source of truth, mutators return new records via `this with { ... }`, and reads see the latest record on every call.
 
-- Every change to the `EntityVariableState` slice fires a Store event subscribed by `StoreVariableStorage`.
-- The handler rebuilds the cache before returning; per-variable subscribers fire for changed values; structural subscribers fire for added/removed keys.
+- Every change to the `EntityState` slice fires a Store event subscribed by per-variable subscribers; the storage adapter routes the notification through the `Subscribe` channel.
 - All of this is synchronous within the originating `Store.Execute` / `Store.ExecuteBatch` call.
 
 Implications for handler code:
 
-- **Read-after-write within a single handler is fresh.** `entity.AddModifier(...)` followed by `entity.GetVariable<T>(...)` returns the post-mutation effective value.
-- **`ExecuteBatch` rebuilds once after all payloads commit.** Reads inside an `ExecuteBatch` block are not allowed (the bridge runs the whole batch atomically); reads after the batch see the final state.
+- **Read-after-write within a single handler is fresh.** `card.Storage.AddModifier(...)` followed by `card.Storage.GetVariable<T>(...)` returns the post-mutation effective value.
+- **`ExecuteBatch` commits once after all payloads run.** Reads inside an `ExecuteBatch` block are not allowed (the bridge runs the whole batch atomically); reads after the batch see the final state.
 - **No "stale read" race for handler code.** All Store mutations and all subscriber notifications are serialized on a single thread.
 
-If a `RemoveVariable` payload is followed by an `AddVariable` for the same key in a single batch, the structural channel sees no event (coalesced). The per-variable subscriber sees the new value if it differs from the old. This is the intended default for continuous-effects cleanup.
+If a `RemoveVariable` payload is followed by an `AddVariable` for the same key in a single batch, slice subscribers see one net event with the post-batch state. Per-variable subscribers see the new value only if it differs from the old. This is the intended default for continuous-effects cleanup; `ClearModifiersPayload` similarly produces a single notification rather than N individual remove events.
 
 ---
 
@@ -431,17 +453,17 @@ Built-in modifiers ship in `com.scaffold.entities`:
 
 Custom modifiers subclass `VariableModifier<T>` and override `Apply`. `Order` controls fold position (lower runs first; ties FIFO by insertion).
 
-### 7.4 `EntityModifierEntry` — the (key, modifier) pair
+### 7.4 `ActiveModifier` — the (key, modifier, id, source) record
 
 ```csharp
-public sealed class EntityModifierEntry {
-    public Variable        Key      { get; }
-    public VariableModifier Modifier { get; }
-    public EntityModifierEntry(Variable key, VariableModifier modifier);
-}
+public sealed record ActiveModifier(
+    Variable          Key,
+    VariableModifier  Modifier,
+    ModifierId        Id,
+    ModifierSource?   Source);
 ```
 
-The argument to `IMutableEntity.AddModifier`. Pre-builds the (key, modifier) pair for serialization-friendly authoring (cards declare modifier entries; effects construct them at runtime).
+The fully-populated runtime record. The factory (`ctx.Modifiers.Create(...)`) is the sanctioned producer; the storage adapter's `AddModifier` accepts an `ActiveModifier` directly or the decomposed `(key, modifier, source)` shape (allocating an id internally only for non-replay paths). For serialization-friendly authoring, cards declare the (key, modifier) shape and the engine populates `Id`/`Source` at install time.
 
 ### 7.5 `IEntityDefinition` and `EntityDefinition`
 
@@ -483,57 +505,56 @@ public sealed class VillagerDefinition : EntityDefinition {
 
 public sealed class SwordDefinition : EntityDefinition { /* ... */ }
 
-public sealed record EquipSwordCommand(InstanceId Wearer, InstanceId Sword) : GameAction;
+public sealed record EquipSwordCommand(Ref<Villager> Wearer, Ref<Sword> Sword) : GameAction;
 public sealed record EquipResult(int AttackBefore, int AttackAfter) : CommandResult;
 
 public sealed class EquipSwordHandler : ICommandHandler<EquipSwordCommand, EquipResult>
 {
     public Task<EquipResult> Handle(EquipSwordCommand cmd, IHandlerContext ctx)
     {
-        var villager = ctx.Entities.Get<VillagerDefinition>(cmd.Wearer);
-        var sword    = ctx.Entities.Get<SwordDefinition>(cmd.Sword);
+        var villager = ctx.Store.Catalog.Resolve(cmd.Wearer);
+        var sword    = ctx.Store.Catalog.Resolve(cmd.Sword);
 
-        var before = villager.GetVariable<int>(Vars.Attack);   // 1 (definition default)
+        var before = villager.Storage.GetVariable<int>(Vars.Attack);   // 1 (definition default)
 
         // Build the +3 attack buff, sourced to the sword instance
         var attackBuff = ctx.Modifiers.Create(
             Vars.Attack,
             new IntAddModifier { Amount = 3, Order = 100 },
-            new ModifierSource(sword.Id));
+            new ModifierSource(sword.SelfRef, 0));
 
-        // Install it on the villager via the IMutableEntity surface
-        villager.AddModifier(attackBuff);
+        // Install it on the villager via the storage adapter
+        villager.Storage.AddModifier(attackBuff);
 
-        var after = villager.GetVariable<int>(Vars.Attack);    // 4
+        var after = villager.Storage.GetVariable<int>(Vars.Attack);    // 4
 
         return Task.FromResult(new EquipResult(before, after));
     }
 }
 
-public sealed record UnequipSwordCommand(InstanceId Wearer, InstanceId Sword) : GameAction;
+public sealed record UnequipSwordCommand(Ref<Villager> Wearer, Ref<Sword> Sword) : GameAction;
 public sealed record UnequipResult(int AttackAfter) : CommandResult;
 
 public sealed class UnequipSwordHandler : ICommandHandler<UnequipSwordCommand, UnequipResult>
 {
     public Task<UnequipResult> Handle(UnequipSwordCommand cmd, IHandlerContext ctx)
     {
+        var villager = ctx.Store.Catalog.Resolve(cmd.Wearer);
+
         // Sweep every modifier on the wearer that came from the sword
-        ctx.Store.Execute(new RemoveModifiersBySourcePayload(
-            cmd.Wearer,
-            new ModifierSource(cmd.Sword)));
+        villager.Storage.RemoveModifiersFromSource(new ModifierSource(cmd.Sword, 0));
 
-        // Destroy the sword instance — handle disposed, slice unregistered
-        ctx.Entities.Destroy(cmd.Sword);
+        // Destroy the sword instance — slice unregistered, catalog entry cleared
+        ctx.Store.Destroy(cmd.Sword);
 
-        var villager = ctx.Entities.Get<VillagerDefinition>(cmd.Wearer);
-        var after = villager.GetVariable<int>(Vars.Attack);    // 1 (back to definition default)
+        var after = villager.Storage.GetVariable<int>(Vars.Attack);    // 1 (back to definition default)
 
         return Task.FromResult(new UnequipResult(after));
     }
 }
 ```
 
-For attachment models where the sword *itself* is the attached entity (per [`effects/03` §2](features/effects/models/03-ongoing-effects.md)), the framework Cleanup hook performs the source-sweep automatically on `Destroy` — the explicit `RemoveModifiersBySourcePayload` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
+For attachment models where the sword *itself* is the attached entity (per [`effects/03` §2](features/effects/models/03-ongoing-effects.md)), the framework Cleanup hook performs the source-sweep automatically on destroy via `store.RemoveModifiersFromSource(source)` — the explicit `RemoveModifiersFromSource` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
 
 ### 8.2 Apply-aura — modifier built in effect, installed in handler
 
@@ -542,10 +563,10 @@ When a modifier comes from an effect orchestrator (target selection, pre-conditi
 ```csharp
 // Action payload — carries the pre-built modifier across the boundary.
 public sealed record ApplyDamageAmpAction(
-    InstanceId          Target,
-    EntityModifierEntry Modifier) : GameAction;
+    Ref<Enemy>      Target,
+    ActiveModifier  Modifier) : GameAction;
 
-public sealed record ApplyResult(InstanceId Target) : CommandResult;
+public sealed record ApplyResult(Ref<Enemy> Target) : CommandResult;
 
 // Effect — picks target, builds the buff, dispatches the install action.
 public sealed class ApplyDamageAmpEffect : Effect
@@ -554,7 +575,7 @@ public sealed class ApplyDamageAmpEffect : Effect
     {
         var pick = await scope.Dispatch<RequestTargetResult>(new RequestTargetAction
         {
-            Filter = EnemyFilter.InRange(scope.SourceInstance, range: 3),
+            Filter = EnemyFilter.InRange(scope.Source, range: 3),
         });
         if (pick.Target is null) return;
 
@@ -562,7 +583,7 @@ public sealed class ApplyDamageAmpEffect : Effect
         var ampBuff = scope.Modifiers.Create(
             Vars.DamageDealt,
             new IntAddModifier { Amount = 2, Order = 200 },
-            new ModifierSource(scope.SourceInstance));
+            new ModifierSource(scope.Source.SelfRef, 0));
 
         await scope.Dispatch<ApplyResult>(new ApplyDamageAmpAction
         {
@@ -578,8 +599,8 @@ public sealed class ApplyDamageAmpHandler : ICommandHandler<ApplyDamageAmpAction
 {
     public Task<ApplyResult> Handle(ApplyDamageAmpAction cmd, IHandlerContext ctx)
     {
-        var enemy = ctx.Entities.Get<EnemyDefinition>(cmd.Target);
-        enemy.AddModifier(cmd.Modifier);
+        var enemy = ctx.Store.Catalog.Resolve(cmd.Target);
+        enemy.Storage.AddModifier(cmd.Modifier);
         return Task.FromResult(new ApplyResult(cmd.Target));
     }
 }
@@ -597,10 +618,10 @@ Use this pattern whenever the buff parameters depend on effect-side state (targe
 
 ## 9. Open items
 
-- **`Spawn` with caller-supplied `InstanceId`.** Currently `Entities.Spawn<TDef>(def)` allocates the id internally. A `SpawnWithId<TDef>(def, id)` overload may be needed for save-state restoration paths that must reuse specific ids. Pin when the snapshot/load flow lands.
-- **Engine-side service composition.** Where `IEntityRegistry`, `IModifierIdGenerator`, and `IInstanceIdGenerator` are constructed, registered, and exposed is engine-builder territory — see `oq-engine-builder`.
+- **`Spawn` with caller-supplied `Ref<T>`.** Currently `store.Spawn<TDef>(def)` allocates the ref internally. A `SpawnAt<TDef>(def, ref)` overload may be needed for save-state restoration paths that must reuse specific refs. Pin when the snapshot/load flow lands.
+- **Engine-side service composition.** Where `CardRegistry`, `IModifierFactory`, and the deterministic ref/id generators are constructed, registered, and exposed is engine-builder territory — see `oq-engine-builder`.
 - **Authoring layer on top of `EntityDefinition`.** Custom-game-definition serialization, validation, asset migration, definition versioning are deferred — `bl-authoring-feature`.
-- **Multi-store entities.** Currently `EntityStateFactory.Create` is parameterized on a single `Store`. Multi-store games (player-private stores, instance-shard stores) would need registry partitioning. Out of scope until a multi-store game arrives.
+- **Multi-store entities.** Currently `StoreEntities.Spawn` is parameterized on a single `Store`. Multi-store games (player-private stores, instance-shard stores) would need catalog partitioning. Out of scope until a multi-store game arrives.
 
 ---
 
@@ -608,6 +629,7 @@ Use this pattern whenever the buff parameters depend on effect-side state (targe
 
 - [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — conceptual model, payload conventions, bridge resolution.
 - [`features/effects/models/04-effect-flow.md`](features/effects/models/04-effect-flow.md) §4.3, §4.4 — `IEffectScope` and `IHandlerContext` surfaces.
-- [`features/effects/models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) §5 — Cleanup hook + `RemoveModifiersBySourcePayload` pattern.
-- `com.scaffold.entities` — `Variable`, `VariableValue`, `VariableModifier`, `IReadOnlyEntity`, `IMutableEntity`, `EntityDefinition`.
-- `com.scaffold.entities.states` — `EntityVariableState`, `StateEntity`, `EntityStateFactory`, six bridge payloads.
+- [`features/effects/models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) §5 — Cleanup hook + source-bulk-remove pattern.
+- `com.scaffold.entities` — `Variable`, `VariableValue`, `VariableModifier`, `EntityInstance<TDef>`, `IEntityVariableStorage`, `LocalVariableStorage`, `EntityDefinition`.
+- `com.scaffold.entities.states` — `EntityState`, `StoreVariableStorage`, `StoreEntities.Spawn`, seven bridge payloads (incl. `ClearModifiersPayload`).
+- `com.scaffold.states` — `Reference`, `Ref<T>`, `ICatalog`, `ICatalogged`.

@@ -33,9 +33,9 @@ All three go through the same `OnBefore<T>` surface — no separate API for each
 
 ```csharp
 // Subscription — takes a Trigger<T>
-// ADR-0005: `owner` is a stable subscription key — InstanceId survives CardRef rotations.
-// Trigger subscriptions outlive individual object references; this use is boundary-correct per ADR-0005 §Stable subscription keys.
-void OnBefore<T>(Trigger<T> trigger, InstanceId owner) where T : GameAction;
+// ADR-0005: `owner` is a stable subscription key — Ref<T> survives CardRef rotations.
+// Trigger subscriptions outlive individual object references; this use is boundary-correct per ADR-0005.
+void OnBefore<T>(Trigger<T> trigger, Reference owner) where T : GameAction;
 
 // Inside Trigger<T>.Execute:
 scope.Cancel("shield absorbed");           // cancellation
@@ -97,7 +97,7 @@ public sealed record TriggerFoldResult(
 
 // Each registration wraps a Trigger<T> as non-generic delegates for pipeline dispatch.
 public sealed record TriggerMatch(
-    InstanceId                             Owner,      // ADR-0005: stable subscription key — boundary-correct; survives CardRef rotations
+    Reference                              Owner,      // ADR-0005: stable subscription key — Ref<T> survives CardRef rotations
     int                                    Priority,    // lower runs first; default 0
     Func<GameCommand, IEffectScope, bool>  Condition,
     Func<GameCommand, IEffectScope, Task>  Execute);

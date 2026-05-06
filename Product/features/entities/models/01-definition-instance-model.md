@@ -57,6 +57,8 @@ Minimum conceptual fields:
 
 Definition IDs should be stable because they are needed for save/load, replay, debugging, and future networking.
 
+**Definitions implement `ISliceProvider`.** Every framework definition kind (`CardDefinition`, `ZoneDefinition`, `PlayerDefinition`) implements `ISliceProvider` with a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Concrete subclasses override to declare per-instance slices (a `PileDefinition` declares `PileState`; a `MagicPlayerDefinition` declares `ManaPoolState`). The factory walks definitions/instances at `Build` and installs returned slices, keying them at the instance's `SelfRef`. See [Game Definition](features/engine/models/07-game-definition.md) for the spawn-walk pseudocode.
+
 ## Instances
 
 An instance is a runtime entity created from a definition.
@@ -82,11 +84,11 @@ Minimum conceptual fields:
 
 The instance should not duplicate every definition field. It should reference its definition and store only runtime differences.
 
-## Instance IDs And Zone Movement
+## Instance Identity And Zone Movement
 
-There should not be a separate conceptual model called "identity." The instance is the thing. An instance may have an `Instance ID` so systems can look it up, reference it, serialize it, or include it in history.
+There should not be a separate conceptual model called "identity." The instance is the thing. An instance carries a typed `Ref<TInstance>` so systems can look it up, reference it, serialize it, or include it in history.
 
-The `Instance ID` is typed as `Identifier<Instance>` and is stable across the instance's lifetime. The framework provides `InstanceId.NewId()` for generating fresh values; mutations that create instances (e.g., `CreateCardMutation`) carry the generated `InstanceId` in the payload for replay determinism.
+`Ref<T>` is a sealed-record subtype of `Reference` (the polymorphic addressable type in `Scaffold.States`), backed by a `Guid`. It is stable across the instance's lifetime. Refs are allocated via `store.Catalog.AllocateRef<T>()` (typically inside `StoreEntities.Spawn<TDef>`) and resolved via `store.Catalog.Resolve(ref)`. Mutations that create instances (e.g., `CreateCardMutation`) carry the allocated `Ref<T>` in the payload for replay determinism.
 
 Default rule:
 
@@ -246,52 +248,54 @@ They should be deterministic and traceable.
 
 Shape:
 
-- **Per-entity variables** are canonical `EntityVariableState` slices in the Store (`BaseValues`, `ModifierStacks` keyed by `InstanceId`).
-- **`StateEntity<TDefinition>`** is a thin handle implementing both `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. It substitutes for plain `EntityInstance` in polymorphic APIs.
-- **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` against six bridge payloads (see "Mutation API conventions" below). `IMutableEntity` calls produce the same payloads internally.
-- **Reads** use a per-rebuild effective-value cache; `Variable` enumeration is ordered by `Variable.Key` (ordinal) for determinism.
+- **Per-entity variables** are canonical `EntityState` slices in the Store (`BaseValues`, `ModifierStacks` keyed by the entity's `Ref<T>`).
+- **`EntityInstance<TDef>`** is a thin handle pairing `(Definition, Storage)`. Identity-free at the base; concrete subclasses (`Card`, `Zone`, `Player`) add typed `Ref<TSubclass> SelfRef`. Storage is `IEntityVariableStorage` — typically `StoreVariableStorage(store, selfRef)` for store-backed variables, or `LocalVariableStorage(parent)` for overlays.
+- **Mutations** route through `Store.Execute` / `Store.ExecuteBatch` against seven bridge payloads (see "Mutation API conventions" below). Calls on the storage adapter produce the same payloads internally.
+- **Reads** delegate to `EntityState`'s pure read methods (`TryGetBase`, `GetModifiers`, `Variables`). Effective-value folding is the handle's responsibility, not the slice's. Modifier lists are pre-sorted by insertion order in `WithModifier`; `Variable` enumeration is the union of `BaseValues.Keys` and `ModifierStacks.Keys`.
 - **Game-level state** (turn, phase, available actions, decisions) lives in plain Store slices alongside entity slices.
-- **Zones** are thin domain handles (classes implementing `IReference`, not entities) sharing the `Identifier<Instance>` namespace with cards; their canonical state lives in `ZoneContentsState` (membership), `OwnershipState` (owner), and per-zone-type runtime slices (typed values like a counter). Zones do not participate in the entity-variable bridge or modifier-stack machinery. See [Zone Model](features/zones/models/01-zone-model.md) and [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md).
-- **Cards** are `StateEntity<TCardDef>` handles (classes; the bridge handle is a class, not a record) that also implement `IReference`. The canonical "this card exists" record is in `CardMapState` keyed by `CardRef` — replacing what would otherwise be the engine-side handle registry (`InstanceId → handle`). Putting that registration on the Store gives snapshot/rollback for free. Cards carry two IDs: stable `InstanceId` (used for variable storage, modifier storage, ownership, history, server-internal subscriptions) and ephemeral `CardRef` (the slice key in `CardMapState`, used in zone contents and client-visible state; rotates on every move and visibility transition). See [Card Model](features/cards/models/01-card-model.md) and [Card ADR-0001](features/cards/decisions/0001-card-shape.md).
-- **Definition swap (transformation)** — `Definition` is on the handle, not in `EntityVariableState`. To transform, create a new `StateEntity<TNewDef>` for the same `InstanceId`. There is no state-level `SetDefinitionPayload`.
+- **Zones** are thin domain handles (`sealed class Zone : EntityInstance<ZoneDefinition>`) carrying typed `Ref<Zone> SelfRef`; their canonical state lives in `ZoneContentsState` (membership), `OwnershipState` (owner), and per-zone-type runtime slices (typed values like a counter). Zones use the entity-variable bridge for any variables their definition declares; zones that need no variables simply have an empty `EntityState`. See [Zone Model](features/zones/models/01-zone-model.md) and [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md).
+- **Cards** are `sealed class Card : EntityInstance<CardDefinition>` handles carrying typed `Ref<Card> SelfRef`. The privacy-rotating `CardRef` is the public-facing client view; `CardMapState` is the indirection layer mapping `CardRef → Ref<Card>`. The live `Card` handle resolves via `store.Catalog.Resolve(refOfCard)` (or via `CardRegistry`). The `Card` handle and its `Ref<Card>` are stable; only the public `CardRef` rotates on hide/move. See [Card Model](features/cards/models/01-card-model.md) and [Card ADR-0001](features/cards/decisions/0001-card-shape.md).
+- **Definition swap (transformation)** — `Definition` is on the handle, not in `EntityState`. To transform, replace the handle in the catalog (`store.Catalog.RegisterAt(selfRef, newCard)`) for the same `Ref<Card>`. There is no state-level `SetDefinitionPayload`.
 
 Why this resolution:
 
 - One source of truth, no duplicate state, no two-way sync.
-- Snapshot/rollback (doc 23, 29) covers per-entity variables for free.
-- Modifier ordering, source attribution (doc 24 continuous-effects cleanup), atomic batches (doc 19 command-as-batch), and coalesced subscriber notifications (doc 27 presentation loop) all come from the Store + bridge.
+- Snapshot/rollback covers per-entity variables for free.
+- Modifier ordering, source attribution, atomic batches, and coalesced subscriber notifications all come from the Store + bridge.
 
 ### Mutation API conventions
 
-The bridge defines six payloads for entity-variable mutations (sealed records, in `Scaffold.Entities.States`):
+The bridge defines seven payloads for entity-variable mutations (sealed records, in `Scaffold.Entities.States`):
 
 ```csharp
-AddModifierPayload(InstanceId EntityId, Variable Variable, VariableModifier Modifier, ModifierId ModifierId, ModifierSource? Source = null)
-RemoveModifierPayload(InstanceId EntityId, Variable Variable, ModifierId ModifierId)
-RemoveModifiersBySourcePayload(InstanceId EntityId, ModifierSource Source)
-SetBaseValuePayload(InstanceId EntityId, Variable Variable, VariableValue Value)
-AddEntityVariablePayload(InstanceId EntityId, Variable Variable, VariableValue InitialValue)
-RemoveEntityVariablePayload(InstanceId EntityId, Variable Variable)
+AddModifierPayload(Reference EntityRef, Variable Variable, VariableModifier Modifier, ModifierId ModifierId, ModifierSource? Source = null)
+RemoveModifierPayload(Reference EntityRef, Variable Variable, ModifierId ModifierId)
+RemoveModifiersBySourcePayload(Reference EntityRef, ModifierSource Source)
+SetBaseValuePayload(Reference EntityRef, Variable Variable, VariableValue Value)
+AddEntityVariablePayload(Reference EntityRef, Variable Variable, VariableValue InitialValue)
+RemoveEntityVariablePayload(Reference EntityRef, Variable Variable)
+ClearModifiersPayload(Reference EntityRef)
 ```
 
-`EntityVariableState.BaseValues` is *override-only*. Reads fall back to `definition.TryGetDefaultValue(var)` for any variable not in the map; a freshly-spawned instance has an empty `BaseValues` and inherits everything from its definition. `WithModifier` inserts ascending by `Modifier.Order` (FIFO ties); `WithoutModifiersFromSource` sweeps by `(Source, Tag)` equality.
+All seven implement `IPayloadReference` (`GetReference() => EntityRef`). `EntityState.BaseValues` is *override-only*. Effective reads on the handle fall back to `definition.TryGetDefaultValue(var)` for any variable not in the map; a freshly-spawned instance has an empty `BaseValues` and inherits everything from its definition. `WithModifier` inserts in `Order` position (stable for ties via insertion order); `WithoutModifiersFromSource` sweeps by `(Source, Tag)` equality. `ClearModifiersPayload` is a single atomic transition that empties `ModifierStacks` for one entity (avoids the N-event storm of looping individual removes).
 
 Card Framework conventions on top of these primitives:
 
-- **Mutation surface.** Handlers prefer the `IMutableEntity` surface on `StateEntity` — obtain a handle from the engine's `IEntityRegistry` (`ctx.Entities.Get<TDef>(id)`) and call its mutator methods. Raw `ctx.Store.Execute(payload)` is the documented fallback for `SetBaseValuePayload` / `RemoveModifiersBySourcePayload` (which `IMutableEntity` doesn't expose), batch authoring, history-replay tooling, and paths that hold an `InstanceId` without a handle. See [`entities/02-runtime-surface.md` §4](features/entities/models/02-runtime-surface.md) for the full handler-side surface.
+- **Mutation surface.** Handlers prefer the `IEntityVariableStorage` surface on `EntityInstance` — call methods on `card.Storage` (`AddModifier`, `RemoveModifier`, `SetBase`, `AddVariable`, `RemoveVariable`, `RemoveModifiersFromSource`, `ClearModifiers`). The storage adapter (`StoreVariableStorage`) translates each call into the matching payload dispatch. Raw `ctx.Store.Execute(payload)` is the documented fallback for batch authoring, history-replay tooling, and paths that hold a `Ref<T>` without a handle. See [`entities/02-runtime-surface.md` §4](features/entities/models/02-runtime-surface.md) for the full handler-side surface.
 - **`AddEntityVariablePayload` discipline.** Reserved for variables *not* declared in the entity's definition — per-instance ad-hoc state (token counters, custom buff bookkeeping). Definition-declared variables stay as definition defaults until a `SetBaseValuePayload` overrides the base or an `AddModifierPayload` stacks a modifier. The slice's `WithVariable` is a no-op when the variable already exists in `BaseValues`, encoding this rule on the storage side.
 - **`SetBaseValuePayload` discipline.** Live, but reserved for *out-of-band* base changes: definition-default override at instance creation, level-up / progression hooks, save-state load, authoring tools. Effect-tracked changes always go through modifiers so source attribution and removal are preserved.
-- **`ModifierSource` convention.** `Source` is the attachment entity's `InstanceId` — equipment instance, aura entity, status-effect entity, ongoing-effect attachment (per [`effects/03`](features/effects/models/03-ongoing-effects.md)). Cleanup-on-source-death is a uniform `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.Id))` per affected target. `Tag` defaults to 0 and is opt-in author disambiguation when one source contributes multiple modifier groups that may need partial removal.
-- **`ModifierId` generation.** Modifier ids must be deterministic for replay and multiplayer. Handlers obtain modifier entries from the engine-provided `IModifierFactory` (`ctx.Modifiers.Create(key, modifier, source)`) — the factory generates a deterministic id from an engine-owned counter (snapshotted with engine state, restored on `LoadSnapshot`) and returns a fully-populated `EntityModifierEntry`. `EntityModifierEntry` carries optional `Id`/`Source`; when set, `IMutableEntity.AddModifier` honours them. Constructing entries directly via `new EntityModifierEntry(key, modifier)` falls back to `ModifierId.New()` (`Guid.NewGuid()`) and is forbidden in framework / handler code.
+- **`ModifierSource` convention.** `Source` is `(Reference, int)` — the attachment entity's `Ref<T>` plus an opt-in `Tag` for disambiguation. Sources include equipment instance, aura entity, status-effect entity, ongoing-effect attachment (per [`effects/03`](features/effects/models/03-ongoing-effects.md)). Cleanup-on-source-death is a uniform `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` per affected target. `Tag` defaults to 0 and is opt-in author disambiguation when one source contributes multiple modifier groups that may need partial removal.
+- **`ModifierId` generation.** Modifier ids must be deterministic for replay and multiplayer. Handlers obtain modifier entries from the engine-provided `IModifierFactory` (`ctx.Modifiers.Create(key, modifier, source)`) — the factory generates a deterministic id from an engine-owned counter (snapshotted with engine state, restored on `LoadSnapshot`) and returns a fully-populated `ActiveModifier`-equivalent entry. Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in framework / handler code.
 
 ### Engine responsibilities (bridge boundary)
 
 These are integration concerns the engine owns. None require further Scaffold work.
 
-- **Handle registry and re-hydration.** `StateEntity` is a class (handle), not state itself. For cards, the `InstanceId → handle` registry is held on the Store as `CardMapState` (keyed by `CardRef`, value is the `Card` handle) — see the [Card Model](features/cards/models/01-card-model.md). `LoadSnapshot` rehydrates the map directly; the engine no longer maintains a separate registry. For entity kinds that don't have a corresponding map slice, the engine still re-creates handles on snapshot load using the `EntityVariableState` slices and a definition lookup.
-- **Disposal on entity death.** Calling `StateEntity.Dispose()` releases the per-instance Store listener. The engine calls this on the entity-removal path so short-lived tokens do not retain handlers.
-- **Single mutator registration per Store.** `EntityBridgeContext.RegisterMutators(store)` runs once per Store at engine bootstrap; a duplicate call throws `DuplicateMutatorRegistrationException`.
-- **Structural-change subscription is diff-based.** Per-mutation granularity (an `Added` and a `Removed` for a remove-and-re-add inside one batch) requires subscribing to the `EntityVariableState` slice directly and diffing. The bridge's `SubscribeToVariableStructuralChanges` is the coalesced view, which is what continuous-effects cleanup actually wants.
+- **Spawn pathway.** `StoreEntities.Spawn<TDef>` is the framework primitive: it allocates a `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers the handle in `store.Catalog`. Typed subclass spawn helpers (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`) wrap this and return the typed handle.
+- **Catalog and re-hydration.** `store.Catalog` holds live handles by `Ref<T>`. For cards, `CardMapState` (the privacy-rotation layer) and `CardRegistry` (the engine-side `Ref<Card> → Card` lookup) sit alongside the catalog. `LoadSnapshot` rehydrates these directly; the engine reconstitutes catalog entries from `EntityState` slices and the definition lookup as needed.
+- **Disposal on entity death.** The engine releases the catalog entry and any per-handle subscriptions on the entity-removal path so short-lived tokens do not retain handlers.
+- **Single mutator registration per Store.** `EntityBridgeContext.RegisterMutators(storeBuilder)` runs once at engine bootstrap, registering all seven mutators (including `ClearModifiersMutator`).
+- **Structural-change subscription.** For per-mutation granularity, subscribe to the `EntityState` slice directly via `store.Subscribe<EntityState>(entityRef, ...)` and diff. The coalesced view is what continuous-effects cleanup actually wants — `ClearModifiersPayload` produces a single subscriber notification rather than N individual remove events.
 
 ## What The Framework Should Not Assume Yet
 
@@ -309,7 +313,7 @@ These are integration concerns the engine owns. None require further Scaffold wo
 These are good early invariants:
 
 - Every entity is represented by an instance.
-- Every instance has an instance ID or reference value for lookups.
+- Every instance carries a typed `Ref<TInstance>` for lookup, subscription, and serialization.
 - Every entity references a base definition.
 - Zone membership is a relationship or state, not the instance itself.
 - Effective values should be explainable from base values plus modifiers.
@@ -323,7 +327,7 @@ This model's zone-related follow-ups have been settled — see the Zone Model an
 
 - ~~Is a zone always an entity instance, or can some zones be lightweight session records?~~ → Resolved: zones are thin domain objects (not entities), state in slices. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
 - ~~Is zone membership a variable, relationship, Store slice, or combination?~~ → Resolved: `ZoneContentsState` slice. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
-- ~~How does ordered or grouped arrangement work inside zones?~~ → Resolved: `ContentEntry { InstanceId, SlotKey?, GroupKey? }`; interpretation lives in zone definition. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
+- ~~How does ordered or grouped arrangement work inside zones?~~ → Resolved: `ZoneContentsState` carries an ordered `ImmutableList<CardRef>`; per-entry slot/group structure is deferred (see `bl-spatial-rule-attachment` in `OPEN-ITEMS.md`). ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
 - ~~How do visibility and ownership interact?~~ → Resolved: zone definition policy + per-card flag enum + per-actor transport alias. ([ADR-0002](features/zones/decisions/0002-visibility-model.md))
 
 
@@ -373,7 +377,7 @@ Confidence: medium.
 
 Follow-up:
 
-Resolved by `com.scaffold.entities.states`: per-entity variables are canonical `EntityVariableState` slices in the Store, exposed through `StateEntity<TDef>` handles that implement both `IReadOnlyEntity` and `IMutableEntity`. Store wraps; Entities is the ergonomic surface. (See "Canonical State" below and doc 10.)
+Resolved by `com.scaffold.entities.states` (post-Plan-A/B/C): per-entity variables are canonical `EntityState` slices in the Store, exposed through `EntityInstance<TDef>` handles backed by `StoreVariableStorage`. Store wraps; Entities is the ergonomic surface. (See "Canonical State" below.)
 
 ## Value Model
 
@@ -421,24 +425,24 @@ Define how variable keys are registered, typed, validated, displayed, and versio
 
 Question: what is the canonical source of truth: entity instances, Store slices, or a composed model where each owns different concerns?
 
-Decision: **Store is canonical; Entities is the API.** Per-entity variables live as `EntityVariableState` slices in the Store. `StateEntity<TDefinition>` is a thin handle implementing `IReadOnlyEntity<TDef>` and `IMutableEntity<TDef>` over `StoreVariableStorage`. Mutations route through `Store.Execute` / `Store.ExecuteBatch`; reads use a per-rebuild effective-value cache. Game-level state (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside the entity slices.
+Decision: **Store is canonical; Entities is the API.** Per-entity variables live as `EntityState` slices in the Store, keyed by the entity's typed `Ref<T>`. `EntityInstance<TDef>` is a thin handle pairing `(Definition, Storage)` where Storage is `IEntityVariableStorage` (typically `StoreVariableStorage` for store-backed variables). Mutations route through `Store.Execute` / `Store.ExecuteBatch`; reads delegate to `EntityState`'s pure read methods and the handle folds modifiers. Game-level state (turn, phase, available actions, decisions, zones-as-records) lives in plain Store slices alongside the entity slices.
 
-This is implemented by **`com.scaffold.entities.states`** (the bridge package). See doc 10 §"Store And Entities Relationship" for the integration shape.
+This is implemented by **`com.scaffold.entities.states`** (the bridge package, post-Plan-A/B/C). See "Store And Entities Relationship" above for the integration shape.
 
 Reasoning:
 
 - One source of truth — no duplication, no two-way sync.
 - Snapshot/rollback comes from the Store for free, including per-entity variables.
-- Polymorphic substitution: any code holding `IReadOnlyEntity` / `IMutableEntity` works against either plain Entities or the state-backed handle.
+- Polymorphic substitution: any code holding `EntityInstance<TDef>` works against the same handle whether it's store-backed or overlay-backed (`LocalVariableStorage`).
 - Modifier ordering, source attribution, atomic batches, and coalesced subscriber notifications all come from the Store + bridge.
 
 Implication:
 
-Three engine-side responsibilities follow from the bridge boundary (none require further Scaffold work):
+A few engine-side responsibilities follow from the bridge boundary (none require further Scaffold work):
 
-- **Handle re-hydration after `LoadSnapshot`.** For cards, the registry lives on the Store as `CardMapState` (keyed by `CardRef`, value is the `Card` handle); snapshot load rehydrates the map directly. For entity kinds without a corresponding map slice, the engine maintains an `InstanceId → (definition, store)` registry and re-creates `StateEntity<TDef>` references after load.
-- **Disposal on entity death.** The engine calls `StateEntity.Dispose()` on the entity-removal path so the Store listener is released; short-lived tokens otherwise leak handlers.
-- **Structural-change subscriptions are diff-based.** A single `ExecuteBatch` that removes and re-adds the same variable produces no net `Added`/`Removed` event. For per-mutation granularity, subscribe to the `EntityVariableState` slice directly and diff. (Coalesced view is the right default for continuous-effects cleanup — doc 24.)
+- **Catalog re-hydration after `LoadSnapshot`.** `store.Catalog` is in-process side-state and not snapshotted. For cards, the privacy-rotation map (`CardMapState`) and engine-side `CardRegistry` are rehydrated alongside the snapshot; the catalog is repopulated from `EntityState` slices + definition lookup.
+- **Disposal on entity death.** The engine releases the catalog entry and any per-handle subscriptions on the entity-removal path so short-lived tokens do not retain handlers.
+- **Structural-change subscriptions are diff-based.** Per-mutation granularity (an `Added` and a `Removed` for a remove-and-re-add inside one batch) requires subscribing to the `EntityState` slice directly and diffing. The coalesced view is the right default for continuous-effects cleanup; `ClearModifiersPayload` produces a single notification.
 
 Confidence: high.
 

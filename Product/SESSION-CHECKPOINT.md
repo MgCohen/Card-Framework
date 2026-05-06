@@ -11,15 +11,31 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Design pass on `oq-game-definition` opened and suspended after Q1 — **Q1 locked**: `GameDefinition` bundle owns slice schema + initial-value instantiation. Mechanism is `ISliceProvider<TInstance>` (per-spawn-keyed; entity and zone definitions implement) + unparameterized `GameDefinition.GetInitialSlices()` for singletons; factory enumerates `(definition, instance)` pairs at `Build` and installs declared slices. Manual `WithInitialSlices(...)` overlay survives as test/script escape hatch. Cardinality lives in the spawn list, not the interface. Stages 2 (per-kind domain modeling: Card, Zone, Player, Game) and 3 (zone layout, `GameDefinition` shape, `MatchSetup` reshape, asset composition) deferred to a dedicated full-domain-modeling session before resuming. No doc patches land until the design pass completes.
+Domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into the canonical Models:
 
-Prior pass on `oq-engine-match-lifecycle` landed — new `engine/06-match-lifecycle.md` written; cascade applied across `engine/01` (Dispatch lifecycle gate), `engine/02` (session-lifecycle framing flipped, `EndGameCommand` → `EndMatchCommand`, lifecycle open item moved to Resolved), `engine/03` (sample uses `EndMatchCommand` + `MatchOutcome.Win`), `engine/04` (`EngineState.Lifecycle` field), `engine/05` (return state, scope-ownership softened, Inv-9 narrowed, open follow-ups cleaned), pile-counter (`EndMatchCommand` rename, runtime takes `actors` ctor param, Q3 struck), glossary (5 new entries: `EngineLifecycle`, `MatchOutcome`, `StartMatchCommand`, `EndMatchCommand`, `MatchStartedSignal`, `MatchEndedSignal`), OPEN-ITEMS (`oq-engine-match-lifecycle` struck; `oq-effect-cancellation-on-match-end` added). Prior `oq-gamerules-runtime-definition` cascade also fully landed.
+- New `Product/features/engine/models/07-game-definition.md` — `GameDefinition` bundle shape, `ISliceProvider` mechanism, layout-block contract, factory `Build` walk pseudocode, ownership-vs-zone-assignment two-tier model.
+- New `Product/features/players/players.md` + `Product/features/players/models/01-player-model.md` — `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions.
+- `Product/features/engine/models/05-game-factory.md` — `MatchSetup = (GameDefinition, Actors, Seed) + 3 overlays`; `IMatchBuilder` updated; validation against new shape; Pile Counter example reshaped to use `PileCounterGameDefinition`; `oq-game-definition` removed from open follow-ups.
+- `Product/features/{cards,zones,entities}/models/01-*.md` + `entities/02-runtime-surface.md` — `ISliceProvider` adopted on `CardDefinition`/`ZoneDefinition`/`EntityDefinition`/`EntityInstance<TDef>` with instance-delegates-to-definition default; "slices don't carry their primary key" convention pinned.
+- `Product/decisions/0005-objects-over-ids.md` — `IActor` interface added to the polymorphic-types section.
+- `Product/ledgers/GLOSSARY.md` — Updated `Actor`/`Player`/`Owner` entries; new entries for `IActor`, `GameDefinition`, `PlayerDefinition`, `ISliceProvider`, `ZoneOverlay`, `PlayerDefinitionOverlay`.
+- `Product/ledgers/FEATURE-MAP.md` — `players` row added; engine model count bumped to 7; Mermaid graph extended.
+- `Product/ledgers/OPEN-ITEMS.md` — `oq-game-definition` resolved; `bl-actor-ownership-reverse-index` added (deferred Q5 sub-question).
+- `Product/spikes/domain-model-proposal.md` — flipped to `superseded` with resolution rationale (locked decisions live in the cascade).
+
+Plan A/B/C doc cascade **landed** earlier in this session ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)). Entities-bridge spike resolved superseded. Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
 
 ---
 
 ## 🎯 Active focus
 
-Full domain modeling pass — sketch every slice / state / aggregate the framework needs across cards, zones, players, mappings, from currently-locked decisions. Out of scope: commands, handlers, mutators, services, runtime composition (those are already designed). Output: a domain model that becomes the input to Stages 2 (per-kind `ISliceProvider` implementations) and 3 (zone layout, `GameDefinition` shape, `MatchSetup` reshape, asset composition) of the suspended `oq-game-definition` design pass. Open in a fresh session.
+No active thread. Possible next directions:
+
+- **Resolve top open items.** Highest-leverage durable questions left: `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async cancellation), `oq-attachment-storage` (attachment home — sub-zone vs registry vs dedicated zone).
+- **Promote a `considered` feature.** `authoring`, `interaction`, or `networking` move from considered to draft when triggered (typically: first feature reaches `implemented`, or a vertical-slice prototype forces it).
+- **First vertical-slice prototype.** Pile Counter sample is the canonical reference; building the actual `PileCounterGameDefinition` against the now-settled domain model would force-test the design.
+
+Pick a thread when ready.
 
 ---
 
@@ -27,9 +43,9 @@ Full domain modeling pass — sketch every slice / state / aggregate the framewo
 
 See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
-- `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 - `oq-effect-cancellation-on-match-end` — async-effect cancellation when the match ends mid-await. Surfaced from the lifecycle pass.
+- `oq-attachment-storage` — where attachments (equipment, auras, buffs) live: sub-zone, global registry, or dedicated zone.
 
 ---
 
@@ -37,17 +53,7 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-### Pending thread — drop the entities bridge?
-
-Mid-conversation, the `EntityDefinition`-as-base question surfaced a deeper one: are the `com.scaffold.entities` + `com.scaffold.entities.states` packages adding value commensurate with their cost given the framework's redux-shaped direction? Sketches captured in [`spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — **draft / exploratory, not approved or denied**. User stepped back to think before deciding. If this lands, it's upstream of the domain modeling pass — `CardDefinition`'s base, what "card slices" means, and the Definition hierarchy all reshape. Resume here next session: either decide on the spike (open as `oq-drop-entities-bridge` design pass) or punt and proceed with the domain modeling pass against the current bridge.
-
-### Kick-start brief — domain modeling session
-
-- **Goal.** Iterate on the saved domain model proposal before resuming `oq-game-definition` Stages 2–3.
-- **Starting input.** [`spikes/domain-model-proposal.md`](spikes/domain-model-proposal.md) — definition hierarchy, slice inventory by keying axis (framework / game-singleton / zone-keyed / actor-keyed / card-keyed), aggregates survey, factory loop pseudocode, open questions for Stage 2/3. Draft / exploratory; not approved or denied.
-- **Out of scope.** Commands, handlers, mutators, services, runtime composition.
-- **Why first.** The proposal is the input to per-kind `ISliceProvider` implementations (Stage 2) and `GameDefinition` shape + asset composition (Stage 3). Iterate on the slice surface against the proposal rather than rebuild from scratch.
-- **Dependency.** The entities-bridge thread above is upstream — if pursued, it reshapes §1 hierarchy and §2.5 (card-keyed) of the proposal. Either resolve it first or take the proposal as-is and resume.
+*Scratch is empty — domain-modeling thread closed; locked decisions landed in the canonical Models.*
 
 ---
 

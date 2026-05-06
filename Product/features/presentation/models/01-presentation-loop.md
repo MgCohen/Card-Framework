@@ -119,7 +119,7 @@ The `AffordanceMap` is the UI's actual reading surface. It's built from the snap
 ```csharp
 public sealed class PileCounterAffordances
 {
-    private readonly Dictionary<InstanceId, IReadOnlyList<PileId>> moveTargets;
+    private readonly Dictionary<Ref<Card>, IReadOnlyList<PileId>> moveTargets;
 
     public PileCounterAffordances(AvailableActionsSnapshot snapshot)
     {
@@ -130,17 +130,17 @@ public sealed class PileCounterAffordances
                 t => (IReadOnlyList<PileId>)t.Destinations.Cast<PileId>().ToList());
     }
 
-    public bool CanDrag(InstanceId card)
+    public bool CanDrag(Ref<Card> card)
         => moveTargets.ContainsKey(card);
 
-    public IReadOnlyList<PileId> ValidDrops(InstanceId card)
+    public IReadOnlyList<PileId> ValidDrops(Ref<Card> card)
         => moveTargets.GetValueOrDefault(card, Array.Empty<PileId>());
 }
 ```
 
 The map pattern-matches on typed template subtypes — no string-keyed slot lookup, no command construction. Each template already exposes its data as named fields.
 
-> **ADR-0005 boundary note.** `InstanceId` keys in `Dictionary<InstanceId, ...>` and `InstanceId card` parameters in `CanDrag`/`OnDrop` are **boundary-correct** here. The `AffordanceMap` is the presentation-side consumer of the engine's wire-form snapshot — presentation works in terms of IDs because it receives the snapshot from the boundary, not a live object graph. See [ADR-0005](decisions/0005-objects-over-ids.md).
+> **ADR-0005 boundary note.** `Ref<Card>` keys in `Dictionary<Ref<Card>, ...>` and `Ref<Card> card` parameters in `CanDrag`/`OnDrop` are **boundary-correct** here. The `AffordanceMap` is the presentation-side consumer of the engine's wire-form snapshot — presentation works in terms of refs because it receives the snapshot from the boundary, not a live object graph. See [ADR-0005](decisions/0005-objects-over-ids.md).
 
 **Properties:**
 - Pure projection of `AvailableActions`. No additional state.
@@ -178,14 +178,14 @@ public sealed class PileCounterView
             if (pile.Cards.Count == 0) { DrawEmptySlot(pile.Id); continue; }
 
             var top = pile.TopCard;
-            DrawCard(top, draggable: affordances.CanDrag(top.Id));
+            DrawCard(top, draggable: affordances.CanDrag(top.SelfRef));
         }
     }
 
-    public void OnDragStart(InstanceId card)
+    public void OnDragStart(Ref<Card> card)
         => HighlightPiles(affordances.ValidDrops(card));
 
-    public void OnDrop(InstanceId card, PileId destination)
+    public void OnDrop(Ref<Card> card, PileId destination)
     {
         if (!affordances.ValidDrops(card).Contains(destination))
             return;   // defensive — UI shouldn't have allowed this drop

@@ -1,12 +1,12 @@
 ---
 type: plan
-status: proposed
+status: landed
 tags: [#scaffold, #states, #catalog, #ref]
 ---
 
 # Scaffold.States — `Ref<T>` + Catalog primitive
 
-> **Plan A** of the Scaffold update sequence. Adds a typed-ref + in-process catalog primitive to `com.scaffold.states`. Pure additive — no removals, no breaking changes to existing APIs in this plan. Plan B (Scaffold.Entities refactor) depends on this landing first.
+> **Plan A** of the Scaffold update sequence — **landed** in [Scaffold#40](https://github.com/MgCohen/Scaffold/pull/40) (jointly with Plan B). Adds a typed-ref + in-process catalog primitive to `com.scaffold.states`. Pure additive — no removals, no breaking changes to existing APIs in this plan. Plan B (Scaffold.Entities refactor) depended on this landing first.
 
 **Source spike:** [`Product/spikes/entities-state-unification.md`](../../Product/spikes/entities-state-unification.md) — locked decisions #13, #14, #15, #16, #17; final shapes §1.
 
