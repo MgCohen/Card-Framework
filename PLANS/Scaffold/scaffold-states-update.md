@@ -318,3 +318,31 @@ These were decided while reviewing Plan A but apply to Plan B's scope. Plan B's 
 - **Strip `VariableBag`'s parent pointer.** Today `LocalVariableStorage.WireToDefinition` wires the definition's bag as a parent for default lookup. Remove that linkage. Definition default-fallback lives at the handle level (`Definition.TryGetDefaultValue` after the `IEntityVariableStorage.Parent` chain bottoms out). Storage `Parent` is overlays-only.
 - **Replace `InstanceId(int)` with `Ref<T>(Guid)` everywhere.** All bridge payloads, `StateEntity<TDef>`, factories — migrate to `Ref<T>` (which is a `Reference`). `InstanceId` is deleted at the end of Plan B.
 - **`ModifierSource` shape:** `readonly struct ModifierSource(Reference Source, int Tag)` (rebased — was `IRef Source`). Polymorphic source identity matches the rest of the system; `Reference` is the polymorphic base on main.
+
+---
+
+## Retrospective (2026-05-05, post-impl)
+
+Plan A landed as written. PR #40, commits `5d52174` (original plan) → `6c85284` (rebase) → `9b90061` (impl + 21 unit tests) → integration tests in this commit.
+
+**Hard requirements / hard avoids:** all matched as written. None had to be revised during implementation.
+
+**Open items, status after impl:**
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Internal storage shape | **Closed** — `Map<Reference, Type, object>` from `Scaffold.Maps` (decided pre-impl) |
+| 2 | `Store` partial class | **Closed** — inline property, ratified during plan review |
+| 3 | `Ref<T>` syntax | **Closed** — record class, ratified during rebase |
+| 4 | Concurrency | **Open (deferred)** — current impl assumes single-threaded use; `Map`/`Dictionary` underneath has no special locking. Revisit if Store ever becomes thread-safe. |
+| 5 | `Unregister` while ref still referenced from a slice | **Open (deferred)** — no auto-cleanup, no in-code documentation yet. The `TryResolve` returns false / `Resolve` throws is the only guard. Add an xml-doc note on `ICatalog.Unregister` next time the file is touched. |
+| 6 | `ICatalog` impl name | **Closed** — `Catalog` (the simplest option; it's `internal`, so external naming is via `ICatalog` anyway) |
+| 7 | Sentinel for allocated-not-bound | **Closed** — `private static readonly object AllocatedSentinel = new();` stored as the value at `(ref, typeof(T))` |
+
+**Implementation notes worth carrying into Plan B:**
+
+- The catalog's `Map<Reference, Type, object>` storage means **type enforcement is automatic** via the `(ref, typeof(T))` secondary key. `Resolve<U>` of a `Ref<U>` registered as `T` returns `false` from `TryResolve` / throws `KeyNotFoundException` from `Resolve`. No `InvalidCastException` path. Plan B authors writing entity factories that pre-allocate refs need to register at the same `T` they allocated under.
+- Tests reach the internal `Catalog` class via the existing `[assembly: InternalsVisibleTo("Scaffold.States.Tests")]` in `Runtime/AssemblyInfo.cs`. Plan B tests will need to do the same if they touch internals of `Scaffold.Entities` / `Scaffold.Entities.States`.
+- Per Decision 1 (Catalog storage choice during review), the type-mismatch enforcement test pair (`Resolve_RegisteredUnderDifferentT_ReturnsFalse`, `RegisterAt_AllocatedUnderDifferentT_Throws`) pin the secondary-key behavior. Useful regression tests if anyone tries to "simplify" the catalog to `Dictionary<Guid, object>` later.
+
+**Spike updates:** the spike's `com.scaffold.states` row in §"What changes, where" has been updated to match the as-built shape. The spike's deeper Plan B sections (§"Final shapes" §3 bridge code, etc.) still reference the pre-rebase `IRef`/`IReference` model; those will be swept when Plan B is prepared.

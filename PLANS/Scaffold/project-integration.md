@@ -10,14 +10,13 @@ tags: [#project, #card-framework, #integration, #scaffold]
 
 **Source spike:** [`Product/spikes/entities-state-unification.md`](../../Product/spikes/entities-state-unification.md) — locked decisions #11, #12, #15; final shapes §4 and §5; "What changes, where" project table; conceptual Profile B section.
 
-**Plan A status:** landed in [Scaffold#40](https://github.com/MgCohen/Scaffold/pull/40).
-**Plan B status:** assumed landed before this plan starts.
+**Plan A + B status:** landed in [Scaffold#40](https://github.com/MgCohen/Scaffold/pull/40) as a single PR.
 **Plan C status:** assumed landed before this plan starts.
 
 After Plans A/B/C, the Scaffold side provides:
 - `Ref<T>` (sealed record : `Reference`), `ICatalog` exposed via `Store.Catalog`, `ICatalogged` (Plan A).
-- `IEntityVariableStorage` with chain-walking reads + `Parent`, identity-free `EntityInstance<TDef>`, single `LocalVariableStorage`, `ModifierSource(Reference, int)`, no `IReadOnlyEntity` / `IMutableEntity` / `BaseEntityInstance` / `InstanceId` (Plan B).
-- Pure-data `EntityState`, 7 payloads, 7 mutators, ~50 LOC `StoreVariableStorage`, `StoreEntities.Spawn<TDef>` extension, no `StateEntity<TDef>` / `EntityStateFactory` / etc. (Plan C).
+- `IEntityVariableStorage` with chain-walking reads + `Parent`, identity-free `EntityInstance<TDef>`, single `LocalVariableStorage`, `ModifierSource(Reference?, int)`, no `IReadOnlyEntity` / `IMutableEntity` / `BaseEntityInstance` / `InstanceId` (Plan B).
+- `EntityState` as `sealed record : State` with `BaseValues`/`ModifierStacks` fields and `With*`/`TryGetBase`/`GetModifiers`/`Variables` methods, 7 payloads (including `ClearModifiersPayload`), 7 mutators using `Mutator<EntityState, TPayload>`, ~90 LOC `StoreVariableStorage`, `StoreEntities.Spawn<TDef>` extension, no `StateEntity<TDef>` / `EntityStateFactory` (Plan C).
 
 ---
 
@@ -92,7 +91,7 @@ Project-side work to consume the migrated Scaffold packages:
 5. **`CardVars`, `ZoneVars`, `PlayerVars`** are static classes holding `Variable` keys for the project's schema. Keys consistent with whatever key-derivation/equality `Variable` uses today.
 6. **`CardMapState` slice** is `record CardMapState(ImmutableDictionary<CardRef, Ref<Card>> RefToInstance, ImmutableDictionary<Ref<Card>, CardRef> InstanceToRef) : State;`. Slice key is `Reference.Null` (singleton-style) or whatever the existing `CardMapState` keying convention is — consistent with how the slice is accessed.
 7. **`CardRegistry` engine service** holds `Dictionary<Ref<Card>, Card> cards` with `Get(Ref<Card>)`, `Register(Card)` (uses `card.SelfRef`), `Unregister(Ref<Card>)`. Side-state on the engine, not in the Store.
-8. **All existing project code that referenced deleted Scaffold types compiles green again.** Specifically: `IReadOnlyEntity`, `IMutableEntity`, `BaseEntityInstance<TDefinition>`, `StateEntity<TDef>`, `InstanceId`, `EntityVariableState`, `EntityStateReference`, `EntityStateFactory`, `EntityBridgeContext`, `StoreInstanceIdExtensions`, `StateEntityOps`, old `StoreVariableStorage` API. All migrated to new shapes.
+8. **All existing project code that referenced deleted Scaffold types compiles green again.** Specifically: `IReadOnlyEntity`, `IMutableEntity`, `BaseEntityInstance<TDefinition>`, `StateEntity<TDef>`, `InstanceId`, `EntityVariableState`, `EntityStateReference`, `EntityStateFactory`, `StoreInstanceIdExtensions`, old `StoreVariableStorage` API. All migrated to new shapes. Note: `EntityBridgeContext` and `StateEntityOps` may still exist after Plan C (Plan C decides their fate); if they survived under new names, project code should reference the new names.
 9. **Subscription patterns use `store.Subscribe<EntityState>(card.SelfRef, ...)`.** No bespoke per-variable subscription multiplexing in project code (that pattern is gone).
 10. **Resolution path is one-step from `CardRef`:** `var r = store.Get<CardMapState>().RefToInstance[cardRef]; return registry.Get(r);`. Two slice accesses (CardMapState + CardRegistry). Document this convention in the project.
 11. **Card / Zone / Player handles outlive `CardRef` rotations.** Only the public ref rotates on visibility flips; the underlying `Ref<Card>` and the live `Card` handle are stable.
@@ -289,8 +288,11 @@ For each currently-referenced deleted/renamed Scaffold type, sweep project code:
 | `InstanceId` | `Ref<TSubclass>` (when typed) or `Reference` (when polymorphic). |
 | `EntityVariableState` | `EntityState`. |
 | `EntityStateReference` | `Ref<TSubclass>` directly; the wrapper is gone. |
-| Old `StoreVariableStorage` (~422 LOC API) | New `StoreVariableStorage` (~50 LOC). API surface should be similar — read methods + write methods. Remove any per-variable subscription wiring. |
-| `EntityStateFactory` / `EntityBridgeContext` / `StoreInstanceIdExtensions` / `StateEntityOps` | `StoreEntities.Spawn<TDef>` extension, or direct `Store` access. |
+| Old `StoreVariableStorage` (~422 LOC API) | New `StoreVariableStorage` (~90 LOC). API surface is similar — read methods + write methods. No per-variable subscription wiring. |
+| `EntityStateFactory` | `StoreEntities.Spawn<TDef>` extension. |
+| `EntityBridgeContext` | May survive Plan C (mutator registration). If renamed, update references. |
+| `StoreInstanceIdExtensions` | Deleted in Plan B; the extensions evaporate. |
+| `StateEntityOps` | Bulk `RemoveModifiersFromSource` may have moved to `StoreEntities`. Check Plan C's retro. |
 | `ModifierSource(InstanceId)` constructor | `ModifierSource(Reference, int)` — typically `someEntity.SelfRef`. |
 
 For each migration: search project for type references, refactor to new shape, run tests.
@@ -346,7 +348,7 @@ Add new terms:
 - **`ICatalogged`** — opt-in interface for objects with a stable cross-run `Guid Key`.
 - **`EntityInstance<TDef>`** — single entity handle class; pairs `(Definition, Storage)`. Identity-free at the base.
 - **`Catalog`** — in-process side-state on Store; not snapshotted.
-- **`EntityState`** — pure-data slice `(Bases, Modifiers)`; replaces `EntityVariableState`.
+- **`EntityState`** — sealed record slice `(BaseValues, ModifierStacks) : State`; replaces `EntityVariableState`. Pure data with functional `With*` updates.
 
 Retire (move to retired-terms list or just delete):
 - `StateEntity<TDef>`
@@ -444,6 +446,9 @@ Phase 1 is one-or-more PRs depending on how many entity types and how much proje
 6. **Migration cascade depth.** If project code references `StateEntity<TDef>` deep in handlers, effects, triggers, etc., migration may surface dozens of files. Triage by file count per feature directory; PR per feature if scope is large.
 7. **Model doc archive vs rewrite.** Some old model docs may be irrelevant post-migration (e.g., docs about the old subscription multiplexing). Decide: archive the doc in `_archive/` vs. delete vs. rewrite. Lean: archive with a "superseded by [new doc]" note.
 8. **Project test fixtures.** Existing test fixtures that constructed `StateEntity<TDef>` directly (bypassing factories) need migration to the new spawn pattern. Audit `Tests/` directory.
+9. **Entity teardown lifecycle.** When a `Card` is removed from gameplay, who calls `store.Catalog.Unregister(card.SelfRef)` and `registry.Unregister(card.SelfRef)`? The spike defers this (open item #5), but Plan D should at least identify the lifecycle hooks — whether it's `Card.Dispose()`, an explicit `Card.Destroy(store)` method, a store-side listener, or just the caller's responsibility. Document the convention even if the implementation is simple.
+10. **`Card` sealed vs unsealed.** Plan D's spec says `public sealed class Card : EntityInstance<CardDefinition>`. If the project ever needs spell-specific subclasses (e.g., `SpellCard : Card`), `sealed` prevents that. Decide: sealed (spells are data-driven via different `CardDefinition` variants) or unsealed (spells are subclasses). Lean: sealed — data-driven via definitions is the idiomatic Scaffold pattern.
+11. **`StoreEntities.Spawn<TDef>` vs typed `Card.Spawn`.** Both exist — `StoreEntities.Spawn` registers as `Ref<EntityInstance<TDef>>` while `Card.Spawn` registers as `Ref<Card>`. These produce differently-typed catalog entries for conceptually the same thing. Decide: use only typed spawn factories (`Card.Spawn`, `Zone.Spawn`) and don't call `StoreEntities.Spawn` from project code, or accept both coexist and document the distinction. Lean: typed factories only — `StoreEntities.Spawn` is the generic fallback for non-subclassed entities.
 
 ---
 
@@ -471,7 +476,7 @@ After Plan D validates, the migration is complete. The project is on the new Sca
 
 ## Out-of-band reminders
 
-- Plans A, B, and C must all be landed in the Scaffold repo before this plan starts. Project compiles will fail otherwise.
+- Plans A+B are already landed ([Scaffold#40](https://github.com/MgCohen/Scaffold/pull/40)). Plan C must be landed before this plan starts. Project compiles will fail against the new Scaffold otherwise.
 - This plan is **migration-only**. No new gameplay features. New features land in separate PRs after the migration is complete.
 - The model doc cascade (Phase 2) is real work. Don't skip it. Stale docs accumulate and confuse readers, especially during onboarding. Spend the time.
 - `Identifier<T>` family migration is **not** in scope for this plan — only entity-related identifiers. If `Identifier<T>` shows up in zones/slots/non-entity domains, leave alone (separate cascade).

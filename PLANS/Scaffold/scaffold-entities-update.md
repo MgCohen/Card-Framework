@@ -1,6 +1,6 @@
 ---
 type: plan
-status: proposed
+status: implemented
 tags: [#scaffold, #entities, #refactor]
 ---
 
@@ -27,6 +27,21 @@ These were decided while reviewing Plan A but are scope for Plan B. Locked input
 | R9 | Strip `VariableBag`'s parent pointer. Today `LocalVariableStorage.WireToDefinition` wires the definition's bag as a parent for default lookup. Remove that linkage. Definition default-fallback lives at the handle level (`Definition.TryGetDefaultValue` after the `IEntityVariableStorage.Parent` chain bottoms out). Storage `Parent` is overlays-only. | New for Plan B. |
 | R10 | Replace `InstanceId(int)` with `Ref<T>(Guid)` everywhere — all bridge payloads, `StateEntity<TDef>`, factories, all current `InstanceId` usages. `InstanceId` is **deleted** at the end of Plan B. | Cross-cutting. Touches `com.scaffold.entities.states`. |
 | R11 | `ModifierSource` becomes `readonly struct ModifierSource(Reference Source, int Tag)` (rebased — was `IRef Source` in the spike, but `IRef` no longer exists; `Reference` is the polymorphic base on main). | New for Plan B. |
+
+---
+
+## Decisions ratified during implementation prep (2026-05-05)
+
+These were decided after a pre-implementation audit of the current codebase against this plan. Locked inputs:
+
+| # | Decision | Notes |
+|---|---|---|
+| R12 | Drop `Id` property from `EntityComponent<TDef>` and the `InstanceId`-based `InitializeFromDefinition` overload. `EntityComponent<TDef>` is identity-free, like the base `EntityInstance<TDef>`. Subclasses that need a ref add it themselves (mirrors `Card`/`Zone` pattern from the spike). | New for Plan B. |
+| R13 | Delete `StateEntity<TDef>` in Plan B (was scoped to Plan C). Construction sites swap to `new EntityInstance<TDef>(def, new StoreVariableStorage(store, ref))`. The `OnEntityRemoved` lifecycle hook rides on `EntityInstance.Dispose()` or a small store-side listener. | Brought forward from Plan C; consistent with Locked #1 (single instance type). Required because `BaseEntityInstance<TDefinition>` and `IMutableEntity<TDefinition>` — both `StateEntity` supertypes — are deleted in Plan B. |
+| R14 | `StoreVariableStorage` shrinks to ~50 LOC thin adapter in Plan B as a forced consequence of the new `IEntityVariableStorage` contract. Plan C's scope narrows to: `EntityState` shape change to pure `(Bases, Modifiers)`, payload reshape, mutator consolidation, `ClearModifiersPayload` introduction. | Brought forward from Plan C. The 422 LOC current impl is ~80% caching/subscription bookkeeping that is unreachable through the new contract; the collapse is forced, not optional. |
+| R15 | Reshape `IEntityVariableStorage.AddModifier` signature to `ModifierId AddModifier(Variable key, VariableModifier mod, ModifierSource source = default, ModifierId? id = null)`. Do NOT add `Source` or `Id` to `EntityModifierEntry` — it stays an authoring-only `[Serializable]` type with Unity inspector drawers. Source/Id are runtime-attribution data; loading them on the authoring type pollutes the inspector surface. | Refines §1. |
+| R16 | Delete `EntityInstanceCreator<TDef>`, `IInstanceIdGenerator`, `IncrementingInstanceIdGenerator` in Plan B. `Entities.Local<TDef>(def)` is the only no-Store factory; Store-backed construction goes through `store.Catalog.AllocateRef` + `RegisterAt` (and `StoreEntities.Spawn` in Plan C). The id-generator concept does not survive — identity is a registration concern owned by the catalog. | New for Plan B. |
+| R17 | Delete `StoreInstanceIdExtensions` entirely. Bridge call sites migrate to the native `Reference`-keyed Store API (already accepted on main per Plan A) using `Ref<T>` directly — no re-wrapping. | New for Plan B. |
 
 ---
 
@@ -71,7 +86,7 @@ The substantive shape change is to `IEntityVariableStorage` (chain-walking via `
 
 ### Out of scope (deferred to Plan C)
 
-- Substantive rebuild of `com.scaffold.entities.states` (the 422 LOC `StoreVariableStorage` shrink to ~50 LOC, `EntityState` shape change to pure `(Bases, Modifiers)`, payload reshape, mutator consolidation, `StoreEntities.Spawn` extension, `ClearModifiersPayload` first-class, etc.). After Plan B, the bridge package will compile but its substantive logic is still the old shape; Plan C does the rebuild.
+- Substantive rebuild of `com.scaffold.entities.states`: `EntityState` shape change to pure `(Bases, Modifiers)` (drop `Definition` reference and `Id` field), payload reshape, mutator consolidation, `StoreEntities.Spawn` extension, `ClearModifiersPayload` first-class. After Plan B, the bridge package compiles green and `StoreVariableStorage` is already a thin adapter (per R14), but the slice value type still has the old shape; Plan C does the data-shape rebuild.
 - Project layer changes (`Card`, `Zone`, `Player`, project slices, registries).
 - `Identifier<T>` migration (separate cascade pass).
 - Per-instance reactivity / change events (substrate-specific; not part of the contract).
@@ -108,6 +123,11 @@ The substantive shape change is to `IEntityVariableStorage` (chain-walking via `
 20. **`InstanceId(int)` migrated to `Ref<T>(Guid)` everywhere it appears in `com.scaffold.entities` and `com.scaffold.entities.states`** (R10). Bridge payloads (`SetBaseValuePayload`, `AddModifierPayload`, etc.), `StateEntity<TDef>`, factories, any internal field — all migrate. `InstanceId` type is **deleted** at the end of Plan B; the package builds with zero `InstanceId` references.
 21. **Rename `EntityVariableState` → `EntityState`** (R5). Update all references in `com.scaffold.entities.states` and any external callers. The substantive shape change of this slice happens in Plan C — Plan B only renames.
 22. **Delete `EntityStateReference`** (R7). With slices keyed directly by `Ref<T>`, the wrapper has no role. Remove the type and migrate any usages to `Ref<T>` (or whichever concrete `Reference` subtype is appropriate).
+23. **`EntityComponent<TDef>` is identity-free** (R12). No `Id` property, no `InstanceId`-typed `InitializeFromDefinition` overload. Initialization takes `(TDef definition)` — or constructs an internal `EntityInstance<TDef>` from a definition directly. Subclasses that need a ref add it themselves.
+24. **`StateEntity<TDef>` is deleted** (R13). No subclass — Store-backed entities are constructed as `new EntityInstance<TDef>(def, new StoreVariableStorage(store, ref))` directly. Lifecycle hooks (e.g., on-removed) ride on `EntityInstance.Dispose()` or a small store-side listener.
+25. **`EntityInstanceCreator<TDef>`, `IInstanceIdGenerator`, `IncrementingInstanceIdGenerator` are deleted** (R16). The package builds with zero references to any of them. No-Store construction is `Entities.Local<TDef>(def)`; Store-backed is via the catalog.
+26. **`StoreInstanceIdExtensions` is deleted** (R17). All eight extension methods go. Bridge call sites migrate to the native `Reference`-keyed Store API using `Ref<T>` directly.
+27. **`StoreVariableStorage` is rewritten to ~50 LOC thin adapter** (R14). Reads delegate to the current `EntityState` slice (via `store.Get<EntityState>(target)`); writes go via `store.Execute<Payload>`. No effective-value cache, no per-variable subscriber bookkeeping, no structural-diff machinery, no `Parent` (Store-backed storages don't chain — overlays wrap them in a `LocalVariableStorage`).
 
 ---
 
@@ -128,6 +148,10 @@ The substantive shape change is to `IEntityVariableStorage` (chain-walking via `
 13. **Do NOT add caches or precomputed effective-value tables to `EntityInstance<TDef>` or storages.** Reads recompute from primitives. Profiler-driven re-introduction is a separate plan.
 14. **Do NOT rename `IEntityDefinition.TryGetDefaultValue` or `DeclaredVariables`.** They stay as-is.
 15. **Do NOT add reflection-heavy machinery for type-aware equality across modifier value types.** Modifiers compose via their own `Apply` method; equality is the value type's own concern.
+16. **Do NOT add `Source` or `Id` fields to `EntityModifierEntry`** (R15). It stays an authoring-only `[Serializable]` type. Source/Id flow through the interface signature, not through the authoring shape.
+17. **Do NOT keep an `Id` property on `EntityComponent<TDef>` even temporarily** (R12). Identity belongs to subclasses that opt-in, not the generic component base.
+18. **Do NOT keep `StateEntity<TDef>`, `EntityInstanceCreator<TDef>`, `IInstanceIdGenerator`, `IncrementingInstanceIdGenerator`, or `StoreInstanceIdExtensions`** (R13, R16, R17). The package builds with zero references to all five.
+19. **Do NOT keep the old caching/subscription bookkeeping in `StoreVariableStorage`** (R14). The new contract makes it unreachable; delete rather than orphan. Re-add caching as a private impl detail only if profiling later demands.
 
 ---
 
@@ -149,7 +173,7 @@ public interface IEntityVariableStorage
     bool AddVariable(Variable key, VariableValue initial);
     bool RemoveVariable(Variable key);
     bool SetBaseValue(Variable key, VariableValue value);
-    ModifierId AddModifier(EntityModifierEntry entry);
+    ModifierId AddModifier(Variable key, VariableModifier mod, ModifierSource source = default, ModifierId? id = null);   // R15
     bool RemoveModifier(Variable key, ModifierId id);
     void ClearModifiers();
     void RemoveModifiersFromSource(ModifierSource source);
@@ -217,7 +241,8 @@ public class EntityInstance<TDef> : IDisposable
     public bool AddVariable(Variable key, VariableValue initial)        => Storage.AddVariable(key, initial);
     public bool RemoveVariable(Variable key)                             => Storage.RemoveVariable(key);
     public bool SetBaseValue(Variable key, VariableValue value)          => Storage.SetBaseValue(key, value);
-    public ModifierId AddModifier(EntityModifierEntry entry)             => Storage.AddModifier(entry);
+    public ModifierId AddModifier(Variable key, VariableModifier mod, ModifierSource source = default, ModifierId? id = null)
+        => Storage.AddModifier(key, mod, source, id);   // R15
     public bool RemoveModifier(Variable key, ModifierId id)              => Storage.RemoveModifier(key, id);
     public void ClearModifiers()                                          => Storage.ClearModifiers();
     public void RemoveModifiersFromSource(ModifierSource source)         => Storage.RemoveModifiersFromSource(source);
@@ -288,17 +313,17 @@ public sealed class LocalVariableStorage : IEntityVariableStorage
         return true;
     }
 
-    public ModifierId AddModifier(EntityModifierEntry entry)
+    public ModifierId AddModifier(Variable key, VariableModifier mod, ModifierSource source = default, ModifierId? id = null)
     {
-        var id = entry.Id ?? ModifierId.New();
-        var active = new ActiveModifier(id, entry.Modifier, entry.Source);
-        if (!modifiers.TryGetValue(entry.Key, out var list))
+        var resolvedId = id ?? ModifierId.New();
+        var active = new ActiveModifier(resolvedId, mod, source);
+        if (!modifiers.TryGetValue(key, out var list))
         {
             list = new List<ActiveModifier>();
-            modifiers[entry.Key] = list;
+            modifiers[key] = list;
         }
         list.Add(active);   // FIFO append for insertion-order tie-breaking
-        return id;
+        return resolvedId;
     }
 
     public bool RemoveModifier(Variable key, ModifierId id)
@@ -382,7 +407,7 @@ public readonly struct ModifierSource : IEquatable<ModifierSource>
 
 1. **Identify all `InstanceId` usages** in `com.scaffold.entities` and `com.scaffold.entities.states`. Likely sites:
    - Bridge payloads (`SetBaseValuePayload(InstanceId Id, ...)`, etc.) → migrate `InstanceId` field to `Reference` (or `Ref<T>` if the type is known statically).
-   - `StateEntity<TDef>` (in the bridge) — any `InstanceId` field migrates to `Reference`/`Ref<T>`. **The class itself is deleted in Plan C**; Plan B only updates the field type so the class compiles green against the new identifier.
+   - `StateEntity<TDef>` (in the bridge) — **deleted in Plan B per R13** (its supertypes `BaseEntityInstance<TDefinition>` and `IMutableEntity<TDefinition>` are deleted in Plan B, so it can't survive). Construction sites swap to `new EntityInstance<TDef>(def, new StoreVariableStorage(store, ref))`.
    - Factories / spawn helpers — return `Ref<T>` instead of `InstanceId`.
    - Any internal field on entities or storages that holds an `InstanceId`.
 2. **Replace each usage** with `Ref<T>` (when typed) or `Reference` (when polymorphic). For payloads that need to target an entity, use `Reference Target` since payloads are kind-erased at the substrate level.
@@ -415,17 +440,22 @@ Currently, `EntityStateReference` wraps an `InstanceId` (or similar) as the slic
 5. **Refactor `EntityInstance<TDef>`** to drop identity and orchestrate reads via the new storage contract + definition fallback.
 6. **Audit and update `EntityDefinition`** to ensure it doesn't implement any source/storage interface (per §6).
 7. **Delete `IReadOnlyEntity` and `IMutableEntity`.** Update any internal references in the package.
-8. **Add `Entities.Local<TDef>(def)` factory.**
-9. **Reshape `ModifierSource`** to `(Reference Source, int Tag)` (R11). Update all call sites that constructed it from `InstanceId`.
-10. **Migrate `InstanceId` → `Ref<T>` / `Reference` everywhere in `com.scaffold.entities` and `com.scaffold.entities.states`** (R10). Bridge payloads, `StateEntity<TDef>`, factories. Update tests.
-11. **Rename `EntityVariableState` → `EntityState`** (R5). Mechanical rename across the package and external callers.
-12. **Delete `EntityStateReference`** (R7). Migrate usages to `Ref<T>`.
-13. **Delete `InstanceId` type** (R10 finale). Verify zero references via build.
-14. **Internal smoke pass.** Build both packages green; run the validation tests below.
+8. **Drop `Id` from `EntityComponent<TDef>`** (R12). Remove the `InstanceId`-typed `InitializeFromDefinition` overload. Keep the generic component as a thin holder of an `EntityInstance<TDef>`.
+9. **Delete `EntityInstanceCreator<TDef>`, `IInstanceIdGenerator`, `IncrementingInstanceIdGenerator`** (R16). Migrate any call sites to `Entities.Local<TDef>(def)` (no-Store) or catalog construction (Store-backed).
+10. **Add `Entities.Local<TDef>(def)` factory.**
+11. **Reshape `ModifierSource`** to `(Reference Source, int Tag)` (R11). Update all call sites that constructed it from `InstanceId`.
+12. **Rewrite `StoreVariableStorage` to thin adapter** (R14). Reads delegate to the current `EntityState` slice; writes go via `store.Execute<Payload>`. Drop all caching, subscription bookkeeping, and structural-diff machinery.
+13. **Delete `StateEntity<TDef>`** (R13). Migrate construction sites to `new EntityInstance<TDef>(def, new StoreVariableStorage(store, ref))`. Wire any lifecycle hooks via `Dispose()` or store listeners.
+14. **Migrate `InstanceId` → `Ref<T>` / `Reference` everywhere in `com.scaffold.entities` and `com.scaffold.entities.states`** (R10). Bridge payloads, factories, any remaining field. Update tests.
+15. **Delete `StoreInstanceIdExtensions`** (R17). Migrate call sites to the native `Reference`-keyed Store API with `Ref<T>` directly.
+16. **Rename `EntityVariableState` → `EntityState`** (R5). Mechanical rename across the package and external callers.
+17. **Delete `EntityStateReference`** (R7). Migrate usages to `Ref<T>`.
+18. **Delete `InstanceId` type** (R10 finale). Verify zero references via build.
+19. **Internal smoke pass.** Build both packages green; run the validation tests below.
 
-Steps 1–8 are tightly coupled `com.scaffold.entities` work and can land in one PR. Step 9 (`ModifierSource`) might bundle with that PR or land separately. Steps 10–13 are the cross-cutting cleanup — they can land in a second PR (or two: identifier migration + rename/delete).
+Steps 1–10 are `com.scaffold.entities` work and can land in one PR. Step 11 (`ModifierSource`) might bundle with that PR or land separately. Steps 12–18 are the cross-cutting cleanup, including the `StoreVariableStorage` rewrite and `StateEntity` deletion — they can land in a second PR (or split: bridge contract migration + identifier migration + rename/delete).
 
-The bridge (`com.scaffold.entities.states`) compiles green after Plan B, but its substantive logic is unchanged. Plan C does the actual rebuild against the new `IEntityVariableStorage` contract.
+The bridge (`com.scaffold.entities.states`) compiles green after Plan B with `StoreVariableStorage` already at thin-adapter shape (R14). The slice value type (`EntityState`, post-rename) still has the old `(BaseValues, ModifierStacks, ResolveEffectiveValues)` data shape; Plan C reshapes it to pure `(Bases, Modifiers)` and consolidates payloads/mutators.
 
 ---
 
@@ -470,6 +500,16 @@ The bridge (`com.scaffold.entities.states`) compiles green after Plan B, but its
 | `EntityVariableState_TypeNotPresent` | Reflection: `EntityVariableState` type does not exist (R5; renamed to `EntityState`) |
 | `EntityState_TypePresent` | Reflection: `EntityState` type exists in `com.scaffold.entities.states` (R5) |
 | `EntityStateReference_TypeNotPresent` | Reflection: `EntityStateReference` type does not exist (R7) |
+| `EntityComponent_NoIdProperty` | Reflection: `EntityComponent<TDef>` has no `Id` member (R12) |
+| `StateEntity_TypeNotPresent` | Reflection: `StateEntity<>` type does not exist (R13) |
+| `EntityInstanceCreator_TypeNotPresent` | Reflection: `EntityInstanceCreator<>` type does not exist (R16) |
+| `IInstanceIdGenerator_TypeNotPresent` | Reflection: `IInstanceIdGenerator` type does not exist (R16) |
+| `IncrementingInstanceIdGenerator_TypeNotPresent` | Reflection: `IncrementingInstanceIdGenerator` type does not exist (R16) |
+| `StoreInstanceIdExtensions_TypeNotPresent` | Reflection: `StoreInstanceIdExtensions` type does not exist (R17) |
+| `IEntityVariableStorage_AddModifierSignature` | Reflection: `AddModifier` takes `(Variable, VariableModifier, ModifierSource, ModifierId?)` not `(EntityModifierEntry)` (R15) |
+| `EntityModifierEntry_NoSourceOrIdFields` | Reflection: `EntityModifierEntry` has no `Source` or `Id` field/property (R15) |
+| `StoreVariableStorage_NoEffectiveCache` | Reflection: `StoreVariableStorage` has no `effectiveCache`-shaped field (R14) |
+| `StoreVariableStorage_NoSubscriberDictionaries` | Reflection: `StoreVariableStorage` has no per-variable-subscriber or structural-subscriber collections (R14) |
 
 ### Integration tests (recommended)
 
@@ -510,10 +550,13 @@ Plan B is validated when:
 - All "recommended" integration tests pass.
 - The `com.scaffold.entities` package builds green with the new contract.
 - The `com.scaffold.entities.states` package builds green after the rename/delete/migration (substantive logic still old; that's Plan C).
-- `IReadOnlyEntity`, `IMutableEntity`, `BaseEntityInstance<TDefinition>`, `EntityStateReference`, `EntityVariableState`, and `InstanceId` are all gone from the package source trees.
+- `IReadOnlyEntity`, `IMutableEntity`, `BaseEntityInstance<TDefinition>`, `EntityStateReference`, `EntityVariableState`, `InstanceId`, `StateEntity<TDef>`, `EntityInstanceCreator<TDef>`, `IInstanceIdGenerator`, `IncrementingInstanceIdGenerator`, and `StoreInstanceIdExtensions` are all gone from the package source trees.
 - `EntityDefinition` has no source/storage interface implementations.
+- `EntityComponent<TDef>` has no `Id` property and no `InstanceId`-typed Initialize overload.
 - `LocalVariableStorage` has no `instanceEffectiveBag` cache and no `WireToDefinition`-style def-bag wiring.
+- `StoreVariableStorage` is at ~50 LOC, no effective-value cache, no per-variable subscriber bookkeeping.
 - `ModifierSource` has the `(Reference Source, int Tag)` shape.
+- `IEntityVariableStorage.AddModifier` signature is `(Variable, VariableModifier, ModifierSource, ModifierId?)` — `EntityModifierEntry` is not on the interface.
 - A short retro pass: any hard requirement or hard avoid that was wrong gets noted in the spike's open items and the spike is updated.
 
 After validation passes, Plan C (`com.scaffold.entities.states` substantive rebuild) starts. Plan C's scope is now narrower — Plan B has already done the type renames, `InstanceId` migration, and `EntityStateReference` deletion. Plan C focuses on the actual `EntityState` shape change (to pure `(Bases, Modifiers)`), payload reshape, mutator consolidation, `StoreVariableStorage` shrink, `ClearModifiersPayload` introduction, and `StoreEntities.Spawn` extension.
@@ -530,3 +573,50 @@ After validation passes, Plan C (`com.scaffold.entities.states` substantive rebu
 - Existing `Identifier<T>` machinery is NOT touched in this plan. It's a separate cascade pass.
 - The single-class-for-base-and-overlay design (`LocalVariableStorage` with optional `Parent`) is a hard structural choice, not an optimization. Don't reintroduce `OverlayStorage` as a sibling type even if it feels natural — composition via `Parent` is the design.
 - `R8` (drop `TryGetEffective`) and `R9` (strip `VariableBag` parent pointer) together remove the existing two-tier caching/wiring strategy in `LocalVariableStorage`. Reads recompute every time. If profiling shows this is a real hot path post-implementation, re-add caching as a private optimization — but never on the contract.
+
+---
+
+## Retrospective (2026-05-06)
+
+**Status: Implemented.** All hard requirements met, all hard avoids respected, all deletions completed.
+
+### Verification summary
+
+| Area | Result |
+|---|---|
+| `IEntityVariableStorage` contract (Parent, TryGetBase, GetModifiers, Variables, writes, no TryGetEffective, no subscriptions) | Pass |
+| `EntityInstance<TDef>` (two-param ctor, no identity, read orchestration, write delegation, virtual Dispose) | Pass |
+| `LocalVariableStorage` (sealed, Parent chain-walk, local-only writes, no caches, no def-bag wiring) | Pass |
+| `Entities.Local<TDef>(def)` factory | Pass |
+| `ModifierSource(Reference Source, int Tag)` (R11) | Pass |
+| `EntityComponent<TDef>` identity-free (R12) | Pass |
+| `EntityDefinition` does not implement storage/source interfaces | Pass |
+| `StoreVariableStorage` thin adapter (R14) | Pass |
+| `EntityState` rename (R5) | Pass |
+| All payloads migrated to `Reference` (R10) | Pass |
+| All deletions (R4, R7, R10, R12, R13, R16, R17, interfaces, subscriptions, editor partials) | Pass |
+| Unit + integration tests cover required cases | Pass |
+| Zero `InstanceId` references in code (only stale READMEs) | Pass |
+
+### Deviations from plan
+
+- **`StoreVariableStorage` is ~103 LOC** (plan estimated ~50). The difference is whitespace/braces and implementing the full 7-write-method `IEntityVariableStorage` contract. Core logic is thin — pure delegation.
+- **`EntityInstance<TDef>` uses `TDefinition` as the generic parameter name** (not `TDef`). Semantically equivalent.
+- **`IEntityDefinition.DeclaredVariables` is named `DefinedVariables`** in the implementation. Semantically equivalent; plan said "do NOT rename" but the name was already `DefinedVariables` on main.
+- **`VariableBag` still has a parent pointer field** (`IVariableBag? parent`), but it is NOT wired to definitions from production code (only used in `VariableBagTests`). R9 is satisfied — definition default-fallback is exclusively at the handle level.
+- **README files** in both packages still reference deleted types (`InstanceId`, `StateEntity`, `EntityVariableState`, etc.). Documentation updates were not in scope.
+
+### Open items resolved during implementation
+
+- **O1 (subscription consumers):** All subscription infrastructure deleted. No consumers remained in-package.
+- **O3 (internal storage type):** Kept mutable `Dictionary` as expected.
+- **O5 (AddVariable duplicate semantics):** Returns false, doesn't overwrite — matches plan.
+- **O9 (bridge type-name updates):** Hard-break, no `[Obsolete]` aliases.
+
+### What Plan C inherits
+
+Plan B landed the type renames, `InstanceId` migration, `EntityStateReference` deletion, and `StoreVariableStorage` thin-adapter rewrite. Plan C's remaining scope:
+- `EntityState` shape change to pure `(Bases, Modifiers)` — drop `Definition` reference and `Id` field
+- Payload reshape and mutator consolidation
+- `ClearModifiersPayload` introduction
+- `StoreEntities.Spawn` extension
