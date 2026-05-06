@@ -11,31 +11,29 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into the canonical Models:
+Domain-model open-seams design pass landed (2026-05-06, follow-on to the same-day domain modeling pass). 10 decisions locked covering the structural seams that surfaced when drawing the model out: `ISliceProvider` placement on Definition + Instance, `Definition` exposure, sealing convention, `CardRegistry` vs `Catalog`, `CardRef → Card` resolution path, `ZoneVisibilityPolicy` shape, registration-contract formalization, orphan-slice strictness, and setup-command pattern. **Patch cascade pending** — see Active focus.
 
-- New `Product/features/engine/models/07-game-definition.md` — `GameDefinition` bundle shape, `ISliceProvider` mechanism, layout-block contract, factory `Build` walk pseudocode, ownership-vs-zone-assignment two-tier model.
-- New `Product/features/players/players.md` + `Product/features/players/models/01-player-model.md` — `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions.
-- `Product/features/engine/models/05-game-factory.md` — `MatchSetup = (GameDefinition, Actors, Seed) + 3 overlays`; `IMatchBuilder` updated; validation against new shape; Pile Counter example reshaped to use `PileCounterGameDefinition`; `oq-game-definition` removed from open follow-ups.
-- `Product/features/{cards,zones,entities}/models/01-*.md` + `entities/02-runtime-surface.md` — `ISliceProvider` adopted on `CardDefinition`/`ZoneDefinition`/`EntityDefinition`/`EntityInstance<TDef>` with instance-delegates-to-definition default; "slices don't carry their primary key" convention pinned.
-- `Product/decisions/0005-objects-over-ids.md` — `IActor` interface added to the polymorphic-types section.
-- `Product/ledgers/GLOSSARY.md` — Updated `Actor`/`Player`/`Owner` entries; new entries for `IActor`, `GameDefinition`, `PlayerDefinition`, `ISliceProvider`, `ZoneOverlay`, `PlayerDefinitionOverlay`.
-- `Product/ledgers/FEATURE-MAP.md` — `players` row added; engine model count bumped to 7; Mermaid graph extended.
-- `Product/ledgers/OPEN-ITEMS.md` — `oq-game-definition` resolved; `bl-actor-ownership-reverse-index` added (deferred Q5 sub-question).
-- `Product/spikes/domain-model-proposal.md` — flipped to `superseded` with resolution rationale (locked decisions live in the cascade).
-
-Plan A/B/C doc cascade **landed** earlier in this session ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)). Entities-bridge spike resolved superseded. Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
+Earlier today: domain modeling design pass + patch cascade landed (13 decisions). Plan A/B/C state-tech cascade landed earlier in PR #100. `oq-game-definition`, `oq-engine-match-lifecycle`, `oq-gamerules-runtime-definition` all resolved.
 
 ---
 
 ## 🎯 Active focus
 
-No active thread. Possible next directions:
+**Patch cascade for the open-seams design pass.** 10 locked decisions to propagate:
 
-- **Resolve top open items.** Highest-leverage durable questions left: `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async cancellation), `oq-attachment-storage` (attachment home — sub-zone vs registry vs dedicated zone).
-- **Promote a `considered` feature.** `authoring`, `interaction`, or `networking` move from considered to draft when triggered (typically: first feature reaches `implemented`, or a vertical-slice prototype forces it).
-- **First vertical-slice prototype.** Pile Counter sample is the canonical reference; building the actual `PileCounterGameDefinition` against the now-settled domain model would force-test the design.
+- `entities/01-definition-instance-model.md` — `DefinitionWithSlices` parent layering (Q1)
+- `entities/02-runtime-surface.md` — `InstanceWithSlices<TDef>` parent + protected `Definition` (Q2, Q3)
+- `cards/01-card-model.md` — `Card` unsealed; `CardRegistry` removed; two-hop resolution (Q4, Q5, Q6)
+- `zones/01-zone-model.md` — `Zone` unsealed; sealed-record `ZoneVisibilityPolicy` (Q4, Q7)
+- `players/01-player-model.md` — `Player` unsealed (Q4)
+- `engine/05-game-factory.md` — Registration contract section; drop `CardRegistry` from PileCounter example (Q5, Q8)
+- `engine/06-match-lifecycle.md` — Match setup section, host-driven + runtime-driven dispatch (Q10)
+- `ledgers/GLOSSARY.md` — retire `CardRegistry`; add `DefinitionWithSlices` / `InstanceWithSlices` / `ZoneVisibilityPolicy`; drop "sealed" wording from Card/Zone/Player
+- `ledgers/OPEN-ITEMS.md` — add `bl-zone-visibility-custom-policy-serialization` (Q7 follow-up); optionally `bl-card-resolution-helper-shape` (Q6)
 
-Pick a thread when ready.
+Q9 lock (warning, not error) is status-quo and needs no edit.
+
+After cascade lands: highest-leverage open items remaining are `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`. First vertical-slice prototype (`PileCounterGameDefinition`) becomes the natural next thread.
 
 ---
 
