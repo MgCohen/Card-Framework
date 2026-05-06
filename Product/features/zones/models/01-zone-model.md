@@ -74,7 +74,7 @@ See [ADR-0001](features/zones/decisions/0001-zone-shape.md) for full reasoning.
 
 ### Zone Definition
 
-The authored base data for a kind of zone.
+The authored base data for a kind of zone. `ZoneDefinition : Scaffold.EntityDefinition, ISliceProvider`. Carries authored configuration (capacity, ordering rules, insertion behavior, default visibility policy) plus a parameterless `GetInitialSlices()` that declares the per-zone slices to install at spawn (a `PileDefinition` returns `new PileState(Counter: 0, Target: Target)`; a `RecipeStackDefinition` returns `new RecipeStackState(Progress: 0, Active: null)`).
 
 Examples:
 
@@ -87,9 +87,9 @@ Examples:
 
 ### Zone Object (Runtime)
 
-The runtime zone in a session — a `Zone` value carrying its `Id` and `Definition`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
+The runtime zone in a session — a `Zone : EntityInstance<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
 
-Zone storage is **game-authored**: the framework does not provide a generic `ZoneMapState` registry. Game code holds Zone objects in its own state slices (e.g., `GameZonesState { Zone P1Hand, Zone P1Deck, ... }`) or in a `Dictionary` keyed however the game prefers. Framework operations take Zone objects as parameters; they don't look them up generically.
+`Zone` is held in `store.Catalog`. Zones are spawned during `Build` from layout blocks declared on `GameDefinition.SharedZones` (game-shared zones — stack, battlefield, market) and `PlayerDefinition.PerPlayerZones` (per-player zones — hand, deck, discard, instantiated once per player actor). Per-match deviations from the standard layout flow through the optional `MatchSetup.ZoneOverlay` escape hatch. See [Game Definition](features/engine/models/07-game-definition.md) for the zone-layout contract and the factory's spawn-walk.
 
 Examples:
 

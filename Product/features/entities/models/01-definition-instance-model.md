@@ -57,6 +57,8 @@ Minimum conceptual fields:
 
 Definition IDs should be stable because they are needed for save/load, replay, debugging, and future networking.
 
+**Definitions implement `ISliceProvider`.** Every framework definition kind (`CardDefinition`, `ZoneDefinition`, `PlayerDefinition`) implements `ISliceProvider` with a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Concrete subclasses override to declare per-instance slices (a `PileDefinition` declares `PileState`; a `MagicPlayerDefinition` declares `ManaPoolState`). The factory walks definitions/instances at `Build` and installs returned slices, keying them at the instance's `SelfRef`. See [Game Definition](features/engine/models/07-game-definition.md) for the spawn-walk pseudocode.
+
 ## Instances
 
 An instance is a runtime entity created from a definition.

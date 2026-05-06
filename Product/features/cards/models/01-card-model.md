@@ -53,6 +53,8 @@ Card variants (Fireball, Goblin, etc.) are not separate C# classes — they are 
 
 The class is a handle, not a record. Equality is overridden to use `SelfRef` so the same card can be looked up reliably by Card object across handle re-creation (e.g., snapshot rehydration). There is at most one *live* `Card` instance per `Ref<Card>` in the running engine — held in `store.Catalog` (and typically in a sibling `CardRegistry` for ergonomic typed lookup).
 
+**`CardDefinition : Scaffold.EntityDefinition, ISliceProvider`.** Adopts `ISliceProvider` from day one with a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Most card state is variables (in `EntityState` via the bridge); per-card non-variable slices are rare. Concrete `CardDefinition` subclasses override `GetInitialSlices()` only when they need additional per-card slices (e.g., a "spell-with-charges" record, an "attack history" log). The factory walks instances at spawn time and installs returned slices keyed at `card.SelfRef`. `Card` itself inherits `EntityInstance<TDef>`'s default `ISliceProvider` implementation, which delegates to the definition.
+
 ## CardRef
 
 `CardRef` is the temporary reference used in client-visible state — zones, indices, anything that gets sent to or read by clients. It rotates on every move and on every visibility transition.

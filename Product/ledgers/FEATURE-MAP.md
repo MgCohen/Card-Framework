@@ -26,7 +26,8 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`actions`](features/actions/actions.md) | settled | 2 | Command pipeline (intent → command → handler → state) + availability snapshot. |
 | [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Async orchestration of action sequences. Replacement / prevention. Ongoing effects. Effect-flow contract (services, decision threading, mutation discipline). |
-| [`engine`](features/engine/engine.md) | settled | 6 | Evaluation loop, `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot pipeline, GameState slice catalog, game factory, match lifecycle. The simulation core. |
+| [`engine`](features/engine/engine.md) | settled | 7 | Evaluation loop, `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot pipeline, GameState slice catalog, game factory, match lifecycle, `GameDefinition` bundle + `ISliceProvider` mechanism. The simulation core. |
+| [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
 | `interaction` | **considered** | — | Input gesture → `PlayerIntent` translation. Drag/drop/click/target. The interaction layer per ARCHITECTURE. |
@@ -47,6 +48,7 @@ graph TD
 
   entities[entities]
   zones[zones]
+  players[players]
   engine[engine]
   actions[actions]
   triggers[triggers]
@@ -57,13 +59,17 @@ graph TD
   interaction[interaction]:::considered
   networking[networking]:::considered
 
+  players --> entities
+  players --> zones
   triggers --> engine
   actions <--> engine
   presentation --> engine
   presentation --> actions
+  engine --> players
 
   authoring -.-> entities
   authoring -.-> zones
+  authoring -.-> players
   interaction -.-> presentation
   networking -.-> engine
 ```
@@ -98,8 +104,12 @@ Solid arrows = current `references` edges between settled features. Dashed arrow
 - [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`, `engine/05`
 - [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — settled, references: `engine/02`, `actions/02` ⚠️ (see cycle)
 - [`models/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — settled, references: `engine/01`
-- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/06`
+- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/06`, `engine/07`
 - [`models/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/05`
+- [`models/07-game-definition.md`](features/engine/models/07-game-definition.md) — settled, references: `engine/05`, `engine/04`, `engine/02`, `zones/01`, `cards/01`, `players/01`, `entities/01`
+
+### `players` (settled)
+- [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/07`, `zones/01`, `decisions/0005`
 
 ### `presentation` (settled)
 - [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, references: `actions/02`, `engine/03`

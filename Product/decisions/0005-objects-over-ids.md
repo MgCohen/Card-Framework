@@ -34,9 +34,11 @@ The zone-model design pass (session-20260501-1602) surfaced this concretely. Zon
 
 ## Decision
 
-**Framework APIs prefer objects.** Code holds and passes domain objects (`Zone`, `Card`, `EntityInstance<TDef>`, `Player`, `Actor`, etc.); methods on those objects perform the queries and dispatches that previously took raw `Identifier<T>` values. Slice access uses the object as the key (e.g., `state.Get<ZoneContentsState>(zone)`).
+**Framework APIs prefer objects.** Code holds and passes domain objects (`Zone`, `Card`, `EntityInstance<TDef>`, `Player`, `IActor`, etc.); methods on those objects perform the queries and dispatches that previously took raw `Identifier<T>` values. Slice access uses the object as the key (e.g., `state.Get<ZoneContentsState>(zone)`).
 
 **`Reference` is the framework's polymorphic addressable type.** Anything addressable in the framework carries a typed `Ref<TSubclass> : Reference` identity. Polymorphic APIs that take "any addressable thing" type their parameter as `Reference`. Concrete entity handles (`Card`, `Zone`, `Player`) carry typed `Ref<TSubclass> SelfRef` fields.
+
+**`IActor` is the framework's polymorphic actor type.** `interface IActor { ActorId Id; }`. Concrete actors are either entity-backed (`Player : EntityInstance<PlayerDefinition>, IActor`) or lightweight non-entity records implementing `IActor` directly (`World`, `Environment`, `Bot`, `Market`). Code that needs "any actor" types its parameter as `IActor`. `OwnershipState` keys `Reference → IActor` for the runtime mutable owner relationship.
 
 ```csharp
 // Scaffold.States
@@ -48,11 +50,13 @@ The hierarchy:
 - `Reference` — abstract record base; the polymorphic addressable type.
 - `Ref<T>` — sealed record subtype, backed by `Guid`; the typed runtime identity for catalog-registered handles.
 - `EntityInstance<TDef>` — single entity handle class; pairs `(Definition, Storage)`. Identity-free at the base.
+- `IActor` — interface carrying `ActorId`; the polymorphic actor type. Implemented by entity-backed `Player` and by lightweight non-entity actor records.
 
 Concrete implementations:
 - `Card : EntityInstance<CardDefinition>` carries `Ref<Card> SelfRef`.
 - `Zone : EntityInstance<ZoneDefinition>` carries `Ref<Zone> SelfRef`.
-- `Player : EntityInstance<PlayerDefinition>` carries `Ref<Player> SelfRef`.
+- `Player : EntityInstance<PlayerDefinition>, IActor` carries `Ref<Player> SelfRef` and `ActorId Id`.
+- Non-entity actors: `sealed record World(ActorId Id) : IActor`; same shape for `Environment`, `Bot`, `Market`.
 
 Catalog-registered handles are resolved via `store.Catalog.Resolve(ref)`. Subscriptions key on the typed `Ref<T>` (e.g., `store.Subscribe<EntityState>(card.SelfRef, ...)`) and survive `CardRef` rotations.
 

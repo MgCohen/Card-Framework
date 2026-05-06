@@ -19,20 +19,31 @@ Audience: handler authors, effect authors, presentation projections, replay/snap
 Every entity at runtime is referenced through a typed handle:
 
 ```csharp
-public class EntityInstance<TDef> where TDef : IEntityDefinition
+public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinition
 {
     public TDef                     Definition { get; }
     public IEntityVariableStorage   Storage    { get; }
+
+    // Default: instance delegates to its definition for initial slices.
+    // Override in subclasses for spawn-time customization (rare).
+    public virtual IEnumerable<BaseState> GetInitialSlices()
+        => Definition is ISliceProvider provider
+            ? provider.GetInitialSlices()
+            : Array.Empty<BaseState>();
 }
 ```
 
 `EntityInstance<TDef>` is identity-free at the base. Concrete subclasses (`Card`, `Zone`, `Player`) carry typed `Ref<TSubclass> SelfRef` — the stable runtime identity. Storage is `IEntityVariableStorage` — typically `StoreVariableStorage(store, selfRef)` for store-backed variables, or `LocalVariableStorage(parent)` for overlays.
 
-The handle exposes everything callers need: read access, mutation, subscriptions. Concrete subclasses add their typed identity. Spawn through `store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) or the typed subclass helper (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`). Live handles are resolved from the catalog: `store.Catalog.Resolve(selfRef)`.
+The handle exposes everything callers need: read access, mutation, subscriptions, slice declaration. Concrete subclasses add their typed identity. Spawn through `store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) or the typed subclass helper (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`). Live handles are resolved from the catalog: `store.Catalog.Resolve(selfRef)`.
 
 `EntityInstance<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityState` rows; handles are re-created from the catalog after `LoadSnapshot`.
 
-**`Ref<T>` vs `ActorId`.** Concrete subclasses carry `Ref<TSubclass> SelfRef` — typed runtime identity backed by `Guid`, allocated by `store.Catalog.AllocateRef<T>()`. `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). An actor that is *also* an entity (a player with health/mana variables) carries both — `ActorId` on the actor, `Ref<Player>` on the entity handle; the game maintains the mapping. System / AI / environment actors have an `ActorId` but no entity handle. See [`GLOSSARY.md`](ledgers/GLOSSARY.md) — `Actor`, `ActorId`, `Ref<T>` rows.
+**`ISliceProvider` on both Definition and Instance.** Both `EntityDefinition` and `EntityInstance<TDef>` implement `ISliceProvider`. Default implementation on the instance delegates to the definition; this lets the factory's spawn loop work instance-centric (`foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`) without reaching back into definitions per spawn. Concrete subclasses override on the instance side only when spawn-time customization is needed (rare). See [Game Definition](features/engine/models/07-game-definition.md) for the factory's spawn-walk pseudocode.
+
+**Slices don't carry their own primary key.** Storage is keyed externally by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice *values* (e.g., `LastMoveState(Ref<Card>, From, To)`) are *data*, not keys. This convention applies uniformly across framework slices (`EntityState`, `ZoneContentsState`, `OwnershipState`, etc.).
+
+**`Ref<T>` vs `ActorId`.** Concrete subclasses carry `Ref<TSubclass> SelfRef` — typed runtime identity backed by `Guid`, allocated by `store.Catalog.AllocateRef<T>()`. `ActorId` is a distinct concept identifying *who issues* a command, used in command attribution, history envelopes (`HistoryEnvelope.actor`), and per-actor available-action queries (`GetActionsFor(ActorId)`). `Player` carries both — `ActorId` on the `IActor` interface, `Ref<Player>` on the entity handle. Non-entity actors (`World`, `Environment`, `Bot`, `Market`) implement `IActor` directly with just an `ActorId`. See [`GLOSSARY.md`](ledgers/GLOSSARY.md) — `IActor`, `ActorId`, `Ref<T>` rows.
 
 ---
 

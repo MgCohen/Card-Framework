@@ -11,32 +11,31 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Domain modeling design pass landed (2026-05-06) — **13 questions settled**, no doc edits yet. Locked: bridge coverage (Card/Zone/Player all on `EntityInstance<TDef>`); `Actor` as `IActor` interface; `ISliceProvider` parameterless on both Definition and Instance (instance delegates to definition); slices externally keyed; two-tier ownership (declarative zone layout + runtime `OwnershipState`); `GameDefinition` standard bundle (`Rules + SharedZones + CardCatalog + DefaultPlayerDefinition + GetInitialSlices()`); `MatchSetup = (GameDefinition, Actors, Seed) + three overlays`; `CardDefinition` adopts `ISliceProvider` from day one; no framework aggregates this pass; `IDefinition` marker deferred. Patch cascade is the next thread: ~10 docs touched, including a new `engine/07-game-definition.md` and a new `players/` feature.
+Domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into the canonical Models:
 
-Plan A/B/C doc cascade **landed** ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)). Scaffold-side Plan C (`com.scaffold.entities.states` bridge cleanup) shipped in [Scaffold#45](https://github.com/MgCohen/Scaffold/pull/45). Project-side cascade rewrote every model doc that referenced the retired Scaffold types. Plan statuses in `PLANS/Scaffold/` flipped: A/B/C `landed`, D `partially-landed` (Phase 2 docs done; Phase 1 code migration deferred — repo is doc-models-only).
+- New `Product/features/engine/models/07-game-definition.md` — `GameDefinition` bundle shape, `ISliceProvider` mechanism, layout-block contract, factory `Build` walk pseudocode, ownership-vs-zone-assignment two-tier model.
+- New `Product/features/players/players.md` + `Product/features/players/models/01-player-model.md` — `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions.
+- `Product/features/engine/models/05-game-factory.md` — `MatchSetup = (GameDefinition, Actors, Seed) + 3 overlays`; `IMatchBuilder` updated; validation against new shape; Pile Counter example reshaped to use `PileCounterGameDefinition`; `oq-game-definition` removed from open follow-ups.
+- `Product/features/{cards,zones,entities}/models/01-*.md` + `entities/02-runtime-surface.md` — `ISliceProvider` adopted on `CardDefinition`/`ZoneDefinition`/`EntityDefinition`/`EntityInstance<TDef>` with instance-delegates-to-definition default; "slices don't carry their primary key" convention pinned.
+- `Product/decisions/0005-objects-over-ids.md` — `IActor` interface added to the polymorphic-types section.
+- `Product/ledgers/GLOSSARY.md` — Updated `Actor`/`Player`/`Owner` entries; new entries for `IActor`, `GameDefinition`, `PlayerDefinition`, `ISliceProvider`, `ZoneOverlay`, `PlayerDefinitionOverlay`.
+- `Product/ledgers/FEATURE-MAP.md` — `players` row added; engine model count bumped to 7; Mermaid graph extended.
+- `Product/ledgers/OPEN-ITEMS.md` — `oq-game-definition` resolved; `bl-actor-ownership-reverse-index` added (deferred Q5 sub-question).
+- `Product/spikes/domain-model-proposal.md` — flipped to `superseded` with resolution rationale (locked decisions live in the cascade).
 
-Entities-bridge spike resolved (2026-05-06) — **superseded** in favor of keeping the bridge (five of the spike's strongest arguments mooted by Plan A/B/C; remaining concerns don't justify a rewrite).
-
-Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
+Plan A/B/C doc cascade **landed** earlier in this session ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)). Entities-bridge spike resolved superseded. Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
 
 ---
 
 ## 🎯 Active focus
 
-Patch cascade for the domain modeling design pass — propagate the 13 locked decisions into the canonical Models. Touch list:
+No active thread. Possible next directions:
 
-- `engine/05-game-factory.md` — `MatchSetup` reshape (Q10), `GameDefinition` parameter (Q9), `Build` ordering corollary (Q7).
-- New `engine/07-game-definition.md` — `GameDefinition` bundle shape, `ISliceProvider` mechanism, layout-block contract, `Build` walk pseudocode.
-- `zones/01-zone-model.md` — `ZoneDefinition : ISliceProvider`; declarative layout block on `GameDefinition.SharedZones` / `PlayerDefinition.PerPlayerZones`.
-- New `players/` feature — `Player : EntityInstance<PlayerDefinition>, IActor`, `PlayerDefinition` shape, per-player slice convention (Q6).
-- `cards/01-card-model.md` — `CardDefinition : ISliceProvider` with default empty implementation; instance-delegates-to-definition spawn pathway.
-- `entities/01` + `entities/02` — `ISliceProvider` on both Definition and Instance; "slices don't carry their primary key" convention pinned.
-- `GLOSSARY.md` — Add `IActor`, `ISliceProvider`, `GameDefinition`, `PlayerDefinition`, `MatchSetup` overlays; update `Actor` (interface) and `Player` (on bridge + IActor) entries.
-- `OPEN-ITEMS.md` — close `oq-game-definition`; add `bl-actor-ownership-reverse-index` (deferred Q5 sub-question).
-- `FEATURE-MAP.md` — add `players` feature row.
-- `spikes/domain-model-proposal.md` — flip to `superseded`; locked decisions live in the eventual Models.
+- **Resolve top open items.** Highest-leverage durable questions left: `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async cancellation), `oq-attachment-storage` (attachment home — sub-zone vs registry vs dedicated zone).
+- **Promote a `considered` feature.** `authoring`, `interaction`, or `networking` move from considered to draft when triggered (typically: first feature reaches `implemented`, or a vertical-slice prototype forces it).
+- **First vertical-slice prototype.** Pile Counter sample is the canonical reference; building the actual `PileCounterGameDefinition` against the now-settled domain model would force-test the design.
 
-Out of scope (still): commands, handlers, mutators, services, runtime composition (already designed).
+Pick a thread when ready.
 
 ---
 
@@ -44,9 +43,9 @@ Out of scope (still): commands, handlers, mutators, services, runtime compositio
 
 See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
 
-- `oq-game-definition` — `GameDefinition` bundle + definition-declared slice schema. Load-bearing for asset-driven match construction.
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 - `oq-effect-cancellation-on-match-end` — async-effect cancellation when the match ends mid-await. Surfaced from the lifecycle pass.
+- `oq-attachment-storage` — where attachments (equipment, auras, buffs) live: sub-zone, global registry, or dedicated zone.
 
 ---
 
@@ -54,23 +53,7 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-### Locked decisions — domain modeling design pass (2026-05-06)
-
-13 questions settled. Decisions live here until the patch cascade lands them in the canonical Models.
-
-- **Q1 = B** — Card/Zone/Player all extend `EntityInstance<TDef>`; their definitions all extend `Scaffold.EntityDefinition`.
-- **Q2 = B** — `PlayerDefinition` adopts `ISliceProvider` from day one.
-- **Q3 = A** — `Actor` is an interface (`IActor` carrying `ActorId`); `Player : EntityInstance<PlayerDefinition>, IActor`. Non-entity actors are lightweight records implementing `IActor`. Actor's purpose stays narrow — subject to revisit.
-- **Q4 = D** — `ISliceProvider` is parameterless: `IEnumerable<BaseState> GetInitialSlices()`. Implemented on both Definition and Instance; instance delegates to definition by default. **Slices don't carry their primary key**; storage is keyed externally by the factory at the instance's `SelfRef`.
-- **Q5 = A** — Two-tier ownership: zone assignment is declarative (layout blocks); `OwnershipState` shrinks to runtime mutable card ownership. Reverse-index deferred.
-- **Q6 = C** — Per-player slice shape convention: per-player-keyed for substantial state; singleton-with-dict for cross-cutting indexes.
-- **Q7 = A** — Actor-aware singletons (`TurnState.Active`) start with default/null; setup commands populate after `StartMatch`. Build orders per-spawn instances first, game singletons second.
-- **Q8 = B** — Zone layout: declarative blocks on `GameDefinition.SharedZones` / `PlayerDefinition.PerPlayerZones` + `MatchSetup.ZoneOverlay` escape hatch.
-- **Q9 = B** — `GameDefinition` shape: `Rules + SharedZones + CardCatalog + DefaultPlayerDefinition + GetInitialSlices()`.
-- **Q10 = A** — `MatchSetup = (GameDefinition, Actors, Seed) + 3 overlays` (`InitialSlices`, `ZoneOverlay`, `PlayerDefinitionOverlay`). `Rules` moves out of `MatchSetup`.
-- **Q11 = A** — `CardDefinition` adopts `ISliceProvider` from day one with default empty implementation.
-- **Q12 = B** — Defer `IDefinition` marker.
-- **Q13 = A** — No framework aggregates introduced this pass.
+*Scratch is empty — domain-modeling thread closed; locked decisions landed in the canonical Models.*
 
 ---
 
