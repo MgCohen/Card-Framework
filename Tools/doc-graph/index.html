@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Card-Framework — Doc Reference Graph</title>
+    <link rel="stylesheet" href="graph.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">
+        <strong>Doc Reference Graph</strong>
+        <span id="mode-label" class="mode-label">overview</span>
+      </div>
+      <div class="actions">
+        <button id="btn-overview" type="button">Overview</button>
+        <button id="btn-fit" type="button">Fit</button>
+        <span class="hint">click a feature to expand · click a node to read</span>
+      </div>
+    </header>
+
+    <main id="cy"></main>
+
+    <aside id="legend">
+      <div class="legend-row"><span class="swatch settled"></span> settled</div>
+      <div class="legend-row"><span class="swatch draft"></span> draft</div>
+      <div class="legend-row"><span class="swatch implemented"></span> implemented</div>
+      <div class="legend-row"><span class="swatch considered"></span> considered</div>
+      <div class="legend-row"><span class="swatch superseded"></span> superseded</div>
+      <div class="legend-row"><span class="edge-mark cycle"></span> bidirectional cycle</div>
+      <div class="legend-row"><span class="edge-mark cross"></span> cross-feature</div>
+    </aside>
+
+    <div id="modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card">
+        <header class="modal-head">
+          <div>
+            <h2 id="modal-title">—</h2>
+            <p id="modal-sub" class="modal-sub"></p>
+          </div>
+          <button id="modal-close" type="button" aria-label="Close">×</button>
+        </header>
+        <article id="modal-body" class="modal-body"></article>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/cytoscape@3.30.0/dist/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+    <script src="https://unpkg.com/marked@12.0.2/marked.min.js"></script>
+    <script src="graph.js"></script>
+  </body>
+</html>
