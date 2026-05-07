@@ -111,7 +111,7 @@ public sealed record CardVisibilityState : IState
 }
 ```
 
-Per-card runtime override on top of the zone's default policy (the policy itself lives on `ZoneDefinition` — see `features/zones/decisions/0002-visibility-model.md`). An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an `Owner`; collapses to `Hidden` if no `Owner`.
+Per-card runtime override on top of the zone's default policy (the policy itself lives on `ZoneDefinition` — see [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md)). An absent entry on the slice means "use the zone's policy default." `VisibleToOwner` requires the card to have an `Owner`; collapses to `Hidden` if no `Owner`.
 
 Rules read effective visibility through the card object: `card.IsVisibleTo(state, actor)` combines the zone policy and per-card override.
 
@@ -240,7 +240,7 @@ public static class StoreExtensions
 
 *Below: provenance — what was considered, why we chose this, what it constrains. Originally landed as `features/cards/decisions/0001-card-shape.md` (2026-05-01); folded into Model provenance per §4.5 on 2026-05-07 (single-feature scope — decision is about Card shape; entities and zones provide abstractions this consumes, not co-decisions).*
 
-The zone-model design pass surfaced that the framework had no explicit answer to "where does a card live as data?" The entities Model implied cards exist as `StateEntity<TDef>` handles, but those handles were anchored in an engine-side `InstanceId → (definition, store)` registry — engine-state, not Store-state. That registry has to be re-built on `LoadSnapshot` and lives outside the snapshot/rollback system. A second concern surfaced from the visibility design (`features/zones/decisions/0002-visibility-model.md`): client visibility is best supported by the framework giving cards a temporary reference (`CardRef`) that can rotate when the card hides or moves.
+The zone-model design pass surfaced that the framework had no explicit answer to "where does a card live as data?" The entities Model implied cards exist as `StateEntity<TDef>` handles, but those handles were anchored in an engine-side `InstanceId → (definition, store)` registry — engine-state, not Store-state. That registry has to be re-built on `LoadSnapshot` and lives outside the snapshot/rollback system. A second concern surfaced from the visibility design ([`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md)): client visibility is best supported by the framework giving cards a temporary reference (`CardRef`) that can rotate when the card hides or moves.
 
 ## Options considered
 
@@ -252,7 +252,7 @@ The zone-model design pass surfaced that the framework had no explicit answer to
 
 ### Q2 — dual-ID model (`InstanceId` + `CardRef`)
 
-- **A — Single stable `InstanceId` everywhere; transport-time alias for visibility** (option (b) from `zones/decisions/0002`, original). Rejected: requires per-actor transport-side machinery that differs from local execution; "play the same locally vs networked" principle pushes against this.
+- **A — Single stable `InstanceId` everywhere; transport-time alias for visibility** (option (b) from `decisions/0006-zone-visibility-model.md`, original). Rejected: requires per-actor transport-side machinery that differs from local execution; "play the same locally vs networked" principle pushes against this.
 - **B — Single ephemeral ID, no stable identity.** Rejected: history, replay, and server-internal subscriptions need a stable cross-time identity.
 - **C — Two IDs: stable `InstanceId` (server-internal, history, serialization) + ephemeral `CardRef` (client-visible state, rotates on hide/move).** **Chosen.**
 
@@ -272,7 +272,7 @@ The zone-model design pass surfaced that the framework had no explicit answer to
 
 `CardMapState` is the canonical "this card exists" slice, mapping `CardRef → Card` plus the parallel reverse index. Holds `Card` objects directly (one live handle per `InstanceId`). Replaces the engine-side handle registry — putting the registration on the Store gives snapshot/rollback for free.
 
-`CardRef` is a temporary reference that rotates on every move (per `zones/decisions/0003-insertion-api.md` and the move mutation contract) and on every visibility transition (per `zones/decisions/0002-visibility-model.md`). It is **not** an `Identifier<T>` — it is deliberately unstable.
+`CardRef` is a temporary reference that rotates on every move (per [`features/zones/models/01-zone-model.md` § Insertion API](features/zones/models/01-zone-model.md) and the move mutation contract) and on every visibility transition (per [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md)). It is **not** an `Identifier<T>` — it is deliberately unstable.
 
 Two IDs coexist: `InstanceId` (stable, used for variable storage, modifier storage, ownership, visibility, history, all server-internal subscriptions) and `CardRef` (temporary, used as `CardMapState` key, in `ZoneContentsState`, in client-visible projections).
 
@@ -282,5 +282,5 @@ Mutations that write `CardMapState` carry the new `CardRef` as a payload field. 
 
 - **Enables:** cards have a clear canonical home on the Store (snapshot/rollback works); the framework supports privacy across reveal-then-hide cycles via server-side ref rotation; "play the same locally vs networked" — the same `CardRef` rotation runs in both modes; server-internal subscriptions reference Cards by `Card` object or `InstanceId` and are unaffected by ref rotation.
 - **Constrains:** any state slice or projection that is sent to clients must reference cards by `CardRef`, not by `InstanceId` (otherwise the privacy filter doesn't work). Server-internal state must reference cards by `Card` or `InstanceId`, not by `CardRef` (otherwise rotations cascade through subscribers).
-- **Reverts/replaces:** `zones/decisions/0002` (visibility model) original "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. The zones ADR has been updated to reflect this.
+- **Reverts/replaces:** [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md) original "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. The zones ADR has been updated to reflect this.
 - **Cascade:** existing references to card identity in `effects/`, `engine/`, `actions/`, `presentation/` need a sweep — server-internal vs client-visible distinction. Surfaced on demand by `/builder:lint` (per §5.7).

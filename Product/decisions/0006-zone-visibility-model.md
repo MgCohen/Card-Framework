@@ -1,14 +1,15 @@
 ---
 type: adr
 status: accepted
-tags: [#adr, #zones, #visibility, #history, #cards]
+references: [features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/presentation/models/01-presentation-loop.md]
+tags: [#adr, #zones, #cards, #presentation, #visibility, #history]
 ---
 
-# ADR-0002 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
+# ADR-0006 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
 
-Date: 2026-05-01
-Context-doc: features/zones/models/01-zone-model.md
-Proposal: session-20260501-1602-zone-model-internal-opens
+Date: 2026-05-01 (originally landed as `features/zones/decisions/0002`; elevated to project-wide on 2026-05-07 per §4.5 — visibility mechanism requires coordinated implementation across zones, cards, and presentation).
+
+Context-doc: `features/zones/models/01-zone-model.md`
 
 ## Context
 
@@ -24,6 +25,8 @@ Initial framing: server is omniscient; visibility is a send-time filter. "Visibl
 
 A guiding principle surfaced during the design pass: **the simulation should play the same locally and over the network. The only allowed difference is information being cut to actors who shouldn't see it — not data being changed per actor.** This forecloses the original "per-actor transport alias" mechanism (which changed IDs per actor) in favour of server-side `CardRef` rotation (canonical state changes; all observers see the same IDs; visibility filter only cuts data, never alters IDs).
 
+Why this is project-wide rather than feature-internal: the mechanism requires coordinated implementation across **three** features. `zones/` owns the policy on `ZoneDefinition`. `cards/` owns the per-card flag (`CardVisibilityState`), the `CardRef` rotation mutators, and the predicate (`card.IsVisibleTo`). `presentation/` owns the transport-boundary filter that cuts data per actor. Each feature's owned surface must implement compatibly — a single ADR captures the contract.
+
 ## Options considered
 
 For the visibility query API:
@@ -34,7 +37,7 @@ For the visibility query API:
 For the privacy mechanism (re-hide tracking):
 - **A — Per-actor transport alias.** Server keeps stable canonical `InstanceId`; per-actor alias map at the network boundary; clients receive aliased IDs. Rejected: changes data per actor (the ID one client sees ≠ canonical ID), violates the "same locally and networked" principle, requires transport-only machinery that doesn't run locally.
 - **B — Simulation-level `InstanceId` reissue.** Mutate `InstanceId` on re-hide; cascade through slices, triggers, effects. Rejected: invasive; breaks the "InstanceId stable across moves" invariant; forces every subscriber to follow ID changes.
-- **C — Two IDs: stable `InstanceId` + ephemeral `CardRef` rotated server-side.** Server canonical state has both IDs. `InstanceId` is stable forever (used for variable storage, modifier storage, history, server-internal subscriptions). `CardRef` is ephemeral and rotates on every visibility transition (and on every move per ADR-0003). All observers see the same `CardRef` — local and remote alike. The privacy filter cuts data, not IDs. Chosen.
+- **C — Two IDs: stable `InstanceId` + ephemeral `CardRef` rotated server-side.** Server canonical state has both IDs. `InstanceId` is stable forever (used for variable storage, modifier storage, history, server-internal subscriptions). `CardRef` is ephemeral and rotates on every visibility transition (and on every move per the Card Model). All observers see the same `CardRef` — local and remote alike. The privacy filter cuts data, not IDs. Chosen.
 
 For zone visibility policy:
 - **A — Definition-only.** Chosen. Most games don't need runtime-mutable zone-wide visibility transitions. The per-card flag covers per-card runtime variation.
@@ -56,7 +59,7 @@ For history filtering:
 
 **Zone visibility policy is authored on the `ZoneDefinition`.** The policy expresses per-actor-role rules across the two channels — e.g., "visible to owner, count-only to others" (hand), "hidden to all" (deck contents), "visible to all" (battlefield). The policy is static; runtime variation comes only from the per-card flag.
 
-**Per-card flag** lives on `CardVisibilityState` (defined in the [Card Model § Card Visibility](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `InstanceId`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+**Per-card flag** lives on `CardVisibilityState` (defined in [Card Model § `CardVisibilityState`](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `InstanceId`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
 
 **Rules read visibility via the card object:** `card.IsVisibleTo(state, actor)` delegates to the slice and combines with the zone's policy. Visibility-conditional rules and triggers branch on this read.
 
@@ -71,7 +74,7 @@ All observers — local and networked — see the canonical new `CardRef`. There
 
 Conservative rotation policy: every visibility transition rotates the ref (Hide → Hidden, Show → VisibleToAll, ShowToOwner → VisibleToOwner — all rotate). This prevents observers from learning continuity across reveal cycles.
 
-**Per ADR-0003 (insertion API), every move also rotates the `CardRef`.** This is the same mechanism — `MoveCardMutation { Card, NewRef, ... }` carries a fresh ref. Hide and move share the privacy property: an observer who briefly saw a card cannot identify it later by its old ref.
+**Every move also rotates the `CardRef`.** This is the same mechanism — `MoveCardMutation { Card, NewRef, ... }` carries a fresh ref. Hide and move share the privacy property: an observer who briefly saw a card cannot identify it later by its old ref.
 
 **History is a single canonical record on the server.** `HistoryEnvelope` entries use canonical `InstanceId`s and full data. Per-actor transport applies two transformations:
 
@@ -84,5 +87,5 @@ For genuinely-secret movements (where even the fact must be hidden from observer
 
 - **Enables:** server-side rules can branch on visibility with a one-line predicate; the same `CardRef` rotation runs locally and over the wire — no per-actor ID divergence; reveal-then-hide privacy works without breaking simulation-side invariants on `InstanceId`; the framework's transport filter is purely a *data cutter*, not a transformer.
 - **Constrains:** server-internal subscriptions (triggers, effects, attachments, history references intended for subscriber dispatch) must use `Card` objects or `InstanceId` — never `CardRef` — otherwise rotations break them. Client-visible state and projections must use `CardRef` — otherwise the privacy mechanism doesn't apply.
-- **Reverts:** the original ADR-0002 selected per-actor transport alias for the privacy mechanism. This was reversed in the same session per the "play the same locally vs networked" principle. The `Ephemeral Instance ID` glossary entry that referred to the old transport-alias model is deprecated; the framework no longer maintains a per-actor alias map.
-- **Audit:** asymmetric reveals (visible to one specific opponent only) are deferred — a game that needs them models the reveal as a transient game-state slice ("opponent X currently knows card Y") separate from the canonical visibility flag.
+- **Reverts/replaces:** the original ADR-0002 selected per-actor transport alias for the privacy mechanism. This was reversed in the same session per the "play the same locally vs networked" principle. The `Ephemeral Instance ID` glossary entry that referred to the old transport-alias model is deprecated; the framework no longer maintains a per-actor alias map.
+- **Cascade:** asymmetric reveals (visible to one specific opponent only) are deferred — a game that needs them models the reveal as a transient game-state slice ("opponent X currently knows card Y") separate from the canonical visibility flag. Surfaced on demand by `/builder:lint` (per §5.7).
