@@ -1,26 +1,15 @@
 ---
 type: model
 status: settled
-references: root
+references: [features/engine/models/01-evaluation-loop.md, features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md]
 tags: [#effects, #async, #suspension]
 ---
 
 # Async Decisions And Suspension
 
-This document defines how the engine handles effects that require player input — targeting, choices, mulligans — and establishes the layer hierarchy that makes async orchestration tractable.
+## What it is
 
-Builds on:
-
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, `GameRules`, `OnQueueDrained`
-- [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — type hierarchy, trigger fold
-- [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — pipeline, envelope, handler flow
-- [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — composite actions and scope
-
----
-
-## 1. The Layer Hierarchy
-
-Three distinct layers handle game logic, and each has exactly one job:
+How the engine handles effects that require player input — targeting, choices, mulligans — and the layer hierarchy that makes async orchestration tractable. Three distinct layers participate, each with one job: **Effects** orchestrate `GameAction`s (the only layer that can sequence commands), **`GameAction` handlers** apply state changes (synchronous, return a `CommandResult`), and **`CompositeAction`s** group state mutations for reuse inside a handler. Decisions are not a special pipeline concept — they're `GameAction`s whose handlers await player response.
 
 ```
 Effect
@@ -28,6 +17,10 @@ Effect
         └── GameAction applies StateMutations — atomic, single envelope, synchronous handler
               └── CompositeAction groups StateMutations — reusable unit inside a handler
 ```
+
+## Contracts
+
+### The layer hierarchy
 
 | Layer | Job | Can sequence commands? | Async? | Envelope |
 |---|---|---|---|---|
@@ -37,9 +30,7 @@ Effect
 
 This hierarchy is the key constraint. Only effects sequence commands. A `GameAction` handler may use `CompositeAction`s internally, but it never dispatches other `GameAction`s — that is the effect's responsibility.
 
----
-
-## 2. Two Dispatch Paths
+### Two dispatch paths
 
 There are two ways a `GameAction` can be executed, and they are not interchangeable:
 
@@ -64,9 +55,7 @@ public async Task Execute(IEffectScope scope)
 
 The engine is effectively paused on `await pipeline.Execute(ExecuteCardAction)` for the entire duration of the effect chain. It will not dequeue the next engine-queued action until the effect — including any player input it waits for — has fully completed. Whether this is acceptable is game-specific.
 
----
-
-## 3. Decisions As Commands
+### Decisions as commands
 
 A decision (choose a target, pick an option) is not a special pipeline concept. It is a `GameAction` that:
 
@@ -87,13 +76,63 @@ public sealed record RequestTargetResult : CommandResult
 }
 ```
 
-The effect receives the `CommandResult` and passes the resolved target directly into the next dispatch. No partial envelopes, no suspension inside a handler, no special engine state for in-progress decisions.
+The effect receives the `CommandResult` and passes the resolved target directly into the next dispatch. No partial envelopes, no suspension inside a handler, no special engine state for in-progress decisions. The mid-execution mechanics (how the handler awaits, how player intent resolves the await) are settled in [`04-effect-flow.md`](features/effects/models/04-effect-flow.md).
 
----
+### What the client sees
 
-## 4. Concrete Scenarios
+Because each `GameAction` publishes its own complete envelope before the next begins:
 
-### Scenario A — Targeted Spell
+- The client always sees fully committed state — no partial or speculative state.
+- A decision command's envelope can carry a `DecisionOpenedSignal` that tells the client to show the appropriate UI (target highlights, choice overlay, etc.).
+- While the decision is open, the client has all prior envelopes and can render the current state accurately.
+- When the decision resolves, the result is in the `CommandResult` and recorded in history.
+
+No partial envelopes needed. No mid-execution state visible to the client.
+
+### Envelope shape for decisions
+
+A decision command's envelope is lightweight:
+
+```
+HistoryEnvelope
+  cause: { actor, chain ID, origin intent }
+  entries:
+    - DecisionOpenedSignal { type: Target, filter: EnemyFilter }
+    - DecisionResolvedSignal { chosen: instanceId X }
+  result: RequestTargetResult { Target: X }
+```
+
+`DecisionOpenedSignal` and `DecisionResolvedSignal` are `GameSignal`s — they pass through the trigger fold (other cards may react to a player being forced to choose), but have no handler.
+
+### `IEffectScope`
+
+The effect interacts with the pipeline through an `IEffectScope`:
+
+```csharp
+public interface IEffectScope
+{
+    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
+    IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
+    Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
+}
+```
+
+`IEffectScope.Dispatch` runs the action **immediately and inline** — before fold → handler → after fold → envelope published — and returns the `CommandResult`. The effect is suspended at the `await` until the action completes. The engine queue is not involved; the action never enters it.
+
+`engine.Dispatch` and `scope.Dispatch` are not the same thing. An effect always uses the scope. Trigger reactions and evaluator follow-ups always use the engine. Mixing them would break the execution model. Full `IEffectScope` definition (including `Cancel` and `Replace` for trigger contexts, and `State` for read access) lives in [`04-effect-flow.md` §4.3](features/effects/models/04-effect-flow.md).
+
+## Invariants
+
+Model-local invariants. (See `effects.md ## Invariants` for feature-level rules.)
+
+- **The engine queue holds only `engine.Dispatch`-ed actions.** `scope.Dispatch` runs inline; the action never enters the queue.
+- **A single `await scope.Dispatch(...)` blocks the calling effect until the entire action lifecycle (before-fold → handler → after-fold → envelope) completes.** Including any decision the action requires.
+- **Decision envelopes are independent.** Each dispatched action publishes its own complete envelope; no partial envelopes; no mid-execution state visible to the client.
+- **`DecisionOpenedSignal` / `DecisionResolvedSignal` are `GameSignal`s.** They pass through trigger folds but have no handler.
+
+## Examples
+
+**Scenario A — Targeted Spell.**
 
 ```
 Effect: PlayFireballEffect
@@ -107,7 +146,7 @@ Effect: PlayFireballEffect
 
 Three envelopes. All clean. No command suspends. The effect awaits each one in sequence.
 
-### Scenario B — Choose One (Discover)
+**Scenario B — Choose One (Discover).**
 
 ```
 Effect: PlayDiscoverEffect
@@ -121,13 +160,9 @@ Effect: PlayDiscoverEffect
 
 Cost is paid before the choice is shown. The envelope for paying cost is published and visible to the client immediately. The client sees the card leave hand before the choice overlay appears.
 
-### Scenario C — Mulligan
+**Scenario C — Mulligan.** Mulligan is a pre-game session lifecycle event, not a mid-command decision. It does not go through the normal command pipeline. It is a session setup phase where each actor is presented a `MulliganDecision` directly, responds, and the session advances once all actors have confirmed. Whether mulligan is modelled as a specialized `GameAction` dispatched during session setup, or as a separate session lifecycle step, is a deferred design question tied to game lifecycle.
 
-Mulligan is a pre-game session lifecycle event, not a mid-command decision. It does not go through the normal command pipeline. It is a session setup phase where each actor is presented a `MulliganDecision` directly, responds, and the session advances once all actors have confirmed.
-
-Whether mulligan is modelled as a specialized `GameAction` dispatched during session setup, or as a separate session lifecycle step, is a deferred design question tied to game lifecycle (checkpoint task 12).
-
-### Scenario D — Mid-Chain Triggered Target
+**Scenario D — Mid-Chain Triggered Target.**
 
 ```
 Effect: PlaySpellEffect
@@ -144,71 +179,35 @@ Triggered ability is itself an effect:
 
 Each envelope is independent. The triggered ability dispatches through the normal channel. `GameRules.OnIncomingCommand` decides scheduling (RunNext, Enqueue, Stash). No special case needed.
 
----
-
-## 5. What The Client Sees
-
-Because each `GameAction` publishes its own complete envelope before the next begins:
-
-- The client always sees fully committed state — no partial or speculative state.
-- A decision command's envelope can carry a `DecisionOpenedSignal` that tells the client to show the appropriate UI (target highlights, choice overlay, etc.).
-- While the decision is open, the client has all prior envelopes and can render the current state accurately.
-- When the decision resolves, the result is in the `CommandResult` and recorded in history.
-
-No partial envelopes needed. No mid-execution state visible to the client.
-
----
-
-## 6. Envelope Shape For Decisions
-
-A decision command's envelope is lightweight:
-
-```
-HistoryEnvelope
-  cause: { actor, chain ID, origin intent }
-  entries:
-    - DecisionOpenedSignal { type: Target, filter: EnemyFilter }
-    - DecisionResolvedSignal { chosen: instanceId X }
-  result: RequestTargetResult { Target: X }
-```
-
-`DecisionOpenedSignal` and `DecisionResolvedSignal` are `GameSignal`s — they pass through the trigger fold (other cards may react to a player being forced to choose), but have no handler.
-
----
-
-## 7. Effect Scope
-
-The effect interacts with the pipeline through an `IEffectScope`:
-
-```csharp
-public interface IEffectScope
-{
-    IEntityRegistry   Entities  { get; }    // entity handle lookup (read paths)
-    IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
-    Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
-}
-```
-
-`IEffectScope.Dispatch` runs the action **immediately and inline** — before fold → handler → after fold → envelope published — and returns the `CommandResult`. The effect is suspended at the `await` until the action completes. The engine queue is not involved; the action never enters it.
-
-`engine.Dispatch` and `scope.Dispatch` are not the same thing. An effect always uses the scope. Trigger reactions and evaluator follow-ups always use the engine. Mixing them would break the execution model.
-
----
-
-## 8. Open Questions
+## Open follow-ups
 
 - **Effect registration** — where is an effect defined? On the card definition as a typed class? As a reference from the handler? How does the engine know which effect to run for a given `GameAction`?
-- **Effect cancellation** — if the `OnBefore<T>` fold cancels a `GameAction` mid-effect, does the effect stop? Does it receive a cancelled `CommandResult` and decide itself?
-- **Nested decisions** — can an effect dispatch a `RequestTargetAction` while another decision is already open (e.g. Scenario D with concurrent triggers)? How does the engine queue shape handle this?
+- **Effect cancellation** — if the `OnBefore<T>` fold cancels a `GameAction` mid-effect, does the effect stop? Does it receive a cancelled `CommandResult` and decide itself? (Settled in [`04-effect-flow.md` §Cancellation](features/effects/models/04-effect-flow.md): the effect inspects the result and decides.)
+- **Nested decisions** — can an effect dispatch a `RequestTargetAction` while another decision is already open (e.g. Scenario D with concurrent triggers)? How does the engine queue shape handle this? (Partial: Model 04 settles single-open per type-hierarchy as runtime assert.)
 - **Multiplayer visibility** — in a multiplayer game, does the `DecisionOpenedSignal` need to reach other clients before the deciding player has responded? Or is it sufficient for the full envelope to arrive after resolution?
-- **Mulligan lifecycle** — does mulligan go through the command pipeline at all, or is it a separate session setup phase? (Deferred to game lifecycle design, checkpoint task 12.)
-- **Effect as a first-class type** — should `Effect` be a named type in the framework, or is it just a convention for how game code is structured? Does it live on the definition?
+- **Mulligan lifecycle** — pipeline action vs separate session setup phase. Deferred to game lifecycle.
+- **Effect as a first-class type** — should `Effect` be a named type in the framework, or is it just a convention? (Settled first-class in [`04-effect-flow.md`](features/effects/models/04-effect-flow.md); recipe shape still open.)
 
 ---
 
-## 9. Related
+*Below: provenance — feature-internal decisions folded from `features/effects/decisions/0001-async-layer-hierarchy.md`. Single-feature scope (the layer hierarchy is internal to effects; other features consume the resulting types but don't co-decide them).*
 
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, Stash scheduling
-- [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — type hierarchy, trigger fold
-- [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — CompositeAction and scope utilities
-- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — async suspension open item
+## Options considered
+
+### Q1 — Async layer hierarchy (formerly ADR-0001 — folded)
+
+Async behavior in a card game spans several distinct kinds: animation handoff (presentation), decision wait (player input), simulation pause (rule), and resolver yield (engine). Treating all of them with one `Task` returned from a handler smears responsibilities.
+
+- **A — Single async layer (`Task<Result>` everywhere).** Rejected: conflates animation, decision, and simulation pauses.
+- **B — No async.** Rejected: real games need decisions and animation handoff.
+- **C — Layered hierarchy: presentation-async (animation), decision-async (player input via `IAvailableActions` decision-scoped snapshot), engine-async (resolver yield). Each layer has its own continuation/handle.** **Chosen.**
+
+## Rationale
+
+Async behavior is layered. Each layer owns its own continuation (animation, decision, engine yield). Effects compose across layers via the handler context, never by smashing them into one `Task`. This is the foundational shape that makes the rest of the effects feature tractable — replacement, prevention, ongoing effects, and decisions all build on it.
+
+## Consequences
+
+- **Enables:** clean handoffs and per-layer testability; effects compose across layers without conflating their semantics; decision-as-command pattern works (handler awaits player; effect awaits handler).
+- **Constrains:** handlers and effects must declare which layer they're awaiting. The two-dispatch-paths split (`engine.Dispatch` vs `scope.Dispatch`) is non-negotiable — using the wrong one breaks the execution model.
+- **Cascade:** the layer hierarchy is consumed by `triggers/01-trigger-fold` (the `GameCommand` type hierarchy reflects it), `engine/01-evaluation-loop` (the queue holds only engine-dispatched commands), and `actions/01-command-pipeline` (handlers execute synchronously within a single envelope).
