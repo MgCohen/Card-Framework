@@ -30,7 +30,7 @@ The feature is **data-driven**: there is one `Card` class. Game content lives in
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `StateEntity<TDef>`, `CardDefinition`, `IReference`, `InstanceId`, `Actor`, `CompositeAction`, `IState` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `StateEntity<TDef>`, `CardDefinition`, `IReference`, `InstanceId`, `Actor`, `CompositeAction`, `IState` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -43,9 +43,7 @@ Feature-owned terms. Cross-feature terms — `StateEntity<TDef>`, `CardDefinitio
 
 ## Architecture
 
-The feature has one Model — the Card Model — which defines the handle, the three state slices it reads (`CardMapState`, `OwnershipState`, `CardVisibilityState`), and the four `CompositeAction` mutations (`Create`, `Move`, `SetCardVisibility`, `Destroy`). All mutations that rotate the ref carry the new `CardRef` as a payload field so all sub-mutators within a composite see the same value, and replays are deterministic.
-
-Cards are read by passing state into accessor methods on the handle (`card.GetRef(state)`, `card.GetOwner(state)`, `card.IsVisibleTo(state, actor)`). There is no direct field access on cards.
+The feature has one Model. See `models/01-card-model.md` for the handle, three state slices (`CardMapState`, `OwnershipState`, `CardVisibilityState`), four `CompositeAction` mutations (`Create`, `Move`, `SetCardVisibility`, `Destroy`), and the read API.
 
 ## Composition
 
@@ -75,6 +73,8 @@ Feature-level rules that hold across the Model and shape how other features must
 - Effect orchestration of card lifecycle → `effects/`
 
 ## Dependencies
+
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
 
 - **Upstream:** `entities/` (the entity bridge `StateEntity<TDef>`), `zones/` (containment + visibility policy + insertion API).
 - **Downstream:** `actions/` (consumes mutations as `CompositeAction`), `effects/` (subscribes to card lifecycle), `engine/` (state slice infrastructure), `presentation/` (consumes card-keyed state via `CardRef`).
