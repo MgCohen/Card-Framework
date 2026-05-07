@@ -5,7 +5,7 @@ references: root
 tags: [#entities, #definition, #instance]
 ---
 
-# Entity, Definition, And Instance Model
+# Entity, Definition, And Instance Model — model
 
 ## What it is
 
@@ -209,6 +209,10 @@ Model-local invariants. (See `entities.md ## Invariants` for feature-level rules
 - **Attachments and equipment are usually separate instances.** Composition handlers calculate effective behavior from related instances + modifiers.
 - **Game-specific systems can replace, transform, destroy, or recreate instances explicitly.** No hidden replacement; explicit per-game behavior.
 - **Zone membership is a relationship or state, not the instance itself.** Zone movement preserves the instance by default.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

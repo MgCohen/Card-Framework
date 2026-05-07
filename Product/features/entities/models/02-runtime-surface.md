@@ -6,7 +6,7 @@ references:
 tags: [#entities, #runtime, #api]
 ---
 
-# Entity Runtime Surface
+# Entity Runtime Surface — model
 
 ## What it is
 
@@ -444,6 +444,10 @@ Model-local invariants. (See `entities.md ## Invariants` for feature-level rules
 - **Factory-only `ModifierId`.** The `IModifierFactory` is the only sanctioned producer of pre-populated `EntityModifierEntry` in framework/handler code. `new EntityModifierEntry(key, modifier)` falls back to `Guid.NewGuid()` and is forbidden.
 - **Reads-inside-batch are not allowed.** `ExecuteBatch` runs the whole sequence atomically; callers needing read-mutate-read split into separate `Execute` calls.
 - **Single mutator registration per Store.** `EntityBridgeContext.RegisterMutators(store)` runs once at engine bootstrap; duplicate calls throw.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

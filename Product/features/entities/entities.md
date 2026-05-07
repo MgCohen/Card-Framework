@@ -93,6 +93,8 @@ Cross-Model rules that hold across both Models and shape how downstream features
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** none — entities are foundational. Sits at the bottom of the feature dependency graph.
 - **Downstream:** `cards/` (Card extends `StateEntity<CardDefinition>`), `zones/` (zones share `Identifier<Instance>` namespace), `actions/` (handlers consume `IEntityRegistry`), `effects/` (effects consume `IEffectScope.Entities`), `triggers/` (modifier-bearing entities subscribe to triggers), `engine/` (engine constructs and exposes the registry), `presentation/` (consumes entity state via slice subscriptions).
 
