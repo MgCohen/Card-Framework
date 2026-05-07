@@ -1,0 +1,596 @@
+---
+type: spike
+status: draft
+tags: [#spike, #effects, #effect-pipeline, #runtime, #scope]
+---
+
+# Effect Pipeline — Design Sketch
+
+> **Status: draft / iterating.** Working sketch for the effect-pipeline shape. Captures the decisions from the effect-pipeline design pass (2026-05-07 session). **Self-contained** — readable standalone. **Not yet propagated to canonical Models** by design — Models stay frozen until this sketch settles. When iteration finishes, the resolution path is to create ADR-0007 and patch `effects/04`, `effects/01`, `triggers/01`, `engine/01`, `engine/02`, plus ledgers.
+
+## TL;DR
+
+- Two pipelines (per [ADR-0006](../decisions/0006-two-pipeline-architecture.md)): **command pipeline** (framework-FIFO, locked) and **effect pipeline** (game-customizable, this sketch).
+- **`IEffectPipeline` is an injected service**, symmetric with `ICommandPipeline`. Default = inline; games swap in DI.
+- **`EffectDefinition` (recipe) + `EffectInstance` (runtime record).** Definition lives on the source's data; instance is the flat immutable wire-form `(Source, EffectId, Bindings)`.
+- **State holds `EffectInstance` records** (immutable). MTG stack zone, Hearthstone trigger queue = game-authored slices over these records.
+- **Runtime stays at `FilterTriggers + Evaluate`.** No `ScheduleEffect` method.
+- **Chain scope only at effect-run time.** Drain doesn't construct scopes. `pipeline.Execute` takes optional `chainScope`.
+- **Re-entrance via `Fired` set** on the chain scope.
+- **Two execution verbs.** `IEffectPipeline.RunEffect` (scheduling decision) and `EffectInstance.Execute(scope)` extension (direct execution, used by resolution handlers).
+- **Triggers compile to effects.** `Trigger<T>` is authoring sugar; the fold wraps a matched trigger as an `EffectInstance` and calls `IEffectPipeline.RunEffect` — same path as active effects.
+
+## Context (locked from prior sessions)
+
+The locked context this sketch must respect:
+
+- Three-level model — Commands / Effects / Triggers ⊆ Effects (per [ADR-0006](../decisions/0006-two-pipeline-architecture.md)).
+- Command pipeline is framework-FIFO; `engine.Dispatch(GameAction, out string? reason)` is try-get; `runtime` contract is `FilterTriggers + Evaluate`; no `OnIncomingCommand` / `OnQueueDrained` / `IIntakeQueue` / `Route` / etc.
+- `IEffectScope.Dispatch` runs `GameAction`s **inline** — pipeline.Execute → fold → handler → fold → envelope, awaited synchronously by the calling effect.
+- `engine.Dispatch` is queued — framework-FIFO, runs after current `pipeline.Execute` returns.
+- Mutation discipline (per [`effects/04` §10](../features/effects/models/04-effect-flow.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
+- `IHandlerContext` exposes `Store`, `Actions` (snapshot writer), `Resolver` (decision awaiter), `Modifiers`. **No `RunEffect` surface today** — that's the documented gap this sketch closes.
+- ADR-0002 (refreshed) — runtime holds zero **gameplay** state. Engine-internal plumbing is fine on the engine; gameplay state lives in Scaffold slices.
+
+## Big decisions
+
+**D1 — `IEffectPipeline` is an injected service**, symmetric with `ICommandPipeline`. Framework ships `InlineEffectPipeline` as the default (runs effects immediately). Games swap implementations in DI: `MtgStackEffectPipeline`, `HearthstoneTriggerQueueEffectPipeline`, etc. The runtime contract is unaffected — there's no `ScheduleEffect` method on `GameRulesRuntime<T>`.
+
+**D2 — State holds `EffectInstance` records, not Effect objects with behavior.** What's "in flight" (on a stack zone, in a trigger queue) is an immutable record carrying `(Source, EffectId, Bindings)`. This keeps state snapshot-friendly and aligns with the existing record-on-slice pattern. The user's concern about "mutable effects on state" is addressed structurally — the wire form is pure data.
+
+**D3 — Naming: `EffectDefinition` + `EffectInstance`.**
+- `EffectDefinition` — the recipe. Authored. Carries `Validate` + `Execute` as lambdas. Constructible inline (like `Trigger<T>`) or subclassable. Lives on the source's definition (e.g., on `CardDefinition`).
+- `EffectInstance` — the runtime record. Flat, immutable, snapshot-friendly. Flows through the pipeline, lands on state, gets resolved.
+
+**D4 — Effects are authored without required subclasses.** `EffectDefinition` is constructible with lambdas, mirroring `Trigger<T>`'s authoring pattern. Subclassing is allowed for typed convenience but not required. Aligns with "effects are data-driven; subclasses are for commands."
+
+**D5 — Runtime stays at `FilterTriggers + Evaluate`.** No `ScheduleEffect` method. Effect-pipeline orchestration is a service (D1), not a runtime method. The runtime continues to drift toward "state evaluator" — `FilterTriggers` is the next candidate to revisit (long-term, not in this sketch).
+
+**D6 — Chain scope created only when an effect runs.** Drain doesn't construct scopes. `pipeline.Execute(action, chainScope?)` takes an optional scope; null means top-level (called from drain), non-null means called from `scope.Dispatch` inside an effect. The trigger fold inherits the calling chain.
+
+**D7 — Re-entrance prevention via the chain's `Fired` set.** When an effect runs, it's added to the chain's `Fired`. If the same effect is scheduled again within the chain, `RunEffect` short-circuits (no infinite loops).
+
+**D8 — Two execution verbs.**
+- `IEffectPipeline.RunEffect(EffectInstance, IEffectScope? parentChain)` — scheduling decision (inline vs deferred). Used by handlers (via `ctx.RunEffect`), the trigger fold, and effects (via `scope.RunEffect`).
+- `EffectInstance.Execute(scope)` extension — direct execution that bypasses scheduling. Used by resolution handlers (e.g., `ResolveTopOfStackHandler` pops the stack and calls `Execute` directly to avoid pushing the popped instance back via the MTG pipeline's scheduling logic).
+
+**D9 — Triggers compile into effects.** `Trigger<T>` stays as authoring sugar with a typed payload. The fold wraps a matched trigger as an `EffectInstance` (intercepted command captured in `Bindings`) and calls `IEffectPipeline.RunEffect`. From that point forward, the path is identical to active effects.
+
+**D10 — `ctx.CurrentChain` is NOT exposed publicly.** The chain scope is bound implicitly when the handler context is constructed (drain → null; `scope.Dispatch` from inside an effect → the calling chain). `ctx.RunEffect(instance)` uses the bound chain internally; handlers don't need to thread it through.
+
+## Type hierarchy
+
+```csharp
+// ─────────────────────────────────────────────────────────────
+// Authoring layer — lives on definitions / per app
+// ─────────────────────────────────────────────────────────────
+
+// The recipe. Authored inline with lambdas, or subclassed for typed convenience.
+public class EffectDefinition
+{
+    public EffectId Id { get; }
+    public Func<EffectInstance, IEffectScope, bool>  Validate { get; }
+    public Func<EffectInstance, IEffectScope, Task>  Execute  { get; }
+
+    public EffectDefinition(
+        EffectId id,
+        Func<EffectInstance, IEffectScope, Task> execute,
+        Func<EffectInstance, IEffectScope, bool>? validate = null)
+    {
+        Id        = id;
+        Execute   = execute;
+        Validate  = validate ?? ((_, _) => true);
+    }
+}
+
+// Triggers — authoring sugar over EffectDefinition with a typed payload.
+public abstract class Trigger<T> where T : GameCommand
+{
+    public virtual bool Validate(T command, IEffectScope scope) => true;
+    public abstract Task Execute(T command, IEffectScope scope);
+
+    // The fold uses this to wrap a matched trigger as an EffectInstance.
+    // The intercepted command is captured in Bindings.InterceptedCommand.
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wire form — records on state / pipeline / wire transport
+// ─────────────────────────────────────────────────────────────
+
+public sealed record EffectInstance(
+    Reference      Source,        // ref to the source entity (card, ability holder)
+    EffectId       Id,             // which of the source's effects (sources have many)
+    EffectBindings Bindings);      // bound at fire time
+
+public sealed record EffectBindings(
+    IReadOnlyList<Reference>? Targets            = null,
+    int?                      XCost              = null,
+    string?                   Mode               = null,
+    GameCommand?              InterceptedCommand = null);   // populated for triggered instances
+
+// ─────────────────────────────────────────────────────────────
+// Resolution helper — direct execution (D8 second verb)
+// ─────────────────────────────────────────────────────────────
+
+public static class EffectInstanceExtensions
+{
+    public static Task Execute(this EffectInstance instance, IEffectScope scope)
+    {
+        var source = scope.Store.Catalog.Resolve(instance.Source);
+        var def    = source.Definition.GetEffect(instance.Id);
+
+        return def.Validate(instance, scope)
+            ? def.Execute(instance, scope)
+            : Task.CompletedTask;
+    }
+}
+```
+
+## Service surfaces
+
+```csharp
+// ─────────────────────────────────────────────────────────────
+// The two pipelines, symmetric — both injected via DI
+// ─────────────────────────────────────────────────────────────
+
+public interface ICommandPipeline
+{
+    bool Validate(GameCommand command, IStateScope state, out string? reason);
+
+    // chainScope: null at drain (top-level commands);
+    //             non-null when called from scope.Dispatch inside an effect.
+    Task<CommandResult> Execute(GameAction action, IEffectScope? chainScope);
+}
+
+public interface IEffectPipeline
+{
+    // The single scheduling-decision entry point.
+    // parentChain: null = start a fresh chain; non-null = extend existing.
+    Task RunEffect(EffectInstance instance, IEffectScope? parentChain);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Framework default — runs inline (Stacklands semantics)
+// ─────────────────────────────────────────────────────────────
+
+public sealed class InlineEffectPipeline : IEffectPipeline
+{
+    private readonly IEffectScopeFactory _scopes;
+
+    public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
+    {
+        // Re-entrance guard within an existing chain.
+        if (parent is not null && parent.Fired.Contains(instance))
+            return;
+
+        var chain = parent is null
+            ? _scopes.NewRoot(instance)             // fresh chain rooted at instance
+            : _scopes.Extend(parent, instance);     // extend the existing chain's Fired set
+
+        await instance.Execute(chain);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Handler context — exposes the pipeline; chain bound implicitly
+// ─────────────────────────────────────────────────────────────
+
+public interface IHandlerContext
+{
+    Store              Store           { get; }
+    IAvailableActions  Actions         { get; }
+    ICommandAwaiter    Resolver        { get; }
+    IModifierFactory   Modifiers       { get; }
+    IEffectPipeline    EffectPipeline  { get; }   // for advanced cases
+
+    // Sugar: EffectPipeline.RunEffect(instance, currentChain).
+    // currentChain is bound when the context is constructed:
+    //   - null when the handler runs a drain-initiated command
+    //   - the calling chain when the handler runs inside scope.Dispatch
+    Task RunEffect(EffectInstance instance);
+}
+
+// ─────────────────────────────────────────────────────────────
+// The chain scope — what an effect's Execute receives
+// ─────────────────────────────────────────────────────────────
+
+public interface IEffectScope
+{
+    IStateScope                  State        { get; }
+    Store                        Store        { get; }    // catalog reads + execute helpers
+    IModifierFactory             Modifiers    { get; }
+    EffectInstance?              Origin       { get; }    // root of this chain (null for trigger-without-source cases)
+    IReadOnlySet<EffectInstance> Fired        { get; }    // re-entrance guard
+
+    // Inline dispatch — runs the action's full pipeline NOW, this scope is passed through.
+    Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
+
+    // Schedule a sub-effect via the pipeline. Pipeline decides inline vs deferred.
+    Task RunEffect(EffectInstance instance);
+
+    // Trigger primitives:
+    void Cancel(string? reason = null);
+    void Replace(GameAction next);   // before-fold only
+}
+```
+
+## The flow
+
+```
+External entry (gateway / timer / re-entry):
+  engine.Dispatch(action, out reason)
+    │
+    ├─ lifecycle gate (NotStarted/Ended)
+    ├─ pipeline.Validate
+    └─ pending.Enqueue(action)              // engine-private FIFO
+
+Drain:
+  while (queue not empty):
+    var action = pending.Dequeue()
+    var result = pipeline.Execute(action, chainScope: null)   // ← null at top-level
+                                       │
+                                       ├─ open envelope
+                                       ├─ before-fold:
+                                       │    foreach trigger in available:
+                                       │      var triggerInstance = WrapAsInstance(trigger, action)
+                                       │      effectPipeline.RunEffect(triggerInstance, null)
+                                       │        ↳ default: starts fresh chain → trigger.Execute
+                                       │        ↳ MTG: pushes onto stack zone (state)
+                                       ├─ handler.Handle(action, ctx where ctx.RunEffect uses chain=null)
+                                       │    handler may: ctx.RunEffect(activeInstance)
+                                       ├─ after-fold: same shape as before
+                                       └─ close envelope
+    var followUps = runtime.Evaluate(action, result)
+    foreach (f in followUps) pending.Enqueue(f)
+
+Inside an effect's Execute (called from a chain):
+  scope.Dispatch(subAction)
+    └─ pipeline.Execute(subAction, chainScope: this)   // ← chain passed through
+        ├─ before-fold (uses this chain — fold's RunEffect calls extend Fired)
+        ├─ handler.Handle(subAction, ctx where ctx.RunEffect uses chain=this)
+        ├─ after-fold (uses this chain)
+        └─ close envelope
+
+  scope.RunEffect(instance)
+    └─ effectPipeline.RunEffect(instance, parentChain: this)
+        ↳ default: extends this chain (adds instance to Fired) → instance.Execute(extendedChain)
+        ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
+```
+
+## Building a simple effect — Lightning Bolt
+
+```csharp
+// On the card's definition. Effects authored inline with lambdas.
+public sealed class LightningBoltCardDefinition : CardDefinition
+{
+    public override IReadOnlyList<EffectDefinition> Effects { get; } = new[]
+    {
+        new EffectDefinition(
+            id: EffectIds.LightningBoltDamage,
+            execute: async (instance, scope) =>
+            {
+                var target = instance.Bindings.Targets[0];
+                await scope.Dispatch(new DealDamageAction
+                {
+                    Target = target,
+                    Amount = 3,
+                });
+            })
+        // Validate omitted — defaults to "always valid"
+    };
+}
+```
+
+A handler that *casts* the spell builds the `EffectInstance` with bound parameters and asks the pipeline to schedule it:
+
+```csharp
+public sealed class CastSpellHandler : ICommandHandler<CastSpellCommand, CastSpellResult>
+{
+    public bool Validate(CastSpellCommand cmd, IStateScope state, out string? reason)
+    {
+        // ... mana cost check, target legality, timing ...
+        reason = null;
+        return true;
+    }
+
+    public async Task<CastSpellResult> Handle(CastSpellCommand cmd, IHandlerContext ctx)
+    {
+        // 1) Pay costs and move card to game-state stack zone.
+        ctx.Store.Execute(new PayManaPayload(cmd.Caster, cmd.ManaCost));
+        ctx.Store.Execute(new MoveCardToZonePayload(cmd.Spell, fromZone: hand, toZone: stack));
+
+        // 2) Build the EffectInstance with bound targets.
+        var instance = new EffectInstance(
+            Source:   cmd.Spell,
+            Id:       EffectIds.LightningBoltDamage,
+            Bindings: new EffectBindings(Targets: new[] { cmd.Target }));
+
+        // 3) Schedule it. Pipeline decides what happens next.
+        //    Stacklands: runs inline (effect's Execute fires here).
+        //    MTG: pushes onto stack state; resolves later via runtime.Evaluate.
+        await ctx.RunEffect(instance);
+
+        return new CastSpellResult();
+    }
+}
+```
+
+## Concrete game implementations
+
+### Stacklands — defaults work
+
+No services to swap; framework's `InlineEffectPipeline` is the registered `IEffectPipeline`. Triggers and active effects run inline.
+
+```csharp
+public sealed class StacklandsRulesRuntime : GameRulesRuntime<StacklandsRulesDefinition>
+{
+    // No FilterTriggers override (default identity).
+    public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
+    {
+        var followUps = ComputeStateBasedFollowUps();
+        if (followUps.Any()) return followUps;
+
+        // No follow-ups — drain about to end. Publish snapshot.
+        Actions.Set(BuildSnapshot());
+        return Array.Empty<GameAction>();
+    }
+}
+
+// Installer:
+//   Framework EngineInstaller registers InlineEffectPipeline as IEffectPipeline.
+//   No game override needed.
+```
+
+### MTG-style — stack zone via service-side scheduling
+
+State holds `EffectInstance` records on a slice. The MTG `IEffectPipeline` pushes onto state instead of running inline. The runtime's `Evaluate` watches state and dispatches resolution actions. Resolution handlers pop state and run via direct `Execute`.
+
+```csharp
+// ─── State ───
+public sealed record StackContentsState(
+    ImmutableList<EffectInstance> Items)
+    : BaseState
+{
+    public EffectInstance? Top    => Items.IsEmpty ? null : Items[^1];
+    public bool            IsEmpty => Items.IsEmpty;
+}
+
+public sealed record PushToStackPayload(EffectInstance Instance);
+public sealed record PopFromStackPayload();
+
+public sealed class PushToStackMutator : Mutator<StackContentsState, PushToStackPayload>
+{
+    public override StackContentsState Change(
+        StackContentsState s, PushToStackPayload p, IStateScope _)
+        => new(s.Items.Add(p.Instance));
+}
+
+public sealed class PopFromStackMutator : Mutator<StackContentsState, PopFromStackPayload>
+{
+    public override StackContentsState Change(
+        StackContentsState s, PopFromStackPayload _, IStateScope __)
+        => new(s.Items.RemoveAt(s.Items.Count - 1));
+}
+
+// ─── MTG Effect pipeline — push onto state ───
+public sealed class MtgStackEffectPipeline : IEffectPipeline
+{
+    private readonly Store _store;
+
+    public Task RunEffect(EffectInstance instance, IEffectScope? parent)
+    {
+        // Re-entrance guard still applies to the calling chain.
+        if (parent is not null && parent.Fired.Contains(instance))
+            return Task.CompletedTask;
+
+        _store.Execute(new PushToStackPayload(instance));
+        return Task.CompletedTask;   // chain doesn't extend; future drain step resolves
+    }
+}
+
+// ─── MTG Runtime — Evaluate drives stack resolution ───
+public sealed class MtgRulesRuntime : GameRulesRuntime<MtgRulesDefinition>
+{
+    public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
+    {
+        var stack    = State.Get<StackContentsState>();
+        var priority = State.Get<PriorityState>();
+
+        if (stack.IsEmpty)
+        {
+            Actions.Set(BuildSnapshot());
+            return Array.Empty<GameAction>();
+        }
+
+        if (priority.BothPassed)
+            return new[] { new ResolveTopOfStackAction() };
+
+        if (!priority.Granted)
+            return new[] { new GrantPriorityAction(priority.NextToAct) };
+
+        return Array.Empty<GameAction>();   // priority outstanding; await input
+    }
+}
+
+// ─── Resolution handler — pops state, runs via direct Execute ───
+public sealed class ResolveTopOfStackHandler
+    : ICommandHandler<ResolveTopOfStackAction, ResolveTopOfStackResult>
+{
+    private readonly IEffectScopeFactory _scopes;
+
+    public bool Validate(ResolveTopOfStackAction _, IStateScope state, out string? reason)
+    {
+        if (state.Get<StackContentsState>().IsEmpty)
+        {
+            reason = "stack empty";
+            return false;
+        }
+        reason = null;
+        return true;
+    }
+
+    public async Task<ResolveTopOfStackResult> Handle(
+        ResolveTopOfStackAction _, IHandlerContext ctx)
+    {
+        var stack = ctx.Store.Get<StackContentsState>();
+        var top   = stack.Top!;
+        ctx.Store.Execute(new PopFromStackPayload());
+
+        // Build a fresh chain rooted at `top`, then call Execute DIRECTLY.
+        // Going through ctx.RunEffect would route via MtgStackEffectPipeline,
+        // which would push `top` back onto the stack — infinite loop.
+        var chain = _scopes.NewRoot(top);
+        await top.Execute(chain);
+
+        return new ResolveTopOfStackResult();
+    }
+}
+
+// Installer:
+//   builder.Register<IEffectPipeline, MtgStackEffectPipeline>(Lifetime.Singleton);
+//   (replaces framework's InlineEffectPipeline)
+```
+
+### Hearthstone-like — service-side trigger queue
+
+Same shape, different state slice and different scheduling logic. Effects nest mid-execution while the queue is "actively resolving"; otherwise inline.
+
+```csharp
+public sealed class HearthstoneTriggerQueueEffectPipeline : IEffectPipeline
+{
+    private readonly Store _store;
+
+    public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
+    {
+        if (parent is not null && parent.Fired.Contains(instance))
+            return;
+
+        var queue = _store.Get<TriggerQueueState>();
+        if (queue.IsResolving)
+        {
+            _store.Execute(new EnqueueTriggerPayload(instance));
+            return;
+        }
+
+        // Idle: run inline.
+        var chain = parent is null ? _scopes.NewRoot(instance) : _scopes.Extend(parent, instance);
+        await instance.Execute(chain);
+    }
+}
+```
+
+## Traced flow — MTG cast Lightning Bolt with reactive trigger
+
+```
+─── Drain step 1: cast ───
+host.Dispatch(CastSpellCommand { spell: lightning_bolt, target: enemy }, out _)
+
+  pipeline.Execute(cast, chainScope=null)
+    handler:
+      • PayManaPayload                                    [state mutation]
+      • MoveCardToZonePayload → stack zone               [state mutation; UI shows card on stack]
+      • build EffectInstance(source=lb, id=Damage, bindings.targets=[enemy])
+      • ctx.RunEffect(instance)
+          → effectPipeline.RunEffect(instance, parent=null)
+          → MtgStackEffectPipeline pushes onto StackContentsState
+          → returns immediately (no chain extended)
+    after-fold: no triggers
+  runtime.Evaluate → stack non-empty, priority not granted
+                  → [GrantPriorityAction(active)]
+
+─── Drain step 2 (and onward): priority resolves ───
+... players pass priority over multiple drain steps ...
+
+─── Drain step N: resolution ───
+runtime.Evaluate → stack non-empty, priority both passed
+                → [ResolveTopOfStackAction]
+
+  pipeline.Execute(resolve, chainScope=null)
+    handler:
+      top = StackContentsState.Top  (LightningBoltInstance)
+      Store.Execute(PopFromStackPayload)
+      var chain = _scopes.NewRoot(top)             // Origin: top, Fired: {top}
+      await top.Execute(chain)
+        ↳ LightningBoltDef.Execute(top, chain)
+            ↳ chain.Dispatch(DealDamageAction { target=enemy, amount=3 })
+                ↳ pipeline.Execute(damage, chainScope=chain)
+                    handler: damage applied (state mutation)
+                    after-fold:
+                      Acolyte's "when damaged → draw" trigger fires
+                      var triggerInstance = WrapAsInstance(acolyteTrigger, damage)
+                      effectPipeline.RunEffect(triggerInstance, parent=chain)
+                        → MtgStackEffectPipeline pushes onto StackContentsState
+                        → returns
+                      envelope closes
+                returns
+            returns (LightningBolt's effect done)
+      handler returns
+  runtime.Evaluate → stack non-empty (newly-added trigger), priority resets
+                  → [GrantPriorityAction(...)]
+
+─── Future drain steps: resolve the triggered ability ───
+... priority round again, eventually ResolveTopOfStackAction pops the trigger,
+    builds a fresh chain rooted at the trigger, runs Execute,
+    which dispatches DrawCardAction, etc.
+```
+
+Two distinct chains across the trace:
+
+1. **chain-1** — rooted at `LightningBoltInstance`. Lives across `top.Execute` and the nested `Dispatch` and the fold's `RunEffect` call. Re-entrance guard: if `LightningBoltInstance` somehow triggered again in this chain, it'd be blocked.
+2. **chain-2** — rooted at the Acolyte trigger when *its* turn to resolve comes (separate drain step). Distinct chain, distinct `Fired` set.
+
+The MTG stack itself is a state slice. The runtime watches it via `Evaluate`. The `IEffectPipeline` service decides what `RunEffect` does. Symmetric, snapshot-friendly, no hidden runtime state.
+
+## Where this leaves the surfaces
+
+```csharp
+// Runtime — stays at two methods (per ADR-0006).
+public abstract class GameRulesRuntime<TDefinition>
+{
+    public virtual IReadOnlyList<TriggerMatch> FilterTriggers(...)        => candidates;
+    public virtual IReadOnlyList<GameAction>   Evaluate(action, result)   => Empty;
+}
+
+// Two services, both injected via DI, swappable per game:
+//   - ICommandPipeline (framework-shipped; not normally swapped)
+//   - IEffectPipeline  (framework default = inline; games swap for stack/queue)
+
+// One framework helper:
+//   - EffectInstance.Execute(scope) extension — direct execution from resolution handlers.
+```
+
+## Open follow-ups (NOT settled here)
+
+- **`oq-effect-authoring`** — the recipe inside `EffectDefinition.Execute` is a delegate, but the *authoring vocabulary* is unsettled: closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph, hybrid? Authoring feature scope.
+- **`oq-runtime-as-state-evaluator`** — long-term direction. After this sketch lands, `FilterTriggers` is the next candidate to revisit. Runtime might collapse further toward pure state evaluation + state-machine transitions.
+- **`oq-session-state-machine`** — richer engine lifecycle (Connecting / Started / Running / Reconnecting / Ended / ShowingResults) on top of the current 3-state `EngineLifecycle`.
+- **`EffectId` shape** — pin during authoring design; for now treat as opaque identifier.
+- **Trigger binding shape** — `Bindings.InterceptedCommand: GameCommand?` is the simplest carrier for the typed payload that a `Trigger<T>` was originally parameterized on. Whether bindings should also carry richer trigger context (Self ref, registration owner, fold phase, timestamp) is unsettled.
+- **`EffectChainScope` factory shape** — `_scopes.NewRoot(instance)` / `_scopes.Extend(parent, instance)` is one shape. Could also be static methods on `EffectChainScope` itself. Mechanical detail; pin during implementation.
+- **`EffectDefinition.Validate`** — semantics under re-entrance and cancellation. Probably "Validate=false → skip silently"; aligns with `Trigger<T>.Validate`.
+- **Whether `Trigger<T>` survives** as a separate authoring type, or collapses entirely into `EffectDefinition` with `InterceptedCommand` in bindings. Probably keeps as authoring sugar — typed payload is ergonomic for game authors.
+
+## What this sketch does NOT settle
+
+Out of scope for this iteration:
+
+- The exact API surface for constructing `EffectChainScope` instances.
+- How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
+- Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
+- Multi-actor decision interleaving inside effects (e.g., MTG split-second).
+- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `effects/02-replacement-prevention.md`); this sketch doesn't add new constraints there.
+
+## When this lands
+
+(Reference for future model conversion — not action-now.)
+
+When iteration settles, propagate to canonical Models:
+
+- **New ADR:** `Product/decisions/0007-effect-pipeline-shape.md` — locks the architecture.
+- `Product/features/effects/models/04-effect-flow.md` — substantial revision (new types, services, chain semantics, two execution verbs).
+- `Product/features/effects/models/01-async-dispatch.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
+- `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
+- `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
+- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature.
+- `Product/ledgers/OPEN-ITEMS.md` — resolve `oq-effect-pipeline` by deletion; add `oq-effect-authoring`, `oq-runtime-as-state-evaluator`, `oq-session-state-machine`.
+- `Product/ledgers/GLOSSARY.md` — entries for `EffectDefinition`, `EffectInstance`, `EffectBindings`, `IEffectPipeline`, chain scope, `Fired` set.
