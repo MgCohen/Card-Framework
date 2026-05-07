@@ -5,7 +5,7 @@ references: [features/actions/models/02-availability-snapshot.md, features/engin
 tags: [#presentation, #loop, #available-actions]
 ---
 
-# Presentation Loop and Available Actions Flow
+# Presentation Loop — model
 
 ## What it is
 
@@ -255,6 +255,10 @@ Model-local invariants. (See `presentation.md ## Invariants` for feature-level r
 - **Intents are emitted at gesture-commit (drag-end), not earlier.** Drag highlights come from the AffordanceMap; the intent is built only when the player commits.
 - **The Store is the single boundary between presentation and engine.** No bypass paths from View to engine; everything goes through `Store.SubmitIntent`.
 - **Validation feedback (toast / inline error) is presentation-side.** The engine surfaces `IntakeResult.Reject(reason)`; the gateway formats and displays.
+
+## Decisions
+
+Linked: [`Product/decisions/0007-five-validation-layers.md`](decisions/0007-five-validation-layers.md) — Five validation layers, with `handler.Validate` authoritative on the engine side and `AffordanceMap` prophylactic on the presentation side. Cross-cutting (engine + actions + presentation).
 
 ## Examples
 

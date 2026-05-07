@@ -93,6 +93,8 @@ Cross-Model rules that hold across the Model and shape how other features must i
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `actions/` (`PlayerIntent` and `IIntentMapper` contracts; `AvailableActionsSnapshot` shape), `engine/` (`AvailableActionsState`, `HistoryState`, `EngineState` slices; `Store` subscription mechanism), `effects/` (`DecisionOpenedSignal` / `DecisionResolvedSignal` for decision UI rendering), `cards/`, `zones/`, `entities/` (consumed via card-keyed / zone-keyed state subscriptions).
 - **Downstream:** game-specific card prefabs, UI scenes, terminal/web/native renderers (none of these are framework-owned).
 
