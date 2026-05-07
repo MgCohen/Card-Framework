@@ -258,7 +258,16 @@ Model-local invariants. (See `presentation.md ## Invariants` for feature-level r
 
 ## Decisions
 
-Linked: [`Product/decisions/0007-five-validation-layers.md`](decisions/0007-five-validation-layers.md) — Five validation layers, with `handler.Validate` authoritative on the engine side and `AffordanceMap` prophylactic on the presentation side. Cross-cutting (engine + actions + presentation).
+**Project-wide ADR.** Linked: [`Product/decisions/0007-five-validation-layers.md`](decisions/0007-five-validation-layers.md) — Five validation layers, with `handler.Validate` authoritative on the engine side and `AffordanceMap` prophylactic on the presentation side. Cross-cutting (engine + actions + presentation).
+
+**Synthesis.** This Model is a synthesis layer over decisions made in sibling features; the locked synthesis:
+
+- **Snapshot lives in state.** `AvailableActionsState.Snapshot` (typed templates only — no scope discriminator). Source: `engine/04-gamestate-slices.md` (Q1, formerly ADR-0003 — folded).
+- **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template carrying source + slots/modes/parameters. Source: `actions/02-availability-snapshot.md` (Q1, formerly ADR-0001 — folded).
+- **Snapshot is written via `IAvailableActions`.** By the rule (default in `OnQueueDrained`) or by effects mid-execution. Engine never auto-publishes. Source: `engine/03-snapshot-pipeline.md` (Q1, formerly ADR-0004 — folded).
+- **`AffordanceMap` is game-specific.** Lives in the gateway/UI layer; recomputed on every snapshot change; pattern-matches typed templates. Source: this Model's design pass (no source ADR).
+- **View consumes `AffordanceMap`, not snapshot directly.** Templates are wire-form; affordances are UI-form. Source: this Model.
+- **Intents are emitted at drag-end.** Drag highlights come from `AffordanceMap`; the intent is built only on commit. Source: this Model.
 
 ## Examples
 
@@ -284,17 +293,6 @@ A player makes a move:
 12. **Queue drains.** `rule.OnQueueDrained` runs, enumerates new templates, calls `Actions.Set(...)`. The `IAvailableActions` mutator writes to `AvailableActionsState`.
 13. **Store fires `OnStateChanged`.** Loop returns to step 2.
 
-### Decisions locked
-
-- **Snapshot lives in state.** `AvailableActionsState.Snapshot` (typed templates only — no scope discriminator). No separate channel, no push API.
-- **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters.
-- **Snapshot is written via the `IAvailableActions` service** by the rule (default in `OnQueueDrained`) or effects (mid-execution overrides). Engine never auto-publishes.
-- **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change. Pattern-matches typed templates.
-- **View consumes AffordanceMap, not snapshot directly.** The view never touches raw templates or commands.
-- **Intents are emitted at drag-end, not earlier.** Drag highlights come from AffordanceMap; the intent is built only when the player drops.
-- **Validation has five layers.** Per-template eligibility (rule) → AffordanceMap (prophylactic) → IntentMapper (well-formedness) → `handler.Validate` (authoritative legality) → `rule.OnIncomingCommand` (engine flow). Project-wide ADR captures the canonical breakdown — see [`Product/decisions/0007-five-validation-layers.md`](decisions/0007-five-validation-layers.md).
-- **`handler.Validate` at dispatch is the single source of truth for legality.** The snapshot is the rule's best-effort approximation; per-binding `Validate` runs on demand only if the rule opts in.
-
 ## Open follow-ups
 
 - **`IIntentMapper` shape** — refined: `Map(ActionTemplate, PlayerChoice) → GameCommand`. `PlayerChoice` shape (positional vs named, parameter typing) pin during implementation.
@@ -315,7 +313,7 @@ A player makes a move:
 
 ## Rationale
 
-*n/a — see Contracts and §Decisions locked above. The four-layer model (Store → IntentMapper → AffordanceMap → View) is the rationale at this level.*
+*n/a — see `## Contracts` and `## Decisions` above. The four-layer model (Store → IntentMapper → AffordanceMap → View) is the rationale at this level.*
 
 ## Consequences
 

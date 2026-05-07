@@ -323,7 +323,7 @@ The evaluator ran twice: once with a card in the zone (produced `ExecuteCardComm
 
 ---
 
-*Below: provenance — feature-internal decision folded from `features/engine/decisions/0006-mtg-sba-known-difference.md`. Single-feature scope (the SBA-ordering choice is internal to the engine's evaluation loop; games that need MTG ordering work around it per-game).*
+*Below: provenance — feature-internal decision folded on 2026-05-07 from `features/engine/decisions/0006-mtg-sba-known-difference.md`. Single-feature scope (the SBA-ordering choice is internal to the engine's evaluation loop; games that need MTG ordering work around it per-game).*
 
 ## Options considered
 

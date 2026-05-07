@@ -183,7 +183,7 @@ UI renders each template type appropriately: minions show drag handles, spells w
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/actions/decisions/0001-typed-action-template.md` and `features/actions/decisions/0002-on-demand-validation.md`. Single-feature scope (the snapshot's shape and validation posture are owned by actions; engine consumes the shape via `IAvailableActions`, presentation consumes via state subscription, but neither co-decides).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/actions/decisions/0001-typed-action-template.md` and `features/actions/decisions/0002-on-demand-validation.md`. Single-feature scope (the snapshot's shape and validation posture are owned by actions; engine consumes the shape via `IAvailableActions`, presentation consumes via state subscription, but neither co-decides).*
 
 ## Options considered
 

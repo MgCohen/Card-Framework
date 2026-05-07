@@ -194,7 +194,7 @@ Each envelope is independent. The triggered ability dispatches through the norma
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/effects/decisions/0001-async-layer-hierarchy.md`. Single-feature scope (the layer hierarchy is internal to effects; other features consume the resulting types but don't co-decide them).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/effects/decisions/0001-async-layer-hierarchy.md`. Single-feature scope (the layer hierarchy is internal to effects; other features consume the resulting types but don't co-decide them).*
 
 ## Options considered
 

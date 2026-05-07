@@ -239,7 +239,7 @@ Open items live in `ledgers/OPEN-ITEMS.md` — see entities-related entries (`oq
 
 ---
 
-*Below: provenance — the original Core Model decisions (formerly doc 8) that produced this Model. Single-feature scope (no project-wide ADR applies); folded into Model provenance per §4.5.*
+*Below: provenance — the original Core Model decisions (formerly doc 8) that produced this Model. Single-feature scope (no project-wide ADR applies); folded into Model provenance per §4.5 on 2026-05-07.*
 
 Doc 8 was a mega-decisions doc spanning entities, zones, and actions. Per migration, load-bearing atomic decisions were extracted into per-feature locations; the entities-relevant decisions are preserved here as the provenance for this Model.
 

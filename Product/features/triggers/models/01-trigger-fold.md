@@ -344,7 +344,7 @@ Original: DealDamageAction(target=goblin, amount=3)
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/triggers/decisions/0001-trigger-fold-semantics.md` and `features/triggers/decisions/0002-onbefore-onafter.md`. Single-feature scope (the trigger fold mechanism is internal to triggers; engine and actions consume the resulting types but don't co-decide them).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/triggers/decisions/0001-trigger-fold-semantics.md` and `features/triggers/decisions/0002-onbefore-onafter.md`. Single-feature scope (the trigger fold mechanism is internal to triggers; engine and actions consume the resulting types but don't co-decide them).*
 
 ## Options considered
 

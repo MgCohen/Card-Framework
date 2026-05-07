@@ -341,7 +341,7 @@ The Pile Counter `GameRulesRuntime` implementation lives in [`support/samples/pi
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/engine/decisions/0001-gamerules-as-class-with-services.md` and `features/engine/decisions/0002-gamerules-zero-state.md`. Single-feature scope (the runtime shape is internal to engine; other features consume the resulting four-method contract but don't co-decide it).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/engine/decisions/0001-gamerules-as-class-with-services.md` and `features/engine/decisions/0002-gamerules-zero-state.md`. Single-feature scope (the runtime shape is internal to engine; other features consume the resulting four-method contract but don't co-decide it).*
 
 ## Options considered
 

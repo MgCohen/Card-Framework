@@ -316,7 +316,7 @@ The envelope is the unit observers consume. Triggers are fold steps in the same 
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/actions/decisions/0003-onincomingcommand-flow-only.md`, `0004-validation-in-handler.md`, `0005-generic-primitive-rule-constraint.md`, `0006-player-intent-mapper.md`, `0008-intent-vocabulary.md`. Single-feature scope (each decision is about how the actions pipeline is shaped; engine, presentation, and effects consume the resulting types but don't co-decide).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/actions/decisions/0003-onincomingcommand-flow-only.md`, `0004-validation-in-handler.md`, `0005-generic-primitive-rule-constraint.md`, `0006-player-intent-mapper.md`, `0008-intent-vocabulary.md`. Single-feature scope (each decision is about how the actions pipeline is shaped; engine, presentation, and effects consume the resulting types but don't co-decide).*
 
 This Model consolidates content from earlier proposal-style docs (former docs 14, 15, 17, 18, 19) that existed before the workflow normalization. Substantive contract content is preserved above; the historical narrative is in the per-Q provenance below and in git history.
 

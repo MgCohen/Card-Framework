@@ -311,7 +311,7 @@ bool visible = card.IsVisibleTo(state, opponent);
 
 ---
 
-*Below: provenance — the original Zone Model decisions (early high-level direction) plus the locked specifics for zone shape (folded from `features/zones/decisions/0001-zone-shape.md`) and insertion API (folded from `features/zones/decisions/0003-insertion-api.md`). The visibility model's full options-weighed lives in the elevated [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md) — Q4 below references the original early framing only.*
+*Below: provenance — the original Zone Model decisions (early high-level direction) plus the locked specifics for zone shape (folded from `features/zones/decisions/0001-zone-shape.md`) and insertion API (folded from `features/zones/decisions/0003-insertion-api.md`). The visibility model's full options-weighed lives in the elevated [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md) — Q4 below references the original early framing only. Folded on 2026-05-07.*
 
 The zone Model evolved in two phases. **Phase 1** (early Q1–Q6 below): high-level direction set in the original Zone Model Decisions doc — responsibilities-not-traits, spatial deferred, stacks-as-zones, two visibility channels (early framing), movement is normal action flow, generated choices deferred. **Phase 2** (Q7–Q8 below): internal-opens session settled the specific shapes — zone-as-thin-handle (folded ADR-0001), insertion-API-as-single-payload (folded ADR-0003). The visibility mechanism was settled in the same Phase-2 session and elevated to a project-wide ADR (visibility requires coordinated implementation across zones + cards + presentation).
 

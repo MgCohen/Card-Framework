@@ -272,7 +272,7 @@ triggers.OnBefore<DamageAction>(
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/effects/decisions/0003-replacement-priority.md`. Single-feature scope (replacement priority lives within the trigger fold mechanism owned by triggers; effects decides how priorities resolve, and triggers' fold consumes them).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/effects/decisions/0003-replacement-priority.md`. Single-feature scope (replacement priority lives within the trigger fold mechanism owned by triggers; effects decides how priorities resolve, and triggers' fold consumes them).*
 
 ## Options considered
 

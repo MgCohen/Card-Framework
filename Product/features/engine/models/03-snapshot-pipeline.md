@@ -214,7 +214,7 @@ The rule visibly owns enumeration. `Actions.Set` is the publish step. No `Valida
 
 ---
 
-*Below: provenance — feature-internal decision folded from `features/engine/decisions/0004-snapshot-writer-iavailableactions.md`. Single-feature scope (the snapshot writer is engine-owned; effects consume the same service via `IHandlerContext` but don't co-decide the publication mechanism).*
+*Below: provenance — feature-internal decision folded on 2026-05-07 from `features/engine/decisions/0004-snapshot-writer-iavailableactions.md`. Single-feature scope (the snapshot writer is engine-owned; effects consume the same service via `IHandlerContext` but don't co-decide the publication mechanism).*
 
 ## Options considered
 

@@ -250,7 +250,7 @@ public sealed class PileMoveMutator : Mutator<PilesState, MoveCardPayload>
 
 ---
 
-*Below: provenance — feature-internal decisions folded from `features/engine/decisions/0003-snapshot-in-state.md` and `features/engine/decisions/0005-state-pattern.md`. Single-feature scope (state-pattern + snapshot-in-state are engine-owned; entities/cards/zones consume the resulting Store mechanism but don't co-decide the immutability + slice pattern).*
+*Below: provenance — feature-internal decisions folded on 2026-05-07 from `features/engine/decisions/0003-snapshot-in-state.md` and `features/engine/decisions/0005-state-pattern.md`. Single-feature scope (state-pattern + snapshot-in-state are engine-owned; entities/cards/zones consume the resulting Store mechanism but don't co-decide the immutability + slice pattern).*
 
 ## Options considered
 
