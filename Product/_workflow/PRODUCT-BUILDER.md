@@ -123,7 +123,9 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | **Checkpoint** | Live operational spine; updated continuously | `Product/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
 
-A Model is the unified design artifact: it describes a system **and** records the decisions baked into it (options weighed, rationale, consequences). The descriptive content sits at the top; provenance sits below a divider as track record.
+A Model is the atomic **build unit**: a single design artifact that can be handed to a developer for standalone implementation without requiring them to open neighboring Models in parallel. It describes a system **and** records the decisions baked into it (options weighed, rationale, consequences) — descriptive content above a divider, provenance below.
+
+A Feature is the **navigation layer** over a set of Models: composition (which Models make up the feature), cross-Model architecture (how they fit), shared vocabulary, cross-Model invariants, and the boundaries against neighboring features. The Feature root is what a reader opens first to orient; the Models are what a developer opens to build.
 
 Major decisions that warrant searchability also get an **ADR** — one-page summary, dated and indexed. The ADR links back to the Model; the Model links forward to the ADR.
 
@@ -190,37 +192,54 @@ One paragraph. If graduated, include a forward link to the Model / ADR it inform
 
 ### 4.2 Feature
 
-A **Feature** doc is the root description of a feature folder. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. It's the source of truth that Models, ADRs, and spikes underneath it support — and **the canonical contract once `settled`** (see §5.6 Status gates).
+A **Feature** doc is the navigation root for a feature folder. It captures composition (which Models make up the feature), cross-Model architecture, shared vocabulary, and cross-Model invariants — the layer above the buildable Models. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. The Models carry the build contracts; the Feature root carries the synthesis (and remains **the canonical contract-of-contracts once `settled`** — see §5.6 Status gates).
 
 A feature root lives at `features/<feature>/<feature>.md` (e.g., `features/engine/engine.md`). One per feature folder. No counter; the name matches the folder.
 
-**Feature vs. Model.** A Feature is the *container* — its scope is the whole feature. A Model is a *sub-system* within the feature (engine has Models for the evaluation loop, the GameRules contract, the snapshot pipeline). The Feature doc summarizes composition and public surface; the Models carry the design content.
+**Feature vs. Model.** A Feature is the *navigation container* — its scope is the whole feature. A Model is a *buildable sub-system* within the feature (engine has Models for the evaluation loop, the GameRules contract, the snapshot pipeline). The Feature doc carries composition, cross-Model architecture, vocabulary, and cross-Model invariants; the Models carry the buildable contracts.
 
 ```markdown
 # <feature> — feature
 
 <front matter: type=feature, status=draft>
 
-## Purpose
-What this feature is and why it exists. One paragraph.
+## What it is
+High-level prose framing the feature, with a canonical artifact (flow diagram, sequence sketch, ASCII pipeline, etc.) that gives a reader the shape in 30 seconds.
+
+## Vocabulary
+Feature-owned terms (table). Cross-feature terms — defined elsewhere — get a one-line pointer ("see triggers/", "see GLOSSARY.md") rather than restated definitions.
+
+| Term | Meaning |
+|---|---|
+| `<term>` | <one-line definition> |
+
+## Architecture
+Cross-Model flow: how the Models in this feature fit together. Phase order, interaction sequence, what calls what. The load-bearing section that makes the feature legible without opening every Model.
+
+## Composition
+Models that make up this feature (table form, always present regardless of count).
+
+| Model | Role |
+|---|---|
+| `models/01-<slug>.md` | <one-line role> |
+| `models/02-<slug>.md` | <one-line role> |
+
+## Invariants
+Cross-Model rules — properties that must hold across the feature's Models. Named, so individual Models can reference them by name rather than restating. Model-local invariants live in the Models themselves.
+
+- **<Invariant name>.** <one-line rule>
 
 ## Boundaries
 What this feature owns — and what it explicitly doesn't. Demarcation against neighboring features.
 
-## Composition
-Models that make up this feature.
-- features/<feature>/models/01-<slug> — short purpose
-- features/<feature>/models/02-<slug> — short purpose
+**Owns:** <list>
 
-## Public surface
-What a consumer of this feature sees. Contracts, services, types — the outer boundary that other features touch.
+**Does not own:**
+- <thing> → <feature that does>
 
 ## Dependencies
 - **Upstream:** features/X — consumed
 - **Downstream:** features/Y — consumes this
-
-## Settled decisions
-Pointers to load-bearing ADRs in this feature's `decisions/`.
 
 ## Open
 Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.
@@ -252,20 +271,22 @@ tags: []
 
 # <subject> — model
 
-## Problem
-What we're modeling and why this exists.
-
-## Concepts
-Types and entities in this system, glossary-style.
+## What it is
+High-level orientation + a canonical artifact (code snippet, algorithm pseudocode, diagram — whichever fits the Model's shape). A reader gets the shape in 30 seconds.
 
 ## Contracts
-Interfaces, methods, return shapes, forbidden behaviors.
+Full API surface: interfaces, methods, signatures, return shapes, forbidden behaviors. The developer's checklist for implementation.
 
 ## Invariants
-What must always be true.
+Model-local rules (cross-Model rules live in the Feature root's `## Invariants`).
+
+## Decisions
+*(Optional — omit if no project-wide ADR applies. Feature-internal decisions live below the divider.)*
+
+Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-At minimum, walked through against the floor sample.
+Walked through against the floor sample, or a stub `*n/a — see Contracts.*` if no example fits the shape.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
@@ -279,19 +300,16 @@ Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
 - **B** — rejected because ...
 - **C** — chosen.
 
-(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order. Replaces what used to be a separate per-decision ADR file in `features/<feature>/decisions/`.)
+(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order.)
 
 ## Rationale
 Why the chosen approach. Skip if obvious.
 
 ## Consequences
 What this enables; what it constrains. Skip if obvious.
-
-## ADR
-*(Optional — present only if a project-wide ADR was opened for cross-cutting decisions. Feature-internal decisions stay above.)*
-
-Linked: `Product/decisions/NNNN-<title>.md`
 ```
+
+**Build-unit test.** A Model should be implementable standalone: a developer reading just this doc + the Feature root should be able to build it without opening neighboring Models in parallel. If implementation requires constant cross-referencing, the Model is either too thin (merge into a neighbor) or wrong-shaped (split along different lines).
 
 A purely descriptive Model can use the empty-stub convention for the provenance sections. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look — and the linter enforces it.
 
@@ -350,10 +368,13 @@ After locking, design changes that affect the sample surface as linter findings 
 
 **Reserved for project-wide / cross-cutting decisions only.** Feature-internal decisions live in the affected Model's provenance section (§4.3 — `## Options considered`, `## Rationale`, `## Consequences`). The ADR was duplicating provenance that grep already finds; collapse into the Model.
 
-ADRs apply to decisions that:
-- Span multiple features (cross-cutting principles, framework-wide naming).
-- Are cited from many docs and deserve a one-pager (e.g., Objects-over-IDs as ADR-0005).
-- Shape the project as a whole (workflow adoption, migration moves).
+**Hard scope rule: ADR requires ≥2 features in scope.** A decision that touches only one feature — even one cited from many Models inside that feature — lives in the affected Model's provenance, not as an ADR. ADRs apply only when the decision genuinely spans feature boundaries:
+
+- Cross-feature principles or framework-wide naming.
+- Project-shaping moves (workflow adoption, migration choices).
+- Decisions cited from Models in two or more sibling features.
+
+If you're tempted to open an ADR for a decision that only touches one feature, write it in the Model's provenance instead.
 
 ADRs live at `Product/decisions/NNNN-<slug>.md` (project-wide counter). There is no `features/<feature>/decisions/` directory — feature-internal ADRs collapse into the Model.
 

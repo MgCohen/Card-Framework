@@ -7,23 +7,27 @@ tags: []
 
 # <subject> — model
 
-<!-- Strict section order. Sections may be empty with the stub `*n/a — purely descriptive Model.*`
-     but cannot be reordered or omitted. The linter validates structure. -->
+<!-- Strict section order. 5 required + 1 optional above the divider; 3 below.
+     Required sections may be empty with a stub line (e.g. `*n/a — see Contracts.*`)
+     but cannot be reordered or omitted. `## Decisions` is optional — omit when no
+     project-wide ADR applies. The linter validates structure. -->
 
-## Problem
-What we're modeling and why this exists.
-
-## Concepts
-Types and entities in this system, glossary-style.
+## What it is
+High-level orientation + a canonical artifact (code snippet, algorithm pseudocode, diagram — whichever fits the Model's shape). A reader gets the shape in 30 seconds.
 
 ## Contracts
-Interfaces, methods, return shapes, forbidden behaviors.
+Full API surface: interfaces, methods, signatures, return shapes, forbidden behaviors. The developer's checklist for implementation.
 
 ## Invariants
-What must always be true.
+Model-local rules (cross-Model rules live in the Feature root's `## Invariants`).
+
+## Decisions
+*(Optional — omit if no project-wide ADR applies. Feature-internal decisions live below the divider.)*
+
+Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-At minimum, walked through against the floor sample.
+Walked through against the floor sample, or a stub `*n/a — see Contracts.*` if no example fits the shape.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`; ephemerals to `SESSION-CHECKPOINT.md ## Scratch`.)
@@ -44,8 +48,3 @@ Why the chosen approach. Skip if obvious.
 
 ## Consequences
 What this enables; what it constrains. Skip if obvious.
-
-## ADR
-*(Optional — present only if a project-wide ADR was opened for cross-cutting decisions involving this Model. Feature-internal decisions stay above; cross-cutting goes to `Product/decisions/`.)*
-
-Linked: `Product/decisions/NNNN-<title>.md`
