@@ -91,7 +91,7 @@ public interface IStoreScope : IStateScope
 
 - `IStateScope` — read-only access to slices. Handed to anything that should not mutate (effects, `GameRules`, presentation, projections, mutators reading sibling slices).
 - `IStoreScope` — adds the event handler for subscriptions. Used where presentation/observers need it.
-- **`GameState` is not a single record.** State lives as multiple slices (typed `BaseState` subclasses) keyed in the store. There is no `state.Piles` or `state.LastMove` field — those reads become `scope.Get<PilesState>(pileRef)` / `scope.Get<LastMoveState>()`. The catalog of slice types is its own open thread (checkpoint task #2).
+- **`GameState` is not a single record.** State lives as multiple slices (typed `BaseState` subclasses) keyed in the store. There is no `state.Piles` or `state.LastMove` field — those reads become `scope.Get<PileState>(pileRef)` / `scope.Get<LastMoveState>()`. The catalog of slice types is its own open thread (checkpoint task #2).
 
 ### 4.2 Writes — `Store.Execute<TPayload>` + `Mutator<TState, TPayload>` (Scaffold)
 
@@ -127,7 +127,7 @@ The shape this gives us:
 - **`TPayload` types are boundary-correct for `Reference` / `Ref<T>` use.** Mutator payloads are the Store's wire form — they persist, serialize, and transport analogously to `GameCommand`s. `Ref<Card>`, `Ref<Zone>`, and the polymorphic `Reference` are boundary-correct in payload records per [ADR-0005](decisions/0005-objects-over-ids.md). Handler code *building* a payload should derive refs from held objects (`card.SelfRef`, `zone.SelfRef`) rather than storing raw refs in locals.
 - **Payload is a dedicated type, not the command.** A "last move" mutator takes a `LastMovePayload`, never `MoveCardCommand`. Payloads are framework-owned; commands are pipeline-owned.
 - **One payload, many mutators.** Mutators are registered per `TPayload` at engine bootstrap. When the handler dispatches one payload through `Store.Execute(payload)`, **every mutator registered for that payload type runs**, each producing its own slice's new state. The handler does not enumerate which mutators exist; the registry does.
-- **Mutators read sibling slices through `IStateScope`.** A mutator computing the new `LastMoveState` can look up the current `PilesState` via the `scope` parameter on `Change`.
+- **Mutators read sibling slices through `IStateScope`.** A mutator computing the new `LastMoveState` can look up the current `ZoneContentsState`, `PileState`, etc. via the `scope` parameter on `Change`.
 - **Atomic commit.** All mutators that fire from one `Execute` call commit together via the runner's overlay. No half-applied state is visible.
 
 ### 4.3 `IEffectScope`
@@ -165,7 +165,7 @@ public interface IHandlerContext
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`; resolve handles via `ctx.Store.Catalog.Resolve(ref)`; spawn entities via `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension). Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
-- **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line in pile-counter §9.4 is replaced by a single `ctx.Store.Execute(new MoveCardPayload(...))` call.
+- **No `Mutate` surface.** The retired `ctx.Mutate.MoveCardBetweenPiles(...)` line is replaced by `ctx.Store.Execute(payload)` / `ctx.Store.ExecuteBatch(...)` calls. The pile-counter sample's handler issues an atomic batch combining the framework's `MoveCardMutation` (CompositeAction) with game-side payloads (`AdjustPileCounterPayload`, `SetLastMovePayload`).
 - **Entity-variable mutations.** For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
 - **Spawn pathway.** `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02` §5](features/entities/models/02-runtime-surface.md).
 - **`Modifiers`** — modifier factory. `Create(key, modifier, source)` returns a fully-populated `ActiveModifier` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in handler / framework code — it breaks replay and multiplayer determinism.
@@ -258,7 +258,7 @@ intent → IntentMapper.Map(template, choice) → GameCommand → engine.Dispatc
 ```csharp
 public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
 {
-    MoveCardTemplate     m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (PileId)choice.Targets[0]),
+    MoveCardTemplate     m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (Ref<Zone>)choice.Targets[0]),
     ChooseTargetTemplate t => new SelectTargetCommand(choice.Targets[0]),
     _ => throw new InvalidOperationException($"unknown template: {template}")
 };
@@ -361,7 +361,7 @@ public sealed class RequestTargetHandler
 
 ### 8.2 Pile Counter under the new shape (replaces sample §9.4)
 
-One payload, two registered mutators. The handler does a single `Execute` call; Scaffold's registry fans out to every mutator registered for `MoveCardPayload` and commits them atomically.
+One batch, two distinct payload types, three game-side mutator runs (counter delta on source pile, counter delta on destination pile, last-move record). The handler does a single `ExecuteBatch` call; Scaffold's registry fans out per payload type and commits everything atomically alongside the framework `MoveCardMutation`'s composite expansion.
 
 ```csharp
 public sealed class MoveCardHandler : ICommandHandler<MoveCardCommand, MoveCardResult>
@@ -375,34 +375,49 @@ public sealed class MoveCardHandler : ICommandHandler<MoveCardCommand, MoveCardR
 
     public Task<MoveCardResult> Handle(MoveCardCommand move, IHandlerContext ctx)
     {
-        ctx.Store.Execute(new MoveCardPayload(move.Card, move.From, move.To));
+        var card   = ctx.Store.Catalog.Resolve(move.Card);
+        var source = ctx.Store.Catalog.Resolve(move.From);
+        var dest   = ctx.Store.Catalog.Resolve(move.To);
+        var number = card.Storage.GetVariable<int>(Vars.Number);
+
+        // Atomic batch — framework MoveCardMutation handles the zone move;
+        // game-side payloads update the cached counters and last-move memory.
+        ctx.Store.ExecuteBatch(new object[]
+        {
+            MoveCardMutation.AtTop(card, source, dest),
+            new AdjustPileCounterPayload(move.From, -number),
+            new AdjustPileCounterPayload(move.To,   +number),
+            new SetLastMovePayload(new LastMove(move.Card, move.From, move.To)),
+        });
+
         return Task.FromResult(new MoveCardResult(move.Card));
     }
 }
 
-public sealed record MoveCardPayload(Ref<Card> Card, PileId From, PileId To);
-
-// Registered mutators — both fire from one MoveCardPayload.
-public sealed class PileMoveMutator : Mutator<PilesState, MoveCardPayload>
+public sealed record AdjustPileCounterPayload(Ref<Zone> Pile, int Delta) : IPayloadReference
 {
-    public override PilesState Change(PilesState state, MoveCardPayload payload, IStateScope scope)
-        => state.WithCardMoved(payload.Card, payload.From, payload.To);
+    public Reference GetReference() => Pile;
 }
 
-public sealed class LastMoveMutator : Mutator<LastMoveState, MoveCardPayload>
+public sealed record SetLastMovePayload(LastMove Move);
+
+// Registered mutators — each fires from its matching payload.
+public class PileCounterMutator : Mutator<PileState, AdjustPileCounterPayload>
 {
-    public override LastMoveState Change(LastMoveState state, MoveCardPayload payload, IStateScope scope)
-        => new LastMoveState(payload.Card, payload.From, payload.To);
+    public override PileState Change(PileState state, AdjustPileCounterPayload payload, IStateScope scope)
+        => state with { Counter = state.Counter + payload.Delta };
 }
 
-// Registered at engine bootstrap:
-//   store.RegisterMutator(new PileMoveMutator());
-//   store.RegisterMutator(new LastMoveMutator());
+public class LastMoveMutator : Mutator<LastMoveState, SetLastMovePayload>
+{
+    public override LastMoveState Change(LastMoveState state, SetLastMovePayload payload, IStateScope scope)
+        => new LastMoveState(payload.Move);
+}
+
+// Registered at app bootstrap via the game's IInstaller (per engine/05).
 ```
 
-The handler does not enumerate which mutators run. The registry routes by payload type. Each mutator owns one slice (`PilesState`, `LastMoveState`) and reads sibling slices through `scope` if it needs to. Adding a third reactive slice (e.g., a move counter, an undo log) is a new mutator + a `RegisterMutator` line at bootstrap — the handler does not change.
-
-The previous sample §9.5 line `LastMoveMutator : IStateMutator<MoveCardCommand>` is incorrect under this model on two counts: (1) `IStateMutator` is not the real type — Scaffold's `Mutator<TState, TPayload>` is; (2) the type parameter must be a dedicated payload, not the command. Both are recorded as alignment debt.
+The handler does not enumerate which mutators run. The registry routes by payload type. Each mutator owns one slice and reads sibling slices through `scope` if it needs to. The framework's `MoveCardMutation` `CompositeAction` handles the zone-move expansion (`ZoneContentsState` updates + `CardMapState` rotation) — game-authored mutators only handle game-side concerns. Adding a third reactive slice (move counter, undo log) is a new payload + mutator + `Register` line; the handler does not change.
 
 ---
 

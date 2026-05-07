@@ -244,7 +244,7 @@ The framework does not provide an `ActorId → Ref<Player>` index out of the box
 
 ## Related
 
-- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — entity bridge foundation; `EntityInstance<TDef>` and the entity-state slice that `Player` participates in.
+- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — entity bridge foundation; `InstanceWithSlices<TDef>` parent and the entity-state slice that `Player` participates in.
 - [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) — handle / read / mutation surface; `ISliceProvider` instance-delegates-to-definition default.
 - [`features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — `MatchSetup`, `IMatchBuilder`, factory `Build` validation. `Actors` is `IReadOnlyList<IActor>`; `PlayerDefinitionOverlay` provides per-actor overrides for asymmetric games.
 - [`features/engine/models/07-game-definition.md`](features/engine/models/07-game-definition.md) — `GameDefinition.DefaultPlayerDefinition`, the factory's `Build` walk, layout-block contract.

@@ -67,7 +67,7 @@ Game installers **do not** register any of these. Doing so produces a `Build` va
 | Registration | Form | Purpose |
 |---|---|---|
 | `GameRulesRuntime<TDefinition>` for the game's definition type | `Register<GameRulesRuntime<TPileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient)` | The game-specific runtime brain |
-| One `Mutator<TState, TPayload>` per game-authored slice | `Register<TPileMoveMutator>(Lifetime.Singleton).AsImplementedInterfaces()` | Each slice declared via `ISliceProvider` needs at least one mutator (warning, not error — see Validation below) |
+| One `Mutator<TState, TPayload>` per game-authored slice | `Register<PileCounterMutator>(Lifetime.Singleton).AsImplementedInterfaces()` | Each slice declared via `ISliceProvider` needs at least one mutator (warning, not error — see Validation below) |
 | One `ICommandHandler<TCommand, TResult>` per game-authored `GameAction` | `Register<TMoveCardHandler>(Lifetime.Singleton).AsImplementedInterfaces()` | Handler resolution at dispatch time |
 
 `Build` throws an aggregate exception if any required registration is missing.
@@ -226,7 +226,7 @@ public static class PileCounterBootstrap
 
         return gameFactory.NewMatch()
             .WithGame(new PileCounterGameDefinition(puzzle))   // bundle: Rules + zones + cards + GetInitialSlices()
-            .WithActors(new SoloPlayer(ActorId.Player1))       // Player : EntityInstance<PlayerDefinition>, IActor
+            .WithActors(new SoloPlayer(ActorId.Player1))       // Player : InstanceWithSlices<PlayerDefinition>, IActor
             .WithSeed(puzzle.Seed)
             .Build();
     }
@@ -264,7 +264,7 @@ public sealed class PileCounterInstaller : IInstaller
     public void Install(IContainerBuilder builder)
     {
         builder.Register<MoveCardHandler>          (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<PileMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<PileCounterMutator>       (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<LastMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<GameRulesRuntime<PileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient);
         builder.Register<PileCounterIntentMapper>  (Lifetime.Singleton).AsImplementedInterfaces();

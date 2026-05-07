@@ -10,7 +10,7 @@ tags: [#feature, #players]
 `Player` is the framework's baseline subtype of actor representing a seated, entity-backed participant. The feature defines `Player`'s shape (entity-on-the-bridge with typed `Ref<Player> SelfRef` and `IActor` identity), `PlayerDefinition`'s authoring surface (variable bag for primary state, `ISliceProvider` for non-variable per-player slices, `PerPlayerZones` layout block), and the per-player slice-shape conventions framework Models follow.
 
 ## Boundaries
-- **Owned:** `Player : EntityInstance<PlayerDefinition>, IActor`, `PlayerDefinition` shape, `PerPlayerZones` layout block, per-player slice-shape conventions (per-player-keyed default vs singleton-with-dict for cross-cutting indexes), the `IActor` interface itself.
+- **Owned:** `Player : InstanceWithSlices<PlayerDefinition>, IActor`, `PlayerDefinition` shape, `PerPlayerZones` layout block, per-player slice-shape conventions (per-player-keyed default vs singleton-with-dict for cross-cutting indexes), the `IActor` interface itself.
 - **Not owned:** match-construction wiring (lives in `features/engine/05-game-factory.md` + `engine/07-game-definition.md`), zone semantics (`features/zones/`), card-ownership runtime semantics (`OwnershipState` keyed `Reference → IActor`; mutation lives in `features/cards/` and `features/effects/`), command attribution (lives in `features/actions/`).
 
 ## Composition
@@ -18,12 +18,12 @@ tags: [#feature, #players]
 
 ## Public surface
 - `IActor` — interface carrying `ActorId Id`. The polymorphic actor type framework code uses for "any actor."
-- `Player : EntityInstance<PlayerDefinition>, IActor` — entity-backed seated participant.
-- `PlayerDefinition : Scaffold.EntityDefinition, ISliceProvider` — authored data; variable defaults via the bag, per-player non-variable slices via `GetInitialSlices()`, per-player zones via `PerPlayerZones`.
+- `Player : InstanceWithSlices<PlayerDefinition>, IActor` — entity-backed seated participant.
+- `PlayerDefinition : DefinitionWithSlices` — authored data; variable defaults via the bag, per-player non-variable slices via `GetInitialSlices()`, per-player zones via `PerPlayerZones`.
 - Non-entity actor records (`World`, `Environment`, `Bot`, `Market`) — lightweight `IActor` implementers carrying just an `ActorId`. Game-side or framework-provided as small records.
 
 ## Dependencies
-- **Upstream:** `features/entities/` (entity bridge — `EntityInstance<TDef>`, `ISliceProvider`); `features/zones/` (`PerPlayerZones` declares `ZoneDefinition`s); `features/engine/` (factory consumes player layout at `Build`; `IActor` referenced by `OwnershipState` keyed slices).
+- **Upstream:** `features/entities/` (entity bridge — `InstanceWithSlices<TDef>` and `DefinitionWithSlices`); `features/zones/` (`PerPlayerZones` declares `ZoneDefinition`s); `features/engine/` (factory consumes player layout at `Build`; `IActor` referenced by `OwnershipState` keyed slices).
 - **Downstream:** `features/effects/`, `features/actions/`, `features/presentation/` — all reference players for command attribution, target selection, and per-player projections.
 
 ## Settled decisions
