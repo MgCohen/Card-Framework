@@ -16,6 +16,14 @@ Original ADR text named the bridge handle `StateEntity<TDef>` and the empty mark
 
 **Spirit of the ADR is preserved.** Zones still don't drag in heavy modifier-stack expectations. Practically, post-Plan-A/B/C the entity-bridge surface is small enough that zones now extend `EntityInstance<ZoneDefinition>` for the typed identity (`Ref<Zone>`) and uniform variable storage — most zones declare zero variables and pay no cost. The "no modifier-stack machinery" rule from the user's original framing applies as a design intent: stat-bearing semantics belong on different entities, not on zones.
 
+## Amendment — 2026-05-06 (open-seams pass)
+
+Three further refinements landed the same day:
+
+1. **Framework parent class layering.** `Zone` extends `InstanceWithSlices<ZoneDefinition>` (which inherits from `Scaffold.EntityInstance<TDef>` and adds `ISliceProvider` + a protected `Definition`) rather than `Scaffold.EntityInstance<ZoneDefinition>` directly. The discussion below referencing `EntityInstance<ZoneDefinition>` should be read as `InstanceWithSlices<ZoneDefinition>` for new code; behaviorally equivalent.
+2. **`CardRegistry` removed.** Resolution from a `CardRef` is two-hop via `CardMapState` then `store.Catalog` — `state.Get<CardRegistry>()` no longer exists. `Zone.GetCards` takes `Store` (or returns `IEnumerable<CardRef>` and lets the caller resolve).
+3. **`Zone` is unsealed.** Project convention (open-seams Q4): default to unsealed unless there's a strong reason to seal. Game code may subclass for typed re-export of authored Definition fields.
+
 ## Context
 
 The zone Model settled high-level direction (responsibilities-not-traits, two visibility channels, zone movement is normal action flow) but left "are zones entities or lightweight records?" and "where does membership live?" unanswered. Both are load-bearing: triggers, effects, presentation, history, and targeting all depend on what a zone *is* in the type system.
@@ -32,24 +40,23 @@ User constraint surfaced during the design pass: zones are groups of cards. They
 
 ## Decision
 
-A **zone** is `sealed class Zone : EntityInstance<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`. Zones share the `Reference` polymorphic type with cards and players.
+A **zone** is `class Zone : InstanceWithSlices<ZoneDefinition>` (unsealed) carrying typed `Ref<Zone> SelfRef`. Zones share the `Reference` polymorphic type with cards and players.
 
 ```csharp
-public sealed class Zone : EntityInstance<ZoneDefinition>
+public class Zone : InstanceWithSlices<ZoneDefinition>
 {
     public Ref<Zone> SelfRef { get; init; }
 
     public Zone(ZoneDefinition def, IEntityVariableStorage storage) : base(def, storage) { }
 
-    public Actor? GetOwner(IStateScope state) =>
+    public IActor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(SelfRef);
 
-    public IEnumerable<Card> GetCards(IStateScope state)
+    public IEnumerable<Card> GetCards(Store store)
     {
-        var contents = state.Get<ZoneContentsState>(this);
-        var map      = state.Get<CardMapState>();
-        var registry = state.Get<CardRegistry>();
-        return contents.Cards.Select(refToCard => registry.Get(map.InstanceOf(refToCard)));
+        var contents = store.Get<ZoneContentsState>(SelfRef);
+        var map      = store.Get<CardMapState>();
+        return contents.Cards.Select(cardRef => store.Catalog.Resolve(map.InstanceOf(cardRef)));
     }
     // ... other state-reading methods
 }

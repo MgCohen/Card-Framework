@@ -99,7 +99,7 @@ Two simplifications from doc 28's draft:
 ### IntentMapper becomes typed
 
 ```csharp
-public sealed class PileCounterIntentMapper : IIntentMapper
+public class PileCounterIntentMapper : IIntentMapper
 {
     private readonly IStateScope state;
     public PileCounterIntentMapper(IStateScope state) => this.state = state;
@@ -108,13 +108,19 @@ public sealed class PileCounterIntentMapper : IIntentMapper
     {
         MoveCardTemplate m => new MoveCardCommand(
             Card: m.Card,
-            From: LocateCard(state.Get<PilesState>(), m.Card),
-            To:   (PileId)choice.Targets[0]),
+            From: LocateCard(state, m.Card),
+            To:   (Ref<Zone>)choice.Targets[0]),
         _ => throw new InvalidOperationException($"unknown template: {template}")
     };
 
-    private static PileId LocateCard(PilesState piles, Ref<Card> card)
-        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.SelfRef.Equals(card))).Key;
+    private static Ref<Zone> LocateCard(IStateScope state, Ref<Card> card)
+    {
+        var cardRef = state.Get<CardMapState>().RefOf(card);
+        foreach (var pileRef in PileCounterGameDefinition.PileRefsAt(state))
+            if (state.Get<ZoneContentsState>(pileRef).Cards.Contains(cardRef))
+                return pileRef;
+        throw new InvalidOperationException($"card {card} not in any pile");
+    }
 }
 ```
 
@@ -220,13 +226,22 @@ Three reasons:
 ## 6. Pile Counter Under the New Shape
 
 ```csharp
-public sealed class PileCounterRules : GameRules
+public class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
 {
-    public PileCounterRules(
-        IStateScope        state,
-        IAvailableActions  actions,
-        IIntakeQueue       pending)
-        : base(state, actions, pending) { }
+    private readonly IActor                   _player;
+    private readonly IReadOnlyList<Ref<Zone>> _pileRefs;
+
+    public PileCounterRulesRuntime(
+        PileCounterRulesDefinition definition,
+        IStateScope                state,
+        IAvailableActions          actions,
+        IIntakeQueue               pending,
+        IReadOnlyList<IActor>      actors)
+        : base(definition, state, actions, pending)
+    {
+        _player   = actors.Single();
+        _pileRefs = PileCounterGameDefinition.PileRefsAt(state);
+    }
 
     public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
     {
@@ -241,27 +256,38 @@ public sealed class PileCounterRules : GameRules
         => candidates;
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
-        => State.Get<PilesState>().Piles.Values.All(p => p.Score == p.Target)
+    {
+        var allWon = _pileRefs.All(pileRef =>
+        {
+            var pile = State.Get<PileState>(pileRef);
+            return pile.Counter == pile.Target;
+        });
+
+        return allWon
             ? new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) }
             : Array.Empty<GameAction>();
+    }
 
     public override DrainResult OnQueueDrained()
     {
-        var piles    = State.Get<PilesState>().Piles.Values;
-        var lastMove = State.Get<LastMoveState>().Move;
+        var lastMove  = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
 
-        foreach (var pile in piles.Where(p => p.Cards.Count > 0))
+        foreach (var sourceRef in _pileRefs)
         {
-            var top = pile.TopCard;
-            if (lastMove?.Card == top.Id) continue;   // per-template suppression
+            var contents = State.Get<ZoneContentsState>(sourceRef).Cards;
+            if (contents.Count == 0) continue;
 
-            var destinations = piles
-                .Where(p => p.Id != pile.Id)
-                .Select(p => (EntityId)p.Id)
+            var topCardRef  = contents[^1];
+            var topInstance = State.Get<CardMapState>().InstanceOf(topCardRef);
+            if (lastMove?.Card.Equals(topInstance) == true) continue;   // per-template suppression
+
+            var destinations = _pileRefs
+                .Where(p => !p.Equals(sourceRef))
+                .Cast<Reference>()
                 .ToList();
 
-            templates.Add(new MoveCardTemplate(top.Id, destinations));
+            templates.Add(new MoveCardTemplate(topInstance, destinations));
         }
 
         Actions.Set(new AvailableActionsSnapshot(templates));
@@ -270,7 +296,7 @@ public sealed class PileCounterRules : GameRules
 }
 ```
 
-The rule visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>()`; slice types (`PilesState`, `LastMoveState`) live in [support/samples/pile-counter.md §9.1](support/samples/pile-counter.md).
+The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [support/samples/pile-counter.md §9](support/samples/pile-counter.md).
 
 ---
 

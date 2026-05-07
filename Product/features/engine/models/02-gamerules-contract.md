@@ -443,7 +443,7 @@ For games with one rule module, extend `GameRulesRuntime<TDefinition>` directly.
 
 ## 10. Open Items
 
-- **`GameState` slice catalog** — concrete catalog of slices (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, etc.) the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal.
+- **`GameState` slice catalog** — concrete catalog of slices (per-zone `PileState`, `LastMoveState`, `TurnState`, `AvailableActionsState`, framework-owned `ZoneContentsState` / `CardMapState` / `OwnershipState` / `EntityState`, etc.) the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal.
 - **`IIntakeQueue` shape** — same operations the old `LinkedList<GameCommand>` exposed. `CurrentlyExecuting` lives on the queue or as a sibling slice. Pin at engine implementation. ([Doc 29 §9](features/engine/models/03-snapshot-pipeline.md).)
 - **Action pipeline cleanup** — handler lookup, validate, execute, trigger folds need to be drawn explicitly in one place rather than scattered across docs 18/19/22/25. (Doc 26 Q2.)
 - **`IHandlerRegistry` shape** — sketched here as `Validate(command, state, out reason)`. Final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc. (Doc 26 Q9.)

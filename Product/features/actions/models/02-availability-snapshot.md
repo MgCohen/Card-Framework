@@ -102,7 +102,7 @@ The IntentMapper switches on the typed template subtype to bind:
 ```csharp
 public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
 {
-    MoveCardTemplate  m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (PileId)choice.Targets[0]),
+    MoveCardTemplate  m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (Ref<Zone>)choice.Targets[0]),
     CastSpellTemplate c => BindSpell(c, choice),
     _ => throw new InvalidOperationException($"unknown template: {template}")
 };
@@ -119,20 +119,24 @@ Pile Counter has one action, one target slot, no modes, no parameters. With type
 ```csharp
 public override DrainResult OnQueueDrained()
 {
-    var s = State.Current;
+    var lastMove  = State.Get<LastMoveState>().Move;
     var templates = new List<ActionTemplate>();
 
-    foreach (var pile in s.Piles.Where(p => p.Cards.Count > 0))
+    foreach (var sourceRef in _pileRefs)
     {
-        var top = pile.TopCard;
-        if (s.LastMove?.Card == top.Id) continue;
+        var contents = State.Get<ZoneContentsState>(sourceRef).Cards;
+        if (contents.Count == 0) continue;
 
-        var destinations = s.Piles
-            .Where(p => p.Id != pile.Id)
-            .Select(p => (EntityId)p.Id)
+        var topCardRef  = contents[^1];
+        var topInstance = State.Get<CardMapState>().InstanceOf(topCardRef);
+        if (lastMove?.Card.Equals(topInstance) == true) continue;
+
+        var destinations = _pileRefs
+            .Where(p => !p.Equals(sourceRef))
+            .Cast<Reference>()
             .ToList();
 
-        templates.Add(new MoveCardTemplate(top.Id, destinations));
+        templates.Add(new MoveCardTemplate(topInstance, destinations));
     }
 
     Actions.Set(new AvailableActionsSnapshot(templates));
@@ -150,7 +154,7 @@ Compared to a flat-command sketch, three things change:
        .OfType<MoveCardTemplate>()
        .ToDictionary(
            t => t.Card,
-           t => t.Destinations.Cast<PileId>().ToList());
+           t => t.Destinations.Cast<Ref<Zone>>().ToList());
    ```
 
 3. **IntentMapper switches on the template type:**
@@ -161,7 +165,7 @@ Compared to a flat-command sketch, three things change:
        MoveCardTemplate m => new MoveCardCommand(
            m.Card,
            state.LocateCard(m.Card),
-           (PileId)choice.Targets[0]),
+           (Ref<Zone>)choice.Targets[0]),
        _ => throw new InvalidOperationException($"unknown: {template}")
    };
    ```

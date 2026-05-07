@@ -7,7 +7,7 @@ tags: [#cards, #model]
 
 # Card Model
 
-A Card is the framework's representation of a card-shaped game entity. It uses the entity bridge (`EntityInstance<CardDefinition>`) for variables and modifiers, lives in `store.Catalog` indexed by typed `Ref<Card>`, and is fronted by a privacy-rotating `CardRef` for client-visible state. The `CardRef → Ref<Card>` indirection is `CardMapState`.
+A Card is the framework's representation of a card-shaped game entity. It uses the entity bridge (`InstanceWithSlices<CardDefinition>`) for variables and modifiers, lives in `store.Catalog` indexed by typed `Ref<Card>`, and is fronted by a privacy-rotating `CardRef` for client-visible state. The `CardRef → Ref<Card>` indirection is `CardMapState`.
 
 Related docs:
 
@@ -21,16 +21,16 @@ Related docs:
 
 A Card is a thin handle over the entity bridge:
 
-> Card = `EntityInstance<CardDefinition>` + typed `Ref<Card> SelfRef` + state-side accessors for the public `CardRef` and `Owner`.
+> Card = `InstanceWithSlices<CardDefinition>` + typed `Ref<Card> SelfRef` + state-side accessors for the public `CardRef` and `Owner`.
 
-The handle itself is stateless beyond its `SelfRef`, `Definition`, and `Storage`. All mutable card data — variables, modifiers, current public ref, owner, visibility — lives in Store slices. Reads happen by passing state into accessor methods (`card.GetRef(state)`, `card.GetOwner(state)`).
+The handle itself is stateless beyond its `SelfRef`, protected `Definition`, and `Storage`. All mutable card data — variables, modifiers, current public ref, owner, visibility — lives in Store slices. Reads happen by passing state into accessor methods (`card.GetRef(state)`, `card.GetOwner(state)`).
 
 The framework is **data-driven**: there is one `Card` class. Different card types (Fireball, Goblin, etc.) are different `CardDefinition` instances with their own data fields and effect recipes — not different C# classes. The `Card` handle reads typed definition data through the entity bridge.
 
 ## Card Class
 
 ```csharp
-public sealed class Card : EntityInstance<CardDefinition>
+public class Card : InstanceWithSlices<CardDefinition>
 {
     public Ref<Card> SelfRef { get; init; }
 
@@ -39,7 +39,7 @@ public sealed class Card : EntityInstance<CardDefinition>
     public CardRef GetRef(IStateScope state) =>
         state.Get<CardMapState>().RefOf(SelfRef);
 
-    public Actor? GetOwner(IStateScope state) =>
+    public IActor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(SelfRef);
 
     public override bool Equals(object? obj) =>
@@ -51,9 +51,11 @@ public sealed class Card : EntityInstance<CardDefinition>
 
 Card variants (Fireball, Goblin, etc.) are not separate C# classes — they are distinct `CardDefinition` instances. A "Fireball" card is a `Card` handle whose definition is a `CardDefinition` configured with Fireball-specific data and effect recipes. Per the data-driven model, the framework provides one `Card` type; game content lives in definitions, not in subclasses.
 
-The class is a handle, not a record. Equality is overridden to use `SelfRef` so the same card can be looked up reliably by Card object across handle re-creation (e.g., snapshot rehydration). There is at most one *live* `Card` instance per `Ref<Card>` in the running engine — held in `store.Catalog` (and typically in a sibling `CardRegistry` for ergonomic typed lookup).
+`Card` is **not sealed** (project convention: default to unsealed). Game code may subclass for typed re-export of authored Definition fields or for game-side helper methods, but **per-card-type subclassing** (`FireballCard : Card`) is discouraged — it breaks the data-driven principle. Variants belong in `CardDefinition` subclasses, not in `Card` subclasses.
 
-**`CardDefinition : Scaffold.EntityDefinition, ISliceProvider`.** Adopts `ISliceProvider` from day one with a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Most card state is variables (in `EntityState` via the bridge); per-card non-variable slices are rare. Concrete `CardDefinition` subclasses override `GetInitialSlices()` only when they need additional per-card slices (e.g., a "spell-with-charges" record, an "attack history" log). The factory walks instances at spawn time and installs returned slices keyed at `card.SelfRef`. `Card` itself inherits `EntityInstance<TDef>`'s default `ISliceProvider` implementation, which delegates to the definition.
+The class is a handle, not a record. Equality is overridden to use `SelfRef` so the same card can be looked up reliably by Card object across handle re-creation (e.g., snapshot rehydration). There is at most one *live* `Card` instance per `Ref<Card>` in the running engine — held in `store.Catalog`.
+
+**`CardDefinition : DefinitionWithSlices`.** Inherits the framework parent class (`DefinitionWithSlices : Scaffold.EntityDefinition, ISliceProvider`); picks up a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Most card state is variables (in `EntityState` via the bridge); per-card non-variable slices are rare. Concrete `CardDefinition` subclasses override `GetInitialSlices()` only when they need additional per-card slices (e.g., a "spell-with-charges" record, an "attack history" log). The factory walks instances at spawn time and installs returned slices keyed at `card.SelfRef`. `Card` itself inherits `InstanceWithSlices<TDef>`'s default `ISliceProvider` implementation, which delegates to the (protected) definition.
 
 ## CardRef
 
@@ -68,7 +70,7 @@ public readonly record struct CardRef(Guid Value)
 
 `CardRef` is **not** an `Identifier<T>`. Identifiers are stable references; `CardRef` is deliberately unstable. The two coexist:
 
-- `Ref<Card>` — stable. Used for variable storage (slice key), modifier storage, ownership, visibility, history, all server-internal subscriptions, and as the `CardRegistry`/catalog key.
+- `Ref<Card>` — stable. Used for variable storage (slice key), modifier storage, ownership, visibility, history, all server-internal subscriptions, and as the catalog key.
 - `CardRef` — temporary. Used as the `CardMapState` key, in `ZoneContentsState`, in client-facing slices and projections.
 
 Rotating `CardRef` is the framework's privacy mechanism. When a card hides or moves, the old ref is retired and a fresh one issued. Observers who held the old ref see it disappear; observers who never had data behind that ref see only the new ref appear. The underlying `Ref<Card>` and live `Card` handle are stable across rotations — only the public-facing `CardRef` flips.
@@ -92,34 +94,41 @@ public sealed record CardMapState : IState
 }
 ```
 
-The map holds typed refs only — *not* live `Card` handles. Live handles are held by `store.Catalog` (and a sibling `CardRegistry` keyed by `Ref<Card>`); resolution from a `CardRef` is two-hop:
+The map holds typed refs only — *not* live `Card` handles. Live handles are held by `store.Catalog`; resolution from a `CardRef` is two-hop:
 
 ```csharp
 var instanceRef = state.Get<CardMapState>().InstanceOf(cardRef);
-var card        = registry.Get(instanceRef);   // or store.Catalog.Resolve(instanceRef)
+var card        = store.Catalog.Resolve(instanceRef);
 ```
 
 Both hops are O(1). Holding `Card` objects in the slice would entangle in-process handle identity with snapshotted state; the indirection keeps the slice serialization-clean.
 
 Mutators that rotate `CardRef` write only `CardMapState` (swap the entry for the same `Ref<Card>`). The `Card` handle, the catalog entry, and every server-internal subscription keyed on `Ref<Card>` are untouched.
 
-## CardRegistry
+## Resolution surfaces
 
-Engine-side service holding live `Card` handles by `Ref<Card>`. Side-state on the engine (not a slice) — populated by `Card.Spawn`, cleared on engine teardown.
+There is one registry for stable handle resolution — `store.Catalog` — keyed by `Ref<T>`. There is no separate `CardRegistry`; per-kind ergonomics flow through type inference on `Catalog.Resolve(Ref<T>)`.
+
+| Caller has… | Resolution call |
+|---|---|
+| `Card` directly | (no resolution) |
+| `Ref<Card>` (server-internal) | `store.Catalog.Resolve(stableRef)` |
+| `CardRef` (from zone contents, history entry, network message) | two-hop via `CardMapState` + `Catalog` |
+
+The two-hop appears only in the third row. A small helper bundles it (its exact location — extension method on `Store`, instance method on `CardRef`, or shared utility — is non-structural and tracked as `bl-card-resolution-helper-shape` in `OPEN-ITEMS.md`):
 
 ```csharp
-public sealed class CardRegistry
+// Conceptual; final shape is an implementation detail.
+public static Card ResolveCard(this Store store, CardRef @ref)
 {
-    private readonly Dictionary<Ref<Card>, Card> cards = new();
-
-    public Card Get(Ref<Card> r) => cards[r];
-    public bool TryGet(Ref<Card> r, out Card card) => cards.TryGetValue(r, out card!);
-    public void Register(Card card) => cards[card.SelfRef] = card;
-    public void Unregister(Ref<Card> r) => cards.Remove(r);
+    var stableRef = store.Get<CardMapState>().InstanceOf(@ref);
+    return store.Catalog.Resolve(stableRef);
 }
 ```
 
-The registry duplicates `store.Catalog` content for `Ref<Card>` specifically; consumers can use either. The registry exists for typed ergonomics — `registry.Get(refOfCard)` returns `Card` directly, no cast — and to allow per-kind lifecycle hooks if a game wants them.
+Server-internal code that holds `Card` or `Ref<Card>` directly never touches this — it goes straight through `store.Catalog.Resolve(stableRef)`. Only code reading client-visible state (zone contents, history entries naming `CardRef`s) hits the helper.
+
+**Snapshot/restore.** `CardMapState` is a slice and serializes with the rest of state. `store.Catalog` is in-process side-state and is rebuilt deterministically on `LoadSnapshot` — the engine walks restored `EntityState` slices and reconstitutes `Card` handles, registering each at its `Ref<Card>`. `CardMapState` entries (already restored from snapshot) remain valid as-is; two-hop resolution works immediately after rehydration.
 
 ## OwnershipState
 
@@ -222,10 +231,10 @@ For `BypassCapacity = true` (force-effects bypassing zone defaults), use a recor
 
 ### Composite expansion (in prose, not normative API)
 
-- **CreateCardMutation** — calls `Card.Spawn` (which wraps `StoreEntities.Spawn<CardDefinition>` and casts the ref to `Ref<Card>`); inserts `(NewRef, NewSelfRef)` into `CardMapState`; registers the handle in `CardRegistry`; initializes the card's `EntityState` slice from `Definition.BaseValues` (already empty after `Spawn` — definition defaults flow through fold-time fallback); if `IntoZone` is non-null, inserts `NewRef` into that zone's `ZoneContentsState` at `Position`.
+- **CreateCardMutation** — calls `Card.Spawn` (which wraps `StoreEntities.Spawn<CardDefinition>` and casts the ref to `Ref<Card>`); inserts `(NewRef, NewSelfRef)` into `CardMapState`; registers the handle in `store.Catalog` at the new `Ref<Card>`; initializes the card's `EntityState` slice from `Definition.BaseValues` (already empty after `Spawn` — definition defaults flow through fold-time fallback); if `IntoZone` is non-null, inserts `NewRef` into that zone's `ZoneContentsState` at `Position`.
 - **MoveCardMutation** — removes `card.GetRef(state)` from `Source.ZoneContentsState`; rotates the `CardRef` entry in `CardMapState` (`oldRef → NewRef`, both pointing at the same `card.SelfRef`); inserts `NewRef` into `Destination.ZoneContentsState` at `Position`. **Precondition:** `Card` must currently be in `Source` (mutator throws if not — see `oq-move-validation-execution-drift` in `OPEN-ITEMS.md` for the deferred concurrency question). The catalog entry, registry entry, and `EntityState` slice are untouched.
 - **SetCardVisibilityMutation** — rotates the `CardRef` entry in `CardMapState`; swaps `oldRef → NewRef` in any `ZoneContentsState` containing the card; writes `CardVisibilityState[card.SelfRef] = Visibility`.
-- **DestroyCardMutation** — removes the entry from `CardMapState`; removes the card's `CardRef` from any `ZoneContentsState`; unregisters the `EntityState` slice keyed by `card.SelfRef`; clears the catalog entry and `CardRegistry` entry; fires the cleanup hook (per `oq-entity-destruction`, still open).
+- **DestroyCardMutation** — removes the entry from `CardMapState`; removes the card's `CardRef` from any `ZoneContentsState`; unregisters the `EntityState` slice keyed by `card.SelfRef`; clears the catalog entry; fires the cleanup hook (per `oq-entity-destruction`, still open).
 
 ### Construction helper
 
@@ -239,7 +248,7 @@ public static class StoreExtensions
         var selfRef = store.Catalog.AllocateRef<Card>();
         var newRef  = CardRef.NewRef();
         store.Execute(new CreateCardMutation(definition, selfRef, newRef, intoZone));
-        return store.GetService<CardRegistry>().Get(selfRef);
+        return store.Catalog.Resolve(selfRef);
     }
 }
 
@@ -254,7 +263,7 @@ Reading a card from a `CardRef` (two-hop, both O(1)):
 
 ```csharp
 var instanceRef = state.Get<CardMapState>().InstanceOf(someRef);
-var card        = registry.Get(instanceRef);
+var card        = store.Catalog.Resolve(instanceRef);
 ```
 
 Reading the cards in a zone — see `Zone.GetCards(state)` defined on the Zone class in [Zone Model § Zone Shape](features/zones/models/01-zone-model.md).
@@ -268,7 +277,7 @@ var owner = card.GetOwner(state);    // Actor or null
 
 ## Useful Invariants
 
-- One `Card` object per `Ref<Card>` in the running engine — held in `store.Catalog` and `CardRegistry`.
+- One `Card` object per `Ref<Card>` in the running engine — held in `store.Catalog`.
 - `Ref<Card>` is stable across the card's lifetime; `CardRef` rotates on every move and visibility transition.
 - All mutable card state (variables, modifiers, current public ref, owner, visibility) lives in slices.
 - Server-internal references (triggers, ongoing effects, attachments, history-side identity) use the `Card` object or `Ref<Card>` — never the rotating `CardRef`.
