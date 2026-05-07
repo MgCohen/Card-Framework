@@ -11,7 +11,7 @@ This document defines how the engine handles effects that require player input �
 
 Builds on:
 
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, `GameRules`, `OnQueueDrained`
+- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, `GameRulesRuntime<T>`, drain cycle
 - [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — type hierarchy, trigger fold
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — pipeline, envelope, handler flow
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — composite actions and scope
@@ -142,7 +142,7 @@ Triggered ability is itself an effect:
             → envelope: triggered ability resolved
 ```
 
-Each envelope is independent. The triggered ability dispatches through the normal channel. `GameRules.OnIncomingCommand` decides scheduling (RunNext, Enqueue, Stash). No special case needed.
+Each envelope is independent. The triggered ability dispatches through the normal channel — `engine.Dispatch` validates and enqueues onto the framework FIFO. Effect-level orchestration (whether the triggered effect runs immediately, batches, or stacks) is game-driven via state plus `runtime.Evaluate` per [ADR-0006](decisions/0006-two-pipeline-architecture.md). No special case at the dispatch channel.
 
 ---
 

@@ -97,7 +97,7 @@ Same pattern — the attachment is created and associated with a global game ent
 
 ## 4. Turn Hooks
 
-Turn lifecycle events (`TurnStartSignal`, `TurnEndSignal`, `PhaseChangeSignal`, etc.) are `GameSignal`s emitted by the turn management system — typically dispatched from inside a turn-advancing `GameAction`'s handler or from `GameRules.OnQueueDrained`.
+Turn lifecycle events (`TurnStartSignal`, `TurnEndSignal`, `PhaseChangeSignal`, etc.) are `GameSignal`s emitted by the turn management system — typically from inside a turn-advancing `GameAction`'s handler. Phase-advance follow-ups themselves are dispatched from `runtime.Evaluate` (state-based; see [`engine/02-gamerules-contract.md` §4](features/engine/models/02-gamerules-contract.md)).
 
 Attachments subscribe to these signals via `OnAfter<TSignal>` exactly like any other trigger. No special attachment API is needed.
 
