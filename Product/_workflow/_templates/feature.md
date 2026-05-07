@@ -19,7 +19,7 @@ High-level prose framing the feature in 30 seconds. SHOULD include a canonical a
 If no form fits cleanly, the stub `*n/a — descriptive only.*` is permitted.
 
 ## Vocabulary
-**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do **not** belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
+**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do not belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
 
 | Term | Meaning |
 |---|---|
@@ -34,7 +34,7 @@ Size to the Model count:
 |---|---|
 | **1** | Thin — often a single sentence pointing at the Model; the Model itself carries the structure. Stub `*n/a — see model 01.*` permitted. |
 | **2–3** | Medium — a paragraph or short diagram showing how the Models compose. The load-bearing section that makes the feature legible without opening every Model. |
-| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. |
+| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. (Past ~15 Models, consider splitting the feature — see §1.) |
 
 ## Composition
 Models that make up this feature (table form, always present regardless of count).
@@ -58,6 +58,8 @@ What this feature owns — and what it explicitly doesn't. Demarcation against n
 - <thing> → <feature that does>
 
 ## Dependencies
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** features/X — consumed
 - **Downstream:** features/Y — consumes this
 

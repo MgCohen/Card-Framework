@@ -223,7 +223,7 @@ High-level prose framing the feature in 30 seconds. SHOULD include a canonical a
 If no form fits cleanly, the stub `*n/a — descriptive only.*` is permitted.
 
 ## Vocabulary
-**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do **not** belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
+**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do not belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
 
 | Term | Meaning |
 |---|---|
@@ -238,7 +238,7 @@ Size to the Model count:
 |---|---|
 | **1** | Thin — often a single sentence pointing at the Model; the Model itself carries the structure. Stub `*n/a — see model 01.*` permitted. |
 | **2–3** | Medium — a paragraph or short diagram showing how the Models compose. The load-bearing section that makes the feature legible without opening every Model. |
-| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. |
+| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. (Past ~15 Models, consider splitting the feature — see §1.) |
 
 ## Composition
 Models that make up this feature (table form, always present regardless of count).
@@ -262,6 +262,8 @@ What this feature owns — and what it explicitly doesn't. Demarcation against n
 - <thing> → <feature that does>
 
 ## Dependencies
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** features/X — consumed
 - **Downstream:** features/Y — consumes this
 
@@ -836,10 +838,9 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 | `ledgers/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
 | `ledgers/OPEN-ITEMS.md` | Durable ledger of loose ends — questions, deferred work, known TODOs. Self-contained paragraph entries. Resolution = delete the entry (resolving doc owns the answer) | Append on durable open; delete on resolution |
 | `ledgers/FEATURE-MAP.md` | Bird's-eye view: feature index table, mermaid dependency graph, model-level breakdown. Hand-maintained v1; auto-generated v2 | When a Model lands, a Feature ships, or dependencies shift |
-| `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
 | `sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` | Opt-in milestone snapshot — frozen copy of `SESSION-CHECKPOINT.md` at a referenceable point. `type: snapshot` front matter; *"Frozen — do not edit"* header. See §4.6. | When `/builder:snapshot` is invoked |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
-| `Product/decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions per §4.5) | When a project-scoped decision settles |
+| `Product/decisions/NNNN-*.md` | Project-wide ADRs — cross-feature decisions, workflow choices, migration moves (per §4.5) | When a project-scoped decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
