@@ -116,7 +116,9 @@ public static class EffectInstanceExtensions
 {
     public static Task Execute(this EffectInstance instance, IEffectScope scope)
     {
-        var source = scope.Store.Catalog.Resolve(instance.Source);
+        // scope.State.Resolve(reference) is assumed to provide catalog lookup —
+        // IStateScope is the read-only surface (state slices + handle resolve).
+        var source = scope.State.Resolve(instance.Source);
         var def    = source.Definition.GetEffect(instance.Id);
 
         return def.Validate(instance, scope)
@@ -271,14 +273,122 @@ Inside an effect's Execute (called from a chain):
         ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
 ```
 
-## Sample effect — Lightning Bolt
+## Sample commands
 
-> **Authoring boundary.** The card's `Effects` list is treated as *already populated* by the time the runtime reads it. *How* it gets populated — code-side registration, serialized asset import, definition editor — is the authoring layer's job (`oq-effect-authoring`) and out of scope here. This spike pins the *shape* of an `EffectDefinition`; not how the catalog gets filled.
+Three handler shapes covering the common base cases. Listed before effects because effects compose over commands.
 
-An effect is authored as a subclass of `EffectDefinition` with the lambdas baked into the constructor — readable, reusable, addressable by type:
+### `MoveCardAction` — composite mutation orchestration
 
 ```csharp
-// Authored effect — lambda lives inside the subclass, not on a card definition.
+public sealed record MoveCardAction(
+    Card Card,
+    Zone From,
+    Zone To,
+    Position? Position = null) : GameAction;
+
+public sealed record MoveCardResult() : CommandResult;
+
+public sealed class MoveCardHandler : ICommandHandler<MoveCardAction, MoveCardResult>
+{
+    public bool Validate(MoveCardAction cmd, IStateScope state, out string? reason)
+    {
+        if (!cmd.From.GetContents(state).Contains(cmd.Card.GetRef(state)))
+        { reason = "card not in source zone"; return false; }
+        reason = null;
+        return true;
+    }
+
+    public Task<MoveCardResult> Handle(MoveCardAction cmd, IHandlerContext ctx)
+    {
+        // MoveCardMutation is a CompositeAction (remove + insert + ref rotation).
+        // The handler dispatches it like any other payload through Store.Execute.
+        ctx.Store.Execute(MoveCardMutation.AtTop(cmd.Card, cmd.From, cmd.To));
+        return Task.FromResult(new MoveCardResult());
+    }
+}
+```
+
+### `DealDamageToPlayerAction` — read + mutate + emit
+
+The representative shape: read state, dispatch a payload, emit a `GameSignal` so triggers can react.
+
+```csharp
+public sealed record DealDamageToPlayerAction(
+    Player Target,
+    int Amount,
+    Reference? Source = null) : GameAction;
+
+public sealed record DealDamageResult(int Dealt) : CommandResult;
+
+public sealed class DealDamageToPlayerHandler
+    : ICommandHandler<DealDamageToPlayerAction, DealDamageResult>
+{
+    public bool Validate(DealDamageToPlayerAction cmd, IStateScope state, out string? reason)
+    {
+        if (cmd.Amount < 0) { reason = "amount cannot be negative"; return false; }
+        reason = null;
+        return true;
+    }
+
+    public Task<DealDamageResult> Handle(DealDamageToPlayerAction cmd, IHandlerContext ctx)
+    {
+        var current = cmd.Target.Storage.GetBase<int>(Vars.Health);
+        var next    = Math.Max(0, current - cmd.Amount);
+
+        ctx.Store.Execute(new SetBaseValuePayload(cmd.Target.SelfRef, Vars.Health, next));
+        ctx.Emit(new DamageDealtSignal(cmd.Target, cmd.Amount, cmd.Source));
+
+        return Task.FromResult(new DealDamageResult(Dealt: current - next));
+    }
+}
+```
+
+### `ApplyBuffAction` — DI-injected service usage
+
+`IModifierFactory` is no longer on `IHandlerContext` (per Q2 — not a base-case service). Handlers that need it inject it. Same pattern for `ICommandAwaiter` if a sync handler unusually needed one (it shouldn't, but the pattern is the same).
+
+```csharp
+public sealed record ApplyBuffAction(
+    EntityInstance<EntityDefinition> Target,
+    Variable Key,
+    int Amount,
+    Reference Source) : GameAction;
+
+public sealed record ApplyBuffResult(ModifierId Id) : CommandResult;
+
+public sealed class ApplyBuffHandler : ICommandHandler<ApplyBuffAction, ApplyBuffResult>
+{
+    private readonly IModifierFactory _modifiers;
+    public ApplyBuffHandler(IModifierFactory modifiers) => _modifiers = modifiers;
+
+    public bool Validate(ApplyBuffAction cmd, IStateScope state, out string? reason)
+    { reason = null; return true; }
+
+    public Task<ApplyBuffResult> Handle(ApplyBuffAction cmd, IHandlerContext ctx)
+    {
+        var entry = _modifiers.Create(
+            cmd.Key,
+            new IntAddModifier { Amount = cmd.Amount },
+            new ModifierSource(cmd.Source, Order: 0));
+
+        ctx.Store.Execute(new AddModifierPayload(cmd.Target.SelfRef, entry));
+
+        return Task.FromResult(new ApplyBuffResult(entry.Id));
+    }
+}
+```
+
+## Sample effects
+
+> **Authoring boundary.** Each card's `Effects` list is treated as *already populated* by the time the runtime reads it. *How* it gets populated — code-side registration, serialized asset import, definition editor — is the authoring layer's job (`oq-effect-authoring`) and out of scope here. This spike pins the *shape* of an `EffectDefinition`; not how the catalog gets filled.
+
+Five shapes covering the trigger-and-effect verb space: active-with-target, active-no-target, before-fold `Replace`, after-fold `Dispatch`, before-fold `Cancel`.
+
+Effects are authored as subclasses of `EffectDefinition` with lambdas baked into the constructor — readable, reusable, addressable by type.
+
+### Lightning Bolt — active effect with target
+
+```csharp
 public sealed class LightningBoltDamageEffect : EffectDefinition
 {
     public LightningBoltDamageEffect()
@@ -286,26 +396,134 @@ public sealed class LightningBoltDamageEffect : EffectDefinition
             id: EffectIds.LightningBoltDamage,
             execute: async (instance, scope) =>
             {
-                var target = instance.Bindings.Targets[0];
-                await scope.Dispatch(new DealDamageAction
-                {
-                    Target = target,
-                    Amount = 3,
-                });
+                var target = scope.State.Resolve<Player>(instance.Bindings.Targets![0]);
+                await scope.Dispatch<DealDamageResult>(
+                    new DealDamageToPlayerAction(target, Amount: 3, Source: instance.Source));
             })
         // Validate omitted — defaults to "always valid"
     { }
 }
 
-// Card definition — `Effects` is treated as already populated by the time
-// anything reads it. The literal initializer below is illustrative only;
-// the spike makes no claim about who/how filled the list (authoring concern).
+// Card definition — `Effects` is treated as already populated. The literal
+// initializer is illustrative only; the spike makes no claim about who/how
+// filled the list (authoring concern).
 public sealed class LightningBoltCardDefinition : CardDefinition
 {
     public override IReadOnlyList<EffectDefinition> Effects { get; }
         = new EffectDefinition[] { new LightningBoltDamageEffect() };
 }
 ```
+
+### Draw a card — active effect, no target
+
+Floor case: a single `Dispatch`, no decision, no target binding. Source is the player drawing.
+
+```csharp
+public sealed class DrawCardEffect : EffectDefinition
+{
+    public DrawCardEffect()
+        : base(
+            id: EffectIds.DrawCard,
+            execute: async (instance, scope) =>
+            {
+                var owner = scope.State.Resolve<Player>(instance.Source);
+                var deck  = owner.Deck;     // declared on PlayerDefinition.PerPlayerZones
+                var hand  = owner.Hand;
+                var top   = deck.GetTopCard(scope.State);
+
+                if (top is null) return;    // empty deck — game-side rule decides what happens
+
+                await scope.Dispatch<MoveCardResult>(
+                    new MoveCardAction(top, From: deck, To: hand, Position: Position.AtTop));
+            })
+    { }
+}
+```
+
+### Bloodlust — before-fold trigger using `Replace`
+
+A passive: the controller's outgoing damage is +1. Registered as a before-fold trigger on `DealDamageToPlayerAction` for the controller's actor.
+
+```csharp
+public sealed class IncreaseOutgoingDamageEffect : EffectDefinition
+{
+    public IncreaseOutgoingDamageEffect()
+        : base(
+            id: EffectIds.IncreaseOutgoingDamage,
+            execute: async (instance, scope) =>
+            {
+                var intercepted = (DealDamageToPlayerAction)instance.Bindings.InterceptedCommand!;
+                var owner       = scope.State.Resolve<Player>(instance.Source);
+
+                if (intercepted.Source != owner.SelfRef) return;   // not from us — leave alone
+
+                var bumped = intercepted with { Amount = intercepted.Amount + 1 };
+                scope.Replace(bumped);                             // ← Replace verb (before-fold only)
+            })
+    { }
+}
+```
+
+### Vampiric — after-fold trigger using `Dispatch`
+
+When the controller deals damage, heal them by half (round down). After-fold: damage already applied, this is a reaction.
+
+```csharp
+public sealed class HealOwnerWhenDealingDamageEffect : EffectDefinition
+{
+    public HealOwnerWhenDealingDamageEffect()
+        : base(
+            id: EffectIds.HealOwnerOnDamage,
+            execute: async (instance, scope) =>
+            {
+                var intercepted = (DealDamageToPlayerAction)instance.Bindings.InterceptedCommand!;
+                var owner       = scope.State.Resolve<Player>(instance.Source);
+
+                if (intercepted.Source != owner.SelfRef || intercepted.Amount <= 0) return;
+
+                // HealActorAction handler is symmetric to DealDamageToPlayerHandler — reads
+                // the variable, dispatches SetBaseValuePayload, emits HealedSignal.
+                await scope.Dispatch<HealActorResult>(
+                    new HealActorAction(owner, intercepted.Amount / 2));
+            })
+    { }
+}
+```
+
+### Lockdown — before-fold trigger using `Cancel`
+
+A passive that silences a marked actor: any cast attempt by them is cancelled. The silenced actor is bound when the lockdown effect is registered (one of the `Bindings.Targets`).
+
+```csharp
+public sealed class SilenceActorEffect : EffectDefinition
+{
+    public SilenceActorEffect()
+        : base(
+            id: EffectIds.SilenceActor,
+            execute: async (instance, scope) =>
+            {
+                if (instance.Bindings.InterceptedCommand is not CastSpellAction cast) return;
+
+                var silenced = (Ref<Player>)instance.Bindings.Targets![0];
+                if (cast.Caster.SelfRef != silenced) return;
+
+                scope.Cancel(reason: "silenced");                   // ← Cancel verb (before-fold only)
+            })
+    { }
+}
+```
+
+### Coverage map
+
+| Shape | Sample |
+|---|---|
+| Active effect, with target, single Dispatch | Lightning Bolt |
+| Active effect, no target | Draw a Card |
+| Before-fold trigger, `Replace` verb | Bloodlust (+1 damage) |
+| After-fold trigger, `Dispatch` reaction | Vampiric (heal-on-damage) |
+| Before-fold trigger, `Cancel` verb | Lockdown (silence) |
+
+What's still uncovered: `scope.Decide` (target picker / choice prompt) and `scope.RunEffect` (sub-effect scheduling from inside a chain). Surface for both. Defer until those design questions settle (`Decide` shape is TBD; `RunEffect` placement depends on concern #2).
 
 A handler that *casts* the spell builds the `EffectInstance` with bound parameters and asks the pipeline to schedule it:
 
