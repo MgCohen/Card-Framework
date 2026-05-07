@@ -11,31 +11,35 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into the canonical Models:
+Design pass on **triggers + dispatch flow** (and an in-flight runtime-contract reshape that preceded it) — closed 2026-05-07. Net architectural moves:
 
-- New `Product/features/engine/models/07-game-definition.md` — `GameDefinition` bundle shape, `ISliceProvider` mechanism, layout-block contract, factory `Build` walk pseudocode, ownership-vs-zone-assignment two-tier model.
-- New `Product/features/players/players.md` + `Product/features/players/models/01-player-model.md` — `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions.
-- `Product/features/engine/models/05-game-factory.md` — `MatchSetup = (GameDefinition, Actors, Seed) + 3 overlays`; `IMatchBuilder` updated; validation against new shape; Pile Counter example reshaped to use `PileCounterGameDefinition`; `oq-game-definition` removed from open follow-ups.
-- `Product/features/{cards,zones,entities}/models/01-*.md` + `entities/02-runtime-surface.md` — `ISliceProvider` adopted on `CardDefinition`/`ZoneDefinition`/`EntityDefinition`/`EntityInstance<TDef>` with instance-delegates-to-definition default; "slices don't carry their primary key" convention pinned.
-- `Product/decisions/0005-objects-over-ids.md` — `IActor` interface added to the polymorphic-types section.
-- `Product/ledgers/GLOSSARY.md` — Updated `Actor`/`Player`/`Owner` entries; new entries for `IActor`, `GameDefinition`, `PlayerDefinition`, `ISliceProvider`, `ZoneOverlay`, `PlayerDefinitionOverlay`.
-- `Product/ledgers/FEATURE-MAP.md` — `players` row added; engine model count bumped to 7; Mermaid graph extended.
-- `Product/ledgers/OPEN-ITEMS.md` — `oq-game-definition` resolved; `bl-actor-ownership-reverse-index` added (deferred Q5 sub-question).
-- `Product/spikes/domain-model-proposal.md` — flipped to `superseded` with resolution rationale (locked decisions live in the cascade).
+- **Three-level model named.** Commands (atomic, framework-FIFO) / Effects (multi-command logic units, game-scheduled) / Triggers ⊆ Effects (reactive effects with intercepted-command payload). Effects and triggers are internally identical.
+- **Two-pipeline architecture.** Command pipeline (framework, strict FIFO, fold-based per-command primitives) + Effect pipeline (game-customizable, decides when each effect *starts*). Per-command primitives — `scope.Modify` / `scope.Cancel` / `scope.Replace` / `scope.Dispatch` — stay framework-level; **no game override on command-queue routing**.
+- **`FilterTriggers` stays on the runtime** (Q1 = A). Game-wide trigger eligibility belongs with other game decisions.
+- **B′ rejected** (`Enqueue` / `GetNext` / `EnqueueReaction` / `EnqueueReplacement` on the runtime). Was solving the wrong abstraction level — what games actually customize is effect-level orchestration, not command queue routing.
+- **In-flight runtime-contract reshape** (preceded this design pass; not yet patched): try-get `Dispatch(GameAction, out string? reason)` and matching lifecycle methods; deletions of `Route` / `OnIncomingCommand` / `IIntakeQueue` / `IntakeDecision` / `IntakeContext` / `IntakeResult` / `DispatchOrigin` / `OnQueueDrained` / `DrainResult`; snapshot publication purely runtime-driven via `Actions.Set`; ADR-0002 refresh to "zero **gameplay** state"; `rules` → `runtime` rename.
+- Patch cascade pending — land both reshapes together as one cascade. Followed by a focused design pass on the effect-pipeline shape.
 
-Plan A/B/C doc cascade **landed** earlier in this session ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)). Entities-bridge spike resolved superseded. Earlier `oq-engine-match-lifecycle` and `oq-gamerules-runtime-definition` cascades fully landed.
+Earlier in the broader project: domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into canonical Models (`engine/07-game-definition`, `players/01-player-model`, `engine/05-game-factory` MatchSetup reshape, `ISliceProvider` adoption across cards/zones/entities, ADR-0005 + glossary + FEATURE-MAP updates, domain-model spike superseded). Plan A/B/C doc cascade landed earlier ([Card-Framework PR #100](https://github.com/MgCohen/Card-Framework/pull/100)).
 
 ---
 
 ## 🎯 Active focus
 
-No active thread. Possible next directions:
+**Patch cascade for triggers+dispatch design pass + runtime-contract reshape.** Land the two together as one cascade so the docs aren't internally inconsistent mid-flight:
 
-- **Resolve top open items.** Highest-leverage durable questions left: `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async cancellation), `oq-attachment-storage` (attachment home — sub-zone vs registry vs dedicated zone).
-- **Promote a `considered` feature.** `authoring`, `interaction`, or `networking` move from considered to draft when triggered (typically: first feature reaches `implemented`, or a vertical-slice prototype forces it).
-- **First vertical-slice prototype.** Pile Counter sample is the canonical reference; building the actual `PileCounterGameDefinition` against the now-settled domain model would force-test the design.
+- `engine/02-gamerules-contract.md` — affirm `FilterTriggers` location; remove candidate `Enqueue` / `GetNext` (B′ retraction); document command-vs-effect-pipeline split; switch surface to try-get `Dispatch`.
+- `engine/01-evaluation-loop.md` — pending list stays engine-private FIFO; `bool Dispatch(GameAction, out string? reason)`; `rules` → `runtime` rename; remove `OnQueueDrained` / `DrainResult` references; remove `OnIncomingCommand` / `Route`.
+- New ADR `decisions/0006-two-pipeline-architecture.md` — name the three-level model and command/effect pipeline split.
+- ADR-0002 (`gamerules-zero-state`) — refresh wording to "zero **gameplay** state."
+- `triggers/01-trigger-fold.md` — align with try-get / runtime rename / removal of `OnIncomingCommand`.
+- `effects/02-replacement-prevention.md` — align with the runtime contract changes.
+- `effects/01-async-dispatch.md` + `effects/04-effect-flow.md` — align with three-level model + new effect-pipeline framing (light touch; deeper work is the next design pass).
+- `presentation/01-presentation-loop.md` + `support/samples/pile-counter.md` — update `engine.Dispatch` call sites to the new try-get shape.
+- `ledgers/OPEN-ITEMS.md` — resolve `oq-intake-queue` and `oq-stash-release` by deletion; add `oq-effect-pipeline`.
+- `ledgers/GLOSSARY.md` — update `Trigger` / `Effect` entries to reflect "triggers ⊆ effects"; add command/effect pipeline entries.
 
-Pick a thread when ready.
+Once the cascade lands, the next thread is the **effect-pipeline design pass** — substantive enough to warrant its own walk, will touch async-dispatch and effect-flow Models.
 
 ---
 
