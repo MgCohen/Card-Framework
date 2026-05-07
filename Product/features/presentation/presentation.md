@@ -42,7 +42,7 @@ The boundary is bi-directional: state and history flow down (server → client s
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `PlayerIntent`, `IIntentMapper`, `PlayerChoice`, `ActionTemplate`, `AvailableActionsSnapshot`, `IntentGateway`, `GameCommand`, `CommandResult`, `HistoryEnvelope` (defined in `actions/`); `IAvailableActions`, `AvailableActionsState`, `HistoryState`, `EngineState`, `IStateScope`, `IStoreScope`, `Store`, `GameRulesRuntime` (defined in `engine/`); `Effect`, `IEffectScope`, `ICommandAwaiter` (defined in `effects/`); `Card`, `CardRef`, `Zone`, `InstanceId`, `Actor`, `ActorId` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `PlayerIntent`, `IIntentMapper`, `PlayerChoice`, `ActionTemplate`, `AvailableActionsSnapshot`, `IntentGateway`, `GameCommand`, `CommandResult`, `HistoryEnvelope` (defined in `actions/`); `IAvailableActions`, `AvailableActionsState`, `HistoryState`, `EngineState`, `IStateScope`, `IStoreScope`, `Store`, `GameRulesRuntime` (defined in `engine/`); `Effect`, `IEffectScope`, `ICommandAwaiter` (defined in `effects/`); `Card`, `CardRef`, `Zone`, `InstanceId`, `Actor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -53,11 +53,7 @@ Feature-owned terms. Cross-feature terms — `PlayerIntent`, `IIntentMapper`, `P
 
 ## Architecture
 
-The feature has one Model — the Presentation Loop Model — which defines the four-layer model (Store → IntentMapper → AffordanceMap → View), the snapshot-driven reactive flow, the validation layering on the presentation side, and the transport-boundary visibility filter responsibility.
-
-The presentation layer **subscribes** to state changes; it does not poll. State subscriptions go through the `Store` (per [`engine/04 §Subscriptions`](features/engine/models/04-gamestate-slices.md)) — typically a singleton subscription on `AvailableActionsState` and per-zone `Subscribe<ZoneContentsState>(zoneRef, ...)` for content rendering. The `AffordanceMap` is rebuilt on every snapshot change; the View re-renders.
-
-Validation on the presentation side is **prophylactic, not authoritative**. The `AffordanceMap` projects what the snapshot says is currently legal; the View only allows gestures the map permits. But `handler.Validate` at dispatch is the authoritative check (per [`decisions/0007-five-validation-layers.md`](decisions/0007-five-validation-layers.md)) — if the snapshot is stale, dispatch catches it and the gateway surfaces the rejection (toast / inline error / etc.).
+The feature has one Model. See `models/01-presentation-loop.md` for the four-layer model (Store → IntentMapper → AffordanceMap → View), snapshot-driven reactive flow, presentation-side validation layering (prophylactic, not authoritative), and transport-boundary visibility filter responsibility.
 
 ## Composition
 

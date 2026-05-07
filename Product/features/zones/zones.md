@@ -34,7 +34,7 @@ Zones do **not** participate in the entity-variable bridge or modifier-stack mac
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `Card`, `CardRef`, `CardMapState`, `CardVisibility` (cards/), `Actor`, `IReference`, `InstanceId`, `IState`, `Identifier<T>` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `Card`, `CardRef`, `CardMapState`, `CardVisibility` (cards/), `Actor`, `IReference`, `InstanceId`, `IState`, `Identifier<T>` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -49,9 +49,7 @@ Feature-owned terms. Cross-feature terms — `Card`, `CardRef`, `CardMapState`, 
 
 ## Architecture
 
-The feature has one Model — the Zone Model — which defines the handle, the three state slice categories (`ZoneContentsState`, `OwnershipState`, per-zone-type runtime), the insertion API, the visibility model, and the zone-movement flow.
-
-Zones organize content; they do not own legality. **Movement is approved by game/action rules and organized by zones** — `actions/` validates whether an actor may move an instance; once approved, the zone's mutator updates `ZoneContentsState` and rotates the `CardRef` (per `cards/` mutation contract). Visibility is a coordinated mechanism across cards, zones, and presentation — see [`decisions/0006-zone-visibility-model.md`](decisions/0006-zone-visibility-model.md).
+The feature has one Model. See `models/01-zone-model.md` for the handle, three state slice categories (`ZoneContentsState`, `OwnershipState`, per-zone-type runtime), insertion API, visibility model, and zone-movement flow.
 
 ## Composition
 

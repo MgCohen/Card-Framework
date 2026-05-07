@@ -37,7 +37,7 @@ This replaces the older `CommandPreHook` / `CommandReaction` placeholder design.
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal` (the type hierarchy is defined here but consumed across `actions/`, `engine/`, `effects/`); `IEffectScope`, `Effect` (defined in `effects/`); `HistoryEnvelope` (defined in `actions/`); `GameRules`, `IntakeResult`, `DrainResult` (defined in `engine/`); `InstanceId`, `ActorId` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal` (the type hierarchy is defined here but consumed across `actions/`, `engine/`, `effects/`); `IEffectScope`, `Effect` (defined in `effects/`); `HistoryEnvelope` (defined in `actions/`); `GameRules`, `IntakeResult`, `DrainResult` (defined in `engine/`); `InstanceId`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -53,9 +53,7 @@ Feature-owned terms. Cross-feature terms — `GameCommand`, `GameAction`, `Compo
 
 ## Architecture
 
-The feature has one Model — the Trigger Fold Model — which defines the type hierarchy (`GameCommand` and its three subtypes), the trigger fold mechanic, the two registration surfaces (`ITriggerSystem` for game code, `ITriggerPipeline` for pipeline-internal execution), and the per-instance registration pattern via `AbilityDefinition`.
-
-The flow above is the load-bearing structure: registry-query → `GameRules.FilterTriggers` (availability policy: phase gating, mana fast-path, stack lock, target validation) → `ITriggerPipeline` runs the fold → if cancelled/replaced, branch; otherwise handler executes → after-fold runs reactions. Reactions dispatched from inside a trigger flow through the same channel as everything else (no separate reaction queue); the channel routes them via `GameRules.OnIncomingCommand` based on `DispatchOrigin`.
+The feature has one Model. See `models/01-trigger-fold.md` for the type hierarchy (`GameCommand` and its three subtypes), the trigger fold mechanic, the two registration surfaces (`ITriggerSystem` for game code, `ITriggerPipeline` for pipeline-internal execution), and the per-instance registration pattern via `AbilityDefinition`. The flow shown in `## What it is` is the load-bearing structure.
 
 ## Composition
 

@@ -41,7 +41,7 @@ The framework's command pipeline. A **`PlayerIntent`** (UI input or system attem
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `ICommandAwaiter`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `IAvailableActions`, `AvailableActionsSnapshot`, `IntakeResult`, `DrainResult`, `IIntakeQueue`, `EngineLifecycle` (defined in `engine/`); `Card`, `Zone`, `OwnershipState`, `CardRef`, `InstanceId`, `Actor`, `ActorId`, `IReference`, `Identifier<T>` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `ICommandAwaiter`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `IAvailableActions`, `AvailableActionsSnapshot`, `IntakeResult`, `DrainResult`, `IIntakeQueue`, `EngineLifecycle` (defined in `engine/`); `Card`, `Zone`, `OwnershipState`, `CardRef`, `InstanceId`, `Actor`, `ActorId`, `IReference`, `Identifier<T>` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|

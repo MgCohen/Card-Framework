@@ -41,7 +41,7 @@ The orchestrator. Holds the **evaluation loop** that drains commands, the **rule
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `TriggerMatch`, `TriggerPhase`, `DispatchOrigin` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `ICommandAwaiter`, `Effect`, `Mutator`, `Store`, `IStateScope`, `IStoreScope`, `BaseState`, `IModifierFactory`, `IAvailableActions`, `AvailableActionsSnapshot`, `ActionTemplate` (defined in `effects/` and `actions/`); `IIntentMapper`, `IntentMapper`, `CommandResult`, `HistoryEnvelope`, `ICommandHandler`, `ICommandPipeline` (defined in `actions/`); `Card`, `Zone`, `OwnershipState`, `InstanceId`, `Actor`, `ActorId`, `IReference` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `TriggerMatch`, `TriggerPhase`, `DispatchOrigin` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `ICommandAwaiter`, `Effect`, `Mutator`, `Store`, `IStateScope`, `IStoreScope`, `BaseState`, `IModifierFactory`, `IAvailableActions`, `AvailableActionsSnapshot`, `ActionTemplate` (defined in `effects/` and `actions/`); `IIntentMapper`, `IntentMapper`, `CommandResult`, `HistoryEnvelope`, `ICommandHandler`, `ICommandPipeline` (defined in `actions/`); `Card`, `Zone`, `OwnershipState`, `InstanceId`, `Actor`, `ActorId`, `IReference` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|

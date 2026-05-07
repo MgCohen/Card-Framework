@@ -33,7 +33,7 @@ The framework's foundational entity primitive. Every runtime "thing" — cards, 
 
 ## Vocabulary
 
-Feature-owned terms. Cross-feature terms — `Actor`, `ActorId`, `Identifier<T>`, `IReference`, `IState`, `Store` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `Actor`, `ActorId`, `Identifier<T>`, `IReference`, `IState`, `Store` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -52,15 +52,7 @@ Feature-owned terms. Cross-feature terms — `Actor`, `ActorId`, `Identifier<T>`
 
 ## Architecture
 
-The feature has two Models. The conceptual model lives in `01-definition-instance-model.md`; the runtime API surface lives in `02-runtime-surface.md`.
-
-Three flows tie the Models together:
-
-1. **Spawn → base → modifier.** `Entities.Spawn<TDef>(definition)` allocates a fresh `InstanceId`, registers an empty `EntityVariableState`, builds the `StateEntity<TDef>` handle, and returns it. The instance inherits all values from definition defaults. Subsequent `SetBaseValuePayload` overrides bases; `AddModifier` (via the factory) layers modifiers. Reads through the handle return effective values (definition default → base override → modifier fold).
-
-2. **Identity preservation across zone moves.** Zone movement preserves the same `InstanceId`. The instance is the durable runtime object; `InstanceId` is just the lookup key. Game-specific systems can override this default explicitly (e.g., MTG-style zone-change replacement).
-
-3. **Snapshot / restore.** Snapshots contain canonical `EntityVariableState` slices, never handles. On `LoadSnapshot` the engine walks the restored slices and re-creates each `StateEntity<TDef>` via `EntityStateFactory.Create(...)`. Subscribers attached to old handles are gone — projections that need to bind on rollback must re-subscribe through `IEntityRegistry`.
+Two Models. The conceptual model lives in `01-definition-instance-model.md` (definitions, instances, variables, modifiers, attachments, the bridge boundary); the runtime API surface lives in `02-runtime-surface.md` (`StateEntity<TDef>` handle, read API, subscriptions, mutation surface, `IEntityRegistry`). Three flows tie them together: **spawn → base → modifier** (handle constructed empty, base overrides, modifier layers fold), **identity preservation across zone moves** (`InstanceId` stable; per-game opt-in for MTG-style replacement), and **snapshot / restore** (slices restore; handles re-created via `EntityStateFactory`; subscribers must re-bind).
 
 ## Composition
 
