@@ -50,9 +50,9 @@ public sealed record AvailableActionsState(
     AvailableActionsSnapshot Snapshot) : BaseState;
 ```
 
-- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime.OnQueueDrained`.
+- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime` via `IAvailableActions.Set(...)`. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted.
 - **Written by.** `IAvailableActions` service (framework-internal mutator). Game authors write through the service, never directly.
-- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.OnQueueDrained` for re-build.
+- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
 - **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()`.
 
 ### 3.2 `EngineState`

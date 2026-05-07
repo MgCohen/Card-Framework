@@ -9,7 +9,7 @@ tags: [#engine, #factory, #bootstrap]
 
 ## Problem
 
-Building a `GameEngine` for a single match requires assembling several inputs: per-game behavior types (handlers, mutators, `GameRules` implementations, `IIntentMapper`), per-match data (initial slice values, actor catalog, RNG seed, rules selection), and framework services (`IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`). The earlier sketch in `support/samples/pile-counter.md §9.8` mixed all of these into a single fluent builder (`new GameEngineBuilder().WithHandlers<T>().WithMutators<T1, T2>().WithRule<T>().WithIntentMapper<T>().Build(container)`), which conflated DI installation with per-match configuration and pushed the container through to the call site.
+Building a `GameEngine` for a single match requires assembling several inputs: per-game behavior types (handlers, mutators, `GameRulesRuntime<T>` implementations, `IIntentMapper`), per-match data (initial slice values, actor catalog, RNG seed, rules selection), and framework services (`IStateScope`, `IAvailableActions`, `ICommandPipeline`). The earlier sketch in `support/samples/pile-counter.md §9.8` mixed all of these into a single fluent builder (`new GameEngineBuilder().WithHandlers<T>().WithMutators<T1, T2>().WithRule<T>().WithIntentMapper<T>().Build(container)`), which conflated DI installation with per-match configuration and pushed the container through to the call site.
 
 This Model defines a clean two-layer split between **DI installation** (the app-level VContainer installer registering every behavior type) and **match construction** (a per-match factory that takes only match-specific data) and locks the factory's API surface.
 
@@ -33,7 +33,7 @@ This Model defines a clean two-layer split between **DI installation** (the app-
 The framework commits to two distinct registration boundaries:
 
 **App-level VContainer installation (one-time, per app):**
-- Framework `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`, `Store`, and `IGameFactory`.
+- Framework `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `ICommandPipeline`, `Store`, and `IGameFactory`. (Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `IIntakeQueue` — the command queue is engine-private FIFO.)
 - Game installer registers every `ICommandHandler<TCommand, TResult>`, every `Mutator<TState, TPayload>`, every `GameRulesRuntime<TDefinition>` implementation (closed-generic, e.g. `Register<GameRulesRuntime<MagicRulesDefinition>, MagicRulesRuntime>()`), `IIntentMapper`, any game-specific subsystems the runtime depends on (`IStackSystem`, `IDeckSystem`, …), and any other game services.
 
 **Per-match construction (every match):**
@@ -146,7 +146,7 @@ After `Build` returns, the `GameEngine` is in `EngineLifecycle.NotStarted` — f
 
 ### Mode-specific command vocabularies
 
-The factory does not accept a per-match handler pool. Vocabulary differences between game modes (Tutorial disabling certain commands, Sandbox enabling debug commands) are expressed in `GameRulesRuntime.OnIncomingCommand` rejection and in the available-actions snapshot. Every match resolves the full installed handler catalog from the container.
+The factory does not accept a per-match handler pool. Vocabulary differences between game modes (Tutorial disabling certain commands, Sandbox enabling debug commands) are expressed in `handler.Validate` rejection (per-command legality) and in the available-actions snapshot (UI prophylactic). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md) the runtime no longer has an `OnIncomingCommand` hook; mode-specific vocabulary lives in handlers and the snapshot. Every match resolves the full installed handler catalog from the container.
 
 ## Invariants
 
@@ -255,8 +255,8 @@ var engine = factory.Create(new MatchSetup
 
 ### Sub-decision — handler pool scoping
 
-- **Build-time scoped pool** — factory takes `WithCommandPool(...)`; pipeline rejects out-of-pool commands at intake. Rejected: duplicates `GameRules.OnIncomingCommand`'s authority over intake gating; introduces a parallel filter the rule and pool must agree on by convention.
-- **Install-time fixed pool** — chosen. Every match resolves the full installed handler catalog; mode-specific vocabularies are expressed in `GameRules` intake rejection and the available-actions snapshot.
+- **Build-time scoped pool** — factory takes `WithCommandPool(...)`; pipeline rejects out-of-pool commands at intake. Rejected: duplicates `handler.Validate`'s authority over per-command legality; introduces a parallel filter that handlers and pool must agree on by convention.
+- **Install-time fixed pool** — chosen. Every match resolves the full installed handler catalog; mode-specific vocabularies are expressed in `handler.Validate` rejection and the available-actions snapshot.
 
 ### Sub-decision — rules selection form
 
