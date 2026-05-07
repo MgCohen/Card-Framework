@@ -1,30 +1,105 @@
 ---
 type: feature
 status: settled
-tags: [#feature, #entities]
+references: root
+tags: [#entities]
 ---
 
 # entities — feature
 
-## Purpose
-Definitions and instances for everything the framework treats as a "thing": cards, players, attachments, equipment, modifiers. Establishes the definition→instance separation and the per-entity variable model that downstream features (zones, actions, effects) build on.
+## What it is
 
-## Boundaries
-- **Owned:** definition shape, instance shape, per-entity variables/modifiers, attachments-as-instances pattern.
-- **Not owned:** zone membership (lives in `features/zones/`), legality (lives in `features/actions/`), runtime effects on entities (lives in `features/effects/`).
+The framework's foundational entity primitive. Every runtime "thing" — cards, players, attachments, equipment, modifiers, zones — is an *instance* of a *definition*. The instance has an `InstanceId` for lookup/reference, plus relationships and modifiers; its effective values are calculated from definition defaults, instance base overrides, local modifiers, attached instances, and external effects. The framework is data-driven: definitions are authored, instances are runtime, and per-instance state lives in canonical Store slices.
+
+```
+                    Definition
+                    (authored data)
+                         │
+                         ▼
+                  Instance (InstanceId)
+                         │
+              ┌──────────┼─────────────────┐
+              │          │                 │
+        EntityVariable  Attached      External effects
+        State (Store)   instances     (zones, auras)
+        - BaseValues     │
+        - ModifierStacks │
+              │          ▼
+              ▼      Composition
+        Effective    handler
+        values  ◄────┘
+        (definition default → base override → modifier fold)
+```
+
+## Vocabulary
+
+Feature-owned terms. Cross-feature terms — `Actor`, `ActorId`, `Identifier<T>`, `IReference`, `IState`, `Store` — live in their owning features and `Product/ledgers/GLOSSARY.md`.
+
+| Term | Meaning |
+|---|---|
+| `Definition` | Shared authored data describing what an entity *is* before runtime state. Stable definition ID. |
+| `Instance` | Runtime entity created from a definition. Has an `InstanceId`, may carry per-instance variables, modifiers, relationships. |
+| `InstanceId` | Typed `Identifier<Instance>`. Stable across the instance's lifetime. Used for variable storage, modifier storage, history, server-internal subscriptions. |
+| `Variable` / `VariableValue` | Key + typed value pair. Variables are identified by `Variable` (`Key` + `PayloadTypeId`); values use typed wrappers (`IntVariableValue`, `FloatVariableValue`, etc.). |
+| `VariableModifier` | Layered modifier that adjusts an effective value. Subclasses (`IntAddModifier`, `BoolOverrideModifier`, …) implement `Apply(current)`. Ordered by `Order` (ascending fold; FIFO ties). |
+| `EntityVariableState` | Canonical per-entity state slice. `BaseValues` (override-only map) + `ModifierStacks` (keyed by `Variable`). |
+| `StateEntity<TDef>` | Thin runtime handle implementing `IReadOnlyEntity<TDef>` + `IMutableEntity<TDef>` over `StoreVariableStorage`. Re-created on `LoadSnapshot`; not state itself. |
+| `EntityDefinition` | Base type for game-authored definitions; declares `DefinedVariables` and `TryGetDefaultValue`. |
+| `IEntityRegistry` | Engine-owned `InstanceId → handle` registry. The single creation/destruction point and lookup surface. |
+| `IModifierFactory` | Engine-owned factory producing `EntityModifierEntry` with deterministic `ModifierId`s. The only sanctioned producer of pre-populated modifier entries. |
+| `ModifierId` | Deterministic id for a modifier. Generated from an engine-owned counter snapshotted with engine state. |
+| `ModifierSource` | Attachment entity's `InstanceId` (and optional `Tag`). Source attribution for cleanup-on-attachment-death sweeps. |
+
+## Architecture
+
+The feature has two Models. The conceptual model lives in `01-definition-instance-model.md`; the runtime API surface lives in `02-runtime-surface.md`.
+
+Three flows tie the Models together:
+
+1. **Spawn → base → modifier.** `Entities.Spawn<TDef>(definition)` allocates a fresh `InstanceId`, registers an empty `EntityVariableState`, builds the `StateEntity<TDef>` handle, and returns it. The instance inherits all values from definition defaults. Subsequent `SetBaseValuePayload` overrides bases; `AddModifier` (via the factory) layers modifiers. Reads through the handle return effective values (definition default → base override → modifier fold).
+
+2. **Identity preservation across zone moves.** Zone movement preserves the same `InstanceId`. The instance is the durable runtime object; `InstanceId` is just the lookup key. Game-specific systems can override this default explicitly (e.g., MTG-style zone-change replacement).
+
+3. **Snapshot / restore.** Snapshots contain canonical `EntityVariableState` slices, never handles. On `LoadSnapshot` the engine walks the restored slices and re-creates each `StateEntity<TDef>` via `EntityStateFactory.Create(...)`. Subscribers attached to old handles are gone — projections that need to bind on rollback must re-subscribe through `IEntityRegistry`.
 
 ## Composition
-- `features/entities/models/01-definition-instance-model.md` — canonical Model: Definition / Instance / per-entity variables / Scaffold-bridge approach.
 
-## Public surface
-Definition and Instance types (with IDs and variable handles), Entity-shaped accessors over the canonical Store. Other features address entities through these handles, never as raw fields.
+| Model | Role |
+|---|---|
+| [`models/01-definition-instance-model.md`](models/01-definition-instance-model.md) | Conceptual model: definitions, instances, variables, modifiers, attachments, composition; bridge boundary (Store + entities); mutation payload conventions |
+| [`models/02-runtime-surface.md`](models/02-runtime-surface.md) | Concrete API: `StateEntity<TDef>` handle, read API, subscriptions, mutation surface, `IEntityRegistry`, authoring reference, worked examples |
+
+## Invariants
+
+Cross-Model rules that hold across both Models and shape how downstream features must use entities.
+
+- **Store is canonical; entities is the API.** Per-entity variables live as `EntityVariableState` slices in the Store. Reads and writes go through the `StateEntity<TDef>` handle (or raw payloads for the cases the handle doesn't expose). No two-way sync, no duplicate state.
+- **Definition immutability on the handle.** `Definition` lives on the handle, not in `EntityVariableState`. Transformation creates a new `StateEntity<TNewDef>` for the same `InstanceId`. There is no state-level `SetDefinitionPayload`.
+- **Modifier source = attachment entity's `InstanceId`.** Cleanup-on-source-death is a uniform `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.Id))` per affected target. Source attribution is how the framework cleans up modifiers when their attachments die.
+- **Deterministic `ModifierId` via factory only.** `ModifierId.New()` (`Guid.NewGuid()`) is forbidden in framework / handler code. The `IModifierFactory` allocates ids from an engine-owned counter snapshotted with engine state, so replay and multiplayer determinism hold.
+- **Effective-value cache rebuild is eager and synchronous.** Read-after-write within a single handler is fresh; subscriber notifications are serialized on a single thread.
+
+## Boundaries
+
+**Owns:** the definition / instance / variable / modifier conceptual model; `EntityVariableState` slice and the six bridge mutation payloads; `StateEntity<TDef>` handle + `IReadOnlyEntity` / `IMutableEntity` surfaces; subscription channels; `IEntityRegistry` and `IModifierFactory` contracts; effective-value cache semantics.
+
+**Does not own:**
+- Card-specific shape (`Card`, `CardRef`, `CardMapState`) → `cards/`
+- Zone membership and zone-shape (`ZoneContentsState`, `Zone`) → `zones/`
+- Action pipeline, command handlers → `actions/`
+- Effect orchestration, attachment lifecycle (Cleanup hook fires from `effects/`) → `effects/`
+- Trigger fold semantics → `triggers/`
+- Engine-side service composition (where `IEntityRegistry` is constructed and registered) → `engine/`
 
 ## Dependencies
-- **Upstream:** none — entities are foundational.
-- **Downstream:** `features/zones/`, `features/actions/`, `features/effects/`, `features/triggers/`, `features/engine/`, `features/presentation/`.
 
-## Settled decisions
-ADRs (backfilled in phase 5) live in `features/entities/decisions/`. Provenance for the original "core model" decisions (formerly doc 8) is folded into `01-definition-instance-model.md`.
+- **Upstream:** none — entities are foundational. Sits at the bottom of the feature dependency graph.
+- **Downstream:** `cards/` (Card extends `StateEntity<CardDefinition>`), `zones/` (zones share `Identifier<Instance>` namespace), `actions/` (handlers consume `IEntityRegistry`), `effects/` (effects consume `IEffectScope.Entities`), `triggers/` (modifier-bearing entities subscribe to triggers), `engine/` (engine constructs and exposes the registry), `presentation/` (consumes entity state via slice subscriptions).
 
 ## Open
-See `ledgers/OPEN-ITEMS.md` for entity-related questions.
+
+See `ledgers/OPEN-ITEMS.md` — entity-related questions:
+
+- `oq-entity-destruction` — what "destroyed" means for the Store; when the framework Cleanup hook fires; what happens to in-flight dispatches referencing the destroyed entity.
+- `oq-engine-builder` — engine-side service composition (where `IEntityRegistry`, `IModifierIdGenerator`, `IInstanceIdGenerator` are constructed, registered, exposed).
+- `bl-authoring-feature` — authoring layer on top of `EntityDefinition` (custom-game-definition serialization, validation, asset migration, definition versioning).
