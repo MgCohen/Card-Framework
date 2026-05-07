@@ -139,16 +139,25 @@ Every doc starts with:
 ---
 type: spike | feature | model | sample | adr | snapshot | checkpoint | plan
 status: <one of the type's status values>
-references: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
-tags: [#async, #triggers]                                 # optional
+references: [features/actions/models/03-action-definition.md, features/triggers/models/02-trigger-shape.md]  # paths or `root`
+tags: [#async, #triggers]                                                                                     # optional
 ---
 ```
 
 Reader knows in 2 seconds what they're holding.
 
-**`references:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade detection (§5.7) and FEATURE-MAP dependency rendering.
+**Path convention.** All `references:` paths are **Product-root-relative** — written as they appear under `Product/`, with no leading `Product/` prefix and no `./` or `../` segments. Front-matter entries use full filenames (e.g., `features/actions/models/03-action-definition.md`) so `/builder:lint` can resolve them mechanically; shorthand forms (`features/actions/03`) are allowed in narrative prose only. The literal string `root` is the sole non-path value permitted, signalling "no upstream." Empty list (`[]`) is not allowed — use `root` for foundations.
 
-Feature roots derive their `Dependencies` section from the union of contained Models' `references:`, so they don't need to repeat it in front matter.
+**`references:` rules by doc type.**
+
+| Doc type | Requirement |
+|---|---|
+| **Model** | **MUST** populate. List of upstream Model/Feature paths, or `root` when foundational. |
+| **Feature root** | **SHOULD** populate with upstream Feature paths the feature depends on. Front-matter `references:` is the canonical machine-readable source; the body's `## Dependencies` section is the human-readable mirror (and carries the Downstream side, which front matter can't). Use `root` when the feature has no upstream. |
+| **ADR** | **SHOULD** populate when the ADR has meaningful upstream context (the Models or Features it shapes). Optional otherwise. |
+| **Spike, Sample, Snapshot, Checkpoint, Plan** | Optional. |
+
+This convention powers cascade detection (§5.7) and FEATURE-MAP dependency rendering.
 
 **No `last-updated:` field.** Git is the source of truth for modification dates — the linter computes `last-updated` per doc on demand from `git log -1 --format=%cs <path>` when needed. Front-matter dates always drift; the field is dropped.
 
