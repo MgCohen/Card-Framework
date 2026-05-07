@@ -160,7 +160,7 @@ public sealed class InlineEffectPipeline : IEffectPipeline
     public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
         // Re-entrance guard within an existing chain.
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return;
 
         var chain = parent is null
@@ -172,45 +172,59 @@ public sealed class InlineEffectPipeline : IEffectPipeline
 }
 
 // ─────────────────────────────────────────────────────────────
-// Handler context — exposes the pipeline; chain bound implicitly
+// Handler context — sync, atomic, may mutate. Chain bound implicitly.
+// Surface trimmed to common base case (Q2 rule); rare-use services
+// (IModifierFactory, IAvailableActions, ICommandAwaiter) → DI.
 // ─────────────────────────────────────────────────────────────
 
 public interface IHandlerContext
 {
-    Store              Store           { get; }
-    IAvailableActions  Actions         { get; }
-    ICommandAwaiter    Resolver        { get; }
-    IModifierFactory   Modifiers       { get; }
-    IEffectPipeline    EffectPipeline  { get; }   // for advanced cases
+    Store Store { get; }                            // slice reads + mutator dispatch (Store.Execute)
+    void  Emit(GameSignal signal);                  // explicit-meaning history channel
 
-    // Sugar: EffectPipeline.RunEffect(instance, currentChain).
+    // Sugar over IEffectPipeline.RunEffect(instance, currentChain).
     // currentChain is bound when the context is constructed:
     //   - null when the handler runs a drain-initiated command
     //   - the calling chain when the handler runs inside scope.Dispatch
+    // Placement on the handler (vs forcing a wrapping effect) is pending — see concern #2.
     Task RunEffect(EffectInstance instance);
 }
 
 // ─────────────────────────────────────────────────────────────
-// The chain scope — what an effect's Execute receives
+// The chain scope — what an effect's Execute receives.
+// Async, orchestrates, never mutates directly (mutation discipline:
+// only handlers invoke mutators; effects receive IStateScope, not Store).
 // ─────────────────────────────────────────────────────────────
 
 public interface IEffectScope
 {
-    IStateScope                  State        { get; }
-    Store                        Store        { get; }    // catalog reads + execute helpers
-    IModifierFactory             Modifiers    { get; }
-    EffectInstance?              Origin       { get; }    // root of this chain (null for trigger-without-source cases)
-    IReadOnlySet<EffectInstance> Fired        { get; }    // re-entrance guard
+    IStateScope State { get; }                      // slice reads + catalog resolve
 
-    // Inline dispatch — runs the action's full pipeline NOW, this scope is passed through.
+    // Inline dispatch — runs the action's full pipeline NOW; this scope is passed through.
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
+
+    // Await a player/system decision (target picker, choice, mode, etc.).
+    // Renamed from `Resolver`/`ICommandAwaiter` so the call site reads as the intent.
+    Task<TResult> Decide<TResult>(/* decision request shape, TBD */) where TResult : DecisionResult;
 
     // Schedule a sub-effect via the pipeline. Pipeline decides inline vs deferred.
     Task RunEffect(EffectInstance instance);
 
-    // Trigger primitives:
+    // Chain metadata — root + re-entrance set. Tucked away so the top-level surface stays small.
+    IChainInfo Chain { get; }
+
+    // Before-fold trigger primitives. Runtime-checked phase: throws when invoked outside
+    // before-fold. Deliberate runtime-check (vs type-narrowed subtype) — revisit if
+    // false-positive misuse becomes a real bug source.
     void Cancel(string? reason = null);
-    void Replace(GameAction next);   // before-fold only
+    void Replace(GameAction next);
+}
+
+// Chain-info sub-property — kept off the top-level scope surface.
+public interface IChainInfo
+{
+    EffectInstance?              Origin { get; }    // root of this chain (debug + game-author tracing)
+    IReadOnlySet<EffectInstance> Fired  { get; }    // re-entrance guard
 }
 ```
 
@@ -392,7 +406,7 @@ public sealed class MtgStackEffectPipeline : IEffectPipeline
     public Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
         // Re-entrance guard still applies to the calling chain.
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return Task.CompletedTask;
 
         _store.Execute(new PushToStackPayload(instance));
@@ -474,7 +488,7 @@ public sealed class HearthstoneTriggerQueueEffectPipeline : IEffectPipeline
 
     public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return;
 
         var queue = _store.Get<TriggerQueueState>();
@@ -602,7 +616,7 @@ Surfaced in the post-write review (2026-05-07). These are *exposition* gaps — 
 
 **Clarity gaps:**
 
-4. **`Origin` field semantics opaque.** `IEffectScope.Origin: EffectInstance?` exists but the runtime only consults `Fired` for re-entrance. If `Origin` is for debugging/tracing, say so. If it has a real role, name it.
+4. ~~**`Origin` field semantics opaque.**~~ *Resolved.* `Origin` and `Fired` moved to `IEffectScope.Chain` (sub-property). `Chain.Origin` is documented as debug + game-author tracing; `Chain.Fired` is the re-entrance guard the runtime consults.
 
 5. **"Why two verbs" rationale buried.** D8 explains the mechanism but the *reason* (resolution-handler-via-RunEffect would re-push onto the MTG stack and loop) lives 200 lines later in the resolution-handler comment. Pull that "why" up to D8.
 
