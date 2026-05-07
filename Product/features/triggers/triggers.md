@@ -87,6 +87,8 @@ Cross-Model rules that hold across the Model and shape how other features must u
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `actions/` (pipeline that hosts the trigger fold; `HistoryEnvelope` shape), `engine/` (evaluation loop, `GameRules` contract — `OnIncomingCommand`, `FilterTriggers`).
 - **Downstream:** `effects/` (effects subscribe via the same `IEffectScope` surface triggers use; replacement-prevention layer in `effects/02` builds on the fold), game-side rules code (registers abilities via `AbilityDefinition`).
 

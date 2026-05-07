@@ -5,7 +5,7 @@ references: [features/actions/models/01-command-pipeline.md, features/engine/mod
 tags: [#triggers, #reactions, #fold]
 ---
 
-# Trigger And Reaction System
+# Trigger And Reaction System — model
 
 ## What it is
 
@@ -293,6 +293,10 @@ Model-local invariants. (See `triggers.md ## Invariants` for feature-level rules
 - **`scope` is the same `IEffectScope` Effects use.** No separate trigger context type; closure capture for per-instance data.
 - **Reactions enter the same dispatch channel as all other commands.** No separate reaction queue; routing decided by `GameRules.OnIncomingCommand` based on `DispatchOrigin`.
 - **`AbilityDefinition.Register` / `Unregister` is the per-instance lifecycle hook.** `RemoveAll(self)` discharges every trigger an instance owns.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 
