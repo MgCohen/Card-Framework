@@ -1,7 +1,7 @@
 ---
 type: feature
 status: draft
-references: [features/triggers/triggers.md, features/state/state.md]
+references: [features/triggers/triggers.md, features/state/state.md, features/entities/entities.md]
 tags: [#commands]
 ---
 
@@ -79,6 +79,8 @@ Cross-Model rules. Models below reference these by name rather than restating.
 - UI loop, intent mapping, snapshot → `presentation/`
 
 ## Dependencies
+
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
 
 - **Upstream:** `triggers/` (command type hierarchy), `state/` (`Mutator`, `IStateScope`), `entities/` (instance ids).
 - **Downstream:** `engine/` (uses pipeline), `effects/` (dispatches via scope, awaits results), `presentation/` (consumes envelopes).

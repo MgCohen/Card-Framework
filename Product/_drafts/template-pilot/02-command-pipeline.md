@@ -5,7 +5,7 @@ references: [features/commands/commands.md, features/triggers/models/02-trigger-
 tags: [#commands, #pipeline]
 ---
 
-# Command Pipeline
+# Command Pipeline — model
 
 ## What it is
 
@@ -63,6 +63,10 @@ public interface ICommandPipeline
 - A cancelled command skips handler execution but still emits an envelope with cancellation entries.
 - The `command'` after the before-fold may differ from the input command in field values *or* concrete type (replacement). Handler resolution uses the post-fold type.
 - The trigger pipeline is called for both before and after, with the pipeline phase as discriminator.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

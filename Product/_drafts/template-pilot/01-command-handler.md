@@ -5,7 +5,7 @@ references: [features/commands/commands.md, features/triggers/models/01-command-
 tags: [#commands, #handler]
 ---
 
-# Command Handler
+# Command Handler — model
 
 ## What it is
 
@@ -91,6 +91,17 @@ public DamageResult Execute(DealDamageCommand cmd, IHandlerContext ctx)
 ```
 
 The handler reads (`Store.Get`), computes (split shield/health), mutates (`Mutate.Invoke`), returns. Three mutators called in one `Execute`; envelope captures all three changes plus the result.
+
+On the call-site, the pipeline dispatches through the typed registry:
+
+```csharp
+// inside Pipeline.Execute<DealDamageCommand, DamageResult>
+var handler = registry.Resolve<DealDamageCommand, DamageResult>();
+var result  = handler.Execute(cmd, ctx);
+envelope.Result = result;
+```
+
+DI's closed-generic resolution makes the dispatch typed end-to-end; no runtime casts.
 
 ## Open follow-ups
 
