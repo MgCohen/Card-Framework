@@ -126,6 +126,8 @@ Cross-Model rules that hold across the six Models and shape how downstream featu
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `entities/` (foundational definition/instance model; `IEntityRegistry` consumed; modifier factory id allocation), `zones/` (zone slices coexist with engine slices), `triggers/` (type hierarchy is the engine's command vocabulary), `effects/` (handler / effect / mutator layers; `IHandlerContext`, `IEffectScope`, `ICommandAwaiter` shapes the engine consumes).
 - **Downstream:** `actions/` (calls into `GameRulesRuntime`; consumes `IAvailableActions` for snapshot reads), `presentation/` (subscribes to `AvailableActionsState`, `HistoryState`; reads `EngineState.Lifecycle`).
 

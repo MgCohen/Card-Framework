@@ -5,7 +5,7 @@ references: [features/engine/models/01-evaluation-loop.md, features/engine/model
 tags: [#engine, #factory, #bootstrap]
 ---
 
-# Game Factory — Match Construction
+# Game Factory — model
 
 ## What it is
 
@@ -141,6 +141,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules.)
 7. **Mode-specific command vocabularies are rules-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in `GameRulesRuntime` and the snapshot.
 8. **Single-phase runtime construction.** `GameRulesRuntime<TDefinition>` is fully constructed by the container in one shot — no two-phase Initialize.
 9. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

@@ -5,7 +5,7 @@ references: [features/engine/models/01-evaluation-loop.md, features/engine/model
 tags: [#engine, #lifecycle, #match]
 ---
 
-# Match Lifecycle
+# Match Lifecycle — model
 
 ## What it is
 
@@ -224,6 +224,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules �
 7. **Engine owns runtime instance disposal; host owns scope disposal.** `engine.Dispose` releases the runtime if `IDisposable`. The per-match DI scope is opened and torn down by the host / outer controller.
 8. **`FinishMatch` permits `NotStarted → Ended`.** Cancel-before-start is supported. Only `MatchEndedSignal` lands; no start signal ever fired.
 9. **`MatchOutcome` is a closed type hierarchy.** Abstract base + sealed subtypes (`Win`, `Loss`, `Draw`, `Aborted`); consumers pattern-match.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

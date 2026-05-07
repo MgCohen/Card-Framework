@@ -5,7 +5,7 @@ references: root
 tags: [#engine, #evaluation-loop, #orchestrator]
 ---
 
-# Engine — Orchestrator And Evaluation Loop
+# Evaluation Loop — model
 
 ## What it is
 
@@ -238,6 +238,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules �
 - **`Dispatch` is the single entry point.** No bypass paths; all sources go through it.
 - **`running = false` is set before `OnQueueDrained` dispatches its follow-ups.** This lets `Drain` re-enter if needed.
 - **`OriginCommandId` is engine-threaded.** The evaluator does not need to set it on follow-ups; the engine copies it from the just-executed command.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

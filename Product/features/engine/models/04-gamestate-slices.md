@@ -5,7 +5,7 @@ references: [features/effects/models/04-effect-flow.md, features/engine/models/0
 tags: [#engine, #state, #slices]
 ---
 
-# GameState Slice Catalog
+# GameState Slices — model
 
 ## What it is
 
@@ -210,6 +210,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules �
 5. **Uniform read surface.** `IStateScope.Get<TState>()` is the only read path for all tiers.
 6. **Subscriptions go through the `Store`.** `IStateScope` is read-only by design.
 7. **Batches are atomic and observable as a single step.**
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

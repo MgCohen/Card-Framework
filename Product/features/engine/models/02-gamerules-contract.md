@@ -5,7 +5,7 @@ references: [features/engine/models/01-evaluation-loop.md, features/engine/model
 tags: [#engine, #gamerules, #contract]
 ---
 
-# GameRules — Definition + Runtime
+# GameRules Contract — model
 
 ## What it is
 
@@ -321,6 +321,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules �
 - **No method holds onto its arguments.** Caching `TriggerMatch` lists or `command` / `result` parameters across calls is undefined.
 - **Per-match lifecycle.** The runtime is constructed at `factory.Build()` and lives as long as its engine.
 - **Methods may be called concurrently from different drain cycles only if the engine guarantees it.** Today the engine serializes drain cycles; the runtime does not need to be thread-safe.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

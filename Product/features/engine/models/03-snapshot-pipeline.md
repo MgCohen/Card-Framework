@@ -5,7 +5,7 @@ references: [features/engine/models/02-gamerules-contract.md, features/actions/m
 tags: [#engine, #snapshot, #available-actions]
 ---
 
-# Snapshot Production Pipeline — How AvailableActions Gets Built
+# Snapshot Pipeline — model
 
 ## What it is
 
@@ -141,6 +141,10 @@ Model-local invariants. (See `engine.md ## Invariants` for feature-level rules.)
 - **Snapshot lives in state via a framework-internal mutator.** Behind `IAvailableActions.Set`, an engine mutator writes `AvailableActionsState`. Game-authored mutators may not target this slice.
 - **Validation is on-demand.** The rule does not auto-validate every candidate; per-binding `handler.Validate` runs at dispatch authoritatively, on-demand during enumeration if the rule opts in.
 - **Templates are typed per command type.** No string-keyed parallel registry; `Type CommandType` is the discriminator.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 
