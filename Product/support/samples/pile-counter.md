@@ -99,7 +99,7 @@ There is no lose condition. The puzzle is always solvable from setup; the player
 This game forces the framework to express:
 
 - **Zones with stack ordering and a derived score.** The score is a *computed* per-zone value — the framework needs a way to expose this without forcing the game author to recompute it manually after every change. (Or to recompute manually but cleanly.)
-- **A single action type with legality rules.** Tests `OnIncomingCommand` rejection, `AvailableActions` (the gateway needs to tell the UI which moves are legal), and how legality interacts with the "can't move same card twice in a row" memory.
+- **A single action type with legality rules.** Tests `handler.Validate` rejection (per-command legality), `AvailableActions` (the gateway needs to tell the UI which moves are legal), and how legality interacts with the "can't move same card twice in a row" memory.
 - **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
 - **Move history of size 1.** "Last card moved" is a sliver of state that doesn't fit on a card or a zone — it's *game-level* memory. Where does it live?
 
@@ -288,26 +288,22 @@ public sealed class PileCounterRulesDefinition : GameRulesDefinition
 // Runtime brain — generic on its definition. No game-specific subsystems
 // (Pile Counter has no stack, no decks, no priority). Holds a reference
 // to the solo player resolved from the seated-actor list at construction.
+//
+// Per ADR-0006, the contract has two methods: FilterTriggers and Evaluate.
+// Pile Counter omits FilterTriggers (uses base default) and uses Evaluate
+// for both state-based follow-ups (win check) and snapshot publication.
 public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
 {
-    private readonly Actor _player;
+    private readonly IActor _player;
 
     public PileCounterRulesRuntime(
         PileCounterRulesDefinition definition,
         IStateScope                state,
         IAvailableActions          actions,
-        IIntakeQueue               pending,
-        IReadOnlyList<Actor>       actors)
-        : base(definition, state, actions, pending)
+        IReadOnlyList<IActor>      actors)
+        : base(definition, state, actions)
     {
         _player = actors.Single();
-    }
-
-    public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
-    {
-        // Pure flow: no pause, no global lockouts, no stashing in this game.
-        Pending.AddLast(command);
-        return IntakeResult.Ok;
     }
 
     // FilterTriggers omitted — base class ships a virtual identity default.
@@ -315,14 +311,18 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
     {
         var piles = State.Get<PilesState>().Piles.Values;
+
+        // Win check: all piles match their target?
         if (piles.All(p => p.Score == p.Target))
             return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
+
+        // No state-based follow-ups. Publish snapshot at this moment.
+        Actions.Set(BuildSnapshot(piles));
         return Array.Empty<GameAction>();
     }
 
-    public override DrainResult OnQueueDrained()
+    private AvailableActionsSnapshot BuildSnapshot(IEnumerable<Pile> piles)
     {
-        var piles    = State.Get<PilesState>().Piles.Values;
         var lastMove = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
 
@@ -333,19 +333,18 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
 
             var destinations = piles
                 .Where(p => p.Id != pile.Id)
-                .Select(p => (PileId)p.Id)
+                .Select(p => (Reference)p.Id)
                 .ToList();
 
             templates.Add(new MoveCardTemplate(top.Id, destinations));
         }
 
-        Actions.Set(new AvailableActionsSnapshot(templates));
-        return DrainResult.Empty;
+        return new AvailableActionsSnapshot(templates);
     }
 }
 ```
 
-The runtime constructor takes its typed `PileCounterRulesDefinition` plus Scaffold's `IStateScope` (read-only) and the two side-effect services. `State.Get<TState>()` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case.
+The runtime constructor takes its typed `PileCounterRulesDefinition` plus Scaffold's `IStateScope` (read-only) and `IAvailableActions` (snapshot writer). `State.Get<TState>()` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime no longer holds `IIntakeQueue` — the command queue is engine-private FIFO with no runtime service.
 
 The runtime constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the runtime does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [doc 29 §2–§3](features/engine/models/03-snapshot-pipeline.md).
 
@@ -354,24 +353,29 @@ Almost everything else Pile Counter cares about lives elsewhere — handler `Val
 ### 9.7 Engine intake order
 
 ```csharp
-public IntakeResult Dispatch(GameCommand command, DispatchOrigin origin)
+public bool Dispatch(GameAction action, out string? reason)
 {
-    // 1. Command-specific legality — pipeline resolves the handler and delegates to Validate.
-    if (!pipeline.Validate(command, store, out var reason))
-        return IntakeResult.Reject(reason);
+    // 1. Lifecycle gate — framework-only check.
+    var lifecycle = store.Get<EngineState>().Lifecycle;
+    if (lifecycle == EngineLifecycle.Ended)        { reason = "MatchEnded"; return false; }
+    if (lifecycle == EngineLifecycle.NotStarted
+        && action is not StartMatchCommand
+        && action is not EndMatchCommand)          { reason = "MatchNotStarted"; return false; }
 
-    // 2. Flow gating + routing (rule). Rule reads state via its injected IStateScope
-    //    and mutates the queue via its injected IIntakeQueue.
-    var result = rules.OnIncomingCommand(command, origin);
+    // 2. Command-specific legality — pipeline resolves the handler and delegates to Validate.
+    if (!pipeline.Validate(action, store, out reason))
+        return false;
 
-    if (result.Accepted && !IsDraining && pending.Count > 0)
-        BeginDrain();
+    // 3. Enqueue onto framework-private FIFO. Drain if not already running.
+    pending.Enqueue(action);
+    if (!running) Drain();
 
-    return result;
+    reason = null;
+    return true;
 }
 ```
 
-`pipeline.Validate` catches malformed commands cheaply (resolves handler, delegates to `handler.Validate`), then the rule's flow check decides routing. Both can reject; both produce the same `IntakeResult` shape. `Origin` is the only ephemeral input; state is read through `IStateScope` over the `Store`.
+The lifecycle gate runs first (cheap, framework-only), then `pipeline.Validate` (resolves handler, delegates to `handler.Validate`). Either can reject — surfaced via the try-get pattern (`bool` + `out string? reason`). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime no longer participates in intake gating; the command queue is framework-private FIFO and game-specific routing customization lives at the effect-pipeline level (separate design pass; tracked as `oq-effect-pipeline`).
 
 ### 9.8 Bootstrap
 
@@ -434,7 +438,7 @@ public sealed class PileCounterInstaller : IInstaller
 
 Match construction is a two-layer split (locked in [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md)):
 
-- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `IIntakeQueue`, `ICommandPipeline`, `Store`, and `IGameFactory`. The game's installer (`PileCounterInstaller` above) registers handlers, mutators, the runtime against its definition's closed generic (`GameRulesRuntime<PileCounterRulesDefinition> → PileCounterRulesRuntime`), and the intent mapper. Each runs once per app.
+- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `ICommandPipeline`, `Store`, and `IGameFactory`. (Per [ADR-0006](decisions/0006-two-pipeline-architecture.md) there is no `IIntakeQueue` — the command queue is engine-private FIFO.) The game's installer (`PileCounterInstaller` above) registers handlers, mutators, the runtime against its definition's closed generic (`GameRulesRuntime<PileCounterRulesDefinition> → PileCounterRulesRuntime`), and the intent mapper. Each runs once per app.
 - **Per-match factory** — the bootstrap call site asks `IGameFactory` for a new game, supplying only per-match data: rules selection, actor catalog, initial slice values, RNG seed. VContainer never appears in this code.
 
 The two `Mutator<…, MoveCardPayload>` registrations in the installer are what makes `ctx.Store.Execute(new MoveCardPayload(...))` fan out to both `PilesState` and `LastMoveState` in one atomic commit ([04-effect-flow §4.2](features/effects/models/04-effect-flow.md)). Framework-owned slices (`AvailableActionsState`, `EngineState`, `HistoryState`) are seeded internally at `Build`. After `Build` returns the engine is idle and dormant — the first `Dispatch()` call triggers `Drain()`. See [doc 27](features/presentation/models/01-presentation-loop.md) for the presentation loop.
@@ -451,14 +455,13 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **Rule holds zero game-affecting state.** `LastMove` lives in its own `LastMoveState` slice, written by a registered `Mutator<LastMoveState, MoveCardPayload>`. Locked as contract.
 - **State mutators are payload-keyed, not command-keyed** (Scaffold State pattern). Handlers issue one `Store.Execute(payload)`; every `Mutator<TState, TPayload>` registered for that payload type runs and commits atomically. Handlers don't enumerate ancillary state slots.
 - **Player input layer is three-tier:** `PlayerIntent` (UI) → `IIntentMapper` → `GameCommand` (engine).
-- **`OnIncomingCommand` is purely flow.** Pause/lockout/stash routing only. Never inspects command body.
-- **Snapshot lives in an `AvailableActionsState` slice carrying `AvailableActionsSnapshot`.** Typed templates with scope discriminator. The rule writes through `IAvailableActions.Set` ([doc 29](features/engine/models/03-snapshot-pipeline.md)).
+- **Two-pipeline architecture** ([ADR-0006](decisions/0006-two-pipeline-architecture.md)). Command pipeline is framework-FIFO with per-command primitives (`scope.Modify` / `Cancel` / `Replace` / `Dispatch`); effect pipeline (game-customizable; `oq-effect-pipeline`) is the forthcoming surface for "when does each effect start." The runtime does not own command-queue routing.
+- **Snapshot lives in an `AvailableActionsState` slice carrying `AvailableActionsSnapshot`.** Typed templates. The runtime writes through `IAvailableActions.Set` from inside `Evaluate` whenever it deems appropriate (typically when its own follow-ups exhaust). See [doc 29](features/engine/models/03-snapshot-pipeline.md).
 - **`AffordanceMap` is game-specific** and lives in the UI/gateway layer. Computed from snapshot. Framework doesn't define it.
-- **`OnQueueDrained` returns `DrainResult { Dispatch }` only.** Snapshot publication moved to the injected `IAvailableActions` service. Supersedes earlier `DrainResult { Snapshot, Dispatch }`.
-- **Four rejection paths:** AvailableActions (UI prophylactic) / `OnIncomingCommand` (engine flow) / `handler.Validate` (command legality, authoritative) / Before-fold `Cancel` (card-effect).
-- **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the rule + intent mapper through them.
-- **Engine intake order:** `pipeline.Validate` first (pipeline resolves handler, delegates to `handler.Validate`), then `rule.OnIncomingCommand`. Validate is cheap and catches malformed commands before the rule has to think about routing.
-- **Rules layer is split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime).** Definition is `[SerializeField]` data; runtime constructor takes the definition + Scaffold `IStateScope` + `IAvailableActions` + `IIntakeQueue` + any game-specific subsystems. Methods take only ephemeral data ([doc 25 §2](features/engine/models/02-gamerules-contract.md), [doc 29 §5](features/engine/models/03-snapshot-pipeline.md), [04-effect-flow §4.1](features/effects/models/04-effect-flow.md)). Factory uses container open-generic resolution to pair them per match ([doc 30 §Behavior resolution](features/engine/models/05-game-factory.md)).
+- **Three rejection paths:** AvailableActions (UI prophylactic) / Engine lifecycle gate (framework, `NotStarted`/`Ended`) / `handler.Validate` (per-command legality, authoritative) / Before-fold `Cancel` (card-effect).
+- **Setup is a factory + bootstrap external to the engine.** Factory produces a `Puzzle` value; bootstrap translates to initial state, constructs the canonical services, and wires the runtime + intent mapper through them.
+- **Engine intake order (try-get):** lifecycle gate → `pipeline.Validate` → enqueue. `engine.Dispatch(GameAction action, out string? reason)` returns `bool`; matches `pipeline.Validate`'s shape.
+- **Rules layer is split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime).** Definition is `[SerializeField]` data; runtime constructor takes the definition + Scaffold `IStateScope` + `IAvailableActions` + any game-specific subsystems. Two-method contract (`FilterTriggers` + `Evaluate`); per-match factory uses container open-generic resolution ([doc 25 §2](features/engine/models/02-gamerules-contract.md), [doc 30](features/engine/models/05-game-factory.md)).
 
 ---
 
@@ -470,7 +473,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 
 - ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [doc 29 §5](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>()`.
 - ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [04-effect-flow §4.4](features/effects/models/04-effect-flow.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
-- ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext` collapsed; `Pending` is the injected `IIntakeQueue` ([doc 29 §5](features/engine/models/03-snapshot-pipeline.md)).
+- ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext`, `Pending`, and `IIntakeQueue` all deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Command queue is engine-private FIFO with no runtime service.
 - ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRulesRuntime<TDefinition>` ships a virtual identity default ([doc 25 §2 + §4](features/engine/models/02-gamerules-contract.md)); games with no eligibility logic don't override it.
 - ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md). No invented provider type.
 - ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
@@ -487,7 +490,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 - **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [doc 29 §3](features/engine/models/03-snapshot-pipeline.md)). `PlayerChoice` shape pin during implementation.
 - **Q7 — `IGameStore` final shape.** Sketched as a presentation-side wrapper exposing `State`, `OnStateChanged`, `SubmitIntent`. Final shape depends on the chosen state library.
 - ~~**Q9 — `IHandlerRegistry` shape.**~~ Resolved session-20260501-1132 Q1: registry is resolver-only (`ICommandHandler Resolve(GameCommand)`); validate/execute live on `ICommandPipeline`; game authors extend `CommandHandler<TCommand, TResult>`.
-- **Q11 — `IntakeResult.Reason`** — free-form string vs. structured enum. Defer until a real game forces it.
+- ~~**Q11 — `IntakeResult.Reason`**~~ — `IntakeResult` deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md); rejection now flows through the try-get pattern (`bool Dispatch(GameAction, out string? reason)`). The reason remains a free-form string; structured enum would be a follow-up if a real game forces it.
 - **Q12 — Re-validation at dequeue.** Validate at intake plus a second time before handler runs (state may have changed). Currently OK as double-validate.
 
 ### Out of scope for Pile Counter (will surface in richer games)

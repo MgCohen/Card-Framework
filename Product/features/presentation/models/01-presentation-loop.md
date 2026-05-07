@@ -11,7 +11,7 @@ This document captures the end-to-end loop from engine to UI and back, with a fo
 
 Builds on:
 
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` four-method interface, `OnQueueDrained`, snapshot ownership question
+- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — canonical `GameRulesRuntime<T>` contract
 - [support/samples/pile-counter.md](support/samples/pile-counter.md) — concrete sample game used to ground the design
 - [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — layer hierarchy
 
@@ -209,15 +209,14 @@ public sealed class GameStore : IGameStore
     public GameState State { get; private set; }
     public event Action OnStateChanged;
 
-    public IntakeResult SubmitIntent(PlayerIntent intent)
+    public bool SubmitIntent(PlayerIntent intent, out string? reason)
     {
-        var command = intentMapper.Map(intent);
-        var result  = engine.Dispatch(command, DispatchOrigin.PlayerIntent);
+        var action = intentMapper.Map(intent);
+        if (engine.Dispatch(action, out reason))
+            return true;
 
-        if (!result.Accepted)
-            ShowToast(result.Reason);
-
-        return result;
+        ShowToast(reason);
+        return false;
     }
 }
 ```
@@ -232,11 +231,11 @@ Validation runs at multiple layers; each has a different purpose.
 
 | Layer | What it answers | Failure mode |
 |---|---|---|
-| **Per-template eligibility** (rule, snapshot build) | "Should this template appear at all?" (e.g., suppress "twice in a row") | Template not added to snapshot |
+| **Per-template eligibility** (runtime, snapshot build) | "Should this template appear at all?" (e.g., suppress "twice in a row") | Template not added to snapshot |
 | **`AffordanceMap.CanDrag` / `ValidDrops`** (UI) | "Is this drag visually allowed?" | UI silently disallows — player sees no error |
 | **`IntentMapper.Map`** (gateway) | "Can this template + choice be resolved into a command?" | Throws or returns null — programmer error if UI emitted a bogus intent |
-| **`handler.Validate`** (engine, intake) | "Is this command legal in the current state?" | `IntakeResult.Reject(reason)` — gateway shows toast |
-| **`rule.OnIncomingCommand`** (engine, intake) | "Is the engine accepting commands right now?" | `IntakeResult.Reject(reason)` — paused, ended, etc. |
+| **Engine lifecycle gate** (framework) | "Is the engine accepting commands right now?" | `Dispatch` returns `false` with reason `MatchNotStarted` / `MatchEnded` |
+| **`handler.Validate`** (engine, intake) | "Is this command legal in the current state?" | `Dispatch` returns `false` with reason — gateway shows toast |
 
 The relationship between AffordanceMap and `handler.Validate`:
 
@@ -250,21 +249,22 @@ The relationship between AffordanceMap and `handler.Validate`:
 
 A player makes a move in Pile Counter:
 
-1. **Engine idle.** Queue empty after last drain. `OnQueueDrained` fired; the rule wrote the snapshot via `Actions.Set`. `state.AvailableActions` updated.
+1. **Engine idle.** Queue empty after last drain. The runtime's `Evaluate` published the snapshot via `Actions.Set`; `state.AvailableActions` updated.
 2. **Store fires `OnStateChanged`.** View receives event.
 3. **View recomputes AffordanceMap.** `MoveCardTemplate`s in the snapshot keyed by `Card`. UI re-renders; only draggable cards show drag handles.
 4. **Player drags a card.** `OnDragStart` highlights valid drop piles from the affordance map.
 5. **Player releases over a target pile.** `OnDrop` validates against affordance map (defensive), emits `MoveCardIntent(card, destination)`.
 6. **Store binds the intent.** Picks the matching `ActionTemplate` from the snapshot (or builds one from the intent), wraps the player's pick in `PlayerChoice`, calls `IntentMapper.Map(template, choice)` → `MoveCardCommand(card, from, to)`.
-7. **Store calls `engine.Dispatch(command, PlayerIntent)`.**
+7. **Store calls `engine.Dispatch(action, out reason)`.**
 8. **Engine intake pipeline:**
-   0. Pre-pipeline awaiter check: `awaiter.TryResolve(command)`. Pile Counter has no open awaits, so this is a no-op and the command falls through. (In a decision-active game this would short-circuit here; no envelope, no handler, no triggers.)
-   1. `handler.Validate(command, state, out reason)` — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
-   2. `rule.OnIncomingCommand(command, origin)` — Pile Counter's rule trivially `Pending.AddLast(command)`, returns `Ok`.
+   0. Pre-pipeline awaiter check: `awaiter.TryResolve(action)`. Pile Counter has no open awaits, so this is a no-op and the command falls through.
+   1. **Lifecycle gate** — `EngineState.Lifecycle == Started`, normal command → permitted.
+   2. **`handler.Validate(action, state, out reason)`** — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
+   3. Action lands in the engine's framework-private FIFO queue.
 9. **Drain begins.** Pipeline runs: before-fold (no triggers) → `MoveCardHandler.Handle` → after-fold (no triggers) → envelope published.
 10. **State mutators fire.** Handler called `ctx.Store.Execute(new MoveCardPayload(...))`; Scaffold's payload-keyed registry fans out to `PileMoveMutator` (writes `PilesState`) and `LastMoveMutator` (writes `LastMoveState`); both commit atomically.
-11. **`rule.Evaluate`** runs — checks if all piles match targets. If yes, returns `[EndGameCommand]`; engine dispatches it next.
-12. **Queue drains.** `rule.OnQueueDrained` runs, enumerates new templates, calls `Actions.Set(...)`. The `IAvailableActions` mutator writes to `state.AvailableActions`.
+11. **`runtime.Evaluate`** runs — checks if all piles match targets. If yes, returns `[EndMatchCommand]`; engine enqueues it. If not, the runtime publishes a fresh snapshot inside the same `Evaluate` call via `Actions.Set(...)` and returns `[]`.
+12. **Drain reaches empty queue.** No `OnQueueDrained` callback (per [ADR-0006](decisions/0006-two-pipeline-architecture.md)); the snapshot was already published in step 11.
 13. **Store fires `OnStateChanged`.** Loop returns to step 2.
 
 ---
@@ -273,37 +273,33 @@ A player makes a move in Pile Counter:
 
 - **Snapshot lives in state.** `GameState.AvailableActions: AvailableActionsSnapshot` (typed templates only — no scope discriminator). No separate channel, no push API.
 - **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template; templates carry source + slots/modes/parameters. See [doc 28](features/actions/models/02-availability-snapshot.md), [doc 29 §3](features/engine/models/03-snapshot-pipeline.md).
-- **Snapshot is written via the `IAvailableActions` service** by the rule (default in `OnQueueDrained`) or effects (mid-execution overrides). Engine never auto-publishes.
+- **Snapshot is written via the `IAvailableActions` service** by the runtime (typically from inside `Evaluate` when its own follow-ups are exhausted) or effects (mid-execution overrides). Engine never auto-publishes. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven; there is no framework-mandated moment.
 - **`AffordanceMap` is game-specific.** Lives in gateway/UI layer. Recomputed on every snapshot change. Pattern-matches typed templates.
 - **View consumes AffordanceMap, not snapshot directly.** The view never touches raw templates or commands.
 - **Intents are emitted at drag-end, not earlier.** Drag highlights come from AffordanceMap; the intent is built only when the player drops.
-- **Validation has five layers.** Per-template eligibility (rule) → AffordanceMap (prophylactic) → IntentMapper (well-formedness) → `handler.Validate` (authoritative legality) → `rule.OnIncomingCommand` (engine flow).
-- **`handler.Validate` at dispatch is the single source of truth for legality.** The snapshot is the rule's best-effort approximation; per-binding `Validate` runs on demand only if the rule opts in.
+- **Validation has five layers.** Per-template eligibility (runtime) → AffordanceMap (prophylactic) → IntentMapper (well-formedness) → engine lifecycle gate (framework) → `handler.Validate` (authoritative legality).
+- **`handler.Validate` at dispatch is the single source of truth for legality.** The snapshot is the runtime's best-effort approximation; per-binding `Validate` runs on demand only if the runtime opts in.
 
 ---
 
-## 12. `OnQueueDrained` Output Shape
+## 12. Snapshot Publication From `Evaluate`
 
-`OnQueueDrained` returns only follow-up dispatches; the snapshot is published through the injected `IAvailableActions` service:
+Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnQueueDrained` callback. The runtime publishes the snapshot from inside `Evaluate` whenever it deems appropriate — typically when its own state-based follow-ups are exhausted (drain about to end):
 
 ```csharp
-public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch)
+// Inside the runtime (services injected via base class)
+public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
 {
-    public static readonly DrainResult Empty = new(Array.Empty<GameCommand>());
-}
+    var followUps = ComputeStateBasedFollowUps();
+    if (followUps.Any()) return followUps;
 
-// Inside the rule (services injected via base class)
-public override DrainResult OnQueueDrained()
-{
-    var templates = EnumerateTemplates(State.Current);
-    Actions.Set(new AvailableActionsSnapshot(templates));
-    return DrainResult.Empty;
+    // No follow-ups — drain about to end. Publish snapshot now.
+    Actions.Set(new AvailableActionsSnapshot(EnumerateTemplates(State)));
+    return Array.Empty<GameAction>();
 }
 ```
 
-The engine dispatches each `Dispatch` command. The snapshot write is a service call — see [doc 29 §2](features/engine/models/03-snapshot-pipeline.md). The rule never holds a `GameEngine` reference; it holds narrow capability services.
-
-(This supersedes the earlier `DrainResult { Snapshot, Dispatch }` shape. Service-driven publication lets effects override the snapshot mid-execution through the same write path.)
+The snapshot write is a service call — see [doc 29 §2](features/engine/models/03-snapshot-pipeline.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
 
 ---
 
