@@ -122,6 +122,8 @@ Cross-Model rules that hold across both Models and shape how downstream features
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `entities/`, `zones/`, `triggers/` (type hierarchy hosting the pipeline), `engine/` (calls into `GameRulesRuntime`; consumes `IAvailableActions`), `effects/` (handler signature returns `Task<TResult>`; effects orchestrate via `scope.Dispatch`).
 - **Downstream:** `presentation/` (consumes `AvailableActionsSnapshot`, `HistoryEnvelope`, builds `AffordanceMap`).
 

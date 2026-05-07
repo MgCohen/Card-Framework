@@ -5,7 +5,7 @@ references: [features/actions/models/01-command-pipeline.md, features/engine/mod
 tags: [#actions, #snapshot, #templates]
 ---
 
-# Availability Snapshot — `ActionTemplate` Per Command Type
+# Availability Snapshot — model
 
 ## What it is
 
@@ -127,6 +127,10 @@ Model-local invariants. (See `actions.md ## Invariants` for feature-level rules.
 - **Targets are `IReadOnlyList<EntityId>` uniformly.** No per-game target-type baking.
 - **Templates are immutable records.** Snapshot mutation requires producing a new template list and calling `Actions.Set`.
 - **`IIntentMapper.Map` is decision-unaware.** It produces commands the same way whether or not a decision is open.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

@@ -5,7 +5,7 @@ references: [features/triggers/models/01-trigger-fold.md, features/effects/model
 tags: [#actions, #model, #command-pipeline]
 ---
 
-# Action, Intent, Command, And History Model
+# Command Pipeline — model
 
 ## What it is
 
