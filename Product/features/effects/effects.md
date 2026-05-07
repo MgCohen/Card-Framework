@@ -100,6 +100,8 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `triggers/` (type hierarchy, `OnBefore`/`OnAfter`, `ITriggerPipeline`, fold mechanic), `actions/` (pipeline, envelope, `IIntentMapper`), `engine/` (`GameRules`, `IAvailableActions`, evaluation loop, `Store`, `Mutator`), `entities/` (entity registry, modifier factory, attachment-entity model).
 - **Downstream:** game-side rules code (defines `Effect` subclasses, `AbilityDefinition`s, ongoing-effect attachments), `presentation/` (consumes `DecisionOpenedSignal` / `DecisionResolvedSignal` to render decision UI).
 

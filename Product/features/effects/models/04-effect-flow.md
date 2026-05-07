@@ -5,7 +5,7 @@ references: [features/effects/models/01-async-dispatch.md, features/engine/model
 tags: [#effects, #handler-context, #decisions, #async]
 ---
 
-# Effect Flow — Services, Decisions, And Await Semantics
+# Effect Flow — model
 
 ## What it is
 
@@ -291,6 +291,10 @@ Model-local invariants. (See `effects.md ## Invariants` for feature-level rules 
 7. **`IEffectScope` exposes** Scaffold `IStateScope`, `IEntityRegistry`, `IModifierFactory`, `Dispatch`, `Cancel`, `Replace`. No `Store` reference; no awaiter surface. `Replace` is meaningful only in before-fold triggers; calling it elsewhere is a no-op / runtime warning.
 8. **`ICommandHandler.Handle` returns `Task<TResult>`**. Synchronous handlers return `Task.FromResult(...)`.
 9. **`Effect.Validate` is a pre-execution gate.** `virtual bool Validate(IEffectScope scope) => true`. Returning `false` prevents `Execute` from running. The default always passes — simple effects don't override it.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

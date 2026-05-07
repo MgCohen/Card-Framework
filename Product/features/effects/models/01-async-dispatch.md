@@ -5,7 +5,7 @@ references: [features/engine/models/01-evaluation-loop.md, features/triggers/mod
 tags: [#effects, #async, #suspension]
 ---
 
-# Async Decisions And Suspension
+# Async Decisions And Suspension — model
 
 ## What it is
 
@@ -129,6 +129,10 @@ Model-local invariants. (See `effects.md ## Invariants` for feature-level rules.
 - **A single `await scope.Dispatch(...)` blocks the calling effect until the entire action lifecycle (before-fold → handler → after-fold → envelope) completes.** Including any decision the action requires.
 - **Decision envelopes are independent.** Each dispatched action publishes its own complete envelope; no partial envelopes; no mid-execution state visible to the client.
 - **`DecisionOpenedSignal` / `DecisionResolvedSignal` are `GameSignal`s.** They pass through trigger folds but have no handler.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

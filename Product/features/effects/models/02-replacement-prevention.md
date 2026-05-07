@@ -5,7 +5,7 @@ references: [features/effects/models/01-async-dispatch.md, features/triggers/mod
 tags: [#effects, #replacement, #prevention]
 ---
 
-# Replacement And Prevention Effects
+# Replacement And Prevention Effects — model
 
 ## What it is
 
@@ -234,6 +234,10 @@ Model-local invariants. (See `effects.md ## Invariants` for feature-level rules.
 - **Replacement-of-replacements is automatic.** No loop detection; the fold re-evaluates conditions against the current command after each trigger.
 - **`available` is passed in to the pipeline.** The pipeline never queries the trigger registry directly. Registry ↔ availability ↔ ordering are three separate concerns.
 - **Replacement creates a fresh fold.** `engine.Dispatch(replacement)` starts the new command's full fold from scratch — including its own `OnIncomingCommand` routing.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 

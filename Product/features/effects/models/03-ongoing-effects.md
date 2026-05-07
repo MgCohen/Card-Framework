@@ -5,7 +5,7 @@ references: [features/effects/models/01-async-dispatch.md, features/entities/mod
 tags: [#effects, #continuous, #ongoing]
 ---
 
-# Continuous And Ongoing Effects
+# Continuous And Ongoing Effects — model
 
 ## What it is
 
@@ -126,6 +126,10 @@ Model-local invariants. (See `effects.md ## Invariants` for feature-level rules 
 - **Subscriptions are owned by the attachment's `InstanceId`.** Cleanup-on-destruction unregisters every subscription owned by that instance.
 - **The cleanup verb for modifiers is `RemoveModifiersBySourcePayload(target.Id, new ModifierSource(attachment.Id))`.** Uniform across equipment, auras, status effects, ongoing-effect attachments.
 - **Turn signals are `GameSignal`s.** No special attachment-only event channel.
+
+## Decisions
+
+*n/a — no elevated ADR.*
 
 ## Examples
 
