@@ -8,17 +8,34 @@ tags: []
 # <feature> — feature
 
 ## What it is
-High-level prose framing the feature, with a canonical artifact (flow diagram, sequence sketch, ASCII pipeline, etc.) that gives a reader the shape in 30 seconds.
+High-level prose framing the feature in 30 seconds. SHOULD include a canonical artifact — a small visual or structural rendering that lets a reader grasp the shape without opening Models. Pick the form that fits:
+
+| Feature shape | Artifact form |
+|---|---|
+| Sequential pipeline / phase order | Flow diagram or arrow chain |
+| Component composition / orchestration | ASCII layout or component sketch |
+| State machine / lifecycle | State diagram |
+| Data transform | Before/after sketch |
+
+If no form fits cleanly, the stub `*n/a — descriptive only.*` is permitted.
 
 ## Vocabulary
-Feature-owned terms (table). Cross-feature terms — defined elsewhere — get a one-line pointer ("see triggers/", "see GLOSSARY.md") rather than restated definitions.
+**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do **not** belong here — link to their canonical home with a one-line pointer ("see triggers/", "see `GLOSSARY.md > Trigger`") instead of restating.
 
 | Term | Meaning |
 |---|---|
 | `<term>` | <one-line definition> |
 
 ## Architecture
-Cross-Model flow: how the Models in this feature fit together. Phase order, interaction sequence, what calls what. The load-bearing section that makes the feature legible without opening every Model.
+Cross-Model flow: how the Models in this feature fit together — phase order, interaction sequence, what calls what.
+
+Size to the Model count:
+
+| Model count | Architecture depth |
+|---|---|
+| **1** | Thin — often a single sentence pointing at the Model; the Model itself carries the structure. Stub `*n/a — see model 01.*` permitted. |
+| **2–3** | Medium — a paragraph or short diagram showing how the Models compose. The load-bearing section that makes the feature legible without opening every Model. |
+| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. |
 
 ## Composition
 Models that make up this feature (table form, always present regardless of count).
