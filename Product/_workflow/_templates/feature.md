@@ -15,12 +15,11 @@ High-level prose framing the feature in 30 seconds. SHOULD include a canonical a
 | Sequential pipeline / phase order | Flow diagram or arrow chain |
 | Component composition / orchestration | ASCII layout or component sketch |
 | State machine / lifecycle | State diagram |
-| Data transform | Before/after sketch |
 
 If no form fits cleanly, the stub `*n/a — descriptive only.*` is permitted.
 
 ## Vocabulary
-**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do **not** belong here — link to their canonical home with a one-line pointer ("see triggers/", "see `GLOSSARY.md > Trigger`") instead of restating.
+**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do **not** belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
 
 | Term | Meaning |
 |---|---|
