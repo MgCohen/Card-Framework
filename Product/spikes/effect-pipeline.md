@@ -257,15 +257,18 @@ Inside an effect's Execute (called from a chain):
         ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
 ```
 
-## Building a simple effect — Lightning Bolt
+## Sample effect — Lightning Bolt
+
+> **Authoring boundary.** The card's `Effects` list is treated as *already populated* by the time the runtime reads it. *How* it gets populated — code-side registration, serialized asset import, definition editor — is the authoring layer's job (`oq-effect-authoring`) and out of scope here. This spike pins the *shape* of an `EffectDefinition`; not how the catalog gets filled.
+
+An effect is authored as a subclass of `EffectDefinition` with the lambdas baked into the constructor — readable, reusable, addressable by type:
 
 ```csharp
-// On the card's definition. Effects authored inline with lambdas.
-public sealed class LightningBoltCardDefinition : CardDefinition
+// Authored effect — lambda lives inside the subclass, not on a card definition.
+public sealed class LightningBoltDamageEffect : EffectDefinition
 {
-    public override IReadOnlyList<EffectDefinition> Effects { get; } = new[]
-    {
-        new EffectDefinition(
+    public LightningBoltDamageEffect()
+        : base(
             id: EffectIds.LightningBoltDamage,
             execute: async (instance, scope) =>
             {
@@ -277,7 +280,16 @@ public sealed class LightningBoltCardDefinition : CardDefinition
                 });
             })
         // Validate omitted — defaults to "always valid"
-    };
+    { }
+}
+
+// Card definition — `Effects` is treated as already populated by the time
+// anything reads it. The literal initializer below is illustrative only;
+// the spike makes no claim about who/how filled the list (authoring concern).
+public sealed class LightningBoltCardDefinition : CardDefinition
+{
+    public override IReadOnlyList<EffectDefinition> Effects { get; }
+        = new EffectDefinition[] { new LightningBoltDamageEffect() };
 }
 ```
 
@@ -618,6 +630,7 @@ Surfaced in the post-write review (2026-05-07). These are *exposition* gaps — 
 
 Out of scope for this iteration:
 
+- **Effect authoring / registration.** How `EffectDefinition`s get authored, registered, serialized, or attached to a card's `Effects` list. The spike pins the *shape* of `EffectDefinition`; how the list gets populated lives in the authoring layer (`oq-effect-authoring`).
 - The exact API surface for constructing `EffectChainScope` instances.
 - How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
 - Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
