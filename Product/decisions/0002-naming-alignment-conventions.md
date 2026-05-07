@@ -8,7 +8,7 @@ tags: [#adr, #general, #naming, #conventions]
 
 Date: 2026-04-29
 Context-doc: ledgers/GLOSSARY.md
-Proposal: features/actions/decisions/0008-intent-vocabulary.md
+Proposal: features/actions/models/01-command-pipeline.md §Q5 (intent vocabulary, formerly ADR-0008)
 
 ## Context
 Several research-era renames cascaded through many docs (Request→Intent, ActionId retired, CommandPreHook/CommandReaction → OnBefore/OnAfter, etc.). Without a written convention, future renames risk re-fragmenting the vocabulary.

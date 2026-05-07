@@ -55,9 +55,9 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 ## Features yet to scaffold
 
-- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
+- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `actions/01-command-pipeline.md` Q5 (intent vocabulary, formerly ADR-0008) depends on this layer to emit the intents.
   Trigger: next presentation or engine-wiring session; or whenever intent → template lookup is designed.
-  References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/decisions/0008-intent-vocabulary.md`, `Product/features/presentation/models/01-presentation-loop.md` §8.
+  References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/models/01-command-pipeline.md` §Q5 (intent vocabulary), `Product/features/presentation/models/01-presentation-loop.md` §8.
 
 - id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md §3` defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
   Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
