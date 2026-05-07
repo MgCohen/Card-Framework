@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/zones/models/01-zone-model.md, decisions/0006-card-shape.md]
+references: [features/entities/models/01-definition-instance-model.md, features/zones/models/01-zone-model.md]
 tags: [#cards, #model]
 ---
 
@@ -202,10 +202,6 @@ Reading the cards in a zone — see `Zone.GetCards(state)` defined on the Zone c
 
 (See `cards.md ## Invariants` for feature-level rules — two-ID model, server-internal vs client-visible split, all-state-in-slices, ref rotation as privacy mechanism.)
 
-## Decisions
-
-Linked: [`Product/decisions/0006-card-shape.md`](decisions/0006-card-shape.md) — Card shape: `StateEntity` handle + `CardMapState` + `CardRef` rotation. Cross-cutting (cards + entities + zones).
-
 ## Examples
 
 ```csharp
@@ -242,16 +238,49 @@ public static class StoreExtensions
 
 ---
 
-*Below: provenance — see the elevated ADR for full options weighed, rationale, and consequences. The decisions in this Model are project-wide cross-cutting (cards + entities + zones), so they were elevated to a project-wide ADR per §4.5.*
+*Below: provenance — what was considered, why we chose this, what it constrains. Originally landed as `features/cards/decisions/0001-card-shape.md` (2026-05-01); folded into Model provenance per §4.5 on 2026-05-07 (single-feature scope — decision is about Card shape; entities and zones provide abstractions this consumes, not co-decisions).*
+
+The zone-model design pass surfaced that the framework had no explicit answer to "where does a card live as data?" The entities Model implied cards exist as `StateEntity<TDef>` handles, but those handles were anchored in an engine-side `InstanceId → (definition, store)` registry — engine-state, not Store-state. That registry has to be re-built on `LoadSnapshot` and lives outside the snapshot/rollback system. A second concern surfaced from the visibility design (`features/zones/decisions/0002-visibility-model.md`): client visibility is best supported by the framework giving cards a temporary reference (`CardRef`) that can rotate when the card hides or moves.
 
 ## Options considered
 
-*See [`Product/decisions/0006-card-shape.md`](decisions/0006-card-shape.md) §Options considered.*
+### Q1 — canonical home of card existence
+
+- **A — Engine-side handle registry only.** Rejected — not on state, no snapshot/rollback support, contradicts the Store-as-canonical pattern.
+- **B — Map slice with `CardRef → InstanceId`; reconstitute Card via the entity bridge.** Possible, but adds a lookup hop on every card access. The bridge already constructs handles — the slice can just hold the constructed Card.
+- **C — Map slice with `CardRef → Card` directly.** Card is a class (reference type); the map holds and owns the handle's lifetime; one-hop lookup. **Chosen.**
+
+### Q2 — dual-ID model (`InstanceId` + `CardRef`)
+
+- **A — Single stable `InstanceId` everywhere; transport-time alias for visibility** (option (b) from `zones/decisions/0002`, original). Rejected: requires per-actor transport-side machinery that differs from local execution; "play the same locally vs networked" principle pushes against this.
+- **B — Single ephemeral ID, no stable identity.** Rejected: history, replay, and server-internal subscriptions need a stable cross-time identity.
+- **C — Two IDs: stable `InstanceId` (server-internal, history, serialization) + ephemeral `CardRef` (client-visible state, rotates on hide/move).** **Chosen.**
+
+### Q3 — relationship between Card and the entity bridge
+
+- **A — Card is a separate type, not on the bridge.** Rejected: the bridge handles variables, modifiers, definition typing — duplicating that for cards is throw-away work.
+- **B — Card extends `StateEntity<CardDefinition>`.** Card is a non-generic handle on the bridge with additional state-reading methods (`GetRef`, `GetOwner`). **Chosen** — see Q4.
+
+### Q4 — Card type's generic parameter
+
+- **A — Generic `Card<TDef>` with per-card-type subclasses** (`Fireball : Card<FireballDefinition>`). Rejected: pushes the framework toward a class-per-card-type model.
+- **B — Non-generic `Card : StateEntity<CardDefinition>`; per-card variants are different `CardDefinition` instances, not different C# classes.** **Chosen** — aligns with the framework's data-driven design (game content lives in definitions, not subclasses).
 
 ## Rationale
 
-*See [`Product/decisions/0006-card-shape.md`](decisions/0006-card-shape.md) §Decision.*
+`Card` is a non-generic class extending `StateEntity<CardDefinition>` and implementing `IReference`. It is a thin handle — no mutable data on the class itself. All mutable card state lives in Store slices. Per-card-type variants are distinct `CardDefinition` instances; the framework provides one `Card` class.
+
+`CardMapState` is the canonical "this card exists" slice, mapping `CardRef → Card` plus the parallel reverse index. Holds `Card` objects directly (one live handle per `InstanceId`). Replaces the engine-side handle registry — putting the registration on the Store gives snapshot/rollback for free.
+
+`CardRef` is a temporary reference that rotates on every move (per `zones/decisions/0003-insertion-api.md` and the move mutation contract) and on every visibility transition (per `zones/decisions/0002-visibility-model.md`). It is **not** an `Identifier<T>` — it is deliberately unstable.
+
+Two IDs coexist: `InstanceId` (stable, used for variable storage, modifier storage, ownership, visibility, history, all server-internal subscriptions) and `CardRef` (temporary, used as `CardMapState` key, in `ZoneContentsState`, in client-visible projections).
+
+Mutations that write `CardMapState` carry the new `CardRef` as a payload field. This ensures all sub-mutators within the composite see the same value and supports deterministic replay. `SetCardVisibilityMutation` collapses what would otherwise be separate `Hide`/`Show` mutations into one operation parameterized by target visibility.
 
 ## Consequences
 
-*See [`Product/decisions/0006-card-shape.md`](decisions/0006-card-shape.md) §Consequences.*
+- **Enables:** cards have a clear canonical home on the Store (snapshot/rollback works); the framework supports privacy across reveal-then-hide cycles via server-side ref rotation; "play the same locally vs networked" — the same `CardRef` rotation runs in both modes; server-internal subscriptions reference Cards by `Card` object or `InstanceId` and are unaffected by ref rotation.
+- **Constrains:** any state slice or projection that is sent to clients must reference cards by `CardRef`, not by `InstanceId` (otherwise the privacy filter doesn't work). Server-internal state must reference cards by `Card` or `InstanceId`, not by `CardRef` (otherwise rotations cascade through subscribers).
+- **Reverts/replaces:** `zones/decisions/0002` (visibility model) original "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. The zones ADR has been updated to reflect this.
+- **Cascade:** existing references to card identity in `effects/`, `engine/`, `actions/`, `presentation/` need a sweep — server-internal vs client-visible distinction. Surfaced on demand by `/builder:lint` (per §5.7).

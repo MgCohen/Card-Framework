@@ -49,53 +49,49 @@ Built from 8 parallel audits (one per feature) against the spec at commit `2f9c4
 
 24 ADRs total. Disposition under §4.5's hard rule (≥2 features = elevate to `Product/decisions/`; single feature = fold into Model provenance).
 
+**Re-triage applied 2026-05-07.** Initial classifications (built from per-feature audits) were too loose — many ADRs were tagged CROSS because the ADR text *referenced* other features, but referencing isn't co-deciding. §4.5's bar is "decision genuinely spans boundaries," not "mentions other features." Re-read against the strict bar: 7 ADRs moved Elevate → Fold. Net: 2 elevate (was 9), 21 fold (was 13), 1 supersede-then-fold (unchanged).
+
 ### Elevate to `Product/decisions/` (project-wide counter)
 
-| Current path | Title | Reason for cross-feature scope | New path |
+| Current path | Title | Reason for genuine cross-feature scope | New path |
 |---|---|---|---|
-| `actions/decisions/0002` | On-demand validation | Touches presentation (AffordanceMap UI gating) + engine (rule-side eligibility) | `decisions/000N-on-demand-validation.md` |
-| `actions/decisions/0003` | OnIncomingCommand flow-only | Defines flow contract between actions pipeline and engine GameRules | `decisions/000N-onincomingcommand-flow.md` |
-| `actions/decisions/0007` | Five validation layers | Spans engine (rule eligibility) + actions (handler.Validate, IntentMapper) + presentation (AffordanceMap) | `decisions/000N-five-validation-layers.md` |
-| `cards/decisions/0001` | Card shape | Anchors Card to entities `StateEntity` bridge + coordinates visibility/ref-rotation with zones | `decisions/000N-card-shape.md` |
-| `effects/decisions/0003` | Replacement priority | Depends on triggers fold semantics (`triggers/01-trigger-fold`) | `decisions/000N-replacement-priority.md` |
-| `engine/decisions/0003` | Snapshot in GameState | Crosses engine (state owner) + presentation (consumer) + actions (snapshot shape) | `decisions/000N-snapshot-in-state.md` |
-| `engine/decisions/0004` | Snapshot writer is `IAvailableActions` | Engine owns the service; effects also write via it mid-execution | `decisions/000N-snapshot-writer.md` |
-| `triggers/decisions/0002` | OnBefore<T> / OnAfter<T> replace CommandPreHook | Replaces hook types in actions + integrates with engine evaluator loop | `decisions/000N-trigger-typed-folds.md` |
-| `zones/decisions/0002` | Visibility model | Cards `CardVisibilityState` + `CardRef` rotation + presentation transport-boundary filtering | `decisions/000N-zone-visibility-model.md` |
+| `zones/decisions/0002` | Visibility model | Mechanism actually requires coordinated implementation: cards owns `CardVisibilityState` + `CardRef` rotation; zones owns the policy; presentation owns transport-boundary filtering. Three features must implement compatibly. | `decisions/0006-zone-visibility-model.md` (lands first per migration order) |
+| `actions/decisions/0007` | Five validation layers | Names 5 layers, each *owned* by a different feature (rule eligibility = engine; AffordanceMap = presentation; IntentMapper = actions; handler.Validate = actions; OnIncomingCommand = engine). Structure constrains how those features' owned surfaces behave. | `decisions/0007-five-validation-layers.md` |
 
-**9 ADRs → `Product/decisions/`.** Renumbering: existing `Product/decisions/0001-adopt-workflow.md` is the only project-wide ADR currently. New numbering starts at `0002` and runs sequentially in elevation order (TBD — could go alphabetical, dependency order, or chronological).
+**2 ADRs → `Product/decisions/`.** 5 project-wide ADRs already exist (`0001-adopt-workflow` through `0005-objects-over-ids`). Next available counter is `0006`. Numbering above is provisional — final assignment when those ADRs land.
 
 ### Fold into Model provenance (single feature)
 
-| Current path | Title | Target Model |
-|---|---|---|
-| `actions/decisions/0001` | Typed `ActionTemplate` per command | `actions/models/02-availability-snapshot.md` |
-| `actions/decisions/0004` | Validation in handler | `actions/models/01-command-pipeline.md` |
-| `actions/decisions/0005` | Generic command primitives, rule-enforced constraints | `actions/models/01-command-pipeline.md` |
-| `actions/decisions/0006` | PlayerIntent → IIntentMapper → GameCommand | `actions/models/01-command-pipeline.md` |
-| `actions/decisions/0008` | Intent vocabulary rename | `actions/models/01-command-pipeline.md` |
-| `effects/decisions/0001` | Async layer hierarchy | `effects/models/01-async-dispatch.md` |
-| `engine/decisions/0001` | GameRules as class with services | `engine/models/02-gamerules-contract.md` |
-| `engine/decisions/0002` | GameRules zero state | `engine/models/02-gamerules-contract.md` |
-| `engine/decisions/0005` | State pattern (immutable, redux-like) | `engine/models/04-gamestate-slices.md` |
-| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-evaluation-loop.md` |
-| `triggers/decisions/0001` | Trigger fold semantics | `triggers/models/01-trigger-fold.md` |
-| `zones/decisions/0001` | Zone shape | `zones/models/01-zone-model.md` |
-| `zones/decisions/0003` | Insertion API | `zones/models/01-zone-model.md` |
+| Current path | Title | Target Model | Was originally |
+|---|---|---|---|
+| `actions/decisions/0001` | Typed `ActionTemplate` per command | `actions/models/02-availability-snapshot.md` | fold |
+| `actions/decisions/0002` | On-demand validation | `actions/models/02-availability-snapshot.md` | elevate (re-triaged) |
+| `actions/decisions/0003` | OnIncomingCommand flow-only | `actions/models/01-command-pipeline.md` | elevate (re-triaged) |
+| `actions/decisions/0004` | Validation in handler | `actions/models/01-command-pipeline.md` | fold |
+| `actions/decisions/0005` | Generic command primitives, rule-enforced constraints | `actions/models/01-command-pipeline.md` | fold |
+| `actions/decisions/0006` | PlayerIntent → IIntentMapper → GameCommand | `actions/models/01-command-pipeline.md` | fold |
+| `actions/decisions/0008` | Intent vocabulary rename | `actions/models/01-command-pipeline.md` | fold |
+| `cards/decisions/0001` | Card shape | `cards/models/01-card-model.md` | elevate (re-triaged) — **already done in cards migration** |
+| `effects/decisions/0001` | Async layer hierarchy | `effects/models/01-async-dispatch.md` | fold |
+| `effects/decisions/0003` | Replacement priority | `effects/models/02-replacement-prevention.md` | elevate (re-triaged) |
+| `engine/decisions/0001` | GameRules as class with services | `engine/models/02-gamerules-contract.md` | fold |
+| `engine/decisions/0002` | GameRules zero state | `engine/models/02-gamerules-contract.md` | fold |
+| `engine/decisions/0003` | Snapshot in GameState | `engine/models/04-gamestate-slices.md` | elevate (re-triaged) |
+| `engine/decisions/0004` | Snapshot writer is `IAvailableActions` | `engine/models/03-snapshot-pipeline.md` | elevate (re-triaged) |
+| `engine/decisions/0005` | State pattern (immutable, redux-like) | `engine/models/04-gamestate-slices.md` | fold |
+| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-evaluation-loop.md` | fold |
+| `triggers/decisions/0001` | Trigger fold semantics | `triggers/models/01-trigger-fold.md` | fold |
+| `triggers/decisions/0002` | OnBefore<T> / OnAfter<T> replace CommandPreHook | `triggers/models/01-trigger-fold.md` | elevate (re-triaged) |
+| `zones/decisions/0001` | Zone shape | `zones/models/01-zone-model.md` | fold |
+| `zones/decisions/0003` | Insertion API | `zones/models/01-zone-model.md` | fold |
 
-**13 ADRs → fold into Models.** Each gets its content (Decision / Options / Rationale / Consequences) merged into the target Model's below-divider sections. The original ADR file gets deleted; git history preserves the record.
+**21 ADRs → fold into Models.** Each gets its content (Context / Options considered / Decision / Consequences) merged into the target Model's below-divider sections. The original ADR file gets deleted; git history preserves the record. The single-feature scope means the decisions are about how that feature's Model is shaped — not co-decisions with other features, even when other features are referenced as upstream/downstream context.
 
 ### Special: silently superseded
 
 | Current path | Title | Disposition |
 |---|---|---|
 | `effects/decisions/0002` | Suspension model — explicit decision IDs | **SUPERSEDE first, then fold.** Per `effects/models/04-effect-flow.md §5.1`, type-only routing replaced explicit DecisionId. Apply §4.3 supersession convention: flip ADR status to `superseded by effects/04`, add header line, then fold the option content into Model 04's provenance. The original "DecisionId" decision becomes Option A (rejected because…) in 04's `## Options considered`. |
-
-### UNCLEAR — flag for discussion
-
-| Current path | Title | Question |
-|---|---|---|
-| `effects/decisions/0001` | Async layer hierarchy | The agent tagged SINGLE because the ADR text covers effects-internal async. But the layer types (`GameAction`, `CompositeAction`, `GameSignal`) live in `actions/` and the hierarchy is consumed by triggers + handlers across features. **Could go either way.** Lean: SINGLE — ADR is about effect orchestration, not about the type definitions themselves. |
 
 ---
 
@@ -107,25 +103,25 @@ Sized as per-feature deltas. Mechanical = template rename only. Synthesis = new 
 
 - **Feature root (`actions.md`).** Full reshape: Purpose → What it is (add canonical artifact — pipeline diagram likely already in Model 01); add Vocabulary (lift Model 01's "Quick Vocabulary" 12-term table); add Architecture (synthesize the Intent → Template → Mapper → Command → Handler → State → Envelope → Evaluator flow that's currently embedded in Model 01); convert Composition to table; add Invariants (~5 cross-Model rules already visible in Model 01 §16); drop Public surface (redistribute) and Settled decisions (vestigial).
 - **Models (2).** `01-command-pipeline.md`: rich content already; mostly section renames + Concepts split. `02-availability-snapshot.md`: rename "Why This Doc Exists" → "What it is"; consolidate floor/ceiling examples into `## Examples`; "Implications Across Existing Docs" table → drop or move to `## Open follow-ups`.
-- **ADRs.** 5 fold (0001, 0004, 0005, 0006, 0008) + 3 elevate (0002, 0003, 0007). Heaviest folding job.
+- **ADRs.** 7 fold (0001, 0002, 0003, 0004, 0005, 0006, 0008) + 1 elevate (0007 — five validation layers, genuine cross-feature). Still the heaviest folding job.
 
 ### `cards/`
 
 - **Feature root: AUTHOR FROM SCRATCH.** Audit produced seed paragraph + 8-term vocabulary + dependency analysis (depends on entities; couples tightly with zones). Use that to draft all 8 sections.
 - **Model (1).** `01-card-model.md`: rename sections; consolidate "Card Class / CardRef / CardMapState / OwnershipState / Card Visibility / Mutations" into `## Contracts` with sub-headings; "Useful Invariants" → `## Invariants`; add `## Examples` (currently has none).
-- **ADRs.** 1 elevate (0001 → cross-feature card shape).
+- **ADRs.** 1 fold (0001 → Card Model provenance). **Done as the migration pilot** (2026-05-07).
 
 ### `effects/`
 
 - **Feature root.** Full reshape. Add Vocabulary (Effect / GameAction / CompositeAction / Dispatch x2 / Fold x3 outcomes / Attachment / Decision / Mutator / Envelope — agent listed). Add Architecture (the 6-phase effect lifecycle arc the agent identified). Add Invariants (consolidate the 9 in Model 04 §10 + 6 more visible across Models 01–03).
 - **Models (4).** `01-async-dispatch.md`, `02-replacement-prevention.md`, `03-ongoing-effects.md` are well-shaped — mostly section renames. `04-effect-flow.md` is exceptionally dense (~450 lines, 11 numbered sections including "9 pinned invariants") — **flag for possible split** during migration; not in scope here.
-- **ADRs.** 1 fold (0001) + 1 supersede-then-fold (0002) + 1 elevate (0003).
+- **ADRs.** 2 fold (0001, 0003) + 1 supersede-then-fold (0002).
 
 ### `engine/` (largest by Models)
 
 - **Feature root.** Full reshape. Add Vocabulary (8 terms from agent: OriginCommandId, Drain, IntakeResult/DrainResult, EngineLifecycle, MatchOutcome, Snapshot, GameRulesDefinition vs Runtime, MatchSetup). Add Architecture (the Factory → Lifecycle → Loop → GameRules-hooks → Snapshot → State flow that the agent diagrammed). Add Invariants (8 cross-Model rules: lifecycle gate, zero-rule-state, service injection, snapshot-in-state, framework-vs-game slices, lifecycle mirror, signals-in-envelopes, ADR-0005 immutability).
 - **Models (6).** `01-evaluation-loop.md` through `06-match-lifecycle.md` are all well-structured. Mostly section renames + provenance backfill.
-- **ADRs.** 4 fold (0001, 0002, 0005, 0006) + 2 elevate (0003, 0004).
+- **ADRs.** 6 fold (0001, 0002, 0003, 0004, 0005, 0006) — all folded into Models in the same feature; no elevations.
 
 ### `entities/`
 
@@ -143,7 +139,7 @@ Sized as per-feature deltas. Mechanical = template rename only. Synthesis = new 
 
 - **Feature root.** Reshape. Add Vocabulary (GameCommand hierarchy, Trigger<T>, TriggerMatch, TriggerFoldResult, DispatchOrigin enum, TriggerPhase). Architecture is thin (1 Model) — surface registry-query → filter → pipeline-execution flow + ITriggerSystem-vs-ITriggerPipeline distinction. 4 invariants the agent named (Before→Execute→After phase order, replacement creates fresh fold, after-phase no-ops, handlers never dispatch GameAction).
 - **Model (1).** `01-trigger-fold.md`: 9 numbered sections — mostly section renames. "§3: Context — Deleted" should become a provenance note, not a current section.
-- **ADRs.** 1 fold (0001) + 1 elevate (0002).
+- **ADRs.** 2 fold (0001, 0002) — both folded into the trigger-fold Model.
 
 ### `zones/`
 
@@ -173,7 +169,7 @@ Only one Model, dense (15 sections). Risk: migrating naively duplicates content 
 
 ### 4.5 Renumbering elevated ADRs
 
-9 ADRs elevate to `Product/decisions/`. Existing `decisions/0001-adopt-workflow.md` is the only current resident. New project-wide counter assignments need to happen — proposed ordering: by dependency (ADRs that other ADRs reference go first) rather than alphabetical or chronological. TBD — call when we get there.
+2 ADRs elevate to `Product/decisions/` (post-re-triage). 5 project-wide ADRs already exist (`0001-adopt-workflow` through `0005-objects-over-ids`). Provisional new numbers in migration-order: `0006-zone-visibility-model` (lands during zones migration, step 3), `0007-five-validation-layers` (lands during actions migration, step 7). Final assignment when each lands.
 
 ### 4.6 ADR move semantics
 
@@ -185,13 +181,13 @@ Only one Model, dense (15 sections). Risk: migrating naively duplicates content 
 
 Bottom-up by dependency graph, leaves first, so vocabulary stabilizes before consumers depend on it. Each migration is its own commit.
 
-1. **`cards/`** — smallest scope (1 Model, 1 ADR), and it's the migration pilot for "author Feature root from scratch." Learning here calibrates the rest.
+1. ~~**`cards/`**~~ — **DONE 2026-05-07.** Migration pilot. 1 Model, 1 ADR (folded).
 2. **`entities/`** — clean ADR slate, 2 Models. Foundation for `cards/` and most others.
-3. **`zones/`** — already partly in new shape; lightest reshape. 1 Model, 3 ADRs (1 elevate).
-4. **`triggers/`** — 1 Model, 2 ADRs (1 elevate). Architecture section is thin.
-5. **`effects/`** — 4 Models, 3 ADRs. Includes the supersession case (0002). Heavier synthesis.
-6. **`engine/`** — 6 Models, 6 ADRs (2 elevate). Largest by Models; richest vocabulary.
-7. **`actions/`** — 2 Models, 8 ADRs (3 elevate). Heaviest ADR triage.
+3. **`zones/`** — already partly in new shape; lightest reshape. 1 Model, 3 ADRs (1 elevate — `0002-visibility-model`).
+4. **`triggers/`** — 1 Model, 2 ADRs (both fold).
+5. **`effects/`** — 4 Models, 3 ADRs (2 fold + 1 supersede-then-fold). Heavier synthesis.
+6. **`engine/`** — 6 Models, 6 ADRs (all fold). Largest by Models; richest vocabulary.
+7. **`actions/`** — 2 Models, 8 ADRs (7 fold + 1 elevate — `0007-five-validation-layers`). Heaviest ADR work.
 8. **`presentation/`** — 1 Model, no ADRs. Last because its consumers (engine/actions) are now stable; presentation depends on everything upstream.
 
 After feature migrations: cleanup pass — verify all `features/<feature>/decisions/` directories are empty/removed; run `/builder:lint` for retired-token sweep + reference integrity; update `ledgers/FEATURE-MAP.md` if dependencies shifted.
@@ -209,7 +205,7 @@ After feature migrations: cleanup pass — verify all `features/<feature>/decisi
 
 ## 7. Decisions needed before migration starts
 
-1. **Confirm the 9 ADR elevations** in §2. Especially scrutinize: `engine/0004` (snapshot-writer) — UNCLEAR-trending-CROSS in the audit; `effects/0001` (async-layer-hierarchy) — UNCLEAR. Either could flip to fold instead.
-2. **Confirm migration order** in §5 — particularly whether `presentation/` last is right given its tight coupling to `actions/` and `engine/`.
-3. **Decide elevated ADR numbering scheme** — dependency order vs. alphabetical vs. chronological. Probably defer until needed.
-4. **`effects/04-effect-flow.md` split** — accept the flag for follow-up, or address during migration?
+1. ~~**Confirm the ADR elevations** in §2.~~ **Resolved 2026-05-07.** Initial 9 elevations re-triaged against strict §4.5 reading — 7 moved to fold; final state is 2 elevate (`actions/0007`, `zones/0002`) + 21 fold + 1 supersede-then-fold.
+2. ~~**Confirm migration order** in §5.~~ Confirmed.
+3. ~~**Decide elevated ADR numbering scheme.**~~ Sequential: `0006`, `0007` (next available after existing 0001–0005). Final assignment when each lands.
+4. ~~**`effects/04-effect-flow.md` split.**~~ Accepted as follow-up; out of scope for migration.
