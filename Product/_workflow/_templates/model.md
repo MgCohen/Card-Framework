@@ -7,27 +7,37 @@ tags: []
 
 # <subject> — model
 
-<!-- Strict section order. 5 required + 1 optional above the divider; 3 below.
-     Required sections may be empty with a stub line (e.g. `*n/a — see Contracts.*`)
-     but cannot be reordered or omitted. `## Decisions` is optional — omit when no
-     project-wide ADR applies. The linter validates structure. -->
+<!-- Strict section order. 6 sections above the divider; 3 below.
+     Sections may be empty with a stub line (e.g. `*n/a — see Contracts.*` or
+     `*n/a — no elevated ADR.*` for `## Decisions`) but cannot be reordered
+     or omitted. The linter validates structure. -->
 
 ## What it is
-High-level orientation + a canonical artifact (code snippet, algorithm pseudocode, diagram — whichever fits the Model's shape). A reader gets the shape in 30 seconds.
+High-level orientation in 30 seconds. SHOULD include a canonical artifact that fits the Model's shape:
+
+| Model shape | Artifact form |
+|---|---|
+| Class / interface / contract | Code snippet (signatures + types) |
+| Algorithm | Pseudocode |
+| State machine / lifecycle | State diagram |
+| Data structure / schema | Shape sketch |
+| Pipeline / pass / phase | Arrow chain |
+
+If no form fits cleanly, the stub `*n/a — see Contracts.*` is permitted.
 
 ## Contracts
-Full API surface: interfaces, methods, signatures, return shapes, forbidden behaviors. The developer's checklist for implementation.
+**Abstract surface only** — interfaces, method signatures, type shapes, return contracts, forbidden behaviors. What an implementer must satisfy. No worked-through realization here; that lives in `## Examples`.
 
 ## Invariants
-Model-local rules (cross-Model rules live in the Feature root's `## Invariants`).
+Model-local rules (cross-Model rules live in the Feature root's `## Invariants`, referenced by name).
 
 ## Decisions
-*(Optional — omit if no project-wide ADR applies. Feature-internal decisions live below the divider.)*
+**Reserved for elevated ADRs.** Project-wide ADRs (per §4.5's two-feature rule) that shape this Model. Feature-internal decisions live below the divider, not here. If no ADR applies, stub `*n/a — no elevated ADR.*`.
 
 Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-Walked through against the floor sample, or a stub `*n/a — see Contracts.*` if no example fits the shape.
+**Concrete realization + call-site framing.** A worked-through instance of the contract — typed-out concrete code (or pseudocode at the same fidelity) plus at least one call-site sketch showing how a consumer wires up. If no example fits the Model's shape (truly abstract surface), stub `*n/a — see Contracts.*`.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`; ephemerals to `SESSION-CHECKPOINT.md ## Scratch`.)
@@ -41,7 +51,7 @@ Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`; ephemeral
 - **B** — rejected because ...
 - **C** — chosen.
 
-*If a sub-decision deserves more depth, write it as a sub-section below `## Options considered` (e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale). Multi-decision Models accumulate sub-sections in narrative order.*
+*Multi-decision Models: accumulate `### Q-N — <slug>` sub-sections in narrative order, each with its own options / lean / rationale.*
 
 ## Rationale
 Why the chosen approach. Skip if obvious.

@@ -284,7 +284,7 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 The unified design artifact. Top half describes the system; bottom half records the provenance (options weighed, rationale, consequences). A reader gets the model first; clicks down for the "why."
 
-**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a stub line (`*n/a — purely descriptive Model.*`) but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
+**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a section-appropriate stub line — e.g., `*n/a — see Contracts.*` for `## Examples`, `*n/a — no elevated ADR.*` for `## Decisions`, `*n/a — purely descriptive Model.*` for the below-divider block — but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
 
 ```markdown
 ---
@@ -297,21 +297,31 @@ tags: []
 # <subject> — model
 
 ## What it is
-High-level orientation + a canonical artifact (code snippet, algorithm pseudocode, diagram — whichever fits the Model's shape). A reader gets the shape in 30 seconds.
+High-level orientation in 30 seconds. SHOULD include a canonical artifact that fits the Model's shape:
+
+| Model shape | Artifact form |
+|---|---|
+| Class / interface / contract | Code snippet (signatures + types) |
+| Algorithm | Pseudocode |
+| State machine / lifecycle | State diagram |
+| Data structure / schema | Shape sketch |
+| Pipeline / pass / phase | Arrow chain |
+
+If no form fits cleanly, the stub `*n/a — see Contracts.*` is permitted.
 
 ## Contracts
-Full API surface: interfaces, methods, signatures, return shapes, forbidden behaviors. The developer's checklist for implementation.
+**Abstract surface only** — interfaces, method signatures, type shapes, return contracts, forbidden behaviors. What an implementer must satisfy. No worked-through realization here; that lives in `## Examples`.
 
 ## Invariants
-Model-local rules (cross-Model rules live in the Feature root's `## Invariants`).
+Model-local rules (cross-Model rules live in the Feature root's `## Invariants`, referenced by name).
 
 ## Decisions
-*(Optional — omit if no project-wide ADR applies. Feature-internal decisions live below the divider.)*
+**Reserved for elevated ADRs.** Project-wide ADRs (per §4.5's two-feature rule) that shape this Model. Feature-internal decisions live below the divider, not here. If no ADR applies, stub `*n/a — no elevated ADR.*`.
 
 Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-Walked through against the floor sample, or a stub `*n/a — see Contracts.*` if no example fits the shape.
+**Concrete realization + call-site framing.** A worked-through instance of the contract — typed-out concrete code (or pseudocode at the same fidelity) plus at least one call-site sketch showing how a consumer wires up. If no example fits the Model's shape (truly abstract surface), stub `*n/a — see Contracts.*`.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
@@ -325,7 +335,7 @@ Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
 - **B** — rejected because ...
 - **C** — chosen.
 
-(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order.)
+*Multi-decision Models: accumulate `### Q-N — <slug>` sub-sections in narrative order, each with its own options / lean / rationale.*
 
 ## Rationale
 Why the chosen approach. Skip if obvious.
@@ -336,7 +346,12 @@ What this enables; what it constrains. Skip if obvious.
 
 **Build-unit test.** A Model should be implementable standalone: a developer reading just this doc + the Feature root should be able to build it without opening neighboring Models in parallel. If implementation requires constant cross-referencing, the Model is either too thin (merge into a neighbor) or wrong-shaped (split along different lines).
 
-A purely descriptive Model can use the empty-stub convention for the provenance sections. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look — and the linter enforces it.
+**Below-divider modes.** The provenance block is filled in one of two modes:
+
+- **Decision-bearing.** Populate `## Options considered`, `## Rationale`, `## Consequences`. Single-decision Models keep them flat. Multi-decision Models accumulate `### Q-N — <slug>` sub-sections under `## Options considered` in narrative order, each carrying its own options / lean / rationale; the closing `## Rationale` and `## Consequences` summarize the composite.
+- **Descriptive.** No design choices, just structural framing. Stub once at the top of the provenance block (`*n/a — purely descriptive Model.*`); the three section headings remain per strict-section order without further content.
+
+Section order is canonical regardless of mode — the linter enforces it.
 
 **Cascade implications** (downstream docs affected by edits to this Model) are detected on demand by the linter — see §5.7.
 
