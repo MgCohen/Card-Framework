@@ -86,7 +86,7 @@ Product/
 
 ### Numbering
 
-**Per-feature counters.** Each feature's `models/` and `decisions/` restart at `01`. Filenames look like `features/actions/models/03-action-definition.md` and `features/actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
+**Per-feature Model counters.** Each feature's `models/` restarts at `01`. Filenames look like `features/actions/models/03-action-definition.md`. The path is the domain prefix; no need to bake it into filenames. (Per §4.5, there is no `features/<feature>/decisions/` directory — feature-internal decisions live in Model provenance below the divider; project-wide ADRs use the `Product/decisions/NNNN-<slug>.md` counter.)
 
 **Project-wide ADRs** live in `decisions/` with their own counter (`decisions/0001-adopt-workflow.md`). Used for decisions that span features or shape the whole project — workflow adoption, migration choices, cross-feature naming conventions.
 
@@ -104,7 +104,7 @@ When a doc spans multiple systems (e.g., a terminology discussion touching namin
 
 ### Feature names are project-specific
 
-Each project applying this workflow picks its own feature names — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/models/`, `features/<name>/decisions/`), not any particular set of names.
+Each project applying this workflow picks its own feature names — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/<name>.md` + `features/<name>/models/`), not any particular set of names. (Per §4.5, there is no `features/<feature>/decisions/` — feature-internal decisions live in Model provenance.)
 
 A rule of thumb: if a feature folder has fewer than ~3 docs after several sessions, it might belong as a tag inside a sibling. If it grows past ~15 docs without natural sub-clusters, consider splitting.
 
@@ -118,7 +118,7 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/models/` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
-| **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
+| **ADR** | One atomic decision per file (project-wide cross-cutting only — see §4.5; feature-internal decisions live in Model provenance) | `Product/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Snapshot** | Opt-in milestone freeze of `SESSION-CHECKPOINT.md` (see §4.6) | `sessions/` | n/a (frozen) |
 | **Checkpoint** | Live operational spine; updated continuously | `Product/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
@@ -774,7 +774,7 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 | `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
 | `sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` | Opt-in milestone snapshot — frozen copy of `SESSION-CHECKPOINT.md` at a referenceable point. `type: snapshot` front matter; *"Frozen — do not edit"* header. See §4.6. | When `/builder:snapshot` is invoked |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
-| `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
+| `Product/decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions per §4.5) | When a project-scoped decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 

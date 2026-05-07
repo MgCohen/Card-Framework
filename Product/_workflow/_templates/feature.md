@@ -45,5 +45,5 @@ What this feature owns — and what it explicitly doesn't. Demarcation against n
 - **Upstream:** features/X — consumed
 - **Downstream:** features/Y — consumes this
 
-## ❓ Open
+## Open
 Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.
