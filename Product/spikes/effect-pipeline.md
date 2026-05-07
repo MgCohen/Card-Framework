@@ -10,7 +10,7 @@ tags: [#spike, #effects, #effect-pipeline, #runtime, #scope]
 
 ## TL;DR
 
-- Two pipelines (per [ADR-0006](../decisions/0006-two-pipeline-architecture.md)): **command pipeline** (framework-FIFO, locked) and **effect pipeline** (game-customizable, this sketch).
+- Two pipelines (per [ADR-0006](decisions/0006-two-pipeline-architecture.md)): **command pipeline** (framework-FIFO, locked) and **effect pipeline** (game-customizable, this sketch).
 - **`IEffectPipeline` is an injected service**, symmetric with `ICommandPipeline`. Default = inline; games swap in DI.
 - **`EffectDefinition` (recipe) + `EffectInstance` (runtime record).** Definition lives on the source's data; instance is the flat immutable wire-form `(Source, EffectId, Bindings)`.
 - **State holds `EffectInstance` records** (immutable). MTG stack zone, Hearthstone trigger queue = game-authored slices over these records.
@@ -24,11 +24,11 @@ tags: [#spike, #effects, #effect-pipeline, #runtime, #scope]
 
 The locked context this sketch must respect:
 
-- Three-level model — Commands / Effects / Triggers ⊆ Effects (per [ADR-0006](../decisions/0006-two-pipeline-architecture.md)).
+- Three-level model — Commands / Effects / Triggers ⊆ Effects (per [ADR-0006](decisions/0006-two-pipeline-architecture.md)).
 - Command pipeline is framework-FIFO; `engine.Dispatch(GameAction, out string? reason)` is try-get; `runtime` contract is `FilterTriggers + Evaluate`; no `OnIncomingCommand` / `OnQueueDrained` / `IIntakeQueue` / `Route` / etc.
 - `IEffectScope.Dispatch` runs `GameAction`s **inline** — pipeline.Execute → fold → handler → fold → envelope, awaited synchronously by the calling effect.
 - `engine.Dispatch` is queued — framework-FIFO, runs after current `pipeline.Execute` returns.
-- Mutation discipline (per [`effects/04` §10](../features/effects/models/04-effect-flow.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
+- Mutation discipline (per [`effects/04` §10](features/effects/models/04-effect-flow.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
 - `IHandlerContext` exposes `Store`, `Actions` (snapshot writer), `Resolver` (decision awaiter), `Modifiers`. **No `RunEffect` surface today** — that's the documented gap this sketch closes.
 - ADR-0002 (refreshed) — runtime holds zero **gameplay** state. Engine-internal plumbing is fine on the engine; gameplay state lives in Scaffold slices.
 
@@ -569,6 +569,50 @@ public abstract class GameRulesRuntime<TDefinition>
 - **`EffectChainScope` factory shape** — `_scopes.NewRoot(instance)` / `_scopes.Extend(parent, instance)` is one shape. Could also be static methods on `EffectChainScope` itself. Mechanical detail; pin during implementation.
 - **`EffectDefinition.Validate`** — semantics under re-entrance and cancellation. Probably "Validate=false → skip silently"; aligns with `Trigger<T>.Validate`.
 - **Whether `Trigger<T>` survives** as a separate authoring type, or collapses entirely into `EffectDefinition` with `InterceptedCommand` in bindings. Probably keeps as authoring sugar — typed payload is ergonomic for game authors.
+
+## Known content gaps in this sketch
+
+Surfaced in the post-write review (2026-05-07). These are *exposition* gaps — places where the sketch is unclear, incomplete, or makes forward references to unwritten helpers — that need to close before this can graduate to Models. Distinct from the genuine open design questions in "Open follow-ups" above.
+
+**Self-containedness gaps:**
+
+1. **Forward references to undefined helpers.**
+   - `IEffectScopeFactory` — used in `InlineEffectPipeline` (`_scopes.NewRoot`, `_scopes.Extend`) and `ResolveTopOfStackHandler`, but the type is never declared. Either define it or fold its job onto `IEffectPipeline` directly.
+   - `WrapAsInstance(trigger, command)` — referenced in the flow diagram and trace, only described in prose. No code sketch of the central trigger-to-EffectInstance wiring.
+   - `BuildSnapshot()`, `ComputeStateBasedFollowUps()` — referenced in runtime examples without flagging them as game-side placeholders.
+
+2. **Types referenced but not introduced.**
+   - `EffectId` — used everywhere; semantics never pinned (string? enum? typed identifier?). Listed in "Open follow-ups" but the reader hits it cold.
+   - `BaseState`, `Mutator<,>`, `Store`, `IStateScope`, `IModifierFactory`, `ICommandAwaiter`, `IAvailableActions`, `Reference` — borrowed from existing framework. A "Prerequisites / referenced framework types" section near the top would close the gap.
+   - `PriorityState.BothPassed` / `Granted` / `NextToAct` — game-side slice; assumed shape never declared. Worth a "(example slice; game-defined)" note inline.
+
+3. **ADR-0006 referenced but not summarized inline.** Context section says "per ADR-0006" without inline-summarizing the three-level model + pipeline split. One paragraph in the Context section would make the spike actually standalone.
+
+**Clarity gaps:**
+
+4. **`Origin` field semantics opaque.** `IEffectScope.Origin: EffectInstance?` exists but the runtime only consults `Fired` for re-entrance. If `Origin` is for debugging/tracing, say so. If it has a real role, name it.
+
+5. **"Why two verbs" rationale buried.** D8 explains the mechanism but the *reason* (resolution-handler-via-RunEffect would re-push onto the MTG stack and loop) lives 200 lines later in the resolution-handler comment. Pull that "why" up to D8.
+
+6. **Trigger-as-EffectInstance is hand-waved.** The single most subtle bit of the design — *how a `Trigger<T>` registration becomes an `EffectInstance` with a stable `EffectId` and a captured intercepted command* — gets one comment in the type hierarchy and a `WrapAsInstance(...)` placeholder. Needs at least a sketch of:
+   - How `AbilityDefinition.Register` produces an `EffectDefinition` on the owner.
+   - Where the `EffectId` for a registered trigger comes from.
+   - How the fold wraps a matched trigger as `EffectInstance` (Source = trigger owner, Id = generated, Bindings.InterceptedCommand = matched command).
+   - How `ResolveTopOfStackHandler.top.Execute(chain)` knows to pull the trigger logic out of the source's definition.
+
+7. **Stacklands section too thin.** Just "no override needed" — needs a simple inline trigger example (e.g., "when this card enters play, deal 1 damage to neighbor") to illustrate the default path with lambda authoring and balance against MTG/Hearthstone weight.
+
+8. **Naming inconsistency.** "chain scope" (informal) / `IEffectScope` (interface) / `EffectChainScope` (implementation never sketched). Pick one and use consistently; sketch `EffectChainScope` if it's load-bearing.
+
+**Smaller polish:**
+
+9. **`StacklandsRulesDefinition` / `MtgRulesDefinition` / `HearthstoneRulesDefinition`** — extended in runtime examples but never sketched. Either show one (canonical authoring shape) or note "definition class is per-game data; out of scope here."
+
+10. **Trace is long.** A higher-level "what changed at each step" summary above the detailed MTG trace would help skimming.
+
+11. **D2's "existing record-on-slice pattern"** — referenced without explanation; readers without `effects/04` open won't know what's meant.
+
+---
 
 ## What this sketch does NOT settle
 
