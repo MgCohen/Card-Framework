@@ -26,7 +26,7 @@ High-level orientation in 30 seconds. SHOULD include a canonical artifact that f
 If no form fits cleanly, the stub `*n/a — see Contracts.*` is permitted.
 
 ## Contracts
-**Abstract surface only** — interfaces, method signatures, type shapes, return contracts, forbidden behaviors. What an implementer must satisfy. No worked-through realization here; that lives in `## Examples`.
+What this Model defines: types, interfaces, signatures, semantics, forbidden behaviors. Implementation is welcome when the framework owns it; surface-only signatures are fine when implementation is game-supplied. Consumer usage and user-supplied extensions live in `## Examples`.
 
 ## Invariants
 Model-local rules (cross-Model rules live in the Feature root's `## Invariants`, referenced by name).
@@ -37,7 +37,7 @@ Model-local rules (cross-Model rules live in the Feature root's `## Invariants`,
 Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-**Concrete realization + call-site framing.** A worked-through instance of the contract — typed-out concrete code (or pseudocode at the same fidelity) plus at least one call-site sketch showing how a consumer wires up. If no example fits the Model's shape (truly abstract surface), stub `*n/a — see Contracts.*`.
+Consumers of the contract — **user extensions** (game-supplied implementations of a framework interface, e.g., `DealDamageHandler : ICommandHandler<...>`) and/or **call-site usage** (code invoking the contract, traced flows, wiring sketches). If no consumer interaction fits the Model's shape, stub `*n/a — see Contracts.*`.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`; ephemerals to `SESSION-CHECKPOINT.md ## Scratch`.)

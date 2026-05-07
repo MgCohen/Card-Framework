@@ -5,7 +5,7 @@ references: [features/entities/models/01-definition-instance-model.md, features/
 tags: [#cards, #model]
 ---
 
-# Card Model
+# Card Model — model
 
 ## What it is
 
@@ -201,6 +201,10 @@ Reading the cards in a zone — see `Zone.GetCards(state)` defined on the Zone c
 - **One live `Card` per `InstanceId`.** The `CardMapState` owns the handle's lifetime; references are shared, not copied. Equality is `InstanceId`-based.
 
 (See `cards.md ## Invariants` for feature-level rules — two-ID model, server-internal vs client-visible split, all-state-in-slices, ref rotation as privacy mechanism.)
+
+## Decisions
+
+- `Product/decisions/0006-zone-visibility-model.md` — zone-level visibility policy and the privacy mechanism. The Card Model implements the per-card visibility override slice (`CardVisibilityState`) and the `CardRef` rotation behavior on every visibility transition, both shaped by this ADR. (The original `cards/decisions/0001-card-shape.md` was single-feature scope and was folded into the below-divider provenance per §4.5.)
 
 ## Examples
 

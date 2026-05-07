@@ -311,7 +311,7 @@ High-level orientation in 30 seconds. SHOULD include a canonical artifact that f
 If no form fits cleanly, the stub `*n/a — see Contracts.*` is permitted.
 
 ## Contracts
-**Abstract surface only** — interfaces, method signatures, type shapes, return contracts, forbidden behaviors. What an implementer must satisfy. No worked-through realization here; that lives in `## Examples`.
+What this Model defines: types, interfaces, method signatures, semantics, forbidden behaviors. **Implementation is welcome when the framework owns it** — e.g., a `CardMapState` record with its dictionary lookups, a pipeline algorithm with its phase ordering, an extension-method body. **Surface-only signatures are appropriate when implementation is game-supplied** — e.g., `ICommandHandler<TCommand, TResult>` defining a contract that game code implements. What does *not* live here: consumer usage and user-supplied extensions of the contract — those live in `## Examples`.
 
 ## Invariants
 Model-local rules (cross-Model rules live in the Feature root's `## Invariants`, referenced by name).
@@ -322,7 +322,12 @@ Model-local rules (cross-Model rules live in the Feature root's `## Invariants`,
 Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-**Concrete realization + call-site framing.** A worked-through instance of the contract — typed-out concrete code (or pseudocode at the same fidelity) plus at least one call-site sketch showing how a consumer wires up. If no example fits the Model's shape (truly abstract surface), stub `*n/a — see Contracts.*`.
+Consumers of the contract — two shapes:
+
+- **User extensions.** Game-supplied implementations of a framework interface — e.g., `DealDamageHandler : ICommandHandler<DealDamageCommand, DamageResult>` showing what an implementer's code looks like.
+- **Call-site usage.** Code that invokes the contract — `store.Execute(MoveCardMutation.AtTop(card, src, dst))`, a traced execution flow, a small wiring sketch.
+
+If no consumer interaction fits the Model's shape (truly internal contract with no documented callers), stub `*n/a — see Contracts.*`.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
