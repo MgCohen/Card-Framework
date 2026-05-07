@@ -145,8 +145,8 @@ For algorithm-shaped Models, the two sections naturally diverge — pseudocode v
 
 5 required + 1 optional above the divider. 3 below. Ready to fold into `PRODUCT-BUILDER.md §4.3` when we move from pilot to spec.
 
-## Still-open questions
+## Resolved
 
-- **`## Examples` always required?** It pulled weight in both pilots. Could it be omittable for tiny Models? My lean: keep required — forces honesty about whether the contract has been concretely walked through.
-- **Feature `## Composition` table required for ≤2 Models?** A sentence in `## Architecture` might do. Suggested rule: required only when ≥3 Models.
-- **Does provenance age well?** Pilots are draft, not 6-month-old Models. Real test of whether `## Options considered / Rationale / Consequences` ossify or stay useful comes later.
+- **`## Examples` always required (with stub allowed).** Forces honesty about whether the contract has been concretely walked through. Stub `*n/a — see Contracts.*` permitted when no example fits.
+- **Feature `## Composition` table always required.** Predictable structure regardless of Model count; reader always knows where to find the Model index.
+- **Provenance handling — deferred.** Keep current inline convention through the spec fold. Revisit at the 6-month mark when settled Models have aged enough to see whether the section ossifies, drifts, or stays useful.
