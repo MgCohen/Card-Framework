@@ -105,3 +105,48 @@ Notes on what worked and what fought the template, observed while writing them.
 ```
 
 5 required + 1 optional above the divider. Tighter than before. Each section earned its keep in the pilot.
+
+---
+
+## Round 2 — revised template applied
+
+Changes made to the pilot files:
+
+- Dropped `## Shape` from both Models.
+  - `01-command-handler.md`: typing notes + `IHandlerContext` framing folded into the preamble of `## Contracts`.
+  - `02-command-pipeline.md`: `ICommandPipeline` interface + handler-registry framing folded into `## Contracts` alongside the method specs.
+- Dropped empty `## Decisions` section from `02-command-pipeline.md`. `01-command-handler.md` keeps it (real ADR-0005 pointer).
+
+How the revised docs feel after the pass:
+
+- **`01-command-handler.md`** — tighter. `## Contracts` now opens with the typing/context framing, then dives into method specs. No section feels redundant. `## What it is` gives orientation; `## Contracts` gives the spec. Clean two-step.
+- **`02-command-pipeline.md`** — every section earns its keep. `## What it is` (algorithm pseudocode) → `## Contracts` (interface + method specs) → `## Invariants` → `## Examples` → `## Open follow-ups`. No empty stubs. The pseudocode-in-What-it-is + interface-in-Contracts split honors the algorithm/API-surface distinction naturally.
+
+For class-shaped Models, `## What it is`'s snippet and `## Contracts`'s opening overlap — both reference the interface. That's intended layering (orientation vs. spec) but worth calling out in the spec so authors don't try to deduplicate.
+
+For algorithm-shaped Models, the two sections naturally diverge — pseudocode vs. interface — and the split feels right.
+
+## Confirmed final shape
+
+```
+## What it is        (required)
+## Contracts         (required)
+## Invariants        (required)
+## Decisions         (optional — omit when empty)
+## Examples          (required)
+## Open follow-ups   (required)
+
+---
+
+## Options considered
+## Rationale
+## Consequences
+```
+
+5 required + 1 optional above the divider. 3 below. Ready to fold into `PRODUCT-BUILDER.md §4.3` when we move from pilot to spec.
+
+## Still-open questions
+
+- **`## Examples` always required?** It pulled weight in both pilots. Could it be omittable for tiny Models? My lean: keep required — forces honesty about whether the contract has been concretely walked through.
+- **Feature `## Composition` table required for ≤2 Models?** A sentence in `## Architecture` might do. Suggested rule: required only when ≥3 Models.
+- **Does provenance age well?** Pilots are draft, not 6-month-old Models. Real test of whether `## Options considered / Rationale / Consequences` ossify or stay useful comes later.

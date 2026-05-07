@@ -20,13 +20,11 @@ public interface ICommandHandler<TCommand, TResult>
 }
 ```
 
-## Shape
-
-Generic per `(TCommand, TResult)` pair. `TCommand` extends the framework's `GameCommand` base (owned by `triggers/`). `TResult` is the handler's typed return — game-defined records like `DamageResult`, `MoveResult`, or framework's `Unit` for void operations.
-
-`IHandlerContext` is a capability-bag passed to `Execute` — gives access to `ctx.Store` (state read), `ctx.Mutate` (mutator invocation), and `ctx.History` (entry emission). Contract owned by `effects/04-effect-flow`.
-
 ## Contracts
+
+Generic per `(TCommand, TResult)` pair. `TCommand` extends the framework's `GameCommand` base (owned by `triggers/`); `TResult` is the handler's typed return — game-defined records like `DamageResult`, `MoveResult`, or `Unit` for void operations.
+
+`IHandlerContext` is a capability-bag passed to `Execute` — `ctx.Store` (state read), `ctx.Mutate` (mutator invocation), `ctx.History` (entry emission). Contract owned by `effects/04-effect-flow`.
 
 **`Validate(command, state, out reason) → bool`**
 - Side-effect-free. Reads state only, returns `false + reason` for rejection (e.g., "actor frozen", "not enough mana").

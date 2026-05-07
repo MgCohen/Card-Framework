@@ -29,9 +29,9 @@ Pipeline.Execute(command):
     return envelope
 ```
 
-## Shape
+## Contracts
 
-`ICommandPipeline` is the framework's executor — one DI-registered service per `GameEngine` instance. It does not own the queue or the drain loop (those live in `engine/`); it processes one command per `Execute` call.
+`ICommandPipeline` is the framework's executor — one DI-registered service per `GameEngine` instance. It does not own the queue or the drain loop (those live in `engine/`); it processes one command per `Execute` call. The handler registry is a separate DI-resolved service the pipeline consults to find `ICommandHandler<TCommand, TResult>` for the command's runtime type. The trigger pipeline is owned by `triggers/`; the command pipeline calls into it for the before/after folds.
 
 ```csharp
 public interface ICommandPipeline
@@ -40,10 +40,6 @@ public interface ICommandPipeline
     HistoryEnvelope  Execute  (GameCommand command);
 }
 ```
-
-The handler registry is a separate DI-resolved service the pipeline consults to find `ICommandHandler<TCommand, TResult>` for the command's runtime type. The trigger pipeline is owned by `triggers/`; the command pipeline calls into it for the before/after folds.
-
-## Contracts
 
 **`Validate(command, state, out reason) → bool`**
 - Resolves the handler from the registry by command type.
@@ -67,10 +63,6 @@ The handler registry is a separate DI-resolved service the pipeline consults to 
 - A cancelled command skips handler execution but still emits an envelope with cancellation entries.
 - The `command'` after the before-fold may differ from the input command in field values *or* concrete type (replacement). Handler resolution uses the post-fold type.
 - The trigger pipeline is called for both before and after, with the pipeline phase as discriminator.
-
-## Decisions
-
-*(none — feature-internal decisions sit below the divider)*
 
 ## Examples
 
