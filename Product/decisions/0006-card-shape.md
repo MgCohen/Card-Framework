@@ -1,14 +1,15 @@
 ---
 type: adr
 status: accepted
-tags: [#adr, #cards, #model]
+references: [features/cards/models/01-card-model.md, features/entities/models/01-definition-instance-model.md, features/zones/models/01-zone-model.md]
+tags: [#adr, #cards, #entities, #zones]
 ---
 
-# ADR-0001 — Card shape: StateEntity handle + CardMapState + CardRef rotation
+# ADR-0006 — Card shape: StateEntity handle + CardMapState + CardRef rotation
 
-Date: 2026-05-01
-Context-doc: features/cards/models/01-card-model.md
-Proposal: session-20260501-1602-zone-model-internal-opens
+Date: 2026-05-01 (originally landed as `features/cards/decisions/0001`; elevated to project-wide on 2026-05-07 per §4.5 — touches cards, entities, and zones).
+
+Context-doc: `features/cards/models/01-card-model.md`
 
 ## Context
 
@@ -96,7 +97,7 @@ public readonly record struct CardRef(Guid Value)
 
 **Ownership lives on a generic `OwnershipState` slice** keyed by `InstanceId` and applicable to any `IReference` instance (cards, zones, future addressable entities). Owner reads go through `card.GetOwner(state)` or `zone.GetOwner(state)`.
 
-**`CardVisibilityState` slice** holds per-card visibility overrides as `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`); absent entry = use zone policy. See [Card Model § Card Visibility](features/cards/models/01-card-model.md).
+**`CardVisibilityState` slice** holds per-card visibility overrides as `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`); absent entry = use zone policy. See [Card Model § `CardVisibilityState`](features/cards/models/01-card-model.md).
 
 **Card construction** is owned by the framework. Game code provides a `CardDefinition`; `CreateCardMutation(Definition, NewInstanceId, NewRef, IntoZone?)` constructs the `Card` handle inside the composite (where the Store reference is available). Game code never calls `new Card(...)` directly.
 
@@ -106,5 +107,5 @@ public readonly record struct CardRef(Guid Value)
 
 - **Enables:** cards have a clear canonical home on the Store (snapshot/rollback works); the framework supports privacy across reveal-then-hide cycles via server-side ref rotation; "play the same locally vs networked" — the same `CardRef` rotation runs in both modes; server-internal subscriptions (triggers, effects, attachments, history) reference Cards by `Card` object or `InstanceId` and are unaffected by ref rotation.
 - **Constrains:** any state slice or projection that is sent to clients must reference cards by `CardRef`, not by `InstanceId` (otherwise the privacy filter doesn't work). Server-internal state must reference cards by `Card` or `InstanceId`, not by `CardRef` (otherwise rotations cascade through subscribers).
-- **Reverts:** Zones ADR-0002 (visibility model) original "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. ADR-0002 has been updated to reflect this.
-- **Audit:** Existing references to card identity in `effects/`, `engine/`, `actions/`, `presentation/` need a sweep — server-internal vs client-visible distinction. Tracked in alignment-debt entries (`ad-20260501-040` through `ad-20260501-047`).
+- **Reverts/replaces:** Zones ADR-0002 (visibility model) original "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. Zones ADR-0002 has been updated to reflect this.
+- **Cascade:** existing references to card identity in `effects/`, `engine/`, `actions/`, `presentation/` need a sweep — server-internal vs client-visible distinction. Surfaced on demand by `/builder:lint` (per §5.7).
