@@ -64,16 +64,15 @@ Product/
 
   features/                  # per-system design work; each feature has a root <feature>.md
     <feature-a>/
-      <feature-a>.md         # feature root — top-level summary, indexes Models + ADRs
+      <feature-a>.md         # feature root — top-level summary, indexes Models
       models/                # Models (NN-<slug>.md, per-feature counter)
-      decisions/             # ADRs (NNNN-<slug>.md, per-feature counter)
       archive/               # superseded and cancelled docs (see §5.14)
     <feature-b>/
       <feature-b>.md
       models/
-      decisions/
       archive/
     ...                      # one folder per major system in the project
+                             # (no per-feature decisions/ — see §4.5)
 
   spikes/                    # flat — most spikes are single docs
 
@@ -276,7 +275,7 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 **`implemented` status convention.** A Feature flips to `implemented` (via §5.6.2 build gate) when code lands that satisfies its contract. While `implemented`, edits to the contract surface open **drift entries** against the implementation — either code updates to match, or the Feature reverts to `settled` (signaling "code is no longer guaranteed to match"). Most of a project's lifetime, mature features sit in `implemented` — that's the steady state.
 
-**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `references:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
+**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. Project-wide ADRs that reference this feature stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `references:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
 
 **Feature ↔ Model status sync.** A Feature's status is bounded above by its qualifying Models (settled or implemented). Drafts and abandoneds don't count, so adding a new draft Model to an implemented Feature doesn't drag it down. Forward flips are deliberate user actions; backward reverts are automatic when a qualifying Model drops a tier. Full rule and worked examples in §5.6.3.
 
@@ -446,6 +445,33 @@ One paragraph.
 - Constrains: ...
 - Reverts/replaces: ADR-NNNN
 ```
+
+#### Migration recipe — retiring `features/<feature>/decisions/`
+
+For projects that accumulated feature-internal ADRs before the §4.5 reform, the migration is per-ADR. Each old ADR resolves into one of two outcomes — **elevate** (genuine cross-feature decision; ≥2 features in scope) or **fold** (feature-internal decision; collapse into the affected Model's provenance).
+
+**Per-ADR steps.**
+
+1. **Decide outcome.** Read the old ADR. Apply the §4.5 hard-scope rule: does the decision touch ≥2 features? If yes → **elevate** to `Product/decisions/NNNN-<slug>.md`. If no → **fold** into the affected Model's provenance below the divider.
+2. **Preserve dates.** Both the original decision date and the migration date stay visible in the new home. The elevated ADR keeps its `Decided YYYY-MM-DD` line; the folded provenance gains a one-line *"Decided YYYY-MM-DD (originally `<old-path>`); folded YYYY-MM-DD."* note.
+3. **Apply the move.** Elevate: copy content to the new ADR file under `Product/decisions/`, renumber to the next free counter. Fold: paste body content into the host Model's `## Options considered` / `## Rationale` / `## Consequences`, sub-sectioned as `### Q-N — <slug>` if the ADR carried multiple decisions.
+4. **Inbound-ref sweep.** Run `/builder:deps <old-path>` to surface every doc that references the retired ADR. Update each reference to point at the new home (project-wide ADR or host Model). Same reverse-graph mechanism as §5.10a.
+5. **Delete the old file.** Once references are redirected, remove the old `features/<feature>/decisions/<file>.md`. When all ADRs in a feature folder are migrated, delete the empty `decisions/` directory.
+
+**Supersede-then-fold (special case).** When an old ADR's decision has since been overturned by later design work, fold the *superseded* body — preserving the supersession record — rather than the live one:
+
+1. First record the supersession on the old ADR (apply the §4.3 superseded-status convention: header line, body kept for record).
+2. Then fold the superseded body into the host Model's provenance, keeping the supersession header. The reader sees both the original reasoning and the fact that it was reversed.
+3. The replacement decision lives wherever it currently sits — its location is independent of this migration step.
+
+**Mechanical vs. full reshape (non-normative).** Useful to know up front so you batch-plan correctly:
+
+| Category | Trigger | Cadence |
+|---|---|---|
+| **Mechanical** | The ADR's reasoning still holds; only its location is wrong. | Batch — fold or elevate several in one PR. |
+| **Full reshape** | The ADR's framing or assumptions no longer match the current design (the host Model has moved on). | Per-Model design pass — open the Model, re-derive the decision in current vocabulary, then fold the result. |
+
+A clean cue: if you can fold without re-reading the host Model, it's mechanical. If you have to re-read the Model to know how to fold, it's a reshape.
 
 ### 4.6 Snapshot (opt-in milestone)
 
@@ -651,7 +677,7 @@ Post-v1, the workflow operates in interleaved mode: features get added over time
 
 When a new feature is requested or designed:
 
-1. **Create the feature folder.** `features/<feature>/` with `models/` and `decisions/` subfolders.
+1. **Create the feature folder.** `features/<feature>/` with a `models/` subfolder. (No `decisions/` — feature-internal decisions live in Model provenance per §4.5.)
 2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
 3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `references:` pointing at upstream Models (or `root` if genuinely foundational).
 4. **Update orientation.** Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new row + dependency edges. Patch `general/ROADMAP.md` if scheduling shifts.
@@ -721,7 +747,7 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | # | Phase | What happens | Driving sections |
 |---|-------|-------------|-----------------|
 | 1 | **Initiated** | Feature folder created via §5.11 ceremony. Feature root stub written (Purpose + Boundaries). Status: `draft`. | §5.11 |
-| 2 | **Designed** | Models drafted in `models/`. ADRs land in `decisions/` as decisions settle. Spikes feed Models. Cascade detected on demand by the linter. | §5.2, §5.4, §5.7 |
+| 2 | **Designed** | Models drafted in `models/`. Project-wide ADRs land in `Product/decisions/` (per §4.5) when decisions span ≥2 features; feature-internal decisions live in Model provenance. Spikes feed Models. Cascade detected on demand by the linter. | §5.2, §5.4, §5.7 |
 | 3 | **Settled** | Each Model passes research gate (§5.6.1). When all qualifying Models settled, Feature is eligible — user commits with deliberate flip. | §5.6.1, §5.6.3 |
 | 4 | **Implemented** | Code lands in implementation directory. Each Model passes build gate (§5.6.2). When all qualifying Models implemented, Feature is eligible — user commits. | §5.6.2, §5.6.3 |
 | 5 | **Steady state** | Most of project lifetime. Drift detection runs post-merge (§5.12); drift surfaces via PR with proposed contract updates. Run `/builder:lint` on demand for reference-staleness checks. | §5.10, §5.12 |
@@ -751,8 +777,7 @@ Superseded and cancelled docs move into a sibling `archive/` folder inside the f
 features/<feature>/
   <feature>.md
   models/
-  decisions/
-  archive/         # retired docs only; same depth as models/ and decisions/
+  archive/         # retired docs only; same depth as models/
 ```
 
 #### Move trigger (explicit, not vibes)
