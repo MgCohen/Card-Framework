@@ -19,7 +19,7 @@ Validation was previously distributed across the rule and the handler with no cl
 - C: `ICommandHandler<T,R>.Validate` is authoritative at dispatch; the rule does flow-level gating only. Chosen.
 
 ## Decision
-`handler.Validate` is the single authoritative validity check at dispatch. Other layers (per-template eligibility, AffordanceMap, IntentMapper, OnIncomingCommand) are advisory or specialized; the handler is final.
+`handler.Validate` is the single authoritative validity check at dispatch. Other layers (per-template eligibility, AffordanceMap, IntentMapper, engine lifecycle gate) are advisory or specialized; the handler is final. (The flow-level layer was renamed from `OnIncomingCommand` to the engine lifecycle gate per [ADR-0006](decisions/0006-two-pipeline-architecture.md); the authoritative-handler principle is unchanged.)
 
 ## Consequences
 - Enables one canonical answer to "is this command valid right now?"

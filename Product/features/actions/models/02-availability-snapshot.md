@@ -114,29 +114,39 @@ No string-keyed slot lookup; each template subtype names its own fields. This is
 
 ## 3. Pile Counter Projection (the Floor)
 
-Pile Counter has one action, one target slot, no modes, no parameters. With typed templates ([doc 29 §3](features/engine/models/03-snapshot-pipeline.md)) and service-driven publication ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)), `OnQueueDrained` becomes:
+Pile Counter has one action, one target slot, no modes, no parameters. With typed templates ([doc 29 §3](features/engine/models/03-snapshot-pipeline.md)) and service-driven publication ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)), the snapshot is published from inside `Evaluate` (per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained` is deleted):
 
 ```csharp
-public override DrainResult OnQueueDrained()
+public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
 {
-    var s = State.Current;
+    var piles = State.Get<PilesState>().Piles.Values;
+
+    if (piles.All(p => p.Score == p.Target))
+        return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
+
+    Actions.Set(BuildSnapshot(piles));
+    return Array.Empty<GameAction>();
+}
+
+private AvailableActionsSnapshot BuildSnapshot(IEnumerable<Pile> piles)
+{
+    var lastMove = State.Get<LastMoveState>().Move;
     var templates = new List<ActionTemplate>();
 
-    foreach (var pile in s.Piles.Where(p => p.Cards.Count > 0))
+    foreach (var pile in piles.Where(p => p.Cards.Count > 0))
     {
         var top = pile.TopCard;
-        if (s.LastMove?.Card == top.Id) continue;
+        if (lastMove?.Card == top.Id) continue;
 
-        var destinations = s.Piles
+        var destinations = piles
             .Where(p => p.Id != pile.Id)
-            .Select(p => (EntityId)p.Id)
+            .Select(p => (Reference)p.Id)
             .ToList();
 
         templates.Add(new MoveCardTemplate(top.Id, destinations));
     }
 
-    Actions.Set(new AvailableActionsSnapshot(templates));
-    return DrainResult.Empty;
+    return new AvailableActionsSnapshot(templates);
 }
 ```
 
@@ -168,7 +178,7 @@ Compared to a flat-command sketch, three things change:
 
 The collapse is graceful: a single-field template (`Destinations`) is barely more verbose than a flat command.
 
-The "twice in a row" rule moved from `handler.Validate` to `OnQueueDrained` because the rule needs to skip the *entire* template for that card, not reject individual `MoveCardCommand`s. `Validate` still owns it as the authoritative check; the rule is exercising the predicate during enumeration. This is the per-template / per-binding split — see [§6](#6-where-eligibility-lives).
+The "twice in a row" rule lives in `Evaluate`'s snapshot-building step (per-template suppression) because the runtime needs to skip the *entire* template for that card, not reject individual `MoveCardCommand`s. `Validate` still owns it as the authoritative check; the runtime is exercising the predicate during enumeration. This is the per-template / per-binding split — see [§6](#6-where-eligibility-lives).
 
 ---
 
@@ -247,7 +257,7 @@ The resolved command carries fully-bound targets and parameters; the typed templ
 
 ## 6. Where Eligibility Lives
 
-Pile Counter's "twice in a row" rule sits in `OnQueueDrained` (suppresses the whole template for that card). Pile Counter's "source non-empty / source ≠ destination" sits in `handler.Validate`. Both are legality checks; they live in different layers. Why?
+Pile Counter's "twice in a row" rule lives in the runtime's snapshot enumeration inside `Evaluate` (suppresses the whole template for that card). Pile Counter's "source non-empty / source ≠ destination" sits in `handler.Validate`. Both are legality checks; they live in different layers. Why?
 
 - **Validate operates on a fully-bound command** (`MoveCardCommand(Card, From, To)`). Once the source is fixed, `From != To` is a per-resolved-command check.
 - **The "twice in a row" rule fixes the *whole template*** — there is no `(From, To)` binding for which the rule allows that card to move. Suppressing it at template level is honest; suppressing every per-binding command separately is wasteful.
@@ -279,16 +289,18 @@ The earlier eager-vs-lazy framing (kept here for reference; superseded by on-dem
 
 Follow-up edits — applied in [doc 29's §8 implications table](features/engine/models/03-snapshot-pipeline.md) (with overlaps from this doc's original list). Both rounds of edits have been applied to docs 25, 26, 27.
 
+> **Note:** This table reflects the original two-round propagation (this doc + doc 29). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained`, `IntakeContext`, and `DrainResult` are all deleted entirely; snapshot publication folds into `Evaluate`. The rows below are kept as historical record of the propagation that landed at the time.
+
 | Doc | Section | Change |
 |---|---|---|
-| 25 | §2 Interface | Methods take only ephemeral data; services injected at construction. `IntakeContext` collapses |
-| 25 | §6 (`OnQueueDrained`) | `DrainResult` shrinks to `Dispatch` only; snapshot writes through `IAvailableActions.Set` |
+| 25 | §2 Interface | Methods take only ephemeral data; services injected at construction. `IntakeContext` collapses (later deleted entirely per ADR-0006) |
+| 25 | §6 (`OnQueueDrained`) | `DrainResult` shrinks to `Dispatch` only; snapshot writes through `IAvailableActions.Set`. (Both `OnQueueDrained` and `DrainResult` later deleted per ADR-0006; snapshot publication folds into `Evaluate`.) |
 | 25 | §10 (Open Items) | State-pattern decision resolved (services injected) |
 | 26 | §9.1 (state shape) | `AvailableActions` is `AvailableActionsSnapshot` |
 | 26 | §9.6 (the rule) | Rewrite per [§3](#3-pile-counter-projection-the-floor) |
 | 26 | §9.3 (intent mapper) | Switches on typed template subtype |
-| 26 | §9.7 (engine intake) | `IntakeContext` collapsed |
-| 26 | §9.8 (bootstrap) | Engine builder constructs services and injects into rule constructor |
+| 26 | §9.7 (engine intake) | `IntakeContext` collapsed (later deleted per ADR-0006) |
+| 26 | §9.8 (bootstrap) | Engine builder constructs services and injects into runtime constructor |
 | 26 | §10 / §11 | Templates instead of commands; service-driven publication; Q1/Q10/Q13 resolved |
 | 27 | §4 State Shape | `AvailableActions` is `AvailableActionsSnapshot` |
 | 27 | §5 Element Type | Rewritten — typed templates, not resolved commands |
@@ -296,7 +308,7 @@ Follow-up edits — applied in [doc 29's §8 implications table](features/engine
 | 27 | §9 Validation Layers | Per-template eligibility tier added; snapshot is approximate; `Validate` at dispatch is authoritative |
 | 27 | §10 End-to-End Trace | Step 12 is `Actions.Set`, not engine-writes-snapshot |
 | 27 | §11 Decisions Locked | Flip element-type line; service-driven publication |
-| 27 | §12 `OnQueueDrained` Output | `DrainResult` is `Dispatch` only |
+| 27 | §12 (snapshot publication) | Folded into `Evaluate` per ADR-0006; `DrainResult` deleted |
 
 ---
 
