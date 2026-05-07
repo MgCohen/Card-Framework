@@ -11,20 +11,25 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Open-seams design pass + patch cascade **both landed** (2026-05-06, follow-on to the same-day domain modeling pass). 10 decisions propagated:
+Two cascades landed today (2026-05-06):
 
-- `entities/01-definition-instance-model.md` — §"Definitions" reframed around the `DefinitionWithSlices` parent class.
+**Open-seams design pass + patch cascade.** 10 structural decisions surfaced when drawing the domain model out and propagated into the canonical Models:
+
+- `entities/01-definition-instance-model.md` — §"Definitions" reframed around the `DefinitionWithSlices` parent class; §"Store And Entities Relationship" Card/Zone bullets updated to `InstanceWithSlices` + unsealed.
 - `entities/02-runtime-surface.md` — §1 reshaped: `InstanceWithSlices<TDef> : Scaffold.EntityInstance<TDef>, ISliceProvider` parent class, `Definition` is `protected`, subclass-re-export discipline documented.
-- `cards/01-card-model.md` — `Card` unsealed; `CardRegistry` removed; new "Resolution surfaces" section pinning the two-hop path; mutation expansions and Read API updated.
+- `cards/01-card-model.md` — `Card` unsealed; `CardRegistry` removed; new "Resolution surfaces" section pinning the two-hop path.
 - `zones/01-zone-model.md` — `Zone` unsealed; visibility policy replaced with the sealed-record `ZoneVisibilityPolicy` hierarchy; Read API split between `GetCardRefs(state)` and `GetCards(store)`.
-- `players/01-player-model.md` — `Player` unsealed; `PlayerDefinition` re-parented onto `DefinitionWithSlices`.
-- `engine/05-game-factory.md` — added "Registration contract" section listing framework-auto-registered, game-required, game-optional registrations.
-- `engine/06-match-lifecycle.md` — added §4.4 "Match setup" covering host-driven and runtime-driven setup-command dispatch.
-- `engine/07-game-definition.md` — `ISliceProvider` reach-points reframed around the parent classes; `EntityInstance<TDef>` examples updated.
-- `ledgers/GLOSSARY.md` — `CardRegistry` retired (moved to Retired terms); new entries for `DefinitionWithSlices`, `InstanceWithSlices<TDef>`, `ZoneVisibilityPolicy`; `Card`/`Zone`/`Player` entries updated to drop "sealed" and reflect parent classes.
-- `ledgers/OPEN-ITEMS.md` — added `bl-zone-visibility-custom-policy-serialization` (Q7 follow-up) and `bl-card-resolution-helper-shape` (Q6 follow-up).
+- `players/01-player-model.md` + `players/players.md` — `Player` unsealed; `PlayerDefinition` re-parented onto `DefinitionWithSlices`.
+- `engine/05-game-factory.md` — added "Registration contract" section.
+- `engine/06-match-lifecycle.md` — added §4.4 "Match setup".
+- `engine/07-game-definition.md` — `ISliceProvider` reach-points reframed.
+- ADRs: `cards/decisions/0001` and `zones/decisions/0001` — open-seams amendments at the top + sample code updated.
+- `ledgers/GLOSSARY.md` — `CardRegistry` retired; `DefinitionWithSlices`, `InstanceWithSlices<TDef>`, `ZoneVisibilityPolicy` added; `Card`/`Zone`/`Player` entries updated.
+- `ledgers/OPEN-ITEMS.md` — `bl-zone-visibility-custom-policy-serialization` (Q7), `bl-card-resolution-helper-shape` (Q6), `bl-pile-refs-index` (PileCounter follow-up) added.
 
-Earlier today: domain modeling design pass + patch cascade landed (13 decisions). Plan A/B/C state-tech cascade landed earlier in PR #100. `oq-game-definition`, `oq-engine-match-lifecycle`, `oq-gamerules-runtime-definition` all resolved.
+**PileCounter sample refresh + cascade tail cleanup.** `support/samples/pile-counter.md §9` fully rewritten — refs throughout, per-zone `PileState`, framework `MoveCardMutation` for the zone move with game-side payloads (`AdjustPileCounterPayload`, `SetLastMovePayload`) for counter cache + last-move memory, `PileCounterGameDefinition` bundle, runtime-driven setup commands. The four Models that referenced its outdated patterns (`engine/03`, `actions/02`, `presentation/01`, `engine/04`) refreshed to match. `effects/04` mutator example updated.
+
+Earlier today: domain modeling design pass + patch cascade landed (13 decisions). Plan A/B/C state-tech cascade landed earlier in PR #100. `oq-game-definition`, `oq-engine-match-lifecycle`, `oq-gamerules-runtime-definition` all resolved. Both today's cascades are in PR #102.
 
 ---
 
@@ -43,6 +48,8 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The thre
 - `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
 - `oq-effect-cancellation-on-match-end` — async-effect cancellation when the match ends mid-await. Surfaced from the lifecycle pass.
 - `oq-attachment-storage` — where attachments (equipment, auras, buffs) live: sub-zone, global registry, or dedicated zone.
+
+New today (open-seams + PileCounter follow-ups, deferred to triggers): `bl-zone-visibility-custom-policy-serialization`, `bl-card-resolution-helper-shape`, `bl-pile-refs-index`.
 
 ---
 

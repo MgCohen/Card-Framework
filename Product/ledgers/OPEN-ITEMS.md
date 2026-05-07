@@ -62,6 +62,10 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: first concrete implementation requires picking a shape.
   References: `Product/features/cards/models/01-card-model.md` § Resolution surfaces.
 
+- id: bl-pile-refs-index | kind: question | **Engine-side index slice for spawned per-game zone references** — `PileCounterGameDefinition.PileRefsAt(state)` (and its analog for any game with a fixed set of game-shared zones) needs an engine-side index slice (`PileIndexState` or similar generic shape — `Dict<TGameKey, Ref<Zone>>` or `IReadOnlyList<Ref<Zone>>`) populated during the factory's Build walk so the runtime and intent mapper can enumerate spawned zone refs without scanning `OwnershipState` or filtering by definition type. Open question: framework-provided generic index, game-side helper, or some intermediate. Surfaced by the PileCounter sample refresh (2026-05-06).
+  Trigger: first vertical-slice implementation needs concrete enumeration of game-shared zones spawned at Build.
+  References: `Product/support/samples/pile-counter.md` §9.6 + §11 Q19; `Product/features/engine/models/07-game-definition.md` § Build walk.
+
 ## Features yet to scaffold
 
 - id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
