@@ -5,7 +5,7 @@ references: [features/entities/models/01-definition-instance-model.md, features/
 tags: [#zones, #model]
 ---
 
-# Zone Model
+# Zone Model — model
 
 ## What it is
 

@@ -86,6 +86,8 @@ Cross-Model rules that hold across the Model and shape how other features must r
 
 ## Dependencies
 
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** `entities/` (foundational definition/instance model; zones share `Identifier<Instance>` namespace), `cards/` (zones contain cards; reads `CardMapState` to resolve refs).
 - **Downstream:** `actions/` (validates moves; consumes `InsertCardPayload` via composite mutations), `effects/` (observes zone-membership changes), `engine/` (state-slice infrastructure; framework slices), `presentation/` (consumes zone-keyed state via `CardRef`; applies visibility filter at transport boundary).
 
