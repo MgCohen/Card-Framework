@@ -277,14 +277,16 @@ Inside an effect's Execute (called from a chain):
 
 Three handler shapes covering the common base cases. Listed before effects because effects compose over commands.
 
-### `MoveCardAction` — composite mutation orchestration
+### `MoveCardAction` — multiple slice payloads via batch
+
+Handler dispatches the slice-level payloads itself (instead of wrapping them in a `CompositeAction` like `MoveCardMutation`). `Store.ExecuteBatch` commits them atomically — subscribers see one logical step.
 
 ```csharp
 public sealed record MoveCardAction(
     Card Card,
     Zone From,
     Zone To,
-    Position? Position = null) : GameAction;
+    InsertPosition? Position = null) : GameAction;
 
 public sealed record MoveCardResult() : CommandResult;
 
@@ -300,9 +302,18 @@ public sealed class MoveCardHandler : ICommandHandler<MoveCardAction, MoveCardRe
 
     public Task<MoveCardResult> Handle(MoveCardAction cmd, IHandlerContext ctx)
     {
-        // MoveCardMutation is a CompositeAction (remove + insert + ref rotation).
-        // The handler dispatches it like any other payload through Store.Execute.
-        ctx.Store.Execute(MoveCardMutation.AtTop(cmd.Card, cmd.From, cmd.To));
+        // Three slice mutators, batched for atomic visibility:
+        //   1. Remove old CardRef from source zone (ZoneContentsState).
+        //   2. Rotate the CardRef in CardMapState (privacy policy — every move rotates).
+        //   3. Insert new CardRef into destination zone (ZoneContentsState).
+        var oldRef = cmd.Card.GetRef(ctx.Store);
+        var newRef = CardRef.NewRef();
+
+        ctx.Store.ExecuteBatch(
+            new RemoveCardFromZonePayload(cmd.From, oldRef),
+            new RotateCardRefPayload(cmd.Card, newRef),
+            new InsertCardPayload(cmd.To, cmd.Card, cmd.Position ?? new DefaultPosition()));
+
         return Task.FromResult(new MoveCardResult());
     }
 }
