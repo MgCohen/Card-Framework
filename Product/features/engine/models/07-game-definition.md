@@ -1,29 +1,45 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/05-game-factory.md, features/engine/models/04-gamestate-slices.md, features/engine/models/02-gamerules-contract.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition-instance-model.md]
+references: [features/engine/models/05-game-factory.md, features/engine/models/04-gamestate-slices.md, features/engine/models/02-gamerules-contract.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md]
 tags: [#engine, #game-definition, #slices, #factory]
 ---
 
-# Game Definition — bundle, slice declaration, factory walk
+# Game Definition — model
 
-## Problem
+## What it is
 
-Constructing an engine for a match needs a coherent description of the game-mode being played: which rules apply, which zones exist (game-shared and per-player), which cards are usable, which player shape applies, and which game-singleton slices to seed at t=0. The previous factory Model accepted an unstructured `MatchSetup.InitialSlices` enumerable for game-singleton state — caller-driven, with no validation against the rules' implicit slice expectations.
+The top-level bundle for a game-mode variant. **`GameDefinition`** carries `Rules` (a `GameRulesDefinition`), `SharedZones` (the game-level zone layout), `CardCatalog` (the cards usable in this mode), `DefaultPlayerDefinition` (applied to all player actors unless overridden), and `GetInitialSlices()` (game-singleton slices). It implements **`ISliceProvider`** — a parameterless interface every framework definition kind implements (via `DefinitionWithSlices`) to declare its initial slices. The factory walks `GameDefinition` at `Build` in a six-step canonical order: auto-seed framework slices → spawn shared zones → spawn players → spawn per-player zones → install per-spawn slices keyed at `instance.SelfRef` → install game-singletons → install manual `InitialSlices` overlay.
 
-This Model defines the **`GameDefinition`** bundle that owns the game-mode shape, the **`ISliceProvider`** mechanism every framework definition kind implements to declare its initial slices, and the **factory walk** that ties them together at `Build`.
+```csharp
+public abstract class GameDefinition : ISliceProvider
+{
+    public abstract GameRulesDefinition           Rules                   { get; }
+    public abstract IReadOnlyList<CardDefinition> CardCatalog             { get; }
+    public abstract IEnumerable<ZoneDefinition>   SharedZones             { get; }
+    public abstract PlayerDefinition              DefaultPlayerDefinition { get; }
 
-## Concepts
+    public virtual IEnumerable<BaseState> GetInitialSlices()
+        => Array.Empty<BaseState>();
+}
+
+public interface ISliceProvider
+{
+    IEnumerable<BaseState> GetInitialSlices();
+}
+```
+
+## Contracts
+
+### Concepts
 
 | Term | Definition |
 |---|---|
-| `GameDefinition` | Top-level bundle for a game-mode variant. Carries `Rules` (a `GameRulesDefinition`), `SharedZones` (the game-level zone layout), `CardCatalog` (the cards usable in this mode), `DefaultPlayerDefinition` (applied to all player actors unless overridden), and `GetInitialSlices()` (game-singleton slices). Implements `ISliceProvider`. |
-| `ISliceProvider` | Parameterless interface — `IEnumerable<BaseState> GetInitialSlices()`. Reached on Definition kinds via the framework parent `DefinitionWithSlices` (which CardDefinition / ZoneDefinition / PlayerDefinition inherit) and directly on `GameDefinition`. Reached on Instance kinds via the framework parent `InstanceWithSlices<TDef>` (which Card / Zone / Player inherit). The instance's default implementation delegates to the (protected) definition. |
+| `GameDefinition` | Top-level bundle for a game-mode variant. Carries `Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, and `GetInitialSlices()`. Implements `ISliceProvider`. |
+| `ISliceProvider` | Parameterless interface — `IEnumerable<BaseState> GetInitialSlices()`. Reached on Definition kinds via the framework parent `DefinitionWithSlices` (which `CardDefinition` / `ZoneDefinition` / `PlayerDefinition` inherit) and directly on `GameDefinition`. Reached on Instance kinds via the framework parent `InstanceWithSlices<TDef>` (which `Card` / `Zone` / `Player` inherit). The instance's default implementation delegates to the (protected) definition. |
 | Layout block | The `SharedZones` collection on `GameDefinition` and the `PerPlayerZones` collection on `PlayerDefinition`. The factory walks these at `Build` and spawns one `Zone` per shared-zone definition (game-level) and one `Zone` per `(player, perPlayerZone)` pair (per-player). |
 | `MatchSetup` overlay | Three optional fields on `MatchSetup` — `InitialSlices`, `ZoneOverlay`, `PlayerDefinitionOverlay` — that allow per-match deviations from the standard layout for tests, scripted scenarios, and asymmetric games. |
 | External slice keying | Convention: framework slices don't carry their own primary key; the factory keys slices externally using the spawned instance's `SelfRef` (or no key for game-singletons). Reference-shaped fields inside slice values are *data*, not keys. |
-
-## Contracts
 
 ### `GameDefinition`
 
@@ -190,7 +206,7 @@ Reference-shaped fields inside slice *values* (e.g., `LastMoveState(Ref<Card>, F
 
 This convention is what lets `ISliceProvider` be parameterless: providers yield slice values; the factory keys.
 
-## Ownership and zone assignment
+### Ownership and zone assignment
 
 The framework distinguishes **structural ownership** (declarative, set at `Build`) from **runtime ownership** (mutable):
 
@@ -198,6 +214,20 @@ The framework distinguishes **structural ownership** (declarative, set at `Build
 - **Card ownership is runtime, mutable.** Tracked in `OwnershipState` (`Reference → IActor`). Cards transfer between players in some games (MTG ownership-vs-control); `OwnershipState` follows the transfers.
 
 `OwnershipState` is one-way today (forward direction only). Reverse-direction queries ("what does this player own?") are deferred — see `bl-actor-ownership-reverse-index` in [`OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md). Until that lands, reverse queries are O(N) filters or game-specific aggregates.
+
+## Invariants
+
+1. **`ISliceProvider` is parameterless.** The interface contract is `IEnumerable<BaseState> GetInitialSlices()`. Implementers don't see the instance's ref; the factory keys externally.
+2. **Slices don't carry their primary key.** Storage is keyed by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice values are data, not keys.
+3. **`InstanceWithSlices<TDef>` delegates to its (protected) definition by default.** Spawn-time override on the instance side is optional and rare.
+4. **The factory walks per-spawn instances before game singletons.** Singleton slices that need actor refs as data start with default/null; setup commands populate after `StartMatch`.
+5. **Layout is declarative.** `GameDefinition.SharedZones` and `PlayerDefinition.PerPlayerZones` declare the standard layout; `MatchSetup.ZoneOverlay` is the per-match escape hatch.
+6. **Zone ownership is structural; card ownership is runtime.** Zones are assigned to actors at `Build` based on layout-block declarations and overlay; cards are tracked in `OwnershipState` (mutable). `OwnershipState` reverse direction is deferred (`bl-actor-ownership-reverse-index`).
+7. **`GameDefinition` is the bundle.** It carries `Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, and `GetInitialSlices()`. `MatchSetup` carries the bundle and the per-match overlays.
+
+## Decisions
+
+*n/a — no elevated ADR.* (The bundle shape and Build-walk ordering are descriptive — they sit on top of [`engine/05`](features/engine/models/05-game-factory.md) (factory two-layer split), [`engine/04`](features/engine/models/04-gamestate-slices.md) (slice tier model), and the entity-bridge `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes from [`entities/01`](features/entities/models/01-definition-instance-model.md). No new options were considered for this Model itself.)
 
 ## Examples
 
@@ -292,22 +322,29 @@ var engine = factory.Create(new MatchSetup
 
 The overlay replaces `Game.DefaultPlayerDefinition` for the specified actors. Each player gets the per-player zones (hand, deck) declared on their specific hero definition.
 
-## Invariants
+## Open follow-ups
 
-1. **`ISliceProvider` is parameterless.** The interface contract is `IEnumerable<BaseState> GetInitialSlices()`. Implementers don't see the instance's ref; the factory keys externally.
-2. **Slices don't carry their primary key.** Storage is keyed by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice values are data, not keys.
-3. **`InstanceWithSlices<TDef>` delegates to its (protected) definition by default.** Spawn-time override on the instance side is optional and rare.
-4. **The factory walks per-spawn instances before game singletons.** Singleton slices that need actor refs as data start with default/null; setup commands populate after `StartMatch`.
-5. **Layout is declarative.** `GameDefinition.SharedZones` and `PlayerDefinition.PerPlayerZones` declare the standard layout; `MatchSetup.ZoneOverlay` is the per-match escape hatch.
-6. **Zone ownership is structural; card ownership is runtime.** Zones are assigned to actors at `Build` based on layout-block declarations and overlay; cards are tracked in `OwnershipState` (mutable). `OwnershipState` reverse direction is deferred (`bl-actor-ownership-reverse-index`).
-7. **`GameDefinition` is the bundle.** It carries `Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, and `GetInitialSlices()`. `MatchSetup` carries the bundle and the per-match overlays.
+- **`bl-actor-ownership-reverse-index`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse direction (`IActor → owned References`) deferred until a consumer surfaces.
+- **Card seeding pattern** — cards are spawned via `CreateCardMutation` during setup commands (after `engine.StartMatch()`), not at `Build`. Whether to add a `MatchSetup.InitialDeals` shape (deck-list-driven seeding) for solo puzzles vs. leaving it to setup commands is undecided. Defer until the second non-trivial game forces the question.
+- **Definition versioning** — `GameDefinition` is asset-friendly via `GameRulesDefinition` (`[SerializeField]`-bearing data class). Per-asset versioning (migration of stale definitions, replay compatibility) is the future authoring layer's concern (`bl-authoring-feature`).
 
-## Related
+---
 
-- [`features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, `Build` validation, behavior resolution.
-- [`features/engine/models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — `GameRulesDefinition` + `GameRulesRuntime<TDefinition>` contract (carried inside `GameDefinition`).
-- [`features/engine/models/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — slice tier model, framework-owned vs game-authored, subscription channels.
-- [`features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — `ZoneDefinition` shape; layout-block participation.
-- [`features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `CardDefinition` shape; per-card non-variable slices via `ISliceProvider`.
-- [`features/players/models/01-player-model.md`](features/players/models/01-player-model.md) — `PlayerDefinition` shape; per-player zones; variable bag for primary state.
-- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) + [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) — `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes and the `ISliceProvider` instance-delegates-to-definition default.
+*Below: provenance.*
+
+## Options considered
+
+*n/a — descriptive Model. The bundle shape, `ISliceProvider` interface, and the canonical Build walk are the natural composition of three earlier decisions: (1) [ADR-0001 (`gamerules-as-class-with-services`)](features/engine/models/02-gamerules-contract.md) — `GameRulesDefinition` is the data half of the runtime split, carried on `GameDefinition.Rules`; (2) the factory's two-layer split ([`engine/05`](features/engine/models/05-game-factory.md)) — per-match data flows through the factory, not through DI; (3) the slice tier model ([`engine/04`](features/engine/models/04-gamestate-slices.md)) — framework-owned vs game-authored. No new options-weighing was needed for this Model.*
+
+## Rationale
+
+`GameDefinition` ties the three earlier decisions together into a single authored bundle. Per-puzzle / per-format variation flows through the constructor (different `Puzzle` data → different `SharedZones` and `CardCatalog`); per-match deviations flow through `MatchSetup` overlays (`ZoneOverlay`, `PlayerDefinitionOverlay`, `InitialSlices`). The bundle is serializable in principle (puzzle data + format = bundle), supporting save/load and replay.
+
+`ISliceProvider` is parameterless because slices don't carry their own primary key — the factory keys externally at `instance.SelfRef`. This convention is what lets a game author yield slice values without knowing the instance's identity in advance; it's also what lets the same `PileDefinition` produce N `PileState` slices keyed by N different `Ref<Zone>`s without any per-instance wiring.
+
+The Build-walk ordering (per-spawn instances before game-singletons) is what lets future actor-aware singletons (`TurnState.Active`, `PriorityState.Holder`) start with default/null and get populated by setup commands after `StartMatch` — when those singletons need to reference instance refs as data, the refs have already been allocated.
+
+## Consequences
+
+- **Enables** asset-friendly game-mode bundles (a `GameDefinition` is the unit of persistence/replay/network); per-puzzle / per-format variation through the constructor; per-match deviations through `MatchSetup` overlays; uniform `ISliceProvider`-based slice declaration across `Card` / `Zone` / `Player` / `GameDefinition`; deterministic Build-walk ordering (per-spawn first, game-singletons second, manual overlay last).
+- **Constrains** every framework definition kind to inherit from `DefinitionWithSlices` (which provides the `ISliceProvider` default empty implementation); slice values must NOT carry their own primary key (the factory keys externally); singleton slices that need actor refs start with default/null and get populated by setup commands; cards are NOT seeded at `Build` (they spawn via `CreateCardMutation` during setup commands after `StartMatch`).

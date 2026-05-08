@@ -1,22 +1,29 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/04-effect-flow.md, features/engine/models/02-gamerules-contract.md]
+references: [features/effects/models/04-effect-flow.md, features/engine/models/02-gamerules-contract.md, features/entities/models/02-runtime-surface.md]
 tags: [#engine, #state, #slices]
 ---
 
-# GameState Slice Catalog
+# GameState Slice Catalog — model
 
-This document pins the catalog of state slices the framework owns, the pattern for game-authored slices, and the rules for how each tier is seeded and accessed. It resolves checkpoint task #2 and the `GameState slice catalog` open question in `OPEN-ITEMS.md`.
+## What it is
 
-Builds on:
+The catalog of state slices the framework owns, the pattern for game-authored slices, and the rules for how each tier is seeded and accessed. There is no `GameState` class; state lives as multiple typed `BaseState` slices in a Scaffold `Store`. Two tiers: **framework-owned** (`AvailableActionsState`, `EngineState`, `HistoryState`) auto-seeded at `Build` and writable only by framework services; **game-authored** declared via `ISliceProvider` and registered with mutators in the game's installer. Subscriptions go through the `Store` directly across four channels; atomic batches commit through `Store.ExecuteBatch`.
 
-- [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md) — Scaffold `IStateScope`/`Store` binding, mutation discipline
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRulesRuntime<T>` service injection, `IAvailableActions`
+```csharp
+public sealed record AvailableActionsState(AvailableActionsSnapshot Snapshot) : BaseState;
+public sealed record EngineState(EngineLifecycle Lifecycle, bool IsRunning, GameCommand? CurrentCommand) : BaseState;
+public sealed record HistoryState(IReadOnlyList<HistoryEnvelope> Envelopes) : BaseState;
 
----
+// Game-authored shape:
+public sealed record PileState(int Counter, int Target) : BaseState;
+public sealed record LastMoveState(LastMove? Move) : BaseState;
+```
 
-## 1. No Single GameState Record
+## Contracts
+
+### No single GameState record
 
 State lives as multiple typed slices in a Scaffold `Store`. There is no `GameState` class, no `state.Piles`, no `state.LastMove`. Every read goes through:
 
@@ -26,11 +33,9 @@ scope.Get<TState>(reference)
 scope.GetAll<TState>()
 ```
 
-where `TState : BaseState`. This is settled in [04-effect-flow §4.1](features/effects/models/04-effect-flow.md).
+where `TState : BaseState`. This binding is settled in [`effects/04 §Service surfaces`](features/effects/models/04-effect-flow.md).
 
----
-
-## 2. Two Tiers
+### Two tiers
 
 | Tier | Who defines | Who seeds | Who writes |
 |---|---|---|---|
@@ -39,23 +44,21 @@ where `TState : BaseState`. This is settled in [04-effect-flow §4.1](features/e
 
 Framework-owned slices are invisible to the game author at bootstrap — they are always present, always written by the framework, and readable by anyone via `IStateScope`. The current catalog is not a fixed ceiling; it reflects what the framework needs today and will grow or shrink as the framework matures.
 
----
+### Framework-owned slices
 
-## 3. Framework-Owned Slices
-
-### 3.1 `AvailableActionsState`
+#### `AvailableActionsState`
 
 ```csharp
 public sealed record AvailableActionsState(
     AvailableActionsSnapshot Snapshot) : BaseState;
 ```
 
-- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime` via `IAvailableActions.Set(...)`. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted.
+- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime` via `IAvailableActions.Set(...)`. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted.
 - **Written by.** `IAvailableActions` service (framework-internal mutator). Game authors write through the service, never directly.
 - **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
 - **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()`.
 
-### 3.2 `EngineState`
+#### `EngineState`
 
 ```csharp
 public sealed record EngineState(
@@ -64,13 +67,13 @@ public sealed record EngineState(
     GameCommand?    CurrentCommand) : BaseState;
 ```
 
-- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate (engine/01 §3 / engine/06 §7), inspection, debugging, and future replay/save support.
-- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler` (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §4).
+- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate ([`engine/01`](features/engine/models/01-evaluation-loop.md) / [`engine/06`](features/engine/models/06-match-lifecycle.md)), inspection, debugging, and future replay/save support.
+- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`.
 - **Written by.** Engine internals only. The lifecycle field is written by the framework `StartMatchHandler` / `EndMatchHandler` via the framework mutator; the running flag and current command are updated on drain start/stop and before/after each `pipeline.Execute`. Not writable by game authors.
 - **Read by.** The engine's `Dispatch` lifecycle gate, tooling, debugger, and any game logic that needs to know "is the match active?" or "is the engine currently draining?".
 - **Seeded.** `EngineState(Lifecycle: EngineLifecycle.NotStarted, IsRunning: false, CurrentCommand: null)` at `Build()`.
 
-### 3.3 `HistoryState`
+#### `HistoryState`
 
 ```csharp
 public sealed record HistoryState(
@@ -81,11 +84,9 @@ public sealed record HistoryState(
 - **Written by.** Engine-internal history mutator (fires after every `pipeline.Execute` call, appending the closed envelope). Not writable by game authors.
 - **Read by.** Presentation layer (history loop), networking (transport), replay tooling.
 - **Seeded.** `HistoryState(ImmutableList<HistoryEnvelope>.Empty)` at `Build()`.
-- **Note.** `HistoryEnvelope` is currently pseudocode (see [OPEN-ITEMS.md — HistoryEnvelope typed definition](ledgers/OPEN-ITEMS.md)). The slice exists and is seeded; its payload type is pinned when that open question resolves.
+- **Note.** `HistoryEnvelope` is currently pseudocode (see `OPEN-ITEMS.md` — `HistoryEnvelope` typed definition). The slice exists and is seeded; its payload type is pinned when that open question resolves.
 
----
-
-## 4. Game-Authored Slice Pattern
+### Game-authored slice pattern
 
 Game authors define slices as immutable records:
 
@@ -99,6 +100,7 @@ public sealed record LastMoveState(LastMove? Move) : BaseState;
 ```
 
 Rules:
+
 - **One slice, one concern.** Each slice owns exactly one piece of game state.
 - **Immutable.** All mutations produce a new record via `with { }` or a helper method.
 - **No cross-slice mutation.** A mutator owns one slice's output. It may read sibling slices through the `IStateScope scope` parameter on `Change`, but it never writes them.
@@ -118,9 +120,7 @@ builder.Register<LastMoveMutator>    (Lifetime.Singleton).AsImplementedInterface
 
 The factory registers framework-owned slices internally at `Build`. Game authors never seed `AvailableActionsState`, `EngineState`, or `HistoryState`. See [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md) for the full match-construction contract.
 
----
-
-## 5. Reading State
+### Reading state
 
 All consumers read state through `IStateScope.Get<TState>(...)` regardless of tier:
 
@@ -150,9 +150,7 @@ foreach (var (reference, state) in scope.EnumerateAll<PileState>()) { … }   //
 foreach (var pile in scope.GetAll<PileState>()) { … }                      // states only
 ```
 
----
-
-## 6. Subscriptions
+### Subscriptions
 
 Slice-level subscriptions go through the `Store` directly (effects and `GameRulesRuntime` see only `IStateScope`, which is read-only). The handler signature is uniform across every channel:
 
@@ -194,11 +192,9 @@ Use cases by channel:
 | `SubscribeAllReferences<TState>` | Engine, broad projections | "Watch every entity's `EntityState` for analytics" |
 | `SubscribeAny` | Debugger, replay recorder | "Log every state change with reference + event type" |
 
-For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`features/entities/models/02-runtime-surface.md` §3](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view; entities/02 §3.2 documents when to reach for it.
+For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`entities/02 §Subscriptions`](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view.
 
-### 6.1 Lifetime
-
-The store does not return an `IDisposable` from these slice-level methods (unlike the entity handle's `Subscribe`, which does). Callers that need symmetric teardown hold the handler delegate and call `Unsubscribe` on disposal:
+**Lifetime.** The store does not return an `IDisposable` from these slice-level methods (unlike the entity handle's `Subscribe`, which does). Callers that need symmetric teardown hold the handler delegate and call `Unsubscribe` on disposal:
 
 ```csharp
 private readonly Action<Reference, PileState, StateChangeEvent> pileHandler;
@@ -215,9 +211,7 @@ public void Dispose() {
 
 `SubscribeAllReferences<TState>` and `SubscribeAny` follow the same pattern but currently lack symmetric `Unsubscribe` overloads — those listeners live for the lifetime of the store. Use them only for engine-level / tooling listeners that don't need teardown.
 
----
-
-## 7. Atomic Batches
+### Atomic batches
 
 `Store.ExecuteBatch` commits multiple payloads as one observable step:
 
@@ -235,13 +229,11 @@ Guarantees:
 
 Use cases: applying multiple modifiers from a single ability in one observable step; restoring entity and game-level state during snapshot load; history-replay reconstruction; any sequence where intermediate state should not be visible to subscribers.
 
-For the entity-side specifics (factory output flowing into raw `AddModifierPayload`, the storage adapter not exposing batch composition), see [`features/entities/models/02-runtime-surface.md` §4.5](features/entities/models/02-runtime-surface.md).
+For the entity-side specifics (factory output flowing into raw `AddModifierPayload`, the storage adapter not exposing batch composition), see [`entities/02 §Mutation API`](features/entities/models/02-runtime-surface.md).
 
----
+## Invariants
 
-## 8. Invariants
-
-1. **No single GameState record.** State is a Scaffold `Store`; reads always go through `scope.Get<TState>()`.
+1. **No single `GameState` record.** State is a Scaffold `Store`; reads always go through `scope.Get<TState>()`.
 2. **Framework-owned slices are auto-seeded at `Build()`.** Game authors never yield them in `WithInitialSlices`.
 3. **Framework-owned slices are written only by framework services.** No game-authored mutator may target `AvailableActionsState`, `EngineState`, or `HistoryState` directly.
 4. **Game-authored slices follow the same pattern.** `BaseState` subclass, immutable record, registered at bootstrap via `WithInitialSlices` + `WithMutators`.
@@ -249,25 +241,42 @@ For the entity-side specifics (factory output flowing into raw `AddModifierPaylo
 6. **Subscriptions go through the `Store`.** `IStateScope` is read-only by design; observation requires the concrete `Store` reference (handlers via `ctx.Store`, presentation via direct injection).
 7. **Batches are atomic and observable as a single step.** Use `ExecuteBatch` whenever intermediate state should not leak to subscribers.
 
----
+## Decisions
 
-## 9. Open Follow-Ups
+*n/a — no elevated ADR.* (The slice-catalog tiers and subscription channels are descriptive — the underlying decisions are pinned in [`engine/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) Q1 (state pattern) and [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) Q1 (snapshot in state). This Model only catalogs.)
 
-- **`HistoryEnvelope` typed definition** — the concrete C# record for `HistoryEnvelope` (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed. ([OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md))
-- **`EngineState` surface** — whether `IsRunning`/`CurrentCommand` are the right fields, or whether additional engine-internal state (pending queue snapshot, awaiter state) belongs here, is deferred to the engine implementation pass.
+## Examples
+
+See "Reading state" and the per-channel "Use cases" tables above; the Pile Counter sample ([`support/samples/pile-counter.md`](support/samples/pile-counter.md)) exercises:
+
+- Game-authored per-zone slice (`PileState`) keyed externally at `pile.SelfRef`.
+- Game-authored singleton (`LastMoveState`) keyed unmapped.
+- Framework-owned `AvailableActionsState` written via `Actions.Set` from `Evaluate`.
+- Framework-owned `HistoryState` appended automatically as envelopes close.
+- Framework-owned `EngineState.Lifecycle` flipped via the framework `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`.
+- Atomic batch combining framework `MoveCardMutation` (CompositeAction) with game-side payloads (`AdjustPileCounterPayload`, `SetLastMovePayload`) in one `ExecuteBatch` call.
+
+## Open follow-ups
+
+- **`HistoryEnvelope` typed definition** — the concrete C# record for `HistoryEnvelope` (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed. (`OPEN-ITEMS.md`)
+- **`EngineState` surface** — whether `IsRunning` / `CurrentCommand` are the right fields, or whether additional engine-internal state (pending queue snapshot, awaiter state) belongs here, is deferred to the engine implementation pass.
 - **Slice catalog growth** — as features land (lifecycle, zones, entities bridge), new game-authored slice types will emerge. The framework slice count may also change. Update this doc when a new framework-owned slice is formally added.
 - **Symmetric unsubscribe for `SubscribeAllReferences` / `SubscribeAny`.** Both currently leak listeners across the store's lifetime. Tooling-only callers don't need teardown today; if presentation reaches for these channels, expose unsubscribe overloads.
 - **`IAggregateProvider` registration.** `Store.RegisterAggregate` ships in Scaffold but the framework hasn't pinned a use case (computed read-only views over multiple slices). Document when the first one lands.
 
 ---
 
-## 10. Related
+*Below: provenance.*
 
-- [features/effects/models/04-effect-flow.md §4.1](features/effects/models/04-effect-flow.md) — `IStateScope` / `Store` binding
-- [features/effects/models/04-effect-flow.md §4.2](features/effects/models/04-effect-flow.md) — `Store.Execute<TPayload>` + `Mutator<TState, TPayload>`
-- [features/entities/models/02-runtime-surface.md §3](features/entities/models/02-runtime-surface.md) — entity-handle subscriptions
-- [features/entities/models/02-runtime-surface.md §4.5](features/entities/models/02-runtime-surface.md) — entity-side batch composition
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `IAvailableActions` service, `GameRulesRuntime<T>` constructor
-- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — snapshot production, `IAvailableActions.Set`
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — working example of game-authored slices (per-zone `PileState`, singleton `LastMoveState`)
-- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — `HistoryEnvelope` typed definition
+## Options considered
+
+*n/a — descriptive Model. The slice-catalog shape sits on top of the state-pattern decision (folded as [`engine/01 §Q1`](features/engine/models/01-evaluation-loop.md)) and the snapshot-in-state decision (folded as [`engine/03 §Q1`](features/engine/models/03-snapshot-pipeline.md)). No new options were considered for the catalog itself.*
+
+## Rationale
+
+The two-tier model (framework-owned vs game-authored) gives game authors a clean default — the framework slices "just exist" and aren't game-author concern — while keeping authoring boilerplate minimal: declare a `BaseState` record, register a mutator, optionally provide initial values via `ISliceProvider`. The four subscription channels span every reasonable observation pattern (singleton change, specific-ref change, all-refs-for-type, all-events) without adding ceremony for the common cases. Atomic batches via `ExecuteBatch` give a single primitive for "commit multiple payloads as one observable step" — necessary for snapshot restore, multi-payload abilities, and undo-log compositions.
+
+## Consequences
+
+- **Enables** uniform read surface across all tiers; clean ownership boundaries (framework vs game) for slices and mutators; single atomic commit for multi-payload mutations; per-channel observation patterns spanning singleton / specific-ref / all-refs / all-events.
+- **Constrains** framework-owned slices to one canonical write path each (`IAvailableActions` for snapshot, framework mutator for lifecycle, history mutator for envelopes); slice values cannot carry their own primary key — the factory keys externally; subscriptions on `SubscribeAllReferences` / `SubscribeAny` channels currently leak listeners (tooling-only until symmetric unsubscribe arrives).
