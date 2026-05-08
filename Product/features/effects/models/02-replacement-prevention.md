@@ -135,19 +135,24 @@ The framework ships a `FifoPipeline` that stable-sorts by `Priority` ascending, 
 `GameRules` decides which registered triggers are eligible to fire for a given command in the current game state. It does not collect, order, or execute them.
 
 ```csharp
-public interface GameRules
+public abstract class GameRulesRuntime<TDefinition>
+    where TDefinition : GameRulesDefinition
 {
     // Returns the subset of candidates that are eligible right now.
     // Default: return candidates unchanged.
-    IReadOnlyList<TriggerMatch> FilterTriggers(
+    public virtual IReadOnlyList<TriggerMatch> FilterTriggers(
         IReadOnlyList<TriggerMatch> candidates,
-        GameCommand command,
-        TriggerPhase phase);
+        GameCommand                 command,
+        TriggerPhase                phase)
+        => candidates;
 
-    // ... settled 4-method shape (see engine/02-gamerules-contract.md)
-    IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin);
-    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result);
-    DrainResult OnQueueDrained();
+    // State-based follow-up actions (see engine/02-gamerules-contract.md).
+    public virtual IReadOnlyList<GameAction> Evaluate(
+        GameAction    justExecuted,
+        CommandResult result)
+        => Array.Empty<GameAction>();
+
+    // Effect-pipeline orchestration surface — separate design pass; tracked as oq-effect-pipeline.
 }
 ```
 
@@ -239,7 +244,7 @@ triggers.OnBefore<DamageAction>(
 When A is replaced by B:
 
 - A's envelope is closed and published with `CommandResult.Replaced` — it appears in history as a command that was dispatched but did not execute.
-- B is dispatched fresh via `engine.Dispatch`. It goes through `GameRules.OnIncomingCommand` and gets its own full fold from scratch. B's envelope is a sibling, not a child, of A's.
+- B is dispatched fresh via `engine.Dispatch` (validates + enqueues onto the framework FIFO command queue). B gets its own full fold from scratch. B's envelope is a sibling, not a child, of A's.
 
 This means the history shows both: "A was replaced" and "B executed." The causal link between them is preserved via `OriginCommandId` threading (doc 20 §3) if A and B share the same originating intent.
 

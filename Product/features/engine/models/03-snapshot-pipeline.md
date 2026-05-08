@@ -7,11 +7,14 @@ tags: [#engine, #snapshot, #available-actions]
 
 # Snapshot Production Pipeline — How AvailableActions Gets Built
 
-This document defines **how** the available-actions snapshot is produced and published. [Doc 28](features/actions/models/02-availability-snapshot.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](features/presentation/models/01-presentation-loop.md) and the `DrainResult.Snapshot` slot in [doc 25 §6](features/engine/models/02-gamerules-contract.md).
+This document defines **how** the available-actions snapshot is produced and published. [Doc 28](features/actions/models/02-availability-snapshot.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](features/presentation/models/01-presentation-loop.md).
+
+> **ADR-0006 update.** Sections describing `OnQueueDrained` as the canonical publication moment are superseded — `OnQueueDrained` is deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Snapshot publication is purely runtime-driven via `Actions.Set(...)`; the runtime calls it from inside `Evaluate` whenever it deems appropriate (typically when its own follow-ups are exhausted). The service-driven model below is unchanged; only the *trigger moment* shifted from a dedicated callback to a runtime decision inside `Evaluate`. §5 (historical "Rules Layer Shape") and §8 (mechanical follow-up table) document the older shape; the canonical contract is now [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md).
 
 Builds on:
 
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` interface; `OnQueueDrained`
+- [decisions/0006-two-pipeline-architecture.md](decisions/0006-two-pipeline-architecture.md) — three-level model and command-vs-effect pipeline split
+- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — canonical runtime contract
 - [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; concrete sketch
 - [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — presentation loop; snapshot consumer
 - [features/actions/models/02-availability-snapshot.md](features/actions/models/02-availability-snapshot.md) — snapshot shape (templates)
@@ -49,13 +52,25 @@ public interface IAvailableActions
 
 Behind the service the engine runs an internal mutator that writes to `GameState.AvailableActions`. The service is the only public write path.
 
-### Default trigger: `OnQueueDrained`
+### Default trigger: `runtime.Evaluate` at drain-end
 
-The rule calls `Actions.Set(...)` from `OnQueueDrained` after each drain. This stays the canonical write moment for most games.
+Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained` is deleted. The runtime calls `Actions.Set(...)` from inside `Evaluate` when it detects "queue is about to empty" — its own state-based follow-ups are exhausted, no more work to enqueue. This is the canonical write moment for most games.
+
+```csharp
+public override IReadOnlyList<GameAction> Evaluate(GameAction action, CommandResult result)
+{
+    var followUps = ComputeStateBasedFollowUps();
+    if (followUps.Any()) return followUps;
+
+    // No follow-ups. Publish snapshot at this moment.
+    Actions.Set(BuildSnapshot());
+    return Array.Empty<GameAction>();
+}
+```
 
 ### Explicit triggers: anywhere the game wants
 
-Effects mid-execution can override the snapshot through the same service (target pickers, choose-one prompts, mid-resolution priority grants). Phase-driven games re-publish on every phase change by reading state inside `OnQueueDrained`. One-shot games (Stacklands) call `Actions.Set` once at bootstrap and never again.
+Effects mid-execution can override the snapshot through the same service (target pickers, choose-one prompts, mid-resolution priority grants). Phase-driven games re-publish on every phase change by reading state inside `Evaluate`. One-shot games (Stacklands) call `Actions.Set` once at bootstrap and never again.
 
 The engine never auto-publishes. If nobody calls the service, `AvailableActions` does not change.
 
@@ -149,7 +164,7 @@ The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., eac
 
 ## 5. Rules Layer Shape — Services Injected
 
-> **Note:** This section is historical. The single-type `GameRules` shown below has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime). The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
+> **Note:** This section is historical. The single-type `GameRules` shown below has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime), and per [ADR-0006](decisions/0006-two-pipeline-architecture.md) the runtime no longer holds `IIntakeQueue` or implements `OnIncomingCommand` / `OnQueueDrained`. The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
 
 Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, queue, and snapshot writer) is a constructor-injected service.
 
@@ -226,7 +241,7 @@ Three reasons:
 ## 6. Pile Counter Under the New Shape
 
 ```csharp
-public class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
+public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
 {
     private readonly IActor                   _player;
     private readonly IReadOnlyList<Ref<Zone>> _pileRefs;
@@ -235,40 +250,29 @@ public class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefiniti
         PileCounterRulesDefinition definition,
         IStateScope                state,
         IAvailableActions          actions,
-        IIntakeQueue               pending,
         IReadOnlyList<IActor>      actors)
-        : base(definition, state, actions, pending)
+        : base(definition, state, actions)
     {
         _player   = actors.Single();
         _pileRefs = PileCounterGameDefinition.PileRefsAt(state);
     }
 
-    public override IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin)
-    {
-        Pending.AddLast(command);
-        return IntakeResult.Ok;
-    }
-
-    public override IReadOnlyList<TriggerMatch> FilterTriggers(
-        IReadOnlyList<TriggerMatch> candidates,
-        GameCommand command,
-        TriggerPhase phase)
-        => candidates;
+    // FilterTriggers omitted — base class ships a virtual identity default.
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
     {
-        var allWon = _pileRefs.All(pileRef =>
-        {
-            var pile = State.Get<PileState>(pileRef);
-            return pile.Counter == pile.Target;
-        });
+        var pileStates = _pileRefs.Select(r => State.Get<PileState>(r));
 
-        return allWon
-            ? new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) }
-            : Array.Empty<GameAction>();
+        // Win check: all piles match their target?
+        if (pileStates.All(p => p.Counter == p.Target))
+            return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
+
+        // No state-based follow-ups. Publish snapshot at this moment.
+        Actions.Set(BuildSnapshot());
+        return Array.Empty<GameAction>();
     }
 
-    public override DrainResult OnQueueDrained()
+    private AvailableActionsSnapshot BuildSnapshot()
     {
         var lastMove  = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
@@ -290,13 +294,12 @@ public class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefiniti
             templates.Add(new MoveCardTemplate(topInstance, destinations));
         }
 
-        Actions.Set(new AvailableActionsSnapshot(templates));
-        return DrainResult.Empty;
+        return new AvailableActionsSnapshot(templates);
     }
 }
 ```
 
-The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [support/samples/pile-counter.md §9](support/samples/pile-counter.md).
+The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [support/samples/pile-counter.md §9](support/samples/pile-counter.md). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnIncomingCommand` and no `OnQueueDrained` — the runtime contributes via `Evaluate` only, and the framework FIFO handles command queueing.
 
 ---
 
@@ -323,7 +326,7 @@ public sealed class RequestTargetHandler
 }
 ```
 
-No `Scope` on the snapshot (per [§4](#4-snapshot-shape) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The mapper is decision-unaware; the engine-level awaiter check intercepts `SelectTargetCommand` before it reaches the pipeline. The next drain's `OnQueueDrained` publishes a fresh template set.
+No `Scope` on the snapshot (per [§4](#4-snapshot-shape) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The mapper is decision-unaware; the engine-level awaiter check intercepts `SelectTargetCommand` before it reaches the pipeline. The next drain's `Evaluate` publishes a fresh template set.
 
 ---
 
@@ -356,9 +359,9 @@ Mechanical follow-up edits, not done in this doc.
 
 ## 9. Open Items
 
-- ~~**`IGameStateProvider` shape.**~~ Folded away — `GameRules` (and effect/handler contexts) bind directly to Scaffold `IStateScope` (read) / `Store` (read + execute mutators); see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md).
+- ~~**`IGameStateProvider` shape.**~~ Folded away — `GameRulesRuntime<T>` (and effect/handler contexts) bind directly to Scaffold `IStateScope` (read) / `Store` (read + execute mutators); see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md).
 - **`GameState` slice catalog.** With the Scaffold State binding, "what slices exist" is concrete: turn, phase, piles, available-actions, decisions, last-move, etc. Tracked as checkpoint task #2.
-- **`IIntakeQueue` shape.** Same operations as the old `LinkedList<GameCommand>` Pending: `AddFirst` / `AddLast` / `Remove` / iterate. `CurrentlyExecuting` lives here as a property, or on a sibling slice. Pin during engine implementation.
+- ~~**`IIntakeQueue` shape.**~~ Resolved by deletion per [ADR-0006](decisions/0006-two-pipeline-architecture.md). The command queue is engine-private FIFO; there is no runtime service surface for command-queue routing.
 - ~~**Effect-side symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md). `IHandlerContext` exposes `Store` + `Actions` + `Resolver`; decision id ≡ action's `CommandId`; await/resume via `Resolver.Await(id)` / `TryResolve(id, choice)`. Documented in [§7](#7-effect-side-symmetry-resolved) above.
 - **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped (S15 Q6). Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [04-effect-flow §9](features/effects/models/04-effect-flow.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.

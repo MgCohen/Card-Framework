@@ -1544,7 +1544,7 @@ Important properties:
 
 > **Note:** The inline `CommandReaction` pipeline step has been superseded by the evaluator pattern (see [Engine — Orchestrator And Evaluation Loop](features/engine/models/01-evaluation-loop.md)). Follow-up commands are no longer dispatched as post-hooks inside the pipeline. Instead, `GameRules.Evaluate` is called after the pipeline finishes and returns follow-up commands based on current game state. This keeps the pipeline lean and gives the evaluator full visibility before deciding what runs next.
 
-The `CommandPreHook` placeholder has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold — see [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) for the full design. `CommandReaction` as a post-step is removed; reactions dispatch through `GameRules.OnIncomingCommand` and `GameRules.Evaluate`.
+The `CommandPreHook` placeholder has been superseded by the `OnBefore<T>` / `OnAfter<T>` trigger fold — see [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) for the full design. `CommandReaction` as a post-step is removed; reactions dispatch through `engine.Dispatch` (validate + framework-FIFO enqueue per [ADR-0006](decisions/0006-two-pipeline-architecture.md)) and follow-ups come from `runtime.Evaluate`.
 
 ## Shape 9: HistoryEntry
 
@@ -1648,7 +1648,7 @@ Important properties:
 8. Envelope closes and is published to observers.
 9. Engine calls GameRules.Evaluate(command, result, state).
 10. Evaluator returns follow-up commands (if any); engine enqueues them with same OriginCommandId.
-11. Loop continues until queue is empty, then OnQueueDrained fires.
+11. Loop continues until queue is empty. (Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no separate `OnQueueDrained` callback; drain-end logic folds into `runtime.Evaluate` via state observation.)
 ```
 
 ## Proposal For Core Terms
@@ -1989,15 +1989,12 @@ public sealed class SampleGameEvaluator : GameRules
         return Array.Empty<GameAction>();
     }
 
-    public void OnQueueDrained(GameEngine engine, GameState state)
-    {
-        // Queue is empty and PlayArea is empty.
-        // Player still has cards in hand and energy — do nothing; await input.
-    }
+    // Drain-end logic (await input, advance phase) folds into Evaluate's
+    // state-based check per ADR-0006 — no separate OnQueueDrained callback.
 }
 ```
 
-The evaluator is also called when the queue empties (`OnQueueDrained`). That is when the game decides to advance a phase, grant priority, or simply await the next player action. See [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) for the full `GameEngine` drain loop and evaluator interface.
+Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnQueueDrained` callback. The runtime decides what runs at drain-end (await input, advance phase, grant priority) by observing state inside `Evaluate` — when its own state-based follow-ups exhaust and queue is about to empty, the runtime can return phase-advance actions or publish a snapshot via `Actions.Set`. See [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) for the full `GameEngine` drain loop and runtime contract.
 
 ## 6c. Execute Card Handler (Effect, Then Discard In This Game)
 
@@ -2311,8 +2308,10 @@ Engine dequeues ExecuteCardCommand { OriginCommandId: C1 }:
       -> state.GetZone(PlayArea).HasCards == false
       -> returns []
 
-Queue empty -> OnQueueDrained:
-  -> player still has energy and cards in hand -> no action, await input
+Queue empty -> drain returns. (Per ADR-0006, no OnQueueDrained callback;
+  runtime detects "queue about to empty" inside Evaluate by observing state +
+  its own follow-up emptiness — player still has energy and cards in hand,
+  no follow-ups, snapshot already published from Evaluate.)
 
 UI receives Envelope 1 (C1): animate card placement
 UI receives Envelope 3 (C1): animate heal popup + life update

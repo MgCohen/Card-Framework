@@ -180,7 +180,7 @@ See [features/effects/models/04-effect-flow.md §4.3](features/effects/models/04
 
 ## 4. Reactions And The Dispatch Channel
 
-Reaction commands dispatched from inside a trigger go immediately into the same channel as everything else. There is no separate reaction queue.
+Reaction commands dispatched from inside a trigger go through the same channel as everything else — `engine.Dispatch`. There is no separate reaction queue.
 
 ```csharp
 // "Whenever another card is healed, draw a card"
@@ -197,35 +197,42 @@ triggers.OnAfter<HealActorAction>(
     owner: self);
 ```
 
-The channel receives the dispatched command and calls `GameRules.OnIncomingCommand` before scheduling it:
+The channel receives the dispatched action, validates it through `pipeline.Validate`, and enqueues it on the engine's strict-FIFO command queue. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md) the runtime does **not** gate intake or route commands — command-queue routing is framework-owned.
+
+The runtime contract relevant to the dispatch channel:
 
 ```csharp
-public interface GameRules
+public abstract class GameRulesRuntime<TDefinition>
+    where TDefinition : GameRulesDefinition
 {
-    IntakeResult OnIncomingCommand(GameCommand command, DispatchOrigin origin);
-    IReadOnlyList<GameAction> Evaluate(GameAction justExecuted, CommandResult result);
-    DrainResult OnQueueDrained();
-    IReadOnlyList<TriggerMatch> FilterTriggers(IReadOnlyList<TriggerMatch> candidates, GameCommand command, TriggerPhase phase);
-}
+    public virtual IReadOnlyList<TriggerMatch> FilterTriggers(
+        IReadOnlyList<TriggerMatch> candidates,
+        GameCommand                 command,
+        TriggerPhase                phase)
+        => candidates;
 
-public enum DispatchOrigin
-{
-    PlayerIntent,      // from player input
-    TriggerReaction,   // from a trigger's react function
-    Timer,            // from a timer service
-    Internal          // from game internals
+    public virtual IReadOnlyList<GameAction> Evaluate(
+        GameAction    justExecuted,
+        CommandResult result)
+        => Array.Empty<GameAction>();
+
+    // Effect-pipeline orchestration surface — separate design pass; tracked as oq-effect-pipeline.
 }
 ```
 
+See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
+
 ### Game-style scheduling examples
 
-| Style | `OnIncomingCommand` behaviour |
-|---|---|
-| Slay the Spire | `RunNext` — triggered effects interrupt and resolve immediately |
-| Hearthstone | `Enqueue` — triggered effects resolve after the current command finishes |
-| MTG | `Stash` until priority resolves, then release onto stack in LIFO order |
+The differentiation between game styles lives at the **effect** level, not at command-queue routing. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), commands are framework-FIFO; what differs is *when* triggered effects start.
 
-The pipeline is the same in all three cases. Only `GameRules` changes.
+| Style | How triggered effects are scheduled |
+|---|---|
+| Slay the Spire | Reactions dispatched from `scope.Dispatch` enter framework FIFO; with the queue empty at trigger-fire time they run as the next command — "on the spot" semantics. |
+| Hearthstone | Same FIFO behaviour. Reactions queue normally and run after the current command's pipeline completes. |
+| MTG | The stack is a **game-state zone**, not the engine queue. Triggered abilities push themselves into the stack zone via state mutation; `runtime.Evaluate` watches the stack and dispatches `ResolveTopOfStack`-style follow-ups. Resolution semantics (LIFO, priority passes) live in game state plus `Evaluate`. |
+
+The pipeline is the same in all three cases. Effect-level orchestration is the customizable layer; the command queue is not.
 
 ---
 
@@ -332,7 +339,8 @@ public async Task<CommandResult> Execute(GameAction action)
 
 ## 9. Related
 
+- [decisions/0006-two-pipeline-architecture.md](decisions/0006-two-pipeline-architecture.md) — three-level model and command-vs-effect pipeline split
 - [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — pipeline, envelope, handler flow
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, GameRules, OnQueueDrained
-- [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — CompositeAction utilities and scope
+- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — engine loop, drain cycle, runtime contract
+- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — canonical `GameRulesRuntime<T>` contract
 - [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — async suspension and other open items

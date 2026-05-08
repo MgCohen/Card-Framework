@@ -11,7 +11,21 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-Two cascades landed today (2026-05-06):
+**Effect-pipeline design pass — iterating in a spike file.** The session settled enough to capture as a working sketch but isn't ready to land in canonical Models. Locked context, decisions, types, services, flow, snippets, and a traced MTG flow live at [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until that sketch settles.
+
+Working shape (from the spike — not yet locked into Models):
+
+- `IEffectPipeline` as injected service, symmetric with `ICommandPipeline`. Framework default = inline (Stacklands); games swap for stack-zone (MTG) / queue-zone (Hearthstone).
+- `EffectDefinition` (recipe; lambdas like `Trigger<T>`, subclass optional) + `EffectInstance` (runtime record `(Source, EffectId, Bindings)`).
+- State holds `EffectInstance` records (immutable). MTG stack zone, Hearthstone trigger queue = game-authored slices over these records. State authoritative; UI projects.
+- Runtime stays at `FilterTriggers + Evaluate`. No `ScheduleEffect` on the runtime.
+- Chain scope only created when an effect runs. Drain doesn't construct scopes. `pipeline.Execute(action, chainScope?)` takes optional scope; trigger fold inherits the calling chain. Re-entrance via `Fired` set.
+- Two verbs: `IEffectPipeline.RunEffect(instance, parent)` (scheduling decision) + `EffectInstance.Execute(scope)` extension (direct execution; used by resolution handlers to bypass scheduling).
+- Triggers compile into effects: `Trigger<T>` is authoring sugar; the fold wraps a matched trigger as `EffectInstance` and calls `RunEffect`.
+
+Earlier this session: triggers + dispatch design pass + runtime-contract reshape — closed and **patch cascade landed** ([PR #104](https://github.com/MgCohen/Card-Framework/pull/104)) introducing ADR-0006 (two-pipeline architecture), the runtime contract reshape (try-get `Dispatch`, two-method runtime, deletions of `Route` / `IIntakeQueue` / etc.), and the three-level model (commands / effects / triggers ⊆ effects).
+
+Two parallel cascades landed earlier (2026-05-06) via [PR #102](https://github.com/MgCohen/Card-Framework/pull/102):
 
 **Open-seams design pass + patch cascade.** 10 structural decisions surfaced when drawing the domain model out and propagated into the canonical Models:
 
@@ -29,15 +43,25 @@ Two cascades landed today (2026-05-06):
 
 **PileCounter sample refresh + cascade tail cleanup.** `support/samples/pile-counter.md §9` fully rewritten — refs throughout, per-zone `PileState`, framework `MoveCardMutation` for the zone move with game-side payloads (`AdjustPileCounterPayload`, `SetLastMovePayload`) for counter cache + last-move memory, `PileCounterGameDefinition` bundle, runtime-driven setup commands. The four Models that referenced its outdated patterns (`engine/03`, `actions/02`, `presentation/01`, `engine/04`) refreshed to match. `effects/04` mutator example updated.
 
-Earlier today: domain modeling design pass + patch cascade landed (13 decisions). Plan A/B/C state-tech cascade landed earlier in PR #100. `oq-game-definition`, `oq-engine-match-lifecycle`, `oq-gamerules-runtime-definition` all resolved. Both today's cascades are in PR #102.
+Earlier in the broader project: domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into canonical Models (`engine/07-game-definition`, `players/01-player-model`, `engine/05-game-factory` MatchSetup reshape, `ISliceProvider` adoption across cards/zones/entities, ADR-0005 + glossary + FEATURE-MAP updates, domain-model spike superseded). Plan A/B/C doc cascade landed earlier ([PR #100](https://github.com/MgCohen/Card-Framework/pull/100)).
 
 ---
 
 ## 🎯 Active focus
 
-No active thread. Highest-leverage open items remaining: `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async cancellation), `oq-attachment-storage` (attachment home). First vertical-slice prototype (`PileCounterGameDefinition` against the now-settled domain model) is the natural next thread — the open-seams pass cleaned up the seams that would have bitten during construction.
+**Iterating on [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md)** — keep refining the sketch until the shape is settled enough to convert to canonical Models (`effects/04`, `effects/01`, `triggers/01`, `engine/02`, `engine/01`, plus a new ADR-0007 and glossary + open-items updates). Don't update Models from this in-flight design; load it back from the spike when ready.
 
-Pick a thread when ready.
+Open follow-ups surfaced by the sketch (not blocking, listed for later promotion):
+
+- `oq-effect-authoring` — recipe shape inside `EffectDefinition.Execute` (data, code, graph, hybrid). Authoring feature scope.
+- `oq-runtime-as-state-evaluator` — long-term direction; `FilterTriggers` is the next candidate to revisit.
+- `oq-session-state-machine` — richer engine lifecycle (Connecting / Started / Running / Reconnecting / Ended / ShowingResults) on top of the current 3-state `EngineLifecycle`.
+
+Alternative threads if iteration on the spike pauses:
+
+- **Resolve top open items.** `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`.
+- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract.
+- **Promote a `considered` feature** (`authoring`, `interaction`, `networking`).
 
 ---
 

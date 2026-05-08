@@ -26,7 +26,7 @@ PlayerIntent, Action, Command, History envelope, ValidationResult, AvailableActi
 
 ## Settled decisions
 ADRs in `features/actions/decisions/` (backfilled in phase 5):
-- typed action template, on-demand validation, OnIncomingCommand-only flow, validation in handler, generic primitive rule constraint, player intent mapper, five validation layers, intent vocabulary rename.
+- typed action template, on-demand validation, ~~OnIncomingCommand-only flow~~ (superseded by ADR-0006 — engine lifecycle gate replaces flow-level layer), validation in handler, generic primitive rule constraint, player intent mapper, five validation layers, intent vocabulary rename.
 
 ## Open
 See `ledgers/OPEN-ITEMS.md` for action-flow questions.
