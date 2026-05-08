@@ -64,16 +64,15 @@ Product/
 
   features/                  # per-system design work; each feature has a root <feature>.md
     <feature-a>/
-      <feature-a>.md         # feature root — top-level summary, indexes Models + ADRs
+      <feature-a>.md         # feature root — top-level summary, indexes Models
       models/                # Models (NN-<slug>.md, per-feature counter)
-      decisions/             # ADRs (NNNN-<slug>.md, per-feature counter)
       archive/               # superseded and cancelled docs (see §5.14)
     <feature-b>/
       <feature-b>.md
       models/
-      decisions/
       archive/
     ...                      # one folder per major system in the project
+                             # (no per-feature decisions/ — see §4.5)
 
   spikes/                    # flat — most spikes are single docs
 
@@ -86,7 +85,7 @@ Product/
 
 ### Numbering
 
-**Per-feature counters.** Each feature's `models/` and `decisions/` restart at `01`. Filenames look like `features/actions/models/03-action-definition.md` and `features/actions/decisions/0002-async-layer-hierarchy.md`. The path is the domain prefix; no need to bake it into filenames.
+**Per-feature Model counters.** Each feature's `models/` restarts at `01`. Filenames look like `features/actions/models/03-action-definition.md`. The path is the domain prefix; no need to bake it into filenames. (Per §4.5, there is no `features/<feature>/decisions/` directory — feature-internal decisions live in Model provenance below the divider; project-wide ADRs use the `Product/decisions/NNNN-<slug>.md` counter.)
 
 **Project-wide ADRs** live in `decisions/` with their own counter (`decisions/0001-adopt-workflow.md`). Used for decisions that span features or shape the whole project — workflow adoption, migration choices, cross-feature naming conventions.
 
@@ -104,7 +103,7 @@ When a doc spans multiple systems (e.g., a terminology discussion touching namin
 
 ### Feature names are project-specific
 
-Each project applying this workflow picks its own feature names — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/models/`, `features/<name>/decisions/`), not any particular set of names.
+Each project applying this workflow picks its own feature names — one folder per major system, sized so it can host a meaningful local discussion without overflowing into adjacents. The workflow only mandates the structure (`features/<name>/<name>.md` + `features/<name>/models/`), not any particular set of names. (Per §4.5, there is no `features/<feature>/decisions/` — feature-internal decisions live in Model provenance.)
 
 A rule of thumb: if a feature folder has fewer than ~3 docs after several sessions, it might belong as a tag inside a sibling. If it grows past ~15 docs without natural sub-clusters, consider splitting.
 
@@ -118,12 +117,14 @@ A rule of thumb: if a feature folder has fewer than ~3 docs after several sessio
 | **Feature** | Top-level summary of a feature; indexes its Models, ADRs, opens — source of truth for the subsystem | `features/<feature>/<feature>.md` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Model** | Durable description of a sub-system within a feature, with decision provenance baked in | `features/<feature>/models/` | `draft`, `settled`, `implemented`, `superseded`, `abandoned` |
 | **Sample** | Concrete reference instance projected onto the design — floor or ceiling | `support/samples/` | `draft`, `locked` |
-| **ADR** | One atomic decision per file | `features/<feature>/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
+| **ADR** | One atomic decision per file (project-wide cross-cutting only — see §4.5; feature-internal decisions live in Model provenance) | `Product/decisions/` | `proposed`, `accepted`, `superseded by NNNN` |
 | **Snapshot** | Opt-in milestone freeze of `SESSION-CHECKPOINT.md` (see §4.6) | `sessions/` | n/a (frozen) |
 | **Checkpoint** | Live operational spine; updated continuously | `Product/` root | n/a (replaceable) |
 | **Plan** | Implementation slice | `PLANS/` | `drafting`, `active`, `done`, `abandoned` |
 
-A Model is the unified design artifact: it describes a system **and** records the decisions baked into it (options weighed, rationale, consequences). The descriptive content sits at the top; provenance sits below a divider as track record.
+A Model is the atomic **build unit**: a single design artifact that can be handed to a developer for standalone implementation without requiring them to open neighboring Models in parallel. It describes a system **and** records the decisions baked into it (options weighed, rationale, consequences) — descriptive content above a divider, provenance below.
+
+A Feature is the **navigation layer** over a set of Models: composition (which Models make up the feature), cross-Model architecture (how they fit), shared vocabulary, cross-Model invariants, and the boundaries against neighboring features. The Feature root is what a reader opens first to orient; the Models are what a developer opens to build.
 
 Major decisions that warrant searchability also get an **ADR** — one-page summary, dated and indexed. The ADR links back to the Model; the Model links forward to the ADR.
 
@@ -137,16 +138,25 @@ Every doc starts with:
 ---
 type: spike | feature | model | sample | adr | snapshot | checkpoint | plan
 status: <one of the type's status values>
-references: [features/actions/03, features/triggers/02]    # mandatory for Models; list of paths or literal `root`
-tags: [#async, #triggers]                                 # optional
+references: [features/actions/models/03-action-definition.md, features/triggers/models/02-trigger-shape.md]  # paths or `root`
+tags: [#async, #triggers]                                                                                     # optional
 ---
 ```
 
 Reader knows in 2 seconds what they're holding.
 
-**`references:` is mandatory for Models** (and ADRs that have meaningful upstream context). Either a list of paths to upstream Models/ADRs, or the literal string `root` when the doc has no upstream. Empty list (`[]`) is not allowed — `root` is the explicit signal for "this is a foundation, no deps." This convention powers cascade detection (§5.7) and FEATURE-MAP dependency rendering.
+**Path convention.** All `references:` paths are **Product-root-relative** — written as they appear under `Product/`, with no leading `Product/` prefix and no `./` or `../` segments. Front-matter entries use full filenames (e.g., `features/actions/models/03-action-definition.md`) so `/builder:lint` can resolve them mechanically; shorthand forms (`features/actions/03`) are allowed in narrative prose only. The literal string `root` is the sole non-path value permitted, signalling "no upstream." Empty list (`[]`) is not allowed — use `root` for foundations.
 
-Feature roots derive their `Dependencies` section from the union of contained Models' `references:`, so they don't need to repeat it in front matter.
+**`references:` rules by doc type.**
+
+| Doc type | Requirement |
+|---|---|
+| **Model** | **MUST** populate. List of upstream Model/Feature paths, or `root` when foundational. |
+| **Feature root** | **SHOULD** populate with upstream Feature paths the feature depends on. Front-matter `references:` is the canonical machine-readable source; the body's `## Dependencies` section is the human-readable mirror (and carries the Downstream side, which front matter can't). Use `root` when the feature has no upstream. |
+| **ADR** | **SHOULD** populate when the ADR has meaningful upstream context (the Models or Features it shapes). Optional otherwise. |
+| **Spike, Sample, Snapshot, Checkpoint, Plan** | Optional. |
+
+This convention powers cascade detection (§5.7) and FEATURE-MAP dependency rendering.
 
 **No `last-updated:` field.** Git is the source of truth for modification dates — the linter computes `last-updated` per doc on demand from `git log -1 --format=%cs <path>` when needed. Front-matter dates always drift; the field is dropped.
 
@@ -190,37 +200,72 @@ One paragraph. If graduated, include a forward link to the Model / ADR it inform
 
 ### 4.2 Feature
 
-A **Feature** doc is the root description of a feature folder. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. It's the source of truth that Models, ADRs, and spikes underneath it support — and **the canonical contract once `settled`** (see §5.6 Status gates).
+A **Feature** doc is the navigation root for a feature folder. It captures composition (which Models make up the feature), cross-Model architecture, shared vocabulary, and cross-Model invariants — the layer above the buildable Models. It says what the feature *is*, what Models compose it, what's settled vs. open, and what other features it depends on. The Models carry the build contracts; the Feature root carries the synthesis (and remains **the canonical contract-of-contracts once `settled`** — see §5.6 Status gates).
 
 A feature root lives at `features/<feature>/<feature>.md` (e.g., `features/engine/engine.md`). One per feature folder. No counter; the name matches the folder.
 
-**Feature vs. Model.** A Feature is the *container* — its scope is the whole feature. A Model is a *sub-system* within the feature (engine has Models for the evaluation loop, the GameRules contract, the snapshot pipeline). The Feature doc summarizes composition and public surface; the Models carry the design content.
+**Feature vs. Model.** A Feature is the *navigation container* — its scope is the whole feature. A Model is a *buildable sub-system* within the feature (engine has Models for the evaluation loop, the GameRules contract, the snapshot pipeline). The Feature doc carries composition, cross-Model architecture, vocabulary, and cross-Model invariants; the Models carry the buildable contracts.
 
 ```markdown
 # <feature> — feature
 
 <front matter: type=feature, status=draft>
 
-## Purpose
-What this feature is and why it exists. One paragraph.
+## What it is
+High-level prose framing the feature in 30 seconds. SHOULD include a canonical artifact — a small visual or structural rendering that lets a reader grasp the shape without opening Models. Pick the form that fits:
+
+| Feature shape | Artifact form |
+|---|---|
+| Sequential pipeline / phase order | Flow diagram or arrow chain |
+| Component composition / orchestration | ASCII layout or component sketch |
+| State machine / lifecycle | State diagram |
+
+If no form fits cleanly, the stub `*n/a — descriptive only.*` is permitted.
+
+## Vocabulary
+**Feature-owned terms only.** Terms defined in another feature, in `ledgers/GLOSSARY.md`, or in upstream prior art do not belong here — link to their canonical home with a one-line pointer ("see `features/triggers/`", "see `GLOSSARY.md > Trigger`") instead of restating.
+
+| Term | Meaning |
+|---|---|
+| `<term>` | <one-line definition> |
+
+## Architecture
+Cross-Model flow: how the Models in this feature fit together — phase order, interaction sequence, what calls what.
+
+Size to the Model count:
+
+| Model count | Architecture depth |
+|---|---|
+| **1** | Thin — often a single sentence pointing at the Model; the Model itself carries the structure. Stub `*n/a — see model 01.*` permitted. |
+| **2–3** | Medium — a paragraph or short diagram showing how the Models compose. The load-bearing section that makes the feature legible without opening every Model. |
+| **4+** | Deep — sub-headers per phase or sub-system; sequence diagram or component map. The reader needs the architecture to navigate. (Past ~15 Models, consider splitting the feature — see §1.) |
+
+## Composition
+Models that make up this feature (table form, always present regardless of count).
+
+| Model | Role |
+|---|---|
+| `models/01-<slug>.md` | <one-line role> |
+| `models/02-<slug>.md` | <one-line role> |
+
+## Invariants
+Cross-Model rules — properties that must hold across the feature's Models. Named, so individual Models can reference them by name rather than restating. Model-local invariants live in the Models themselves.
+
+- **<Invariant name>.** <one-line rule>
 
 ## Boundaries
 What this feature owns — and what it explicitly doesn't. Demarcation against neighboring features.
 
-## Composition
-Models that make up this feature.
-- features/<feature>/models/01-<slug> — short purpose
-- features/<feature>/models/02-<slug> — short purpose
+**Owns:** <list>
 
-## Public surface
-What a consumer of this feature sees. Contracts, services, types — the outer boundary that other features touch.
+**Does not own:**
+- <thing> → <feature that does>
 
 ## Dependencies
+*Mirrors the front-matter `references:` array in human-readable form (per §3).*
+
 - **Upstream:** features/X — consumed
 - **Downstream:** features/Y — consumes this
-
-## Settled decisions
-Pointers to load-bearing ADRs in this feature's `decisions/`.
 
 ## Open
 Pointers to `ledgers/OPEN-ITEMS.md` items relevant to this feature.
@@ -232,7 +277,7 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 **`implemented` status convention.** A Feature flips to `implemented` (via §5.6.2 build gate) when code lands that satisfies its contract. While `implemented`, edits to the contract surface open **drift entries** against the implementation — either code updates to match, or the Feature reverts to `settled` (signaling "code is no longer guaranteed to match"). Most of a project's lifetime, mature features sit in `implemented` — that's the steady state.
 
-**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. ADRs in the feature's `decisions/` stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `references:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
+**`abandoned` status convention.** A Feature that's decided against keeps its folder as historical record. The root receives a one-line header: *"Status: abandoned YYYY-MM-DD — `<reason>`. Folder kept for record."* All nested Models cascade to `abandoned`. Project-wide ADRs that reference this feature stay in place (they record decisions that *were* made; they don't become wrong just because the feature didn't survive). Cascade rules from §4.3 Model abandonment apply: docs whose `references:` references this feature get ledger entries opened. Distinct from `superseded` (which means another Feature took over the role).
 
 **Feature ↔ Model status sync.** A Feature's status is bounded above by its qualifying Models (settled or implemented). Drafts and abandoneds don't count, so adding a new draft Model to an implemented Feature doesn't drag it down. Forward flips are deliberate user actions; backward reverts are automatic when a qualifying Model drops a tier. Full rule and worked examples in §5.6.3.
 
@@ -240,7 +285,7 @@ A Feature doc starts as a stub when the folder is first created — sometimes on
 
 The unified design artifact. Top half describes the system; bottom half records the provenance (options weighed, rationale, consequences). A reader gets the model first; clicks down for the "why."
 
-**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a stub line (`*n/a — purely descriptive Model.*`) but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
+**Strict section order.** Every Model has the canonical sections in canonical order. Sections may be empty with a section-appropriate stub line — e.g., `*n/a — see Contracts.*` for `## Examples`, `*n/a — no elevated ADR.*` for `## Decisions`, `*n/a — purely descriptive Model.*` for the below-divider block — but cannot be reordered or omitted. The linter validates structure. Variable *size* is fine; variable *structure* is not.
 
 ```markdown
 ---
@@ -252,20 +297,37 @@ tags: []
 
 # <subject> — model
 
-## Problem
-What we're modeling and why this exists.
+## What it is
+High-level orientation in 30 seconds. SHOULD include a canonical artifact that fits the Model's shape:
 
-## Concepts
-Types and entities in this system, glossary-style.
+| Model shape | Artifact form |
+|---|---|
+| Class / interface / contract | Code snippet (signatures + types) |
+| Algorithm | Pseudocode |
+| State machine / lifecycle | State diagram |
+| Data structure / schema | Shape sketch |
+| Pipeline / pass / phase | Arrow chain |
+
+If no form fits cleanly, the stub `*n/a — see Contracts.*` is permitted.
 
 ## Contracts
-Interfaces, methods, return shapes, forbidden behaviors.
+What this Model defines: types, interfaces, method signatures, semantics, forbidden behaviors. **Implementation is welcome when the framework owns it** — e.g., a `CardMapState` record with its dictionary lookups, a pipeline algorithm with its phase ordering, an extension-method body. **Surface-only signatures are appropriate when implementation is game-supplied** — e.g., `ICommandHandler<TCommand, TResult>` defining a contract that game code implements. What does *not* live here: consumer usage and user-supplied extensions of the contract — those live in `## Examples`.
 
 ## Invariants
-What must always be true.
+Model-local rules (cross-Model rules live in the Feature root's `## Invariants`, referenced by name).
+
+## Decisions
+**Reserved for elevated ADRs.** Project-wide ADRs (per §4.5's two-feature rule) that shape this Model. Feature-internal decisions live below the divider, not here. If no ADR applies, stub `*n/a — no elevated ADR.*`.
+
+Linked: `Product/decisions/NNNN-<title>.md`
 
 ## Examples
-At minimum, walked through against the floor sample.
+Consumers of the contract — two shapes:
+
+- **User extensions.** Game-supplied implementations of a framework interface — e.g., `DealDamageHandler : ICommandHandler<DealDamageCommand, DamageResult>` showing what an implementer's code looks like.
+- **Call-site usage.** Code that invokes the contract — `store.Execute(MoveCardMutation.AtTop(card, src, dst))`, a traced execution flow, a small wiring sketch.
+
+If no consumer interaction fits the Model's shape (truly internal contract with no documented callers), stub `*n/a — see Contracts.*`.
 
 ## Open follow-ups
 Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
@@ -279,21 +341,23 @@ Unresolved threads. (Promote durable items to `ledgers/OPEN-ITEMS.md`.)
 - **B** — rejected because ...
 - **C** — chosen.
 
-(For multi-decision Models, accumulate sub-sections — e.g., `### Q1 — visibility mechanism` with its own options/lean/rationale — in narrative order. Replaces what used to be a separate per-decision ADR file in `features/<feature>/decisions/`.)
+*Multi-decision Models: accumulate `### Q-N — <slug>` sub-sections in narrative order, each with its own options / lean / rationale.*
 
 ## Rationale
 Why the chosen approach. Skip if obvious.
 
 ## Consequences
 What this enables; what it constrains. Skip if obvious.
-
-## ADR
-*(Optional — present only if a project-wide ADR was opened for cross-cutting decisions. Feature-internal decisions stay above.)*
-
-Linked: `Product/decisions/NNNN-<title>.md`
 ```
 
-A purely descriptive Model can use the empty-stub convention for the provenance sections. A decision-heavy Model fills them all in. Section order is canonical so readers always know where to look — and the linter enforces it.
+**Build-unit test.** A Model should be implementable standalone: a developer reading just this doc + the Feature root should be able to build it without opening neighboring Models in parallel. If implementation requires constant cross-referencing, the Model is either too thin (merge into a neighbor) or wrong-shaped (split along different lines).
+
+**Below-divider modes.** The provenance block is filled in one of two modes:
+
+- **Decision-bearing.** Populate `## Options considered`, `## Rationale`, `## Consequences`. Single-decision Models keep them flat. Multi-decision Models accumulate `### Q-N — <slug>` sub-sections under `## Options considered` in narrative order, each carrying its own options / lean / rationale; the closing `## Rationale` and `## Consequences` summarize the composite.
+- **Descriptive.** No design choices, just structural framing. Stub once at the top of the provenance block (`*n/a — purely descriptive Model.*`); the three section headings remain per strict-section order without further content.
+
+Section order is canonical regardless of mode — the linter enforces it.
 
 **Cascade implications** (downstream docs affected by edits to this Model) are detected on demand by the linter — see §5.7.
 
@@ -350,10 +414,13 @@ After locking, design changes that affect the sample surface as linter findings 
 
 **Reserved for project-wide / cross-cutting decisions only.** Feature-internal decisions live in the affected Model's provenance section (§4.3 — `## Options considered`, `## Rationale`, `## Consequences`). The ADR was duplicating provenance that grep already finds; collapse into the Model.
 
-ADRs apply to decisions that:
-- Span multiple features (cross-cutting principles, framework-wide naming).
-- Are cited from many docs and deserve a one-pager (e.g., Objects-over-IDs as ADR-0005).
-- Shape the project as a whole (workflow adoption, migration moves).
+**Hard scope rule: ADR requires ≥2 features in scope.** A decision that touches only one feature — even one cited from many Models inside that feature — lives in the affected Model's provenance, not as an ADR. ADRs apply only when the decision genuinely spans feature boundaries:
+
+- Cross-feature principles or framework-wide naming.
+- Project-shaping moves (workflow adoption, migration choices).
+- Decisions cited from Models in two or more sibling features.
+
+If you're tempted to open an ADR for a decision that only touches one feature, write it in the Model's provenance instead.
 
 ADRs live at `Product/decisions/NNNN-<slug>.md` (project-wide counter). There is no `features/<feature>/decisions/` directory — feature-internal ADRs collapse into the Model.
 
@@ -385,6 +452,33 @@ One paragraph.
 - Constrains: ...
 - Reverts/replaces: ADR-NNNN
 ```
+
+#### Migration recipe — retiring `features/<feature>/decisions/`
+
+For projects that accumulated feature-internal ADRs before the §4.5 reform, the migration is per-ADR. Each old ADR resolves into one of two outcomes — **elevate** (genuine cross-feature decision; ≥2 features in scope) or **fold** (feature-internal decision; collapse into the affected Model's provenance).
+
+**Per-ADR steps.**
+
+1. **Decide outcome.** Read the old ADR. Apply the §4.5 hard-scope rule: does the decision touch ≥2 features? If yes → **elevate** to `Product/decisions/NNNN-<slug>.md`. If no → **fold** into the affected Model's provenance below the divider.
+2. **Preserve dates.** Both the original decision date and the migration date stay visible in the new home. The elevated ADR keeps its `Decided YYYY-MM-DD` line; the folded provenance gains a one-line *"Decided YYYY-MM-DD (originally `<old-path>`); folded YYYY-MM-DD."* note.
+3. **Apply the move.** Elevate: copy content to the new ADR file under `Product/decisions/`, renumber to the next free counter. Fold: paste body content into the host Model's `## Options considered` / `## Rationale` / `## Consequences`, sub-sectioned as `### Q-N — <slug>` if the ADR carried multiple decisions.
+4. **Inbound-ref sweep.** Run `/builder:deps <old-path>` to surface every doc that references the retired ADR. Update each reference to point at the new home (project-wide ADR or host Model). Same reverse-graph mechanism as §5.10a.
+5. **Delete the old file.** Once references are redirected, remove the old `features/<feature>/decisions/<file>.md`. When all ADRs in a feature folder are migrated, delete the empty `decisions/` directory.
+
+**Supersede-then-fold (special case).** When an old ADR's decision has since been overturned by later design work, fold the *superseded* body — preserving the supersession record — rather than the live one:
+
+1. First record the supersession on the old ADR (apply the §4.3 superseded-status convention: header line, body kept for record).
+2. Then fold the superseded body into the host Model's provenance, keeping the supersession header. The reader sees both the original reasoning and the fact that it was reversed.
+3. The replacement decision lives wherever it currently sits — its location is independent of this migration step.
+
+**Mechanical vs. full reshape (non-normative).** Useful to know up front so you batch-plan correctly:
+
+| Category | Trigger | Cadence |
+|---|---|---|
+| **Mechanical** | The ADR's reasoning still holds; only its location is wrong. | Batch — fold or elevate several in one PR. |
+| **Full reshape** | The ADR's framing or assumptions no longer match the current design (the host Model has moved on). | Per-Model design pass — open the Model, re-derive the decision in current vocabulary, then fold the result. |
+
+A clean cue: if you can fold without re-reading the host Model, it's mechanical. If you have to re-read the Model to know how to fold, it's a reshape.
 
 ### 4.6 Snapshot (opt-in milestone)
 
@@ -590,7 +684,7 @@ Post-v1, the workflow operates in interleaved mode: features get added over time
 
 When a new feature is requested or designed:
 
-1. **Create the feature folder.** `features/<feature>/` with `models/` and `decisions/` subfolders.
+1. **Create the feature folder.** `features/<feature>/` with a `models/` subfolder. (No `decisions/` — feature-internal decisions live in Model provenance per §4.5.)
 2. **Write the feature root stub** at `features/<feature>/<feature>.md` per §4.2. Status `draft`. Even Purpose + Boundaries alone is enough to start — it thickens as Models land.
 3. **Declare dependencies.** Identify upstream features this builds on. The first Model written under this feature carries `references:` pointing at upstream Models (or `root` if genuinely foundational).
 4. **Update orientation.** Patch `ledgers/FEATURE-MAP.md` — promote the corresponding `considered` row, or add a new row + dependency edges. Patch `general/ROADMAP.md` if scheduling shifts.
@@ -660,7 +754,7 @@ A feature progresses through these phases. Each phase corresponds to one or more
 | # | Phase | What happens | Driving sections |
 |---|-------|-------------|-----------------|
 | 1 | **Initiated** | Feature folder created via §5.11 ceremony. Feature root stub written (Purpose + Boundaries). Status: `draft`. | §5.11 |
-| 2 | **Designed** | Models drafted in `models/`. ADRs land in `decisions/` as decisions settle. Spikes feed Models. Cascade detected on demand by the linter. | §5.2, §5.4, §5.7 |
+| 2 | **Designed** | Models drafted in `models/`. Project-wide ADRs land in `Product/decisions/` (per §4.5) when decisions span ≥2 features; feature-internal decisions live in Model provenance. Spikes feed Models. Cascade detected on demand by the linter. | §5.2, §5.4, §5.7 |
 | 3 | **Settled** | Each Model passes research gate (§5.6.1). When all qualifying Models settled, Feature is eligible — user commits with deliberate flip. | §5.6.1, §5.6.3 |
 | 4 | **Implemented** | Code lands in implementation directory. Each Model passes build gate (§5.6.2). When all qualifying Models implemented, Feature is eligible — user commits. | §5.6.2, §5.6.3 |
 | 5 | **Steady state** | Most of project lifetime. Drift detection runs post-merge (§5.12); drift surfaces via PR with proposed contract updates. Run `/builder:lint` on demand for reference-staleness checks. | §5.10, §5.12 |
@@ -690,8 +784,7 @@ Superseded and cancelled docs move into a sibling `archive/` folder inside the f
 features/<feature>/
   <feature>.md
   models/
-  decisions/
-  archive/         # retired docs only; same depth as models/ and decisions/
+  archive/         # retired docs only; same depth as models/
 ```
 
 #### Move trigger (explicit, not vibes)
@@ -750,10 +843,9 @@ Once a decision lands on `main`, the archive convention applies in full: a later
 | `ledgers/GLOSSARY.md` | Canonical vocabulary + changelog | When a term lands or renames |
 | `ledgers/OPEN-ITEMS.md` | Durable ledger of loose ends — questions, deferred work, known TODOs. Self-contained paragraph entries. Resolution = delete the entry (resolving doc owns the answer) | Append on durable open; delete on resolution |
 | `ledgers/FEATURE-MAP.md` | Bird's-eye view: feature index table, mermaid dependency graph, model-level breakdown. Hand-maintained v1; auto-generated v2 | When a Model lands, a Feature ships, or dependencies shift |
-| `decisions/NNNN-*.md` | Project-wide ADRs (cross-feature decisions, workflow choices, migration moves) | When a project-scoped decision settles |
 | `sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md` | Opt-in milestone snapshot — frozen copy of `SESSION-CHECKPOINT.md` at a referenceable point. `type: snapshot` front matter; *"Frozen — do not edit"* header. See §4.6. | When `/builder:snapshot` is invoked |
 | `features/<feature>/<feature>.md` | Feature root — top-level summary, indexes Models + ADRs, source of truth for the subsystem | When a Model lands, an ADR settles, or feature scope shifts |
-| `features/<feature>/decisions/NNNN-*.md` | ADRs (per-feature counter) | When a decision settles |
+| `Product/decisions/NNNN-*.md` | Project-wide ADRs — cross-feature decisions, workflow choices, migration moves (per §4.5) | When a project-scoped decision settles |
 | `features/<feature>/archive/*.md` | Retired docs (Superseded / Cancelled). Front matter: `status`, `superseded_by`, `archived_on`, `reason`. See §5.14. | When a doc is superseded or cancelled (same commit as the status flip) |
 | `spikes/<name>.md` | Time-boxed investigations | When new exploration starts; status updated on conclude/graduate/archive |
 
