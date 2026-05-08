@@ -17,19 +17,74 @@ Working draft of the rules that govern each kind of doc in the Product corpus. I
 
 ## Model
 
-A doc under `features/<feature>/models/`. The unit of canonical design.
+A doc under `features/<feature>/models/`. The unit of canonical design — focused, deep, narrow. One model = one central element explained in depth.
 
-- 🟢 **A model owns a canonical surface or system.** "Canonical" = this is where the surface/system is defined for the first time, the one place to read the contract.
-- 🟢 **Implementation isn't disqualifying — irrelevance is.** A load-bearing, framework-required implementation that realizes a system *can* live in that system's model alongside the abstraction. Example: `StartMatchCommand` / `EndMatchCommand` + handlers + signals are framework-required implementations of the lifecycle system, and live in `engine/06` because they realize the system defined there.
-- 🟢 **NOT a model** (under the strict reading):
-  - Implementations of surfaces defined elsewhere, when the implementations don't form a coherent system on their own.
-  - Method extensions to a class defined elsewhere → go to the class's canonical home.
-  - Behaviors / rules of a surface defined elsewhere → go to the surface's canonical home.
-  - Patterns / recipes using existing surfaces → feature root.
-- 🟢 **Rules / behaviors / extensions move to their owner.** If a model accumulates content that describes how a surface defined elsewhere works or extends, that content belongs in the surface's canonical home.
-- 🟡 **Naming should match content.** When a model's canonical concern sharpens, its title may need to follow. Example: "Evaluation Loop" → "Game Engine" once the model's scope became "the GameEngine class" rather than "the loop algorithm."
-- 🟡 **Each cross-doc reference should point at exactly one canonical home.** No "see X or Y" for the same surface.
-- 🔴 **When does a model split vs. stay merged?** Heuristic TBD. Working principle: split when two surfaces in the same model don't reference each other and have separate consumers; merge when content is "load-bearing implementation of the same system."
+### What a model IS
+
+🟢 **Hard rule.** A model has a single **central element** that is both:
+1. **Concrete** — a class, interface, service, contract, or structured type. Something you can name and point at.
+2. **Load-bearing** — carries logic, behavior, or its own design space. Not just data.
+
+🟢 **The title names the central element.** Reading the title tells you what the model is about; reading the body explains that one element in depth.
+
+🟢 **The body covers the central element + the supports that exist for it.** Sub-types, payloads, helpers, mechanics that only make sense in the central element's context all live inside the model — not as peers, but as parts of how the central element works.
+
+🟢 **A model is the canonical home for its central element.** First-time definition; the one place to read the contract.
+
+### What a model is NOT
+
+🔴 **Not a model: a concept without a central element.** "Lifecycle," "validation," "loop," "subscription model" as standalone topics aren't models if no concrete load-bearing thing centralizes them. The concept is just a name for a collection of related things — that collection belongs to a feature (across multiple models) or as supports inside an existing model.
+
+🔴 **Not a model: pure data types alone.** Enums, simple records, signals, payload types, value objects, outcome hierarchies — these are concrete but not load-bearing. They have shape but no logic, no behavior, no real design space of their own. They're supporting content within the model that defines or uses them.
+
+🔴 **Not a model: an amalgamation tied by a theme.** Multiple peer concrete elements with no unifying central element belong in a feature (with multiple focused models), not a single model. If you can't name *the* central element, you're looking at a feature.
+
+🔴 **Not a model: rules / behaviors / extensions of a surface defined elsewhere.** Move them to the surface's canonical home.
+
+🔴 **Not a model: a recipe / pattern using existing surfaces.** Belongs in the feature root or the canonical home of the surfaces being composed.
+
+🔴 **Not a model: a method extension to a class defined elsewhere.** Goes to the class's canonical home.
+
+### How to evaluate
+
+When deciding whether some content earns its own model, walk the flow:
+
+1. **Can you point at a single concrete element as the core?**
+   - No → not a model. It's a feature, content for an existing model, or unorganized. Stop.
+   - Yes → continue.
+
+2. **Does the element carry load-bearing logic, behavior, or design space?**
+   - No (pure data — enum, record, signal, payload) → not a model. Support inside the model that defines or uses it. Stop.
+   - Yes → it's a candidate. Continue.
+
+3. **Does the title match the central element?**
+   - No → rename the title or split the content until they match.
+   - Yes → continue.
+
+4. **Should the candidate be its own model, or supporting content under a parent?** Soft rule, design call. **Default: support under the parent.** Promote when:
+   - Substantial design depth of its own.
+   - Independent consumption (consumers reach for it without going through a parent).
+   - Authoring concerns benefit from a focused doc.
+   - Supporting elements are forming around it.
+
+   *"Could be a model" ≠ "should be a model."* Defaulting to support keeps the corpus from over-fragmenting.
+
+### Worked examples — quick reference
+
+See **§Examples — good and bad calls** below for full reasoning. Quick table:
+
+| Case | Verdict | Why |
+|---|---|---|
+| `GameEngine` class as a model (engine/01) | ✅ | Concrete + load-bearing (drain, queue, gate enforcement) |
+| `IAvailableActions` service as a model (engine/03) | ✅ | Concrete + load-bearing (write protocol, production semantics) |
+| `IGameFactory` as a model (engine/05) | ✅ | Concrete + load-bearing (bootstrap walk, two-layer DI split) |
+| `Card` class as a model (cards/01) | ✅ | Concrete + load-bearing (resolution, slice access, ref rotation) |
+| "Match Lifecycle" as a model (engine/06) | ❌ | Concept-only — no central element. Amalgamation of enum + commands + handlers + signals + outcome under the "lifecycle" umbrella. |
+| "Framework Slice Tier" as a model (engine/04) | ❌ | Convention/index, no central element. Tier rules + catalog table. |
+| `EngineLifecycle` enum alone | ❌ | Concrete but pure data. Support inside the model where the lifecycle implementation lives. |
+| `MatchOutcome` closed hierarchy | ❌ | Concrete but pure data (payload). Support next to `EndMatchCommand`. |
+| `MatchStartedSignal` / `MatchEndedSignal` | ❌ | Concrete but pure data (fieldless / outcome-carrying). Support. |
+| `StartMatchCommand` / `EndMatchCommand` records | ❌ | Concrete but pure data (intent shapes). Support. |
 
 ---
 
@@ -114,17 +169,42 @@ Concrete cases that ground the rules. Each entry: the doc (or proposed doc), the
 
 ### Model — earns its file ✅
 
-- **`engine/06` (Match Lifecycle System).** Defines the lifecycle FSM, the gate rules, and the framework-required implementation that realizes them (commands, handlers, signals, `MatchOutcome`). Multiple consumers reference it: `engine/01` for the gate, `engine/04` for `EngineLifecycle`, effects-cancellation question, presentation observers. *Why it earns:* defines a coherent system; implementations live with the system because they realize it.
-- **`engine/01` (Game Engine).** Defines the `GameEngine` class — the orchestrator. Loop, queue, drain, `Dispatch`, lifecycle-method sugar. *Why it earns:* canonical home for `GameEngine`, no other doc owns the class.
-- **`engine/03` (Snapshot Production).** Defines `IAvailableActions` service and the `AvailableActionsState` slice. *Why it earns:* canonical home for the production service. (The snapshot *shape* lives in `actions/02` — different system.)
-- **`engine/05` (Game Factory).** Defines `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer DI split. *Why it earns:* canonical home for match construction.
-- **`actions/01` (Command Pipeline).** Defines the action-flow vocabulary (`PlayerIntent`, `GameCommand`, `CommandHandler`, `CommandResult`, `HistoryEnvelope`) and now the `HistoryState` slice. *Why it earns:* canonical home for the command-pipeline contract.
+Each entry: doc, central element, why it passes.
+
+- **`engine/01` (Game Engine).** Central: `GameEngine` class. Load-bearing: drain logic, queue management, lifecycle gate enforcement, intake contract. *Why it earns:* canonical home for `GameEngine`; no other doc owns the class; consumers reach for it directly.
+- **`engine/02` (GameRules Contract).** Central: `GameRulesRuntime<TDefinition>` (paired with `GameRulesDefinition`). Load-bearing: two contract methods (`FilterTriggers`, `Evaluate`), anti-scope, composition story. *Why it earns:* the contract games implement; rich design space of its own.
+- **`engine/03` (Snapshot Production).** Central: `IAvailableActions` service. Load-bearing: write protocol (`Set` / `Append` / `Clear`), production semantics, validation posture. *Why it earns:* canonical home for the production service. (The snapshot *shape* lives in `actions/02` — different element, different model.)
+- **`engine/05` (Game Factory).** Central: `IGameFactory` (with `MatchSetup`, `IMatchBuilder` as supports). Load-bearing: bootstrap walk, two-layer DI split, container open-generic resolution. *Why it earns:* canonical home for match construction; substantial design pass.
+- **`engine/07` (Game Definition).** Central: `GameDefinition` bundle. Load-bearing: bundle shape, `ISliceProvider` contract, six-step Build walk. *Why it earns:* the top-level contract for shipping a game.
+- **`actions/01` (Command Pipeline).** Central: the command pipeline contract (with `GameCommand`, `CommandHandler`, `CommandResult`, `HistoryEnvelope`, `HistoryState` as supports). Load-bearing: five-layer validation, envelope production, mutator dispatch. *Why it earns:* canonical home for the action-flow vocabulary; substantial design pass.
+- **`actions/02` (Availability Snapshot).** Central: `AvailableActionsSnapshot` + `ActionTemplate` typed hierarchy. Load-bearing: typed-template-per-command-type design pass, snapshot-as-state decision. *Why it earns:* concrete + structured + has its own design space.
+- **`cards/01` (Card Model).** Central: `Card` class + `CardRef`. Load-bearing: resolution, slice access, ref rotation, privacy. *Why it earns:* the framework's primary handle; consumers reach for it from many features.
 
 ### Model — does not earn its file ❌
 
-- **`effects/02-replacement-prevention` (current state).** Composes `OnBefore<T>` (canonical in `triggers/01`) + `IEffectScope` (canonical in `effects/04`). The "three before-fold outcomes" is a *rule* about how the existing pipeline composes, not a new surface. *Verdict:* folds into `effects.md` feature root.
-- **`effects/03-ongoing-effects` (current state).** Author explicitly says: *"No new pipeline concept is needed — the attachment uses the same entity, trigger, and action machinery as everything else."* Recipe over existing surfaces. *Verdict:* folds into `effects.md` feature root.
-- **Pre-refactor `engine/06` (Match Lifecycle Types).** Before reframing, the doc mixed canonical types with method-extensions to `GameEngine` (defined in `engine/01`) and gate behavior (a rule about `Dispatch`). The leaks belonged in `engine/01`; the patterns (setup, disposal split) belonged in `engine.md`. *Outcome:* leaks moved out, doc reframed as the "lifecycle system" and earned its file under that framing.
+- **`engine/06` (Match Lifecycle), current state.** Fails the central-element test. "Lifecycle" is a concept; no `LifecycleService` / `LifecycleController` / load-bearing element centralizes the doc. The contents are an amalgamation: `EngineLifecycle` enum + gate rules (rules about `Dispatch`) + `StartMatchCommand` / `EndMatchCommand` (data) + their handlers + two signals (data) + `MatchOutcome` (data). Tied together by the "lifecycle" theme but no central thing realizes it. *Verdict:* dissolves; everything becomes supporting content under `GameEngine` in `engine/01` (the central element that *does* drive the lifecycle).
+- **`engine/04` (Framework Slice Tier), current state.** Fails the central-element test. Contents are tier conventions (rules) + a catalog index (a table) + the external-keying convention (a rule). No `IFrameworkTier` element. *Verdict:* contents redistribute — catalog index and tier rules into `state.md` or the engine feature root.
+- **`effects/02` (Replacement and Prevention), current state.** Fails. Composes `OnBefore<T>` (canonical in `triggers/01`) + `IEffectScope` (canonical in `effects/04`). The "three before-fold outcomes" is a *rule* about how existing surfaces compose. *Verdict:* folds into `effects.md` feature root.
+- **`effects/03` (Ongoing Effects), current state.** Fails. Author explicitly says: *"No new pipeline concept is needed — the attachment uses the same entity, trigger, and action machinery as everything else."* Recipe over existing surfaces. *Verdict:* folds into `effects.md` feature root.
+- **`presentation/01` (Presentation Loop), current state.** Fails. "Loop" is a concept; the doc itself describes itself as a "synthesis layer over decisions made in sibling features." The few new surfaces it sketches (`IIntentMapper`, `IGameStore`) are loosely-defined, not the title. *Verdict:* folds into `presentation.md` feature root; if `IIntentMapper` later earns a model, it lands there as its own focused doc.
+
+### Concrete-but-not-load-bearing — pure data (support, not a model) 🔵
+
+These have central elements (concrete types) but fail the load-bearing test. They're support inside the model that defines or uses them.
+
+- **`EngineLifecycle` enum** — just states; no logic. Lives inside whatever model holds the lifecycle implementation.
+- **`MatchOutcome` closed hierarchy** — payload type; pattern-matched but no behavior. Lives next to `EndMatchCommand`.
+- **`MatchStartedSignal` / `MatchEndedSignal`** — fieldless / outcome-carrying signals. Live next to the handlers that emit them.
+- **`StartMatchCommand` / `EndMatchCommand` records** — intent shapes carrying parameters. Live next to the methods that dispatch them.
+- **`PlayerIntent`** — small type, always reached via `IntentGateway` / `IIntentMapper`. Lives inside `actions/01`.
+- **`HistoryEnvelope`** (current state) — pseudocode, no fields finalized; structured payload not load-bearing logic. Lives inside `actions/01` until typed and rich.
+
+### Borderline — concrete + load-bearing but currently support 🟡
+
+These pass the hard rule (concrete + load-bearing) but the soft rule (depth/independence) keeps them as supporting content for now. Could promote later if their design grows.
+
+- **`StartMatchHandler` / `EndMatchHandler`** — have validation + signal emission + state-flip logic. The logic is mechanical glue between command and effect; not enough independent design space to promote. Stay as supports.
+- **`ActionTemplate` typed hierarchy** — currently a major sub-section of `actions/02`. Could split out as its own model if the typed-template design grew further (e.g., game-extension story, codegen, validation). For now correctly inside `actions/02` because the snapshot and the templates were settled together.
 
 ### Feature — earns its file ✅
 
