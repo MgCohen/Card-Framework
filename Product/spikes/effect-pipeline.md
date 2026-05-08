@@ -84,13 +84,18 @@ public class EffectDefinition
 }
 
 // Triggers — authoring sugar over EffectDefinition with a typed payload.
+// Receives `self` (the wrapped EffectInstance carrying registration metadata —
+// Source = registration owner, Bindings = bound parameters) plus the typed
+// command. The fold matches a trigger to an incoming GameCommand, wraps it as
+// an EffectInstance, and invokes Execute via the same pipeline path as active
+// effects. The wrap mechanism is runtime-internal (gap #6).
 public abstract class Trigger<T> where T : GameCommand
 {
-    public virtual bool Validate(T command, IEffectScope scope) => true;
-    public abstract Task Execute(T command, IEffectScope scope);
+    public EffectId Id { get; }
+    protected Trigger(EffectId id) => Id = id;
 
-    // The fold uses this to wrap a matched trigger as an EffectInstance.
-    // The intercepted command is captured in Bindings.InterceptedCommand.
+    public virtual bool Validate(EffectInstance self, T command, IEffectScope scope) => true;
+    public abstract Task Execute(EffectInstance self, T command, IEffectScope scope);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -273,6 +278,15 @@ Inside an effect's Execute (called from a chain):
         ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
 ```
 
+## Framework conveniences (assumed by samples)
+
+- **Implicit `EntityInstance<TDef>` → `Ref<TDef>` conversion.** Payloads/actions accepting a `Ref<T>` can take a handle directly:
+  ```csharp
+  public static implicit operator Ref<TDef>(EntityInstance<TDef> instance) => instance.SelfRef;
+  ```
+  Samples below pass handles where refs are expected (`new SetBaseValuePayload(player, ...)` rather than `(player.SelfRef, ...)`).
+- **Trigger registration** (per-instance via authoring layer) is out of scope here — see `oq-effect-authoring` and gap #6. Samples show the authored `Trigger<T>` shape; the wrap-to-`EffectInstance` step is runtime-internal.
+
 ## Sample commands
 
 Three handler shapes covering the common base cases. Listed before effects because effects compose over commands.
@@ -343,13 +357,13 @@ public sealed class DealDamageToPlayerHandler
 
     public Task<DealDamageResult> Handle(DealDamageToPlayerAction cmd, IHandlerContext ctx)
     {
-        var current = cmd.Target.Storage.GetBase<int>(Vars.Health);
-        var next    = Math.Max(0, current - cmd.Amount);
-
-        ctx.Store.Execute(new SetBaseValuePayload(cmd.Target.SelfRef, Vars.Health, next));
+        // Domain payload — mutator handles the variable bookkeeping (whether
+        // health is base value, a modifier stack, or a damage counter is the
+        // game's choice; the handler doesn't care).
+        ctx.Store.Execute(new ApplyDamagePayload(cmd.Target, cmd.Amount));
         ctx.Emit(new DamageDealtSignal(cmd.Target, cmd.Amount, cmd.Source));
 
-        return Task.FromResult(new DealDamageResult(Dealt: current - next));
+        return Task.FromResult(new DealDamageResult(Dealt: cmd.Amount));
     }
 }
 ```
@@ -382,7 +396,7 @@ public sealed class ApplyBuffHandler : ICommandHandler<ApplyBuffAction, ApplyBuf
             new IntAddModifier { Amount = cmd.Amount },
             new ModifierSource(cmd.Source, Order: 0));
 
-        ctx.Store.Execute(new AddModifierPayload(cmd.Target.SelfRef, entry));
+        ctx.Store.Execute(new AddModifierPayload(cmd.Target, entry));
 
         return Task.FromResult(new ApplyBuffResult(entry.Id));
     }
@@ -453,25 +467,24 @@ public sealed class DrawCardEffect : EffectDefinition
 
 ### Bloodlust — before-fold trigger using `Replace`
 
-A passive: the controller's outgoing damage is +1. Registered as a before-fold trigger on `DealDamageToPlayerAction` for the controller's actor.
+A passive: the controller's outgoing damage is +1. Authored as a `Trigger<T>` over `DealDamageToPlayerAction`; registered (per-instance) as before-fold on the controller's actor.
 
 ```csharp
-public sealed class IncreaseOutgoingDamageEffect : EffectDefinition
+public sealed class IncreaseOutgoingDamageTrigger : Trigger<DealDamageToPlayerAction>
 {
-    public IncreaseOutgoingDamageEffect()
-        : base(
-            id: EffectIds.IncreaseOutgoingDamage,
-            execute: async (instance, scope) =>
-            {
-                var intercepted = (DealDamageToPlayerAction)instance.Bindings.InterceptedCommand!;
-                var owner       = scope.State.Resolve<Player>(instance.Source);
+    public IncreaseOutgoingDamageTrigger() : base(EffectIds.IncreaseOutgoingDamage) { }
 
-                if (intercepted.Source != owner.SelfRef) return;   // not from us — leave alone
+    public override Task Execute(
+        EffectInstance self,
+        DealDamageToPlayerAction command,
+        IEffectScope scope)
+    {
+        // self.Source is the registration owner — typed payload, no cast needed.
+        if (command.Source != self.Source) return Task.CompletedTask;
 
-                var bumped = intercepted with { Amount = intercepted.Amount + 1 };
-                scope.Replace(bumped);                             // ← Replace verb (before-fold only)
-            })
-    { }
+        scope.Replace(command with { Amount = command.Amount + 1 });   // ← Replace verb (before-fold only)
+        return Task.CompletedTask;
+    }
 }
 ```
 
@@ -480,59 +493,58 @@ public sealed class IncreaseOutgoingDamageEffect : EffectDefinition
 When the controller deals damage, heal them by half (round down). After-fold: damage already applied, this is a reaction.
 
 ```csharp
-public sealed class HealOwnerWhenDealingDamageEffect : EffectDefinition
+public sealed class HealOwnerOnDamageTrigger : Trigger<DealDamageToPlayerAction>
 {
-    public HealOwnerWhenDealingDamageEffect()
-        : base(
-            id: EffectIds.HealOwnerOnDamage,
-            execute: async (instance, scope) =>
-            {
-                var intercepted = (DealDamageToPlayerAction)instance.Bindings.InterceptedCommand!;
-                var owner       = scope.State.Resolve<Player>(instance.Source);
+    public HealOwnerOnDamageTrigger() : base(EffectIds.HealOwnerOnDamage) { }
 
-                if (intercepted.Source != owner.SelfRef || intercepted.Amount <= 0) return;
+    public override async Task Execute(
+        EffectInstance self,
+        DealDamageToPlayerAction command,
+        IEffectScope scope)
+    {
+        if (command.Source != self.Source || command.Amount <= 0) return;
 
-                // HealActorAction handler is symmetric to DealDamageToPlayerHandler — reads
-                // the variable, dispatches SetBaseValuePayload, emits HealedSignal.
-                await scope.Dispatch<HealActorResult>(
-                    new HealActorAction(owner, intercepted.Amount / 2));
-            })
-    { }
+        // HealActorAction handler is symmetric to DealDamageToPlayerHandler —
+        // dispatches an ApplyHealPayload, emits HealedSignal.
+        var owner = scope.State.Resolve<Player>(self.Source);
+        await scope.Dispatch<HealActorResult>(
+            new HealActorAction(owner, command.Amount / 2));
+    }
 }
 ```
 
 ### Lockdown — before-fold trigger using `Cancel`
 
-A passive that silences a marked actor: any cast attempt by them is cancelled. The silenced actor is bound when the lockdown effect is registered (one of the `Bindings.Targets`).
+A passive that silences a marked actor: any cast attempt by them is cancelled. The silenced actor is bound at registration time (carried in `self.Bindings.Targets`).
 
 ```csharp
-public sealed class SilenceActorEffect : EffectDefinition
+public sealed class SilenceActorTrigger : Trigger<CastSpellAction>
 {
-    public SilenceActorEffect()
-        : base(
-            id: EffectIds.SilenceActor,
-            execute: async (instance, scope) =>
-            {
-                if (instance.Bindings.InterceptedCommand is not CastSpellAction cast) return;
+    public SilenceActorTrigger() : base(EffectIds.SilenceActor) { }
 
-                var silenced = (Ref<Player>)instance.Bindings.Targets![0];
-                if (cast.Caster.SelfRef != silenced) return;
+    public override Task Execute(
+        EffectInstance self,
+        CastSpellAction command,
+        IEffectScope scope)
+    {
+        var silenced = (Ref<Player>)self.Bindings.Targets![0];
+        if (command.Caster.SelfRef != silenced) return Task.CompletedTask;
 
-                scope.Cancel(reason: "silenced");                   // ← Cancel verb (before-fold only)
-            })
-    { }
+        scope.Cancel(reason: "silenced");                          // ← Cancel verb (before-fold only)
+        return Task.CompletedTask;
+    }
 }
 ```
 
 ### Coverage map
 
-| Shape | Sample |
-|---|---|
-| Active effect, with target, single Dispatch | Lightning Bolt |
-| Active effect, no target | Draw a Card |
-| Before-fold trigger, `Replace` verb | Bloodlust (+1 damage) |
-| After-fold trigger, `Dispatch` reaction | Vampiric (heal-on-damage) |
-| Before-fold trigger, `Cancel` verb | Lockdown (silence) |
+| Shape | Authored as | Sample |
+|---|---|---|
+| Active effect, with target, single Dispatch | `EffectDefinition` | Lightning Bolt |
+| Active effect, no target | `EffectDefinition` | Draw a Card |
+| Before-fold trigger, `Replace` verb | `Trigger<DealDamageToPlayerAction>` | Bloodlust (+1 damage) |
+| After-fold trigger, `Dispatch` reaction | `Trigger<DealDamageToPlayerAction>` | Vampiric (heal-on-damage) |
+| Before-fold trigger, `Cancel` verb | `Trigger<CastSpellAction>` | Lockdown (silence) |
 
 What's still uncovered: `scope.Decide` (target picker / choice prompt) and `scope.RunEffect` (sub-effect scheduling from inside a chain). Surface for both. Defer until those design questions settle (`Decide` shape is TBD; `RunEffect` placement depends on concern #2).
 
