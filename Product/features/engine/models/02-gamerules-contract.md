@@ -159,7 +159,7 @@ public sealed class MagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
 |---|---|
 | `TDefinition Definition` | The serializable data object selected for this match (`GameDefinition.Rules`). Read config knobs through it. Immutable for the runtime's lifetime. |
 | `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/04` §Service surfaces](features/effects/models/04-effect-flow.md). |
-| `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/03 §Snapshot service`](features/engine/models/03-snapshot-pipeline.md). |
+| `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). |
 | Game-specific subsystems | Concrete runtimes inject whatever else they need (`IStackSystem`, `IDeckSystem`, …) via their own constructor. Registered in the game's installer. The framework knows nothing about them. |
 
 `IIntakeQueue` is **not** in the injected services list — per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command queue is engine-private FIFO with no runtime service surface for routing.
@@ -306,7 +306,7 @@ Engine-internal plumbing (the pending command queue, drain-cycle running flag) i
 
 A real game's runtime will grow large — phase rules, SBAs, ordering rules, available-actions computation. The base type intentionally does not bake composition in; that's an authoring concern, not a framework primitive.
 
-The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [`engine/03 §2`](features/engine/models/03-snapshot-pipeline.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it. A future modular-rule tier (likely double-generic on definition + module) will compose alongside the central runtime — see `oq-gamerules-composition`.
+The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it. A future modular-rule tier (likely double-generic on definition + module) will compose alongside the central runtime — see `oq-gamerules-composition`.
 
 For games with one rule module, extend `GameRulesRuntime<TDefinition>` directly. The constructor takes the definition + two framework services + any game-specific subsystems; the contract methods do the work.
 

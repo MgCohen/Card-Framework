@@ -62,7 +62,7 @@ public sealed class GameEngine
     // runtime no longer gates intake — command-queue routing is framework-owned FIFO.
     public bool Dispatch(GameAction action, out string? reason)
     {
-        // Lifecycle gate — see engine/06 §7.
+        // Lifecycle gate — see engine/06 §Intake gates.
         var lifecycle = store.Get<EngineState>().Lifecycle;
         if (lifecycle == EngineLifecycle.Ended)
         {

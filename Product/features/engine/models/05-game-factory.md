@@ -174,11 +174,11 @@ public interface IMatchBuilder
 
 ### Framework auto-seeded slices
 
-`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §3`](features/engine/models/04-gamestate-slices.md) (and as more features land, the cards/zones/etc. Models) is the source of truth. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
+`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/engine/models/04-gamestate-slices.md) (and as more features land, the cards/zones/etc. Models) is the source of truth. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
 
 ### Behavior resolution at `Build`
 
-The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6). The factory:
+The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)). The factory:
 
 1. Registers the `MatchSetup.Game.Rules` definition instance into the surrounding scope (so the runtime constructor can take its typed `TDefinition` parameter).
 2. Resolves `GameRulesRuntime<TDefinition>` via container open-generic resolution — `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))` — picking up the definition, framework services, and any game-specific subsystems in one constructor call.
@@ -186,7 +186,7 @@ The factory operates **inside** a per-match DI scope opened by the host (or app-
 4. Resolves `ICommandPipeline` (which resolves handlers from the container at dispatch time).
 5. Resolves `IIntentMapper` if the game registered one.
 6. Constructs the `Store` and walks the slice-installation pseudocode from [Game Definition §Build walk](features/engine/models/07-game-definition.md): framework slices auto-seeded, then per-spawn instances (zones, players) spawned from the layout blocks + overlays, then game-singletons from `GameDefinition.GetInitialSlices()`, then manual `MatchSetup.InitialSlices` overlay.
-7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6).
+7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)).
 
 The factory does not register behaviors itself — those came in via the installer. The factory only assembles them. The runtime is single-phase constructed: when its constructor returns, every dependency is bound; there is no separate `Initialize` hook.
 
@@ -226,7 +226,7 @@ The factory does not accept a per-match handler pool. Vocabulary differences bet
 7. **Engine is in `NotStarted` at return.** No commands have been dispatched; no drain has run; the lifecycle gate rejects all `Dispatch` calls except `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to open the engine; match-specific setup is dispatched as ordinary commands after that.
 8. **Mode-specific command vocabularies are rules-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in `GameRulesRuntime` and the snapshot.
 9. **Single-phase runtime construction.** `GameRulesRuntime<TDefinition>` is fully constructed by the container in one shot — no two-phase Initialize. Definition + framework services + game subsystems all flow through the constructor.
-10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6.
+10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md).
 11. **Build orders per-spawn first, singletons second.** Zones (from layout blocks + overlay) and players (from actors + definition overlay) spawn before game-singleton slices install. Singletons that need actor refs as data start with default/null values; setup commands populate them after `engine.StartMatch()`.
 
 ## Decisions
@@ -364,7 +364,7 @@ var engine = factory.Create(new MatchSetup
 
 - **Single type with `Initialize(services)` hook** — rejected. Two-phase construction creates a "half-initialized" window and forces every method to guard against pre-init calls.
 - **Services passed per-call** — rejected. Bloats every contract method's signature and breaks the locked four-method surface.
-- **Definition + Runtime split, generic-parameterized, single-phase DI construction** — chosen. `GameRulesDefinition` is pure data; `GameRulesRuntime<TDefinition>` is the stateful runtime. Container open-generic resolution pairs them at `Build`. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the full contract.
+- **Definition + Runtime split, generic-parameterized, single-phase DI construction** — chosen. `GameRulesDefinition` is pure data; `GameRulesRuntime<TDefinition>` is the stateful runtime. Container open-generic resolution pairs them at `Build`. See [`engine/02 §The two-type split` and §The interface](features/engine/models/02-gamerules-contract.md) for the full contract.
 
 ## Rationale
 

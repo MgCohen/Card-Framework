@@ -170,7 +170,7 @@ public interface ICommandHandler<TCommand, TResult>
 public abstract class CommandHandler<TCommand, TResult> : ICommandHandler { ... }
 ```
 
-Each `GameCommand` type has exactly one registered handler (per [`engine/02 §Handler types`](features/engine/models/02-gamerules-contract.md)). Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/04 §ICommandHandler.Handle returns Task`](features/effects/models/04-effect-flow.md)).
+Each `GameCommand` type has exactly one registered handler (per [`engine/02 §Position in the system`](features/engine/models/02-gamerules-contract.md) — `ICommandHandler.Validate` / `Handle` is the per-action layer). Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/04 §ICommandHandler.Handle returns Task<TResult>`](features/effects/models/04-effect-flow.md)).
 
 ### `StateMutation` — payload-keyed mutators
 
