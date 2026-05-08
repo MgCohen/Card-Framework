@@ -55,7 +55,7 @@ Built from 8 parallel audits (one per feature) against the spec at commit `2f9c4
 
 | Current path | Title | Reason for genuine cross-feature scope | New path |
 |---|---|---|---|
-| `zones/decisions/0002` | Visibility model | Mechanism actually requires coordinated implementation: cards owns `CardVisibilityState` + `CardRef` rotation; zones owns the policy; presentation owns transport-boundary filtering. Three features must implement compatibly. | `decisions/0006-zone-visibility-model.md` (lands first per migration order) |
+| `zones/decisions/0002` | Visibility model | Mechanism actually requires coordinated implementation: cards owns `CardVisibilityState` + `CardRef` rotation; zones owns the policy; presentation owns transport-boundary filtering. Three features must implement compatibly. | `decisions/0008-zone-visibility-model.md` (lands first per migration order) |
 | `actions/decisions/0007` | Five validation layers | Names 5 layers, each *owned* by a different feature (rule eligibility = engine; AffordanceMap = presentation; IntentMapper = actions; handler.Validate = actions; OnIncomingCommand = engine). Structure constrains how those features' owned surfaces behave. | `decisions/0007-five-validation-layers.md` |
 
 **2 ADRs → `Product/decisions/`.** 5 project-wide ADRs already exist (`0001-adopt-workflow` through `0005-objects-over-ids`). Next available counter is `0006`. Numbering above is provisional — final assignment when those ADRs land.
@@ -169,7 +169,7 @@ Only one Model, dense (15 sections). Risk: migrating naively duplicates content 
 
 ### 4.5 Renumbering elevated ADRs
 
-2 ADRs elevate to `Product/decisions/` (post-re-triage). 5 project-wide ADRs already exist (`0001-adopt-workflow` through `0005-objects-over-ids`). Provisional new numbers in migration-order: `0006-zone-visibility-model` (lands during zones migration, step 3), `0007-five-validation-layers` (lands during actions migration, step 7). Final assignment when each lands.
+2 ADRs elevate to `Product/decisions/` (post-re-triage). 5 project-wide ADRs already exist (`0001-adopt-workflow` through `0005-objects-over-ids`). Provisional new numbers in migration-order: `0008-zone-visibility-model` (lands during zones migration, step 3), `0007-five-validation-layers` (lands during actions migration, step 7). Final assignment when each lands.
 
 ### 4.6 ADR move semantics
 

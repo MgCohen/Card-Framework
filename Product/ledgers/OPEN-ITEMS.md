@@ -76,9 +76,9 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 ## Features yet to scaffold
 
-- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary in `actions/decisions/0008-intent-vocabulary.md` depends on this layer to emit the intents.
+- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary defined in `features/actions/models/01-command-pipeline.md` (Q5 — formerly `actions/decisions/0008-intent-vocabulary.md`, folded 2026-05-08) depends on this layer to emit the intents.
   Trigger: next presentation or engine-wiring session; or whenever intent → template lookup is designed.
-  References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/decisions/0008-intent-vocabulary.md`, `Product/features/presentation/models/01-presentation-loop.md` §8.
+  References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/models/01-command-pipeline.md` §Q5 (provenance), `Product/features/presentation/models/01-presentation-loop.md` §8.
 
 - id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md §3` defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
   Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
@@ -120,7 +120,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: bl-spatial-rule-attachment | kind: defer | **Spatial rule attachment surface for zones** — when a game (Stacklands-style) needs spatial coordinates as rules data rather than presentation layout, the framework must commit to where spatial info attaches. The current zone contents shape is a flat `IReadOnlyList<Card>` — there is no pre-defined hook. When forced by a real game, decide between: extending `ZoneContentsState` with per-entry structure (slot/coord field), introducing a parallel `SpatialState` slice keyed by card, or per-card position variable.
   Trigger: first spatial-rules game (Stacklands-like) reaches design-pass.
-  References: `Product/features/zones/models/01-zone-model.md` §Deferred, `Product/features/zones/decisions/0001-zone-shape.md`.
+  References: `Product/features/zones/models/01-zone-model.md` §Deferred (and the zone-shape provenance Q below the divider — formerly `zones/decisions/0001-zone-shape.md`, folded 2026-05-08).
 
 - id: bl-card-location-index | kind: defer | **Reverse-lookup index for card → zone** — derived aggregate slice (e.g., `CardLocationIndex` keyed by `CardRef → Zone`) that answers "what zone is this card in?" in O(1) instead of scanning all `ZoneContentsState` slices. Maintained atomically by the same mutators that write `ZoneContentsState`. Originally drafted into the cards Model during session-20260501-1602 but removed after audit found no current consumer.
   Trigger: first reverse-lookup consumer surfaces (e.g., a Stacklands-style game's spatial query, a presentation feature that needs to render card-to-zone arrows, or any rule that needs frequent reverse lookup at scale).

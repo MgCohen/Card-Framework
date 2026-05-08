@@ -1,41 +1,35 @@
 ---
 type: model
 status: settled
-references: root
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/02-gamerules-contract.md, features/engine/models/06-match-lifecycle.md]
 tags: [#engine, #evaluation-loop, #orchestrator]
 ---
 
-# Engine — Orchestrator And Evaluation Loop
+# Evaluation Loop — model
 
-This document defines what the **engine** is in the Card Framework: its structure, its responsibilities, and how game-specific rules plug into it.
+## What it is
 
-Builds on:
+The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions), and a uniform lifecycle gate (`NotStarted` / `Started` / `Ended`). It does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command pipeline is **framework-owned** (no game customization on routing); effect-level orchestration is a separate forthcoming surface (`oq-effect-pipeline`).
 
-- [Action Flow Snippets](features/actions/models/01-command-pipeline.md) — the command pipeline that the engine wraps
-- [decisions/0006-two-pipeline-architecture.md](decisions/0006-two-pipeline-architecture.md) — the three-level model (commands / effects / triggers ⊆ effects) and the command-vs-effect pipeline split
+```csharp
+public sealed class GameEngine
+{
+    private readonly Queue<GameAction>             pending = new();
+    private readonly ICommandPipeline              pipeline;
+    private readonly GameRulesRuntime<TDefinition> runtime;
+    private readonly Store                         store;   // framework slices auto-seeded at Build()
+    private bool running;
 
----
+    public bool Dispatch(GameAction action, out string? reason);
+    private void Drain();
+}
+```
 
-## 1. What The Engine Is
+## Contracts
 
-The engine is the **orchestrator** of the framework's command pipeline. It is the central point that:
+### The three parts
 
-- Receives `GameAction`s from all entry points (player input, timers, trigger reactions, network)
-- Manages a strict-FIFO queue of pending actions
-- Executes one action at a time through the pipeline
-- After each execution, asks game-specific logic what (if anything) comes next
-
-The engine does not know what any particular action means or what game is being played. That knowledge lives in the **runtime** (`GameRulesRuntime<TDefinition>`), which the game implements. The engine only knows how to run the loop.
-
-Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the **command pipeline is framework-owned** — strict FIFO, no game customization on routing. Effect-level orchestration (when an effect starts, whether effects nest, batch, or stack) is a separate concern, expressed by the runtime through state-based decisions in `Evaluate` plus, eventually, a dedicated effect-pipeline surface (separate design pass; tracked as `oq-effect-pipeline`).
-
----
-
-## 2. The Three Parts
-
-### ICommandPipeline
-
-The framework's executor. It owns two responsibilities: validating commands at intake (by resolving the handler from the registry and delegating to `handler.Validate`), and executing them through the full pipeline (before triggers → handler → after triggers → envelope). It does not know about the queue or what happens after.
+**`ICommandPipeline`** — the framework's executor. Owns two responsibilities: validating commands at intake (resolving the handler from the registry and delegating to `handler.Validate`) and executing them through the full pipeline (before-fold → handler → after-fold → envelope). Does not know about the queue or what happens after.
 
 ```csharp
 public interface ICommandPipeline
@@ -48,17 +42,11 @@ public interface ICommandPipeline
 }
 ```
 
-### Rules layer (`GameRulesDefinition` + `GameRulesRuntime<TDefinition>`)
+**Rules layer** (`GameRulesDefinition` + `GameRulesRuntime<TDefinition>`) — the game's decision layer. Two cooperating types: pure data + stateful runtime brain. Called after each action resolves to read state and return follow-up actions. Full canonical contract in [`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md).
 
-The game's decision layer. Split into two cooperating types: `GameRulesDefinition` (pure `[SerializeField]` data, asset-friendly) and `GameRulesRuntime<TDefinition>` (stateful runtime brain with services). The runtime is called after each action resolves — reads the current game state through `IStateScope` and returns the actions that should run next, if any. See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
+**`GameEngine`** — the loop itself. Holds the queue, calls the pipeline, calls the runtime, manages the drain cycle.
 
-### GameEngine
-
-The loop itself. Holds the queue, calls the pipeline, calls the runtime, and manages the drain cycle.
-
----
-
-## 3. The Engine Loop
+### The engine loop
 
 ```csharp
 public sealed class GameEngine
@@ -66,7 +54,7 @@ public sealed class GameEngine
     private readonly Queue<GameAction>             pending = new();
     private readonly ICommandPipeline              pipeline;
     private readonly GameRulesRuntime<TDefinition> runtime;
-    private readonly Store                         store;   // Scaffold Store; framework slices auto-seeded at Build()
+    private readonly Store                         store;
     private bool running;
 
     // Single entry point for all sources — player input, timers, trigger reactions.
@@ -74,7 +62,7 @@ public sealed class GameEngine
     // runtime no longer gates intake — command-queue routing is framework-owned FIFO.
     public bool Dispatch(GameAction action, out string? reason)
     {
-        // Lifecycle gate — see engine/06 §7.
+        // Lifecycle gate — see engine/06 §Intake gates.
         var lifecycle = store.Get<EngineState>().Lifecycle;
         if (lifecycle == EngineLifecycle.Ended)
         {
@@ -120,7 +108,7 @@ public sealed class GameEngine
 }
 ```
 
-Key points:
+### Loop semantics
 
 - **Try-get `Dispatch`.** Returns `bool` plus `out string? reason` — symmetric with `pipeline.Validate`. `false` carries a non-null reason; `true` carries `null`.
 - **`Dispatch(GameAction)`, not `Dispatch(GameCommand)`.** `GameSignal` is emitted via `scope.Emit` from inside handlers (never dispatched); `CompositeAction` runs inline within a parent handler (never queued). The engine's queue holds only `GameAction`s.
@@ -128,12 +116,10 @@ Key points:
 - **Per-step evaluation.** The loop calls `runtime.Evaluate` after every action, not once at the end. This is what gives the engine per-step state-based awareness.
 - **`OriginCommandId` threading.** The engine copies `OriginCommandId` from the just-executed action onto every evaluator follow-up. `PlayCardCommand` and any chain members share the same `OriginCommandId`. The engine does this mechanically — the runtime does not need to set it.
 - **Lifecycle gate.** Framework rejects pre-`StartMatch` and post-`FinishMatch` dispatches uniformly. Only `StartMatchCommand` and `EndMatchCommand` are admitted from `NotStarted`; nothing is admitted from `Ended`. Match lifecycle in full lives in [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
-- **No `OnQueueDrained` callback.** Per ADR-0006, drain-end logic folds into `Evaluate` — the runtime detects "queue is about to empty" by observing state and its own follow-up emptiness, then publishes snapshots / dispatches phase advances from there. See §7.
+- **No `OnQueueDrained` callback.** Per ADR-0006, drain-end logic folds into `Evaluate` — the runtime detects "queue is about to empty" by observing state and its own follow-up emptiness, then publishes snapshots / dispatches phase advances from there.
 - **Evaluator follow-ups bypass `Validate`.** Actions returned from `Evaluate` are produced by runtime logic and enter the queue directly. External entry points and trigger reactions still go through `Dispatch` (validate + enqueue).
 
----
-
-## 4. Entry Points
+### Entry points
 
 Everything that wants the engine to act submits a `GameAction`. The engine does not know or care which entry point created it.
 
@@ -169,15 +155,15 @@ public sealed class TurnTimerService
 // as any other entry. See features/triggers/models/01-trigger-fold.md.
 ```
 
----
+### State pattern — `GameState` as Scaffold slices
 
-## 5. The Runtime — Reading State, Not Just The Last Action
+`GameState` is **not a single record**. State lives as multiple typed `BaseState` slices in a Scaffold `Store`. There is no `state.Piles`, `state.LastMove`, etc. Reads always go through `IStateScope.Get<TState>()`; writes always go through `Store.Execute(payload)` → registered `Mutator<TState, TPayload>`. The runtime reads through the injected `IStateScope`; it never mutates state directly. `IAvailableActions.Set` is the single write path for the snapshot — it itself goes through an internal mutator, not a direct field write.
 
-The runtime's primary lens for follow-ups is the **current game state**, not which specific action just ran. This is the key design point.
+The full slice catalog (framework-owned vs game-authored, the `ISliceProvider` mechanism, subscriptions, atomic batches) is in [`04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
 
-If the runtime matched on action types ("after `PlayCardCommand` → run execute"), it would miss any other way a card could end up in the same zone (an opponent's trigger, a copy effect, a token). State-based evaluation handles all sources the same way.
+### Reading state, not the just-executed action
 
-The canonical runtime contract is in [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md). The methods relevant to the loop:
+The runtime's primary lens for follow-ups is the **current game state**, not which specific action just ran. If the runtime matched on action types ("after `PlayCardCommand` → run execute"), it would miss any other way a card could end up in the same zone (an opponent's trigger, a copy effect, a token). State-based evaluation handles all sources the same way. The methods relevant to the loop:
 
 ```csharp
 public abstract class GameRulesRuntime<TDefinition>
@@ -201,11 +187,102 @@ public abstract class GameRulesRuntime<TDefinition>
 }
 ```
 
-State is read through the injected `IStateScope` (`State.Get<TState>()`) — see [04-effect-flow §4.1](features/effects/models/04-effect-flow.md). The runtime observes state and returns follow-up actions; it never mutates state directly.
+State is read through the injected `IStateScope` (`State.Get<TState>()`). The runtime observes state and returns follow-up actions; it never mutates state directly.
 
----
+### Drain end — detected from state, not a callback
 
-## 6. Sample: Zone-Check Evaluation (Slay The Spire Style)
+There is no `OnQueueDrained` callback (deleted per ADR-0006). The runtime detects "queue is about to empty" by observing state inside `Evaluate` and acts on that observation:
+
+- **Phase advance** — when state-based follow-ups are exhausted and a phase needs to advance, return the phase-advance action from `Evaluate`.
+- **Priority grant** (MTG-like) — when stack is non-empty and priority isn't granted, return `GrantPriorityCommand` from `Evaluate`.
+- **Available-actions snapshot** — when the runtime decides "now is a good moment to publish," it calls `Actions.Set(...)` from inside `Evaluate`. Pile Counter publishes when its own follow-ups are empty; MTG publishes when priority is granted.
+
+| Game situation                              | Runtime behaviour in `Evaluate`                         |
+| ------------------------------------------- | ------------------------------------------------------- |
+| Slay the Spire, mid-player-turn             | Return `[]` — player still has available actions        |
+| Slay the Spire, player clicked end turn     | Return `[StartEnemyTurnCommand]`                        |
+| MTG-like, stack empty, no priority granted  | Return `[GrantPriorityCommand(activePlayer)]`           |
+| Any game, all players have no legal actions | Return `[AdvancePhaseCommand]`                          |
+
+Snapshot publication is purely runtime-driven via the injected `IAvailableActions` service. The framework never auto-publishes; if the runtime never calls `Actions.Set`, the snapshot does not change. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
+
+### Relationship to the command pipeline
+
+The pipeline described in [`actions/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) does not change. The engine wraps it:
+
+| Concern                                                                | Where it lives                                   |
+| ---------------------------------------------------------------------- | ------------------------------------------------ |
+| Execute one action (before triggers, handler, after triggers, history) | `ICommandPipeline` (framework)                   |
+| Decide what action runs next                                           | `GameRulesRuntime<T>` (game-specific)            |
+| Drive the loop between them                                            | `GameEngine` (framework)                         |
+| Submit actions from outside                                            | Entry points (`IntentGateway`, `TurnTimerService`, etc.) |
+| Trigger fold ordering                                                  | `ITriggerPipeline` (swappable; default FIFO)     |
+
+The `GameCommandDispatcher` from earlier sketches becomes `ICommandPipeline.Execute` — it handles one action and returns a result. Reactions are dispatched through `IEffectScope.Dispatch` from inside trigger executes; that path enters the engine through the same `Dispatch` method as external entry points.
+
+### Available-actions snapshot (optional system)
+
+Some games tell the player which actions are currently legal before they attempt anything — Hearthstone highlights playable cards, MTG shows what can be cast or activated. Other games place no restrictions on what a player can attempt — in a Stacklands-style game everything is always possible and the simulation just responds.
+
+The framework supports both through an **optional** available-actions system. By default it is a no-op: all requests pass through the gateway unchecked. Games that need it opt in.
+
+`AvailableActionsSnapshot` is a read-only artifact the runtime publishes through the injected `IAvailableActions` service. It lives as the `AvailableActionsState` slice. See [`actions/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) for the typed-template shape and [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for the publication flow.
+
+The runtime publishes whenever it deems appropriate (typically when its own follow-ups are exhausted and the queue is about to empty, but the moment is purely runtime-driven):
+
+```csharp
+public override IReadOnlyList<GameAction> Evaluate(GameAction action, CommandResult result)
+{
+    var followUps = ComputeStateBasedFollowUps();
+    if (followUps.Any()) return followUps;
+
+    // No state-based follow-ups. Publish snapshot at this moment.
+    Actions.Set(BuildSnapshot());
+    return Array.Empty<GameAction>();
+}
+```
+
+Games that do not use this system never call `Actions.Set`. The framework never auto-publishes.
+
+`IntentGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
+
+```csharp
+public IntentResult Submit(PlayerIntent request)
+{
+    var match = actionMatcher.TryMatch(request); // reads current snapshot; no-op if none published
+    if (match.RequiresMatch && !match.Success)
+        return new IntentResult { Status = IntentStatus.Rejected, Reason = RejectReason.NotAvailableAction };
+
+    // ... dispatch as normal
+}
+```
+
+`IntentMapper` is a simple reader — it does not compute game logic itself. The game logic that decided what is legal already ran inside `Evaluate`.
+
+| Game style        | Uses snapshot? | Notes                                                                                  |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
+| Hearthstone / MTG | Yes            | Runtime publishes legal plays when its follow-ups exhaust; gateway rejects illegal attempts |
+| Stacklands        | No             | No snapshot published; gateway no-op; everything is always attemptable                 |
+| Slay the Spire    | Partial        | Could publish playable cards for UI highlights but skip gateway enforcement            |
+
+## Invariants
+
+1. **Strict-FIFO queue, framework-owned.** No runtime customization on routing; per ADR-0006 (cross-Model invariant pinned by Feature root).
+2. **`Dispatch(GameAction)` only.** `GameSignal` emits via `scope.Emit`; `CompositeAction` runs inline. The queue holds `GameAction`s.
+3. **Per-step `Evaluate`.** Called after every action's `pipeline.Execute` returns, not once at end of drain. Drain-end behavior folds into `Evaluate` (snapshot publication, phase advance) — there is no `OnQueueDrained` callback.
+4. **`OriginCommandId` threading is mechanical.** The engine copies `OriginCommandId` from the just-executed action onto every evaluator follow-up. The runtime does not set it.
+5. **Evaluator follow-ups bypass `Validate`.** External dispatches and trigger reactions go through `Dispatch` (validate + enqueue); follow-ups returned from `Evaluate` enter the queue directly.
+6. **Lifecycle gate runs before `pipeline.Validate`.** Framework checks `EngineState.Lifecycle` first; per ADR-0006 there is no runtime-side intake hook.
+7. **Drain is not re-entered.** If a command is dispatched while drain is running, it is enqueued and picked up by the current cycle. Concurrency / async re-entry is an open follow-up.
+8. **`GameState` is multiple slices.** No single record. Reads via `IStateScope.Get<TState>()`; writes via `Store.Execute(payload)` → `Mutator<TState, TPayload>`. The runtime never writes directly; `IAvailableActions.Set` is the only "write" the runtime performs and even that goes through an internal mutator.
+
+## Decisions
+
+*n/a — no elevated ADR.* (The state-pattern decision is single-feature scope; folded as Q1 below.)
+
+## Examples
+
+### Zone-check evaluation (Slay the Spire style)
 
 In this sample game, when a card is played it is moved into a **PlayArea** zone. The rule is: any card sitting in `PlayArea` must be executed. The runtime does not care that a `PlayCardCommand` just ran — it just checks the zone.
 
@@ -237,7 +314,7 @@ public sealed class SampleRulesRuntime : GameRulesRuntime<SampleRulesDefinition>
 }
 ```
 
-### Traced flow
+Traced flow:
 
 ```text
 Player drags card C17 from Hand to PlayArea
@@ -268,28 +345,7 @@ Queue empty. Drain returns.
 
 The runtime ran twice: once with a card in the zone (produced `ExecuteCardCommand`), once with the zone empty (produced nothing). The loop self-terminated.
 
----
-
-## 7. Drain End — Detected From State, Not A Callback
-
-There is no `OnQueueDrained` callback (deleted per ADR-0006). The runtime detects "queue is about to empty" by observing state inside `Evaluate` and acts on that observation:
-
-- **Phase advance** — when state-based follow-ups are exhausted and a phase needs to advance, return the phase-advance action from `Evaluate`.
-- **Priority grant** (MTG-like) — when stack is non-empty and priority isn't granted, return `GrantPriorityCommand` from `Evaluate`.
-- **Available-actions snapshot** — when the runtime decides "now is a good moment to publish," it calls `Actions.Set(...)` from inside `Evaluate`. Pile Counter publishes when its own follow-ups are empty; MTG publishes when priority is granted.
-
-| Game situation                              | Runtime behaviour in `Evaluate`                         |
-| ------------------------------------------- | ------------------------------------------------------- |
-| Slay the Spire, mid-player-turn             | Return `[]` — player still has available actions        |
-| Slay the Spire, player clicked end turn     | Return `[StartEnemyTurnCommand]`                        |
-| MTG-like, stack empty, no priority granted  | Return `[GrantPriorityCommand(activePlayer)]`           |
-| Any game, all players have no legal actions | Return `[AdvancePhaseCommand]`                          |
-
-Snapshot publication is purely runtime-driven via the injected `IAvailableActions` service. The framework never auto-publishes; if the runtime never calls `Actions.Set`, the snapshot does not change. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
-
----
-
-## 8. Variation: Conditional Evaluation (MTG-like Priority)
+### Conditional evaluation (MTG-like priority)
 
 The same interface handles priority-based games by adding a state condition before auto-executing:
 
@@ -322,84 +378,7 @@ The structure is identical. The only difference is the conditions read from `Pri
 
 This is also where MTG-style stack semantics lives — per ADR-0006, the "stack" is a game-state zone (`ZoneContentsState` keyed by a stack-zone reference), and stack resolution is driven by `Evaluate` watching that zone. It is not a runtime queue customization.
 
----
-
-## 9. Relationship To The Existing Pipeline
-
-The pipeline described in [Action Flow Snippets](features/actions/models/01-command-pipeline.md) does not change. The engine wraps it:
-
-
-| Concern                                                                | Where it lives                                   |
-| ---------------------------------------------------------------------- | ------------------------------------------------ |
-| Execute one action (before triggers, handler, after triggers, history) | `ICommandPipeline` (framework)                   |
-| Decide what action runs next                                           | `GameRulesRuntime<T>` (game-specific)            |
-| Drive the loop between them                                            | `GameEngine` (framework)                         |
-| Submit actions from outside                                            | Entry points (IntentGateway, TimerService, etc.) |
-| Trigger fold ordering                                                  | `ITriggerPipeline` (swappable; default FIFO)     |
-
-
-The `GameCommandDispatcher` from the original snippets becomes `ICommandPipeline.Execute` — it handles one action and returns a result. Reactions are dispatched through `IEffectScope.Dispatch` from inside trigger executes; that path enters the engine through the same `Dispatch` method as external entry points.
-
----
-
-## 10. Available Actions Snapshot (Optional System)
-
-Some games tell the player which actions are currently legal before they attempt anything — Hearthstone highlights playable cards, MTG shows what can be cast or activated. Other games place no restrictions on what a player can attempt — in a Stacklands-style game everything is always possible and the simulation just responds.
-
-The framework supports both through an **optional** available-actions system. By default it is a no-op: all requests pass through the gateway unchecked. Games that need it opt in.
-
-### The Snapshot
-
-`AvailableActionsSnapshot` is a read-only artifact the runtime publishes through the injected `IAvailableActions` service. It lives as the `AvailableActionsState` slice. See [`features/actions/models/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) for the typed-template shape and [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for the publication flow.
-
-### Publishing
-
-The runtime publishes whenever it deems appropriate (typically when its own follow-ups are exhausted and the queue is about to empty, but the moment is purely runtime-driven):
-
-```csharp
-public override IReadOnlyList<GameAction> Evaluate(GameAction action, CommandResult result)
-{
-    var followUps = ComputeStateBasedFollowUps();
-    if (followUps.Any()) return followUps;
-
-    // No state-based follow-ups. Publish snapshot at this moment.
-    Actions.Set(BuildSnapshot());
-    return Array.Empty<GameAction>();
-}
-```
-
-Games that do not use this system never call `Actions.Set`. The framework never auto-publishes.
-
-### Gateway Fast-Reject
-
-`IntentGateway` reads the snapshot before dispatching. If no snapshot is active, all requests pass:
-
-```csharp
-public IntentResult Submit(PlayerIntent request)
-{
-    var match = actionMatcher.TryMatch(request); // reads current snapshot; no-op if none published
-    if (match.RequiresMatch && !match.Success)
-        return new IntentResult { Status = IntentStatus.Rejected, Reason = RejectReason.NotAvailableAction };
-
-    // ... dispatch as normal
-}
-```
-
-`IntentMapper` is a simple reader — it does not compute game logic itself. The game logic that decided what is legal already ran inside `Evaluate`.
-
-### When Each Game Uses This
-
-
-| Game style        | Uses snapshot? | Notes                                                                                  |
-| ----------------- | -------------- | -------------------------------------------------------------------------------------- |
-| Hearthstone / MTG | Yes            | Runtime publishes legal plays when its follow-ups exhaust; gateway rejects illegal attempts |
-| Stacklands        | No             | No snapshot published; gateway no-op; everything is always attemptable                 |
-| Slay the Spire    | Partial        | Could publish playable cards for UI highlights but skip gateway enforcement            |
-
-
----
-
-## 11. Open Choices
+## Open follow-ups
 
 - **Effect pipeline shape.** The substantive open design surface — how the runtime expresses effect-level orchestration (when an effect starts, whether it nests, batches, or stacks). Per ADR-0006, this is a separate concept from command-queue routing. Tracked as `oq-effect-pipeline`.
 - **Concurrency and re-entry.** The `running` guard serializes dispatch. Networking and async input will require a more explicit contract here.
@@ -407,13 +386,23 @@ public IntentResult Submit(PlayerIntent request)
 
 ---
 
-## 12. Related
+*Below: provenance — how the state pattern was settled. Single-feature scope (no project-wide ADR applies; folded into Model provenance per §4.5 on 2026-05-08). Original ADR-0005 landing 2026-04-29.*
 
-- [decisions/0006-two-pipeline-architecture.md](decisions/0006-two-pipeline-architecture.md) — three-level model, command vs effect pipeline split
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — canonical runtime contract
-- [features/actions/models/01-command-pipeline.md](features/actions/models/01-command-pipeline.md) — the command pipeline this engine wraps
-- [features/actions/models/02-availability-snapshot.md](features/actions/models/02-availability-snapshot.md) — typed template shape
-- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — snapshot publication via Actions.Set
-- [features/engine/models/06-match-lifecycle.md](features/engine/models/06-match-lifecycle.md) — match start/end and lifecycle gate
-- [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — trigger fold inside `pipeline.Execute`
-- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — `oq-effect-pipeline`, `oq-gamerules-composition`, etc.
+## Options considered
+
+### Q1 — State pattern
+
+The framework needs a state model that supports replay, per-player views, deterministic networking, and zero state held by the rule. We had Scaffold States available with a redux-like immutable model.
+
+- **A — Mutable POCO state mutated in handlers.** Rejected — breaks replay and forces deep cloning for views.
+- **B — Custom event-sourced state.** Rejected — duplicates Scaffold infrastructure for no incremental benefit.
+- **C — Scaffold States: `GameState` immutable, redux-like; mutators react to commands. `IAvailableActions` writes via internal mutator.** **Chosen.**
+
+## Rationale
+
+`GameState` immutable + redux-like via Scaffold gives us four wins simultaneously: deterministic replay, snapshot/restore, per-player views, and a clean separation between state (Store) and decisions (runtime). The Store is canonical; entities are accessed via Entities-shaped handles through `com.scaffold.entities.states`. `IAvailableActions` writes via an internal mutator like every other state slice — no special-case write path. Custom event sourcing would duplicate Scaffold infrastructure for no incremental benefit; mutable POCOs would force deep cloning for per-player views and break replay.
+
+## Consequences
+
+- **Enables** deterministic replay; snapshot/restore (per-entity variables included via the bridge package); per-player views (read-only Scope handles); the clean two-layer split between rule (decisions) and state (slices).
+- **Constrains** every state change to be expressible as a mutator over a payload — ad-hoc mutation isn't possible; the runtime never writes state directly (only through `Actions.Set`, which itself goes through an internal mutator). Reverts/replaces earlier mutable-POCO sketches in pre-migration drafts.

@@ -1,39 +1,41 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md, features/effects/models/04-effect-flow.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 
-# Snapshot Production Pipeline — How AvailableActions Gets Built
+# Snapshot Pipeline — model
 
-This document defines **how** the available-actions snapshot is produced and published. [Doc 28](features/actions/models/02-availability-snapshot.md) settled the snapshot's *shape*; this doc settles its *production*. Together they replace the snapshot-build line in [doc 27 §9](features/presentation/models/01-presentation-loop.md).
+## What it is
 
-> **ADR-0006 update.** Sections describing `OnQueueDrained` as the canonical publication moment are superseded — `OnQueueDrained` is deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Snapshot publication is purely runtime-driven via `Actions.Set(...)`; the runtime calls it from inside `Evaluate` whenever it deems appropriate (typically when its own follow-ups are exhausted). The service-driven model below is unchanged; only the *trigger moment* shifted from a dedicated callback to a runtime decision inside `Evaluate`. §5 (historical "Rules Layer Shape") and §8 (mechanical follow-up table) document the older shape; the canonical contract is now [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md).
+How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
 
-Builds on:
+```csharp
+public interface IAvailableActions
+{
+    void Set    (AvailableActionsSnapshot snapshot);    // wholesale replace
+    void Append (IReadOnlyList<ActionTemplate> additional);   // additive; future composition
+    void Clear  ();                                     // erase between phases / decisions
+}
+```
 
-- [decisions/0006-two-pipeline-architecture.md](decisions/0006-two-pipeline-architecture.md) — three-level model and command-vs-effect pipeline split
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — canonical runtime contract
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; concrete sketch
-- [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — presentation loop; snapshot consumer
-- [features/actions/models/02-availability-snapshot.md](features/actions/models/02-availability-snapshot.md) — snapshot shape (templates)
+```
+runtime.Evaluate (or effect mid-execution)
+        │
+        ▼
+   Actions.Set(snapshot)
+        │
+        ▼   (internal mutator)
+   AvailableActionsState slice
+        │
+        ▼
+   IntentGateway / presentation read via IStateScope
+```
 
----
+## Contracts
 
-## 1. Why This Doc Exists
-
-Doc 28 defined `ActionAvailability` as a template carrying `Source`, `TargetSlots`, `Modes`, `Parameters`, but left three production questions open (doc 28 §6, §8; checkpoint task #18):
-
-1. Where action enumeration lives — handler, rule, descriptor, composition.
-2. Eager vs. lazy binding validation.
-3. How snapshot production composes with the rest of the per-command pipeline.
-
-This doc resolves all three. Headline: **the rule constructs templates and writes them through a service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.**
-
----
-
-## 2. The Service-Driven Model
+### The service-driven model
 
 Snapshot production is *not* a return value the engine collects from `OnQueueDrained` and writes to state. The rule (and effects) write the snapshot directly through a service the engine provides.
 
@@ -50,11 +52,11 @@ public interface IAvailableActions
 - **`Append`** — additive contribution; useful for future composition where multiple rule modules each contribute templates.
 - **`Clear`** — erase the snapshot (between phases, between decisions, etc.).
 
-Behind the service the engine runs an internal mutator that writes to `GameState.AvailableActions`. The service is the only public write path.
+Behind the service the engine runs an internal mutator that writes to `AvailableActionsState`. The service is the only public write path.
 
 ### Default trigger: `runtime.Evaluate` at drain-end
 
-Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained` is deleted. The runtime calls `Actions.Set(...)` from inside `Evaluate` when it detects "queue is about to empty" — its own state-based follow-ups are exhausted, no more work to enqueue. This is the canonical write moment for most games.
+Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), `OnQueueDrained` is deleted. The runtime calls `Actions.Set(...)` from inside `Evaluate` when it detects "queue is about to empty" — its own state-based follow-ups are exhausted, no more work to enqueue. This is the canonical write moment for most games.
 
 ```csharp
 public override IReadOnlyList<GameAction> Evaluate(GameAction action, CommandResult result)
@@ -76,17 +78,15 @@ The engine never auto-publishes. If nobody calls the service, `AvailableActions`
 
 ### Validation posture: on-demand
 
-The rule does **not** automatically run `handler.Validate` against every candidate while building the snapshot. Doc 27 §9's "snapshot is built by running `Validate` against every candidate" line is retired. Per-binding validation runs at dispatch (authoritative) and any time the rule chooses to call it during enumeration to prune templates whose every binding fails. The cost is a deliberate game-author decision, not a framework default.
+The rule does **not** automatically run `handler.Validate` against every candidate while building the snapshot. Per-binding validation runs at dispatch (authoritative) and any time the rule chooses to call it during enumeration to prune templates whose every binding fails. The cost is a deliberate game-author decision, not a framework default.
 
----
+### Action templates — typed per command type
 
-## 3. Action Templates — Typed Per Command Type
-
-Doc 28 §2 sketched a single generic `ActionAvailability` record. We refine it: typed templates per command type with a shared base. The base carries what the snapshot machinery and presentation projection need; subtypes carry per-action shape.
+Typed templates per command type with a shared base. The base carries what the snapshot machinery and presentation projection need; subtypes carry per-action shape.
 
 ```csharp
 public abstract record ActionTemplate(
-    Type      CommandType,    // was ActionId — uses the registered command type directly
+    Type      CommandType,    // uses the registered command type directly
     EntityId? Source);
 
 public sealed record MoveCardTemplate(
@@ -102,14 +102,14 @@ public sealed record CastSpellTemplate(
     : ActionTemplate(typeof(CastSpellCommand), Spell);
 ```
 
-> **ADR-0005 boundary note.** `Ref<Card> Card`, `Ref<Card> Spell`, and other `Reference`-typed fields on `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives refs from held objects (`card.SelfRef`, `spell.SelfRef`); the template stores the ref because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
+> **ADR-0005 boundary note.** `Ref<Card> Card`, `Ref<Card> Spell`, and other `Reference`-typed fields on `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives refs from held objects (`card.SelfRef`, `spell.SelfRef`); the template stores the ref because it is the boundary form. See [ADR-0005](Product/decisions/0005-objects-over-ids.md).
 
-Two simplifications from doc 28's draft:
+Two simplifications:
 
-- **`Type CommandType` instead of `ActionId`.** The handler registry is already keyed by command type ([doc 25 §6](features/engine/models/02-gamerules-contract.md)); IntentMapper dispatches on it; history serialises it. No parallel string-id registry.
-- **Targets are `IReadOnlyList<EntityId>` uniformly.** Doc 10's instance/entity model already says everything targetable is an entity. Whether the entity is a card, slot, player, or zone is a per-action concern; the snapshot layer doesn't need to know.
+- **`Type CommandType`.** The handler registry is already keyed by command type; `IntentMapper` dispatches on it; history serialises it. No parallel string-id registry.
+- **Targets are `IReadOnlyList<Reference>` uniformly.** The entity model already says everything targetable is an entity. Whether the entity is a card, slot, player, or zone is a per-action concern; the snapshot layer doesn't need to know.
 
-`TargetSlot` / `ModeOption` / `ParameterSpec` from doc 28 §2 remain valid building blocks; they live as fields on subtypes that need them. A `MoveCardTemplate` doesn't carry `Modes` or `Parameters` because it doesn't need them — typed shapes let each action surface only what it actually has.
+`TargetSlot` / `ModeOption` / `ParameterSpec` remain valid building blocks; they live as fields on subtypes that need them. A `MoveCardTemplate` doesn't carry `Modes` or `Parameters` because it doesn't need them — typed shapes let each action surface only what it actually has.
 
 ### IntentMapper becomes typed
 
@@ -139,15 +139,11 @@ public class PileCounterIntentMapper : IIntentMapper
 }
 ```
 
-No string-keyed slot lookup; the template's fields name themselves. `IStateScope` is injected for normal state-driven mapping (locating the card's current pile), not for decision awareness — the mapper is decision-unaware (S15).
+No string-keyed slot lookup; the template's fields name themselves. `IStateScope` is injected for normal state-driven mapping (locating the card's current pile), not for decision awareness — the mapper is decision-unaware.
 
-### Authoring cost
+**Authoring cost.** Each new action shape adds a template type. That's incremental — same curve as adding a `GameCommand` + `Handler`. Pile Counter has one template; a Hearthstone-shaped game maybe ten; MTG-shaped maybe twenty. The cost scales with distinct action shapes, not with state-space size.
 
-Each new action shape adds a template type. That's incremental — same curve as adding a `GameCommand` + `Handler`. Pile Counter has one template; a Hearthstone-shaped game maybe ten; MTG-shaped maybe twenty. The cost scales with distinct action shapes, not with state-space size.
-
----
-
-## 4. Snapshot Shape
+### Snapshot shape
 
 The snapshot carries only the available templates:
 
@@ -156,89 +152,52 @@ public sealed record AvailableActionsSnapshot(
     IReadOnlyList<ActionTemplate> Templates);
 ```
 
-There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted — S15 Q6). "Is an await open?" is answered by `ICommandAwaiter`, not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
+There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted). "Is an await open?" is answered by `ICommandAwaiter` ([`effects/04 §Decision routing`](features/effects/models/04-effect-flow.md)), not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
 
-The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor to type-only routing. See [§9](#9-open-items).
+The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor to type-only routing. See "Open follow-ups."
 
----
+### Effect-side symmetry
 
-## 5. Rules Layer Shape — Services Injected
+Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. The full contract — `IHandlerContext` shape, type-only decision routing, await semantics — is settled in [`effects/04-effect-flow.md`](features/effects/models/04-effect-flow.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate` surface, no decision-id field — type-only routing answers "is a decision open?"); decision handlers `await ctx.Resolver.Wait<TCommand>()`.
 
-> **Note:** This section is historical. The single-type `GameRules` shown below has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime), and per [ADR-0006](decisions/0006-two-pipeline-architecture.md) the runtime no longer holds `IIntakeQueue` or implements `OnIncomingCommand` / `OnQueueDrained`. The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
-
-Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, queue, and snapshot writer) is a constructor-injected service.
+A target-picker decision handler under that model:
 
 ```csharp
-public abstract class GameRules
+public sealed class RequestTargetHandler
+    : ICommandHandler<RequestTargetAction, RequestTargetResult>
 {
-    protected IStateScope        State    { get; }   // Scaffold; read-only
-    protected IAvailableActions  Actions  { get; }
-    protected IIntakeQueue       Pending  { get; }
-
-    protected GameRules(
-        IStateScope        state,
-        IAvailableActions  actions,
-        IIntakeQueue       pending)
+    public async Task<RequestTargetResult> Handle(RequestTargetAction action, IHandlerContext ctx)
     {
-        State    = state;
-        Actions  = actions;
-        Pending  = pending;
+        var legal = ComputeLegalTargets(ctx.Store, action.Filter);
+
+        ctx.Actions.Set(new AvailableActionsSnapshot(
+            new[] { new ChooseTargetTemplate(legal) }));
+
+        var cmd = await ctx.Resolver.Wait<SelectTargetCommand>();
+        return new RequestTargetResult { Target = cmd.Target };
     }
-
-    public abstract IntakeResult OnIncomingCommand(
-        GameCommand    command,
-        DispatchOrigin origin);
-
-    public abstract IReadOnlyList<TriggerMatch> FilterTriggers(
-        IReadOnlyList<TriggerMatch> candidates,
-        GameCommand                 command,
-        TriggerPhase                phase);
-
-    public abstract IReadOnlyList<GameAction> Evaluate(
-        GameAction    justExecuted,
-        CommandResult result);
-
-    public abstract DrainResult OnQueueDrained();
 }
 ```
 
-### What moved
+No `Scope` on the snapshot. The mapper is decision-unaware; the engine-level awaiter check intercepts `SelectTargetCommand` before it reaches the pipeline. The next drain's `Evaluate` publishes a fresh template set.
 
-| Was a parameter | Now an injected service |
-|---|---|
-| `GameState state` | Scaffold `IStateScope` (read sliced state via `State.Get<TState>()`) |
-| `IntakeContext.Pending` (live queue) | `IIntakeQueue` |
-| (new) snapshot write | `IAvailableActions` |
+## Invariants
 
-### What stays as a parameter
+1. **`IAvailableActions` is the only public write path.** Runtime + effects call `Set` / `Append` / `Clear`; nobody writes `AvailableActionsState` directly. Behind the service is an internal mutator going through the same `Store.Execute(payload)` pipeline as everything else.
+2. **Engine never auto-publishes.** If nobody calls the service, the snapshot does not change. One-shot games call `Set` once at bootstrap; phase-driven games re-publish on phase change; effects override mid-execution.
+3. **No `Scope` discriminator on the snapshot.** "Is a decision open?" is answered by `ICommandAwaiter`, not the snapshot. `FreeInput` / `DecisionPrompt` are deleted.
+4. **Validation is on-demand.** No automatic `handler.Validate` sweep during snapshot build. The rule chooses whether to pre-validate; dispatch is authoritative.
+5. **Templates are typed per command type with a shared base.** `ActionTemplate` carries `CommandType` + `Source?`; subtypes carry per-action shape (`MoveCardTemplate`, `CastSpellTemplate`, `ChooseTargetTemplate`).
+6. **`Reference`-typed fields on templates are boundary-correct (ADR-0005).** Templates are wire-form; rule-side code derives refs from held objects (`card.SelfRef`).
+7. **Effect-side symmetry.** Effects use the same `IAvailableActions` service through `ctx.Actions`. Type-only decision routing means no decision-id is threaded — the awaiter recognises the command type and resumes.
 
-Anything truly ephemeral to *this* call: `command`, `origin`, `candidates`, `phase`, `justExecuted`, `result`.
+## Decisions
 
-### Contract changes
+*n/a — no elevated ADR.* (The two decisions that shape this Model — snapshot-in-state and snapshot-writer-as-`IAvailableActions` — are single-feature scope and folded as Q1–Q2 below.)
 
-- **`IntakeContext` collapses.** It carried `Pending` + `CurrentlyExecuting` + `Origin`. `Pending` is now the injected `IIntakeQueue`; `CurrentlyExecuting` lives on the queue or state provider; `Origin` is a method parameter.
-- **`DrainResult` shrinks** to just dispatch:
-  ```csharp
-  public sealed record DrainResult(IReadOnlyList<GameCommand> Dispatch)
-  {
-      public static readonly DrainResult Empty = new(Array.Empty<GameCommand>());
-  }
-  ```
-  Snapshot publication moved to `Actions.Set(...)`.
-- **"Observer-shaped, never side-effects" loosens for `OnQueueDrained`.** Doc 25 §2's contract guarantee keeps for `Evaluate` and `FilterTriggers`. `OnIncomingCommand` already mutates `Pending`. `OnQueueDrained` now also writes through `Actions`. Both are deliberate: side effects flow through narrow capability services, not through a held `GameEngine` reference. The "rule never holds the engine" guarantee is preserved.
-- **"Zero game-affecting state" still holds.** Services are configuration; gameplay memory still lives in `GameState`. The rule holds service handles, not data.
+## Examples
 
-### Why service-injected, not parameter-passed
-
-Three reasons:
-
-1. **Effect-side symmetry.** Effects mid-execution also need to write the snapshot ([§7](#7-effect-side-symmetry-deferred)). Services give us one write path the rule and effects share. Parameter-passing would force the engine to build a different surface for effects.
-2. **Method signatures shrink to "what's ephemeral."** Cleaner reading; method intent is obvious.
-3. **Resolves [doc 26 Q1](support/samples/pile-counter.md) (state-pattern decision).** No method takes `state`; all read it through the injected `IStateScope` via `State.Get<TState>()`. The asymmetry between `OnIncomingCommand` (no state) and the others (state passed) goes away.
-
----
-
-## 6. Pile Counter Under the New Shape
+### Pile Counter under the new shape
 
 ```csharp
 public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
@@ -299,83 +258,59 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
 }
 ```
 
-The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [support/samples/pile-counter.md §9](support/samples/pile-counter.md). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnIncomingCommand` and no `OnQueueDrained` — the runtime contributes via `Evaluate` only, and the framework FIFO handles command queueing.
+The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [`support/samples/pile-counter.md`](support/samples/pile-counter.md). Per ADR-0006, there is no `OnIncomingCommand` and no `OnQueueDrained` — the runtime contributes via `Evaluate` only, and the framework FIFO handles command queueing.
 
----
+### Rules-layer shape — historical note
 
-## 7. Effect-Side Symmetry (Resolved)
+> **Historical.** The single-type `GameRules` from earlier drafts has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime), and per ADR-0006 the runtime no longer holds `IIntakeQueue` or implements `OnIncomingCommand` / `OnQueueDrained`. The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §The interface`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
 
-Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. The full contract — `IHandlerContext` shape, decision-id threading, await semantics — is settled in [features/effects/models/04-effect-flow.md](features/effects/models/04-effect-flow.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate`, no decision-id field — the action's `CommandId` *is* the decision id); decision handlers `await ctx.Resolver.Await(action.Id)`.
+Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, snapshot writer) is a constructor-injected service.
 
-A target-picker decision handler under that model:
+The reasoning, in three points:
 
-```csharp
-public sealed class RequestTargetHandler
-    : ICommandHandler<RequestTargetAction, RequestTargetResult>
-{
-    public async Task<RequestTargetResult> Handle(RequestTargetAction action, IHandlerContext ctx)
-    {
-        var legal = ComputeLegalTargets(ctx.Store, action.Filter);
+1. **Effect-side symmetry.** Effects mid-execution also need to write the snapshot. Services give us one write path the rule and effects share. Parameter-passing would force the engine to build a different surface for effects.
+2. **Method signatures shrink to "what's ephemeral."** Cleaner reading; method intent is obvious.
+3. **State-pattern decision falls out.** No method takes `state`; all read it through the injected `IStateScope` via `State.Get<TState>()`. The asymmetry between methods that need state and those that don't goes away.
 
-        ctx.Actions.Set(new AvailableActionsSnapshot(
-            new[] { new ChooseTargetTemplate(legal) }));
+## Open follow-ups
 
-        var cmd = await ctx.Resolver.Wait<SelectTargetCommand>();
-        return new RequestTargetResult { Target = cmd.Target };
-    }
-}
-```
-
-No `Scope` on the snapshot (per [§4](#4-snapshot-shape) and [04-effect-flow §5](features/effects/models/04-effect-flow.md)). The mapper is decision-unaware; the engine-level awaiter check intercepts `SelectTargetCommand` before it reaches the pipeline. The next drain's `Evaluate` publishes a fresh template set.
-
----
-
-## 8. Implications Across Existing Docs
-
-Mechanical follow-up edits, not done in this doc.
-
-| Doc | Section | Change |
-|---|---|---|
-| 25 | §2 (Interface) | Methods shed `state` / `handlers` / `IntakeContext` parameters; rule becomes abstract class with injected services |
-| 25 | §2 (Contract guarantees) | "Observer-shaped" relaxes for `OnIncomingCommand` (already mutates `Pending`) and `OnQueueDrained` (now writes via `Actions`); narrow-capability services replace held engine reference |
-| 25 | §3 (`OnIncomingCommand`) | `IntakeContext` collapses; `Pending` is injected `IIntakeQueue`; `Origin` is a parameter |
-| 25 | §6 (`OnQueueDrained`) | Returns `DrainResult { Dispatch }` only; snapshot writes through `Actions.Set` |
-| 25 | §10 (Open Items) | State-pattern decision (Q1) resolved: services injected |
-| 26 | §9.1 (state shape) | `AvailableActions` type is `AvailableActionsSnapshot` (Scope + Templates) |
-| 26 | §9.6 (the rule) | Rewrite per [§6](#6-pile-counter-under-the-new-shape) |
-| 26 | §9.7 (engine intake) | `IntakeContext` collapses; intake takes `command` + `origin` |
-| 26 | §9.8 (bootstrap) | Expand: engine builder constructs services and injects into the rule's constructor |
-| 26 | §11 Q1 | Resolved (services injected) |
-| 27 | §4 (state shape) | `AvailableActions` becomes `AvailableActionsSnapshot` |
-| 27 | §6 (AffordanceMap) | Reads typed `ActionTemplate` subtypes; pattern-matches on type instead of stringly-named slots |
-| 27 | §9 (validation layers) | Snapshot construction is approximate; `Validate` runs at dispatch (authoritative) and on-demand if the rule opts in |
-| 27 | §10 (end-to-end trace) | Step 12 is `Actions.Set`, not engine-writes-snapshot |
-| 27 | §11 (decisions locked) | Snapshot element type is `ActionTemplate` (typed); writer is the service |
-| 27 | §12 (`OnQueueDrained` output) | `DrainResult.Snapshot` is removed |
-| 28 | §2 (the shape) | Refine to typed `ActionTemplate` subtypes with shared base; `CommandType` field; entity-list slots |
-| 28 | §6 (eligibility) | Eager-vs-lazy framing replaced by "on-demand by the rule" |
-
----
-
-## 9. Open Items
-
-- ~~**`IGameStateProvider` shape.**~~ Folded away — `GameRulesRuntime<T>` (and effect/handler contexts) bind directly to Scaffold `IStateScope` (read) / `Store` (read + execute mutators); see [04-effect-flow §4.1–§4.2](features/effects/models/04-effect-flow.md).
-- **`GameState` slice catalog.** With the Scaffold State binding, "what slices exist" is concrete: turn, phase, piles, available-actions, decisions, last-move, etc. Tracked as checkpoint task #2.
-- ~~**`IIntakeQueue` shape.**~~ Resolved by deletion per [ADR-0006](decisions/0006-two-pipeline-architecture.md). The command queue is engine-private FIFO; there is no runtime service surface for command-queue routing.
-- ~~**Effect-side symmetry.**~~ Resolved by [04-effect-flow](features/effects/models/04-effect-flow.md). `IHandlerContext` exposes `Store` + `Actions` + `Resolver`; decision id ≡ action's `CommandId`; await/resume via `Resolver.Await(id)` / `TryResolve(id, choice)`. Documented in [§7](#7-effect-side-symmetry-resolved) above.
-- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped (S15 Q6). Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [04-effect-flow §9](features/effects/models/04-effect-flow.md).
+- **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
+- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04 §Open follow-ups`](features/effects/models/04-effect-flow.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
-- **Bootstrap wiring.** Engine builder constructs services and the rule. Sketched in [doc 26 §9.8](support/samples/pile-counter.md); expand there to show service-injection wiring. Not blocking; cosmetic.
-- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([doc 28 §8](features/actions/models/02-availability-snapshot.md)).
-- **`PlayerChoice` shape under typed templates.** Doc 28's `PlayerChoice` had named-string targets/parameters. With typed templates, IntentMapper switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<EntityId>` + `IReadOnlyDictionary<string, object>` parameters. Pin when IntentMapper is implemented.
+- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/02-availability-snapshot.md)).
+- **`PlayerChoice` shape under typed templates.** With typed templates, `IntentMapper` switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<Reference>` + `IReadOnlyDictionary<string, object>` parameters. Pin when `IntentMapper` is implemented.
 
 ---
 
-## 10. Related
+*Below: provenance — two engine-feature decisions that shape this Model. Both single-feature scope (no project-wide ADR applies; folded into Model provenance per §4.5 on 2026-05-08). Originals 2026-04-29.*
 
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` interface (this doc reshapes it)
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; concrete sketch
-- [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — presentation loop; snapshot consumer
-- [features/actions/models/02-availability-snapshot.md](features/actions/models/02-availability-snapshot.md) — snapshot shape (templates)
-- [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — effect/decision flow context for [§7](#7-effect-side-symmetry-deferred)
-- [features/entities/models/01-definition-instance-model.md](features/entities/models/01-definition-instance-model.md) — entity model; informs uniform `EntityId` slots
+## Options considered
+
+### Q1 — Where does the snapshot live?
+
+The snapshot of currently-legal actions has to flow to presentation, network, and replay. Where does the snapshot *live*? In the rule? In a side channel? Or in canonical state?
+
+- **A — Side-channel observable owned by the rule.** Rejected — bypasses the state pattern, breaking replay and per-player views.
+- **B — Recompute on every read by presentation.** Rejected — cost is unbounded for complex games and tying it to a frame loop hides bugs.
+- **C — `AvailableActionsState` slice in `GameState`, written via the `IAvailableActions` service.** **Chosen.**
+
+### Q2 — Snapshot writer surface
+
+The snapshot has multiple potential writers — the runtime (the typical default site), effects mid-execution (decision pickers), and the engine (auto-publish?). Multiple write paths fragment ordering and introduce races.
+
+- **A — Engine auto-publishes after every command.** Rejected — auto-publication can't represent intermediate decision-scoped snapshots, and it forces work the runtime may not want.
+- **B — Runtime writes directly to `AvailableActionsState`.** Rejected — leaks the state-pattern boundary.
+- **C — Single `IAvailableActions` service exposed to both the runtime and effects (`Set` / `Append` / `Clear`); engine never auto-publishes.** **Chosen.**
+
+The runtime calls `Actions.Set(...)` from inside `Evaluate` whenever it deems appropriate (per ADR-0006, `OnQueueDrained` is gone — typical moment is when the runtime's own state-based follow-ups are exhausted). Effects override mid-execution for decision-scoped snapshots. Engine doesn't publish.
+
+## Rationale
+
+The two decisions converge on the service-driven model. **Q1 (snapshot in state)** is what gives uniform observation, replay, and snapshot-driven UIs — presentation reads the snapshot through the same state-subscription mechanism it uses for everything else. **Q2 (single service writer)** is what gives a single ordering invariant: snapshot mutations are serialized through one service, used by both the runtime and effects. The combination eliminates parallel write paths and makes the "is a decision open?" question belong to the awaiter mechanism rather than to a snapshot scope discriminator.
+
+The on-demand validation posture is consistent with this: the rule decides when to pre-validate; dispatch is the authoritative check. No automatic per-template `Validate` sweep during build.
+
+## Consequences
+
+- **Enables** uniform observation, replay, and snapshot-driven UIs; effects publishing decision-scoped snapshots without bespoke wiring; a single ordering invariant on snapshot mutations; dropping the `Scope` discriminator entirely (the awaiter answers "is a decision open?").
+- **Constrains** every snapshot mutation to round-trip through the writer service (no direct state writes); one-shot games (Stacklands) must `Set` once at bootstrap; phase-driven games (MTG) `Set` on phase enter / priority grant; effects mid-execution must call `Actions.Set` to override the snapshot for decision pickers.

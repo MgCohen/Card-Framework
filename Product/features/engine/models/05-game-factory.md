@@ -1,32 +1,48 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/engine/models/04-gamestate-slices.md, features/engine/models/06-match-lifecycle.md]
+references: [features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/engine/models/04-gamestate-slices.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md]
 tags: [#engine, #factory, #bootstrap]
 ---
 
-# Game Factory — Match Construction
+# Game Factory — model
 
-## Problem
+## What it is
 
-Building a `GameEngine` for a single match requires assembling several inputs: per-game behavior types (handlers, mutators, `GameRulesRuntime<T>` implementations, `IIntentMapper`), per-match data (initial slice values, actor catalog, RNG seed, rules selection), and framework services (`IStateScope`, `IAvailableActions`, `ICommandPipeline`). The earlier sketch in `support/samples/pile-counter.md §9.8` mixed all of these into a single fluent builder (`new GameEngineBuilder().WithHandlers<T>().WithMutators<T1, T2>().WithRule<T>().WithIntentMapper<T>().Build(container)`), which conflated DI installation with per-match configuration and pushed the container through to the call site.
+The match-construction layer. Building a `GameEngine` for a single match needs three separate inputs: **per-game behavior types** (handlers, mutators, `GameRulesRuntime<T>` implementations, `IIntentMapper`), **per-match data** (initial slice values, actor catalog, RNG seed, rules selection via `GameDefinition`), and **framework services** (`IStateScope`, `IAvailableActions`, `ICommandPipeline`). This Model defines a clean two-layer split between **DI installation** (the app-level VContainer installer registering every behavior type, one-time) and **match construction** (a per-match factory that takes only match-specific data). The factory is itself DI-resolved; caller code never sees `IContainerBuilder` / `IObjectResolver`.
 
-This Model defines a clean two-layer split between **DI installation** (the app-level VContainer installer registering every behavior type) and **match construction** (a per-match factory that takes only match-specific data) and locks the factory's API surface.
+```csharp
+public interface IGameFactory
+{
+    GameEngine    Create(MatchSetup setup);
+    IMatchBuilder NewMatch();
+}
+```
 
-## Concepts
+```
+App-level installer (one-time):           Per-match factory (every match):
+  EngineInstaller — framework services      caller resolves IGameFactory
+  GameInstaller   — handlers, mutators,     factory.NewMatch().With...().Build()
+                    GameRulesRuntime<T>,    or factory.Create(MatchSetup)
+                    IIntentMapper, …                   │
+                                                       ▼
+                                              GameEngine in NotStarted
+```
+
+## Contracts
+
+### Concepts
 
 | Term | Definition |
 |---|---|
 | `IGameFactory` | DI-resolved service that constructs a fresh `GameEngine` for a match. Holds container-resolved framework + game services as dependencies; the caller asks the factory for a new game without ever seeing VContainer. |
-| `MatchSetup` | Per-match data bundle the factory consumes. Carries the rules selection, actor catalog, initial slice values, and RNG seed. |
+| `MatchSetup` | Per-match data bundle the factory consumes. Carries the rules selection (via `GameDefinition`), actor catalog, initial slice values, and RNG seed. |
 | `IMatchBuilder` | Fluent builder surface exposed by the factory as ergonomic sugar over `MatchSetup`. Either path produces the same `GameEngine`. |
-| `GameRulesDefinition` | Pure `[SerializeField]`-bearing data class (non-`UnityObject`) carrying authored config for a game-mode variant. Asset-friendly; replay/save/network-safe. Wrapped by a Unity-side asset (e.g. `GameRulesAsset : ScriptableObject`) for editor assignability. See [`engine/02-gamerules-contract.md §1–§2`](features/engine/models/02-gamerules-contract.md). |
-| `GameRulesRuntime<TDefinition>` | Stateful runtime class holding framework services, game-specific subsystems, and a typed `Definition`. Implements the four contract methods. DI-resolved per match via container open-generic resolution. See [`engine/02-gamerules-contract.md §2`](features/engine/models/02-gamerules-contract.md). |
-| `Player : Actor` | Framework-provided baseline subtype representing a seated participant. Concrete shape is minimal — game-specific player data lives in game-authored slices keyed by `ActorId`. |
+| `GameRulesDefinition` | Pure `[SerializeField]`-bearing data class (non-`UnityObject`) carrying authored config for a game-mode variant. Asset-friendly; replay/save/network-safe. Wrapped by a Unity-side asset (e.g. `GameRulesAsset : ScriptableObject`) for editor assignability. See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md). |
+| `GameRulesRuntime<TDefinition>` | Stateful runtime class holding framework services, game-specific subsystems, and a typed `Definition`. Implements the contract methods. DI-resolved per match via container open-generic resolution. See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md). |
+| `Player` | Framework-provided baseline `IActor` shape (entity-backed via `InstanceWithSlices<PlayerDefinition>`). Game-specific player data lives in game-authored slices keyed by `ActorId`. |
 | Per-game behavior | Handlers, mutators, `GameRules` implementations, `IIntentMapper` — same set every match; lives in the game's VContainer installer. |
-| Per-match data | Initial slice values, actor catalog, rules selection, seed — varies every match; flows through the factory. |
-
-## Contracts
+| Per-match data | Initial slice values, actor catalog, rules selection (via `GameDefinition`), seed — varies every match; flows through the factory. |
 
 ### Two-layer split
 
@@ -158,11 +174,11 @@ public interface IMatchBuilder
 
 ### Framework auto-seeded slices
 
-`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §3`](features/engine/models/04-gamestate-slices.md) (and as more features land, the cards/zones/etc. Models) is the source of truth. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
+`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/engine/models/04-gamestate-slices.md) (and as more features land, the cards/zones/etc. Models) is the source of truth. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
 
 ### Behavior resolution at `Build`
 
-The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6). The factory:
+The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)). The factory:
 
 1. Registers the `MatchSetup.Game.Rules` definition instance into the surrounding scope (so the runtime constructor can take its typed `TDefinition` parameter).
 2. Resolves `GameRulesRuntime<TDefinition>` via container open-generic resolution — `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))` — picking up the definition, framework services, and any game-specific subsystems in one constructor call.
@@ -170,7 +186,7 @@ The factory operates **inside** a per-match DI scope opened by the host (or app-
 4. Resolves `ICommandPipeline` (which resolves handlers from the container at dispatch time).
 5. Resolves `IIntentMapper` if the game registered one.
 6. Constructs the `Store` and walks the slice-installation pseudocode from [Game Definition §Build walk](features/engine/models/07-game-definition.md): framework slices auto-seeded, then per-spawn instances (zones, players) spawned from the layout blocks + overlays, then game-singletons from `GameDefinition.GetInitialSlices()`, then manual `MatchSetup.InitialSlices` overlay.
-7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6).
+7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)).
 
 The factory does not register behaviors itself — those came in via the installer. The factory only assembles them. The runtime is single-phase constructed: when its constructor returns, every dependency is bound; there is no separate `Initialize` hook.
 
@@ -210,8 +226,12 @@ The factory does not accept a per-match handler pool. Vocabulary differences bet
 7. **Engine is in `NotStarted` at return.** No commands have been dispatched; no drain has run; the lifecycle gate rejects all `Dispatch` calls except `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to open the engine; match-specific setup is dispatched as ordinary commands after that.
 8. **Mode-specific command vocabularies are rules-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in `GameRulesRuntime` and the snapshot.
 9. **Single-phase runtime construction.** `GameRulesRuntime<TDefinition>` is fully constructed by the container in one shot — no two-phase Initialize. Definition + framework services + game subsystems all flow through the constructor.
-10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) §6.
+10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md).
 11. **Build orders per-spawn first, singletons second.** Zones (from layout blocks + overlay) and players (from actors + definition overlay) spawn before game-singleton slices install. Singletons that need actor refs as data start with default/null values; setup commands populate them after `engine.StartMatch()`.
+
+## Decisions
+
+*n/a — no elevated ADR.* (The factory's two-layer split is a single-feature decision; folded below the divider as the chosen option set.)
 
 ## Examples
 
@@ -294,9 +314,11 @@ var engine = factory.Create(new MatchSetup
 
 - **Empty-actors mode** — whether `Actors` may be empty (purely simulation-driven games like a cellular automaton) is undecided. Defer until a real game forces it.
 - **Networking-driven `IRandom`** — `Seed` is currently an `int`. When networking lands, `IRandom` (or a richer determinism contract) replaces this slot.
-- **`bl-actor-ownership-reverse-index`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse direction (`IActor → owned References`) is deferred until a consumer surfaces. See [Game Definition § Ownership and zone assignment](features/engine/models/07-game-definition.md).
+- **`bl-actor-ownership-reverse-index`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse direction (`IActor → owned References`) is deferred until a consumer surfaces. See [`engine/07 §Ownership and zone assignment`](features/engine/models/07-game-definition.md).
 
 ---
+
+*Below: provenance — how the factory's two-layer split and per-axis sub-decisions were settled. Single-feature scope (no project-wide ADR applies; folded into Model provenance per §4.5 on 2026-05-08).*
 
 ## Options considered
 
@@ -342,7 +364,7 @@ var engine = factory.Create(new MatchSetup
 
 - **Single type with `Initialize(services)` hook** — rejected. Two-phase construction creates a "half-initialized" window and forces every method to guard against pre-init calls.
 - **Services passed per-call** — rejected. Bloats every contract method's signature and breaks the locked four-method surface.
-- **Definition + Runtime split, generic-parameterized, single-phase DI construction** — chosen. `GameRulesDefinition` is pure data; `GameRulesRuntime<TDefinition>` is the stateful runtime. Container open-generic resolution pairs them at `Build`. See [`engine/02 §1–§2`](features/engine/models/02-gamerules-contract.md) for the full contract.
+- **Definition + Runtime split, generic-parameterized, single-phase DI construction** — chosen. `GameRulesDefinition` is pure data; `GameRulesRuntime<TDefinition>` is the stateful runtime. Container open-generic resolution pairs them at `Build`. See [`engine/02 §The two-type split` and §The interface](features/engine/models/02-gamerules-contract.md) for the full contract.
 
 ## Rationale
 
@@ -361,7 +383,3 @@ This split also opens the future path to data-driven match construction: a seria
 - **Glossary updates.** `Player` shifts from "game-specific" to "framework-provided baseline." `IGameFactory`, `MatchSetup`, `GameRulesDefinition`, `GameRulesRuntime` are added/refreshed.
 - **No call site sees VContainer.** Every bootstrap path goes through `IGameFactory`. The `IObjectResolver` parameter that pile-counter §9.8 currently accepts disappears.
 - **Test ergonomics improve.** Tests construct `MatchSetup` directly with hand-built initial slices and inject a mock `IGameFactory` if they want to bypass DI; behavior still goes through real handlers/mutators registered in a test installer.
-
-## ADR
-
-*n/a — feature-internal decision; no project-wide ADR opened.*

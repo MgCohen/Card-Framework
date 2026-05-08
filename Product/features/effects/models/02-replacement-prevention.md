@@ -1,23 +1,34 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-async-dispatch.md]
+references: [features/effects/models/01-async-dispatch.md, features/triggers/models/01-trigger-fold.md, features/engine/models/02-gamerules-contract.md]
 tags: [#effects, #replacement, #prevention]
 ---
 
-# Replacement And Prevention Effects
+# Replacement And Prevention — model
 
-This document defines the rules-level semantics for replacement and prevention effects — how the before-fold is interpreted, how competing replacements are handled, and where game-specific ordering policy lives.
+## What it is
 
-Builds on:
+The rules-level semantics for replacement and prevention effects — how the before-fold is interpreted, how competing replacements are handled, and where game-specific ordering policy lives. Every `OnBefore<T>` trigger produces one of three outcomes (Modification / Cancellation / Substitution) communicated through `IEffectScope`; `ITriggerPipeline` owns the mechanical fold (collect, order, run); `GameRulesRuntime.FilterTriggers` owns availability policy.
 
-- [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — trigger fold, OnBefore/OnAfter, cancel/replace mechanic
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — GameRules interface, scheduling decisions
-- [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — layer hierarchy, Effect/GameAction/Decision
+```
+candidates ── rules.FilterTriggers ──▶ available
+                                          │
+                                          ▼
+                          triggerPipeline.RunBefore(action, available, scope)
+                                          │
+                          ┌───────────────┼───────────────┐
+                          │               │               │
+                       (modify)        (cancel)        (replace)
+                          │               │               │
+                          ▼               ▼               ▼
+                   handler runs       envelope:       envelope:
+                   on mutated cmd     Cancelled       Replaced; engine.Dispatch(next)
+```
 
----
+## Contracts
 
-## 1. Three Before-Fold Outcomes
+### Three before-fold outcomes
 
 Every `OnBefore<T>` trigger produces one of three outcomes:
 
@@ -26,8 +37,6 @@ Every `OnBefore<T>` trigger produces one of three outcomes:
 | **Modification** | Same type, different property values | Reduce `DamageAction.Amount` from 5 to 3 |
 | **Cancellation** | Event is stopped; handler never runs | Shield absorbs hit; action cancelled |
 | **Substitution** | Different `GameAction` type dispatched in place | `DamageAction` → `HealAction` |
-
-Modification and cancellation were implicit in the fold design (doc 21). Substitution is the replacement case.
 
 All three go through the same `OnBefore<T>` surface — no separate API for each. Triggers communicate their outcome through `IEffectScope` rather than a return value:
 
@@ -45,9 +54,7 @@ scope.Replace(new ShieldAbsorbAction(…));  // substitution
 
 `FoldResult` (`Keep`/`Cancel`/`Replace`) is a pipeline-internal discriminator — it is not part of the game-author API. The pipeline reads scope state after `Execute` returns to determine which outcome occurred.
 
----
-
-## 2. Replacement-Of-Replacements Is Handled By The Fold
+### Replacement-of-replacements is handled by the fold
 
 No special mechanism is needed. The fold evaluates each trigger's condition against the *current command* — the output of all prior triggers in the fold sequence.
 
@@ -63,9 +70,7 @@ trigger D condition: (c) => c is HealAction      → true on c1  — fires norma
 
 If B substitutes `DamageAction` with `HealAction`, any trigger watching for `DamageAction` no longer applies. Any trigger watching for `HealAction` applies as if it was always the event. This is correct by construction — no loop detection or special casing required.
 
----
-
-## 3. ITriggerPipeline — Owns The Mechanical Process
+### `ITriggerPipeline` — owns the mechanical process
 
 The trigger execution mechanics are extracted behind `ITriggerPipeline`. This interface owns:
 
@@ -103,7 +108,7 @@ public sealed record TriggerMatch(
     Func<GameCommand, IEffectScope, Task>  Execute);
 ```
 
-The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRules` before the pipeline receives it (see §4).
+The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRules` before the pipeline receives it (see "Availability policy" below).
 
 Both methods are `async Task`. The default implementation completes synchronously via `Task.FromResult` — no allocation overhead for the common case. The async signature exists so that custom pipelines can genuinely await a `Decision` without special casing.
 
@@ -128,9 +133,7 @@ The framework ships a `FifoPipeline` that stable-sorts by `Priority` ascending, 
 3. Awaits the result
 4. Runs the fold in the chosen order
 
----
-
-## 4. GameRules.FilterTriggers — Availability Policy
+### `GameRulesRuntime.FilterTriggers` — availability policy
 
 `GameRules` decides which registered triggers are eligible to fire for a given command in the current game state. It does not collect, order, or execute them.
 
@@ -165,20 +168,11 @@ This separates two distinct concerns:
 | "In what order do they run?" | `ITriggerPipeline` |
 | "What does each trigger do?" | `AbilityDefinition` |
 
-### Example filter uses
-
-- **Phase gating** — no triggers fire during setup
-- **Mana abilities** — skip the trigger pipeline entirely for speed-mana costs
-- **Stack restriction** — triggers suppressed while a specific resolution lock is active
-- **Target validation** — a trigger requires a legal target to exist before it is considered applicable
-
 `GameRules` never holds a reference to `ITriggerPipeline` or the trigger registry. It only receives a list of `TriggerMatch` candidates and returns a filtered subset.
 
----
+### Updated pipeline shape
 
-## 5. Updated Pipeline Shape
-
-The command pipeline (doc 21 §7) now calls `GameRules.FilterTriggers` before handing candidates to `ITriggerPipeline`:
+The command pipeline calls `GameRules.FilterTriggers` before handing candidates to `ITriggerPipeline`:
 
 ```csharp
 public async Task<CommandResult> Execute(GameAction action)
@@ -214,9 +208,7 @@ public async Task<CommandResult> Execute(GameAction action)
 }
 ```
 
----
-
-## 6. Prevention As Modification
+### Prevention as modification
 
 Simple prevention is modification with a zero floor:
 
@@ -235,22 +227,18 @@ triggers.OnBefore<DamageAction>(
     owner: self);
 ```
 
-**Stateful prevention** ("prevent the next N damage") is an ongoing effect that manages its own state — it reduces the payload and decrements an internal counter, deleting itself when exhausted. Ongoing effects are a deferred design topic; stateful prevention is one instance of them.
+**Stateful prevention** ("prevent the next N damage") is an ongoing effect that manages its own state — it reduces the payload and decrements an internal counter, deleting itself when exhausted. Ongoing effects are covered in [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md); stateful prevention is one instance of them.
 
----
-
-## 7. History When An Action Is Replaced
+### History when an action is replaced
 
 When A is replaced by B:
 
 - A's envelope is closed and published with `CommandResult.Replaced` — it appears in history as a command that was dispatched but did not execute.
 - B is dispatched fresh via `engine.Dispatch` (validates + enqueues onto the framework FIFO command queue). B gets its own full fold from scratch. B's envelope is a sibling, not a child, of A's.
 
-This means the history shows both: "A was replaced" and "B executed." The causal link between them is preserved via `OriginCommandId` threading (doc 20 §3) if A and B share the same originating intent.
+This means the history shows both: "A was replaced" and "B executed." The causal link between them is preserved via `OriginCommandId` threading if A and B share the same originating intent.
 
----
-
-## 8. Extension Points Summary
+### Extension points summary
 
 | What you want to customize | Where |
 |---|---|
@@ -259,17 +247,59 @@ This means the history shows both: "A was replaced" and "B executed." The causal
 | MTG controller-choice for competing replacements | Custom `ITriggerPipeline` that dispatches a `Decision` |
 | Self-replacement priority | Custom `ITriggerPipeline` sorting by `owner == affectedEntity` |
 
+## Invariants
+
+- **Three outcomes exhaust before-fold semantics.** Modification, cancellation, substitution — no fourth case. All communicated through `IEffectScope` (`scope.Cancel` / `scope.Replace` / no-call), not return values.
+- **Replacement-of-replacement is fold-natural.** No loop detection or special casing — each trigger evaluates its condition against the current command (the output of prior triggers).
+- **Priority is total ordering with stable tie-break.** Lower priority runs first; ties break stably (registration order in default `FifoPipeline`). Determinism is required for replay.
+- **Pipeline never queries the registry.** `ITriggerPipeline` receives the `available` list pre-filtered. The registry → `GameRules.FilterTriggers` → pipeline pipeline is one-directional.
+- **Replaced commands re-fold from scratch.** `engine.Dispatch(before.Replacement)` enqueues `next` as a fresh command; it goes through its own full fold (not the parent's continuation).
+- **Filter ≠ order ≠ execute.** Three concerns, three owners: `GameRules` filters availability, `ITriggerPipeline` orders, `AbilityDefinition` executes. They do not share interfaces.
+
+### Example filter uses
+
+- **Phase gating** — no triggers fire during setup
+- **Mana abilities** — skip the trigger pipeline entirely for speed-mana costs
+- **Stack restriction** — triggers suppressed while a specific resolution lock is active
+- **Target validation** — a trigger requires a legal target to exist before it is considered applicable
+
+## Decisions
+
+*n/a — no elevated ADR.* (Replacement priority applies to a single feature; folded as Q1 below.)
+
+## Examples
+
+See [`triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) for the full subscription / fold mechanics. The contracts above are exercised in:
+
+- **Shield absorbing damage** — `OnBefore<DamageAction>` calls `scope.Cancel("shield absorbed")`; the `DealDamageHandler` never runs; the original envelope publishes with `CommandResult.Cancelled`.
+- **Damage-to-heal substitution** — a "convert damage to healing" ability calls `scope.Replace(new HealAction { Amount = original.Amount, Target = original.Target })`; the original envelope publishes `Replaced`; `engine.Dispatch(healAction)` queues the `HealAction` for fresh fold.
+- **MTG controller-choice ordering** — the game ships a `MtgPipeline : ITriggerPipeline` that, when `available.Count > 1`, dispatches `ChooseReplacementOrderAction { Replacements: available.Select(t => t.Owner) }`, awaits the player's chosen ordering, then runs the fold in that order.
+- **Phase gating** — `GameRulesRuntime.FilterTriggers` returns `Array.Empty<TriggerMatch>()` while `state.Phase == Phase.Setup`, blocking all triggers during setup without modifying registrations.
+
+## Open follow-ups
+
+- **`CommandResult` cancellation shape** — flag on the base record vs typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup. (Tracked in `04-effect-flow.md`.)
+- **Trigger ordering stability across save/load** — `FifoPipeline`'s registration-order tie-break depends on subscription registration sequence; whether that's stable across snapshots is tied to `oq-engine-builder`.
+
 ---
 
-## 9. Open Questions
+*Below: provenance — how replacement priority was settled. Single-feature scope (no project-wide ADR applies; folded into Model provenance per §4.5 on 2026-05-08). Original ADR-0003 landing 2026-04-29.*
 
-- **Trigger ordering within the fold** — `ITriggerPipeline` owns ordering, but the default (FIFO by registration time) may not match all games. A `priority` weight on registration is a likely extension to the subscription API.
+## Options considered
 
----
+### Q1 — Replacement priority
 
-## 10. Related
+Replacement effects ("if X would happen, instead Y") and prevention effects ("X doesn't happen") need a deterministic priority story. Without one, two replacements in the same fold produce nondeterministic outcomes.
 
-- [features/triggers/models/01-trigger-fold.md](features/triggers/models/01-trigger-fold.md) — trigger fold, subscription, OnBefore/OnAfter
-- [features/engine/models/01-evaluation-loop.md](features/engine/models/01-evaluation-loop.md) — GameRules, scheduling, engine loop
-- [features/effects/models/01-async-dispatch.md](features/effects/models/01-async-dispatch.md) — async layer, Decisions
-- [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — open items
+- **A — Order replacements by registration time.** Rejected — registration order isn't a deterministic, replay-safe property across save/load and multiplayer.
+- **B — Player-controlled tie-breaks at every collision.** Rejected — spams decisions for negligible gain in floor cases.
+- **C — Fold-ordered priority.** Replacements declare priority ranks; the trigger fold consumes them in rank order; ties break by stable, explicit ordering (e.g., source entity ID). **Chosen.**
+
+## Rationale
+
+Explicit priority on each registration plus stable tie-break gives deterministic replay across replacement-heavy effects without forcing a player decision at every collision. Games that want player-controlled ordering opt in via a custom `ITriggerPipeline` that dispatches a `ChooseReplacementOrderAction`; the framework default is silent and deterministic. Authoring cost is small (one `priority` argument with a default of 0); the determinism payoff is large.
+
+## Consequences
+
+- **Enables** deterministic replay of replacement-heavy effects; per-game customization (FIFO, priority, MTG-style player choice) via `ITriggerPipeline` swap; predictable testing of replacement chains.
+- **Constrains** rule authors to assign priorities for non-default ordering; no implicit defaults beyond `0`; tie-break rule (registration order in `FifoPipeline`) must hold across snapshots.

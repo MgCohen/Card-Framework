@@ -47,7 +47,7 @@ The feature has one Model. See `models/01-card-model.md` for the handle, the fou
 
 | Model | Role |
 |---|---|
-| [`models/01-card-model.md`](models/01-card-model.md) | Card handle, four state slices, four mutations, resolution surfaces, read API |
+| [`01-card-model.md`](features/cards/models/01-card-model.md) | Card handle, four state slices, four mutations, resolution surfaces, read API |
 
 ## Invariants
 

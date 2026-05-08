@@ -56,7 +56,7 @@ The feature has one Model. See `models/01-zone-model.md` for the handle, the thr
 
 | Model | Role |
 |---|---|
-| [`models/01-zone-model.md`](models/01-zone-model.md) | Zone handle, three state slice categories, insertion API, visibility model, history filtering, zone-movement flow |
+| [`01-zone-model.md`](features/zones/models/01-zone-model.md) | Zone handle, three state slice categories, insertion API, visibility model, history filtering, zone-movement flow |
 
 ## Invariants
 
@@ -65,7 +65,7 @@ Cross-Model rules that hold across the Model and shape how other features must r
 - **Zones are thin handles.** Implement `InstanceWithSlices<ZoneDefinition>`; carry typed `Ref<Zone> SelfRef`; state lives in slices; one live `Zone` per `Ref<Zone>` in `store.Catalog`.
 - **Zones share the polymorphic `Reference` namespace with cards.** Targeting and references work uniformly across cards and zones.
 - **Zones do not own broad gameplay legality.** Game/action rules answer "can this actor move this card?"; zones answer "where does an approved instance go?"
-- **Zone membership references cards by current `CardRef`.** Refs rotate on every move (per `cards/` mutation contract) and every visibility transition (per `Product/decisions/0006-zone-visibility-model.md`).
+- **Zone membership references cards by current `CardRef`.** Refs rotate on every move (per `cards/` mutation contract) and every visibility transition (per `Product/decisions/0008-zone-visibility-model.md`).
 - **Movement is approved by game/action rules and organized by zones.** Simulation-driven, not view-driven.
 - **Server is canonical; visibility filtering at the transport boundary cuts data, never alters identity.** All observers see the same canonical `CardRef`; privacy comes from server-side ref rotation.
 
