@@ -38,7 +38,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 - *Richer schedulers* (stack+priority, turn/phase machine, real-time tick) — `engine` currently runs immediate queue drain. Other modes are deferred extensions inside `engine`. See ARCHITECTURE §"Effect Resolution Direction."
 - *Visibility / Reveal* — cross-concern of `engine` (membership/detail visibility on zones) and `presentation` (rendering filter). Will land as Models inside those features when work begins.
 - *Determinism / RNG* — sub-concern of `engine`; folded into `networking` for the seeded/recorded random source.
-- *State-Based Checks* — handled inside `engine` evaluation loop. Game-specific extensions (e.g. MTG-strict ordering) live as ADRs under `features/engine/decisions/`.
+- *State-Based Checks* — handled inside `engine` evaluation loop. Game-specific extensions (e.g. MTG-strict ordering) are folded into `features/engine/models/02-gamerules-contract.md` provenance (Q3) per the §4.5 ADR migration recipe.
 
 ## Dependency graph
 

@@ -218,7 +218,7 @@ public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult _
 }
 ```
 
-The snapshot write is a service call — see [`engine/03 §Service-driven model`](features/engine/models/03-snapshot-pipeline.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
+The snapshot write is a service call — see [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
 
 ## Invariants
 
