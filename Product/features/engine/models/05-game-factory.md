@@ -174,7 +174,7 @@ public interface IMatchBuilder
 
 ### Framework auto-seeded slices
 
-`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/engine/models/04-gamestate-slices.md) (and as more features land, the cards/zones/etc. Models) is the source of truth. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
+`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/engine/models/04-gamestate-slices.md) is the catalog index; each slice's schema lives with its producing system. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
 
 ### Behavior resolution at `Build`
 

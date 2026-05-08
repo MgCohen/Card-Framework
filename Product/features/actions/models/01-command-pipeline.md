@@ -228,7 +228,24 @@ Without an envelope, UI sees unrelated state changes. With an envelope, UI can a
 
 **One envelope per `GameAction`.** Effect-dispatched siblings share `OriginCommandId` but each gets its own envelope. The historical "child folds into parent envelope" model is retired (per [`effects/01 §Two dispatch paths`](features/effects/models/01-async-dispatch.md)). `OriginIntent` is recorded only on the first envelope of a chain.
 
-The typed `HistoryEnvelope` C# record is currently pseudocode — see `engine/04 ## Open follow-ups` for the typed-definition open.
+The typed `HistoryEnvelope` C# record is currently pseudocode — typed definition is an open follow-up (see `OPEN-ITEMS.md`).
+
+### The `HistoryState` slice
+
+Closed envelopes accumulate in a framework-owned `BaseState` slice — the canonical home for the envelope log.
+
+```csharp
+public sealed record HistoryState(
+    IReadOnlyList<HistoryEnvelope> Envelopes) : BaseState;
+```
+
+- **Purpose.** Holds the ordered envelope log. Load-bearing for replay, multiplayer transport, and the presentation history loop.
+- **Written by.** Engine-internal history mutator (fires after every `pipeline.Execute` call, appending the closed envelope). Not writable by game authors.
+- **Read by.** Presentation layer (history loop), networking (transport), replay tooling.
+- **Seeded.** `HistoryState(ImmutableList<HistoryEnvelope>.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
+- **Note.** `HistoryEnvelope` payload type is pseudocode pending typed-definition open follow-up.
+
+The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/engine/models/04-gamestate-slices.md) for the framework-vs-game-authored convention.
 
 ### Relationship to triggers
 

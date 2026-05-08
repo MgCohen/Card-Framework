@@ -9,9 +9,15 @@ tags: [#engine, #lifecycle, #match]
 
 ## What it is
 
-The lifecycle types: the `EngineLifecycle` FSM (`NotStarted` / `Started` / `Ended`), the framework-owned commands that transition between states (`StartMatchCommand` / `EndMatchCommand`) and their handlers, the signals emitted by those handlers (`MatchStartedSignal` / `MatchEndedSignal`), and the closed `MatchOutcome` type hierarchy (`Win` / `Loss` / `Draw` / `Aborted`). One `GameEngine` instance, one match — broader session lifecycle (pause / resume / concede / disconnect / reconnect / multi-match orchestration) is a higher-layer concern that wraps the engine externally.
+The framework's match lifecycle system. One `GameEngine` instance, one match — the system has three components:
 
-The `GameEngine` surface that drives these transitions (`StartMatch` / `FinishMatch` / `Dispose` / `Lifecycle`) and the lifecycle gate's intake table are defined in [`engine/01`](features/engine/models/01-evaluation-loop.md). Setup-command patterns and the disposal split between engine and host live in [`engine.md`](features/engine/engine.md).
+1. **The FSM** — three states (`NotStarted` / `Started` / `Ended`) with defined semantics and valid transitions.
+2. **The intake gate** — state-conditional rules over which commands `engine.Dispatch` admits, including the queue-tail-on-end semantics.
+3. **The required implementation** — the framework-owned types that realize the system: `EngineLifecycle` enum, `StartMatchCommand` / `EndMatchCommand` and handlers, `MatchStartedSignal` / `MatchEndedSignal`, `MatchOutcome` closed hierarchy.
+
+Broader session lifecycle (pause / resume / concede / disconnect / reconnect / multi-match orchestration) is a higher-layer concern that wraps the engine externally — not part of this system.
+
+The `GameEngine` surface methods that drive transitions (`StartMatch` / `FinishMatch` / `Dispose` / `Lifecycle`) live in [`engine/01`](features/engine/models/01-evaluation-loop.md) (where `GameEngine` is canonical). Setup-command patterns and the disposal split between engine and host are recipes/conventions in [`engine.md`](features/engine/engine.md).
 
 ```csharp
 public enum EngineLifecycle { NotStarted, Started, Ended }
@@ -30,9 +36,24 @@ public enum EngineLifecycle
 }
 ```
 
-Three states. No intermediate `Starting` / `Ending` — transitions are atomic from the public engine surface. Internal flags like "drain in progress" live separately on `EngineState` (see [`engine/04 §EngineState`](features/engine/models/04-gamestate-slices.md)) and don't conflate with lifecycle.
+Three states. No intermediate `Starting` / `Ending` — transitions are atomic from the public engine surface. Internal flags like "drain in progress" live separately on `EngineState` (see [`engine/01 §The EngineState slice`](features/engine/models/01-evaluation-loop.md)) and don't conflate with lifecycle.
 
 The state is mirrored on `EngineState.Lifecycle` so any consumer reading state via `IStateScope` sees it without holding an engine reference. The `EngineState` slice is the source of truth for state-driven consumers; `engine.Lifecycle` (defined in [`engine/01`](features/engine/models/01-evaluation-loop.md)) is a convenience accessor for host code that already holds the engine.
+
+### Lifecycle gate
+
+The framework's intake gate is part of the lifecycle system. `engine.Dispatch` consults `EngineState.Lifecycle` before delegating to `pipeline.Validate` and admits a state-specific subset of commands. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime no longer has an `OnIncomingCommand` hook — the gate runs first, uniformly. Enforcement lives in [`engine/01 §Lifecycle gate enforcement`](features/engine/models/01-evaluation-loop.md); this section defines the rules.
+
+| Lifecycle | Command | Result |
+|---|---|---|
+| `NotStarted` | `StartMatchCommand` | Validate runs; handler flips to `Started` |
+| `NotStarted` | `EndMatchCommand` | Validate runs; handler flips to `Ended` (cancel-before-start) |
+| `NotStarted` | Any other | Reject(`"MatchNotStarted"`) before pipeline runs |
+| `Started` | `EndMatchCommand` | Validate runs; handler flips to `Ended` |
+| `Started` | Any other | Normal pipeline flow |
+| `Ended` | Anything | Reject(`"MatchEnded"`) before pipeline runs |
+
+**Queue tail drains naturally on end.** When `EndMatchCommand`'s handler flips `Lifecycle` to `Ended` mid-drain, the queue tail continues to execute — already-queued commands aren't pre-cleared. If a tail command tries to dispatch follow-ups during the same drain, those new dispatches hit the `Ended` gate and reject. Trigger reactions dispatched through `engine.Dispatch` *during* the same drain that ended the match are subject to the same gate. Evaluator follow-ups bypass `Dispatch` entirely (they go through the engine's internal `pending.Enqueue` after `Evaluate` returns), so they are *not* subject to the lifecycle gate; runtime authors who want to suppress evaluator follow-ups after match end check `EngineState.Lifecycle` from inside `Evaluate`.
 
 ### Transitions are commands
 
@@ -144,11 +165,13 @@ var label = outcome switch
 ## Invariants
 
 1. **Three lifecycle states.** `NotStarted`, `Started`, `Ended`. No intermediate states on the public enum; drain-in-progress lives on `EngineState` separately.
-2. **Lifecycle transitions are commands.** Every `NotStarted → Started` and `* → Ended` transition flows through the normal pipeline as `StartMatchCommand` or `EndMatchCommand`. Handlers emit signals and flip `EngineState.Lifecycle` via the framework-internal `SetEngineLifecyclePayload` mutator — no direct state writes.
-3. **Signals land in normal envelopes.** `MatchStartedSignal` and `MatchEndedSignal` are emitted via `scope.Emit` from inside their respective handlers; they appear in `HistoryState` as ordinary `HistoryEntry`s.
-4. **End-of-match has one transition path, multiple entry points.** Runtime / effect drives by dispatching `EndMatchCommand` (typically from `Evaluate`); host drives via `engine.FinishMatch(outcome)` (defined in [`engine/01`](features/engine/models/01-evaluation-loop.md)); `engine.Dispose` synthesizes `MatchOutcome.Aborted("Disposed")` if not already ended. All paths reach `EndMatchHandler.Handle`.
-5. **`EndMatchCommand` permits `NotStarted → Ended`.** Cancel-before-start is supported. Only `MatchEndedSignal` lands; no start signal ever fired.
-6. **`MatchOutcome` is a closed type hierarchy.** Abstract base + sealed subtypes (`Win`, `Loss`, `Draw`, `Aborted`); consumers pattern-match. No nullable-field tuple shape.
+2. **Lifecycle gate is uniform and framework-owned.** The gate consults `EngineState.Lifecycle` before `pipeline.Validate` runs and admits a state-specific subset of commands per the rules table. Per ADR-0006 the runtime has no intake hook.
+3. **Queue tail drains naturally on end.** When the lifecycle flips to `Ended` mid-drain, the queue is not pre-cleared — already-queued commands continue executing in order. New `Dispatch` calls during the same drain hit the `Ended` gate and reject. Evaluator follow-ups bypass the gate.
+4. **Lifecycle transitions are commands.** Every `NotStarted → Started` and `* → Ended` transition flows through the normal pipeline as `StartMatchCommand` or `EndMatchCommand`. Handlers emit signals and flip `EngineState.Lifecycle` via the framework-internal `SetEngineLifecyclePayload` mutator — no direct state writes.
+5. **Signals land in normal envelopes.** `MatchStartedSignal` and `MatchEndedSignal` are emitted via `scope.Emit` from inside their respective handlers; they appear in `HistoryState` as ordinary `HistoryEntry`s.
+6. **End-of-match has one transition path, multiple entry points.** Runtime / effect drives by dispatching `EndMatchCommand` (typically from `Evaluate`); host drives via `engine.FinishMatch(outcome)` (defined in [`engine/01`](features/engine/models/01-evaluation-loop.md)); `engine.Dispose` synthesizes `MatchOutcome.Aborted("Disposed")` if not already ended. All paths reach `EndMatchHandler.Handle`.
+7. **`EndMatchCommand` permits `NotStarted → Ended`.** Cancel-before-start is supported. Only `MatchEndedSignal` lands; no start signal ever fired.
+8. **`MatchOutcome` is a closed type hierarchy.** Abstract base + sealed subtypes (`Win`, `Loss`, `Draw`, `Aborted`); consumers pattern-match. No nullable-field tuple shape.
 
 ## Decisions
 

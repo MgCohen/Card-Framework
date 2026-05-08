@@ -5,7 +5,7 @@ references: [features/engine/models/02-gamerules-contract.md, features/actions/m
 tags: [#engine, #snapshot, #available-actions]
 ---
 
-# Snapshot Pipeline — model
+# Snapshot Production — model
 
 ## What it is
 
@@ -53,6 +53,22 @@ public interface IAvailableActions
 - **`Clear`** — erase the snapshot (between phases, between decisions, etc.).
 
 Behind the service the engine runs an internal mutator that writes to `AvailableActionsState`. The service is the only public write path.
+
+### The `AvailableActionsState` slice
+
+`IAvailableActions` writes to a framework-owned `BaseState` slice — the canonical home for the published snapshot. Reads go through `IStateScope.Get<AvailableActionsState>()` like any other slice.
+
+```csharp
+public sealed record AvailableActionsState(
+    AvailableActionsSnapshot Snapshot) : BaseState;
+```
+
+- **Purpose.** Holds the current available-actions snapshot. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted, or from effects mid-execution.
+- **Written by.** `IAvailableActions` service via a framework-internal mutator. Game authors write through the service, never directly.
+- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
+- **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
+
+The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/engine/models/04-gamestate-slices.md) for the framework-vs-game-authored convention and the auto-seeding rule.
 
 ### Default trigger: `runtime.Evaluate` at drain-end
 

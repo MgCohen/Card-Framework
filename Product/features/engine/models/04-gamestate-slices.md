@@ -9,14 +9,10 @@ tags: [#engine, #state, #slices]
 
 ## What it is
 
-The catalog of state slices the framework owns, the pattern for game-authored slices, and the rules for how each tier is seeded and accessed. There is no `GameState` class; state lives as multiple typed `BaseState` slices in a Scaffold `Store`. Two tiers: **framework-owned** (`AvailableActionsState`, `EngineState`, `HistoryState`) auto-seeded at `Build` and writable only by framework services; **game-authored** declared via `ISliceProvider` and registered with mutators in the game's installer. Subscriptions go through the `Store` directly across four channels; atomic batches commit through `Store.ExecuteBatch`.
+The slice mechanism: how state is structured, the framework-vs-game-authored tier split, the read surface, the four subscription channels, and atomic batches. There is no `GameState` class; state lives as multiple typed `BaseState` slices in a Scaffold `Store`. **Framework-owned** slices (auto-seeded at `Build`, writable only by framework services) are catalogued here as an index — each schema lives with its producing system. **Game-authored** slices are declared via `ISliceProvider` and registered with mutators in the game's installer. Subscriptions go through the `Store` directly across four channels; atomic batches commit through `Store.ExecuteBatch`.
 
 ```csharp
-public sealed record AvailableActionsState(AvailableActionsSnapshot Snapshot) : BaseState;
-public sealed record EngineState(EngineLifecycle Lifecycle, bool IsRunning, GameCommand? CurrentCommand) : BaseState;
-public sealed record HistoryState(IReadOnlyList<HistoryEnvelope> Envelopes) : BaseState;
-
-// Game-authored shape:
+// Game-authored shape — example:
 public sealed record PileState(int Counter, int Target) : BaseState;
 public sealed record LastMoveState(LastMove? Move) : BaseState;
 ```
@@ -46,45 +42,15 @@ Framework-owned slices are invisible to the game author at bootstrap — they ar
 
 ### Framework-owned slices
 
-#### `AvailableActionsState`
+The framework auto-seeds three slices at `Build()`. Each slice's schema lives with the system that produces it; this Model only catalogs them. Game authors never declare any of these in `MatchSetup.InitialSlices`.
 
-```csharp
-public sealed record AvailableActionsState(
-    AvailableActionsSnapshot Snapshot) : BaseState;
-```
+| Slice | Produced by | Schema canonical home |
+|---|---|---|
+| `AvailableActionsState` | `IAvailableActions` service | [`engine/03 §The AvailableActionsState slice`](features/engine/models/03-snapshot-pipeline.md) |
+| `EngineState` | Engine internals (drain start/stop, lifecycle handlers) | [`engine/01 §The EngineState slice`](features/engine/models/01-evaluation-loop.md) |
+| `HistoryState` | Engine history mutator (post-`pipeline.Execute`) | [`actions/01 §The HistoryState slice`](features/actions/models/01-command-pipeline.md) |
 
-- **Purpose.** Holds the current available-actions snapshot published by `GameRulesRuntime` via `IAvailableActions.Set(...)`. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted.
-- **Written by.** `IAvailableActions` service (framework-internal mutator). Game authors write through the service, never directly.
-- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
-- **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()`.
-
-#### `EngineState`
-
-```csharp
-public sealed record EngineState(
-    EngineLifecycle Lifecycle,
-    bool            IsRunning,
-    GameCommand?    CurrentCommand) : BaseState;
-```
-
-- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate ([`engine/01 §Lifecycle gate`](features/engine/models/01-evaluation-loop.md)), inspection, debugging, and future replay/save support. Lifecycle types are defined in [`engine/06`](features/engine/models/06-match-lifecycle.md).
-- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`.
-- **Written by.** Engine internals only. The lifecycle field is written by the framework `StartMatchHandler` / `EndMatchHandler` via the framework mutator; the running flag and current command are updated on drain start/stop and before/after each `pipeline.Execute`. Not writable by game authors.
-- **Read by.** The engine's `Dispatch` lifecycle gate, tooling, debugger, and any game logic that needs to know "is the match active?" or "is the engine currently draining?".
-- **Seeded.** `EngineState(Lifecycle: EngineLifecycle.NotStarted, IsRunning: false, CurrentCommand: null)` at `Build()`.
-
-#### `HistoryState`
-
-```csharp
-public sealed record HistoryState(
-    IReadOnlyList<HistoryEnvelope> Envelopes) : BaseState;
-```
-
-- **Purpose.** Holds the ordered envelope log — every command that has executed, with its cause, actor, and result entries. Load-bearing for replay, multiplayer transport, and the presentation history loop.
-- **Written by.** Engine-internal history mutator (fires after every `pipeline.Execute` call, appending the closed envelope). Not writable by game authors.
-- **Read by.** Presentation layer (history loop), networking (transport), replay tooling.
-- **Seeded.** `HistoryState(ImmutableList<HistoryEnvelope>.Empty)` at `Build()`.
-- **Note.** `HistoryEnvelope` is currently pseudocode (see `OPEN-ITEMS.md` — `HistoryEnvelope` typed definition). The slice exists and is seeded; its payload type is pinned when that open question resolves.
+The catalog is not a fixed ceiling; it reflects what the framework needs today and will grow or shrink as the framework matures. New framework-owned slices land at their producing system's canonical home and are added as a row above.
 
 ### Game-authored slice pattern
 
@@ -258,9 +224,7 @@ See "Reading state" and the per-channel "Use cases" tables above; the Pile Count
 
 ## Open follow-ups
 
-- **`HistoryEnvelope` typed definition** — the concrete C# record for `HistoryEnvelope` (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed. (`OPEN-ITEMS.md`)
-- **`EngineState` surface** — whether `IsRunning` / `CurrentCommand` are the right fields, or whether additional engine-internal state (pending queue snapshot, awaiter state) belongs here, is deferred to the engine implementation pass.
-- **Slice catalog growth** — as features land (lifecycle, zones, entities bridge), new game-authored slice types will emerge. The framework slice count may also change. Update this doc when a new framework-owned slice is formally added.
+- **Slice catalog growth** — as features land, new game-authored slice types will emerge and framework-owned slices may be added or removed. The catalog index above is updated when a new framework slice lands; per-slice details (schema, fields, write/read paths, open questions) live with the producing system.
 - **Symmetric unsubscribe for `SubscribeAllReferences` / `SubscribeAny`.** Both currently leak listeners across the store's lifetime. Tooling-only callers don't need teardown today; if presentation reaches for these channels, expose unsubscribe overloads.
 - **`IAggregateProvider` registration.** `Store.RegisterAggregate` ships in Scaffold but the framework hasn't pinned a use case (computed read-only views over multiple slices). Document when the first one lands.
 
