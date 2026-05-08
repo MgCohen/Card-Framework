@@ -15,14 +15,11 @@ Promotion target: `_workflow/PRODUCT-BUILDER.md`. When stable, this lands there.
 Each doc type below follows the same shape:
 
 - **Definitions** — vocabulary used by the section.
-- **Identity** — substantive criteria for the decision "is this a [type]?". Drives classification, not formatting.
-- **Forbidden** — what disqualifies the doc, both identity-wise and convention-wise.
-- **Decision flow** — explicit walk through identity criteria.
+- **Identity** — substantive criteria for the decision "is this a [type]?". Each rule states the positive form + its failure mode inline. Drives classification, not formatting.
+- **Decision flow** — stepwise walk for applying the criteria to a candidate.
 - **Conventions** — formatting / placement / structure that applies *once* a doc is classified as this type. These don't bear weight on the decision.
-- **Anti-pattern checklist** — review-mode tickbox items.
-- **Heuristics** — judgement calls; default behavior stated.
-- **Patterns** — abstract, timeless ✅/❌ shapes.
-- **Anchor cases** — small set of stable real corpus references.
+- **Heuristics** — judgement calls for soft / borderline cases; default behavior stated.
+- **Anchor cases** — small set of stable real corpus references (✅ pass, 🔵 support-not-model, etc.).
 
 **Per-rule status (inline emoji):** 🟢 locked · 🟡 draft · 🔴 open.
 
@@ -41,33 +38,24 @@ The unit of canonical design. One model = one central element explained in depth
 
 ## Identity (decision criteria)
 
-- 🟢 The model has exactly one central element.
-- 🟢 The central element is concrete (class, interface, service, contract, structured type).
-- 🟢 The central element is load-bearing (behavior **OR** substantial design space).
-- 🟢 The model is the central element's canonical home — first-time definition.
+Each rule is positive (must hold) with its failure mode inline.
 
-## Forbidden
-
-- 🟢 Title is a concept (lifecycle, validation, loop, pipeline, system) without a concrete central element behind it.
-- 🟢 Multiple peer central elements (→ that's a feature, not a model).
-- 🟢 Central element is data **with no design space** — bare enum, fieldless signal, simple payload that's just shape, single-purpose value type.
-- 🟢 Defines rules / behaviors / extensions of an element defined elsewhere (→ goes to that element's canonical home).
-- 🟢 Recipe / pattern composing existing surfaces (→ feature root).
-- 🟢 Method extension to a class defined elsewhere (→ class's canonical home).
+- 🟢 **Has exactly one central element.**
+  - *Fails if:* title is a concept without a concrete thing behind it (lifecycle, validation, loop, pipeline, system) — that's an amalgamation, not a model. Multiple peer elements tied only by a theme is a feature, not a model.
+- 🟢 **Central element is concrete** — a class, interface, service, contract, or structured type.
+  - *Fails if:* the subject is purely a concept, relationship, or convention.
+- 🟢 **Central element is load-bearing** — has behavior **OR** substantial design space.
+  - *Fails if:* bare enum, fieldless signal, simple payload that's just shape, or single-purpose value type with no design weight. Place those as support inside the model that defines or uses them.
+- 🟢 **The model is the central element's canonical home.**
+  - *Fails if:* defines rules / behaviors / extensions of an element defined elsewhere (→ goes to that element's home). Recipe composing existing surfaces (→ feature root). Method extension to a class defined elsewhere (→ class's home).
 
 ## Decision flow
 
 When asking "does X earn its own model?":
 
-1. **Identify the candidate central element.**
-   - No single concrete element → **NOT A MODEL.** Escalate to feature, or fold into existing model.
-2. **Check load-bearing.**
-   - Behavior present (methods, logic, runtime semantics) → continue.
-   - Design space present (authoring contract, evolution, integration, multi-consumer concerns) → continue.
-   - Neither → **NOT A MODEL.** Place as support inside the model that defines or uses it.
-3. **Independence check (soft rule; default = support):**
-   - Always reached via parent + small + no design depth → **SUPPORT.**
-   - Substantial design depth **OR** independent consumers **OR** own supports → **MODEL.**
+1. **Identify the candidate central element.** No single concrete element → **NOT A MODEL.** Escalate to feature, or fold into existing model.
+2. **Check load-bearing.** Behavior present (methods, logic, runtime semantics) OR design space present (authoring contract, evolution, integration, multi-consumer concerns) → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
+3. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth **OR** independent consumers **OR** own supports → **MODEL.**
 
 ## Conventions (once decided)
 
@@ -78,42 +66,13 @@ When asking "does X earn its own model?":
 - 🟢 Body sections (per the model template): What it is, Contracts, Invariants, Decisions, Examples, Open follow-ups, Options considered, Rationale, Consequences.
 - 🟢 Cross-references use shorthand (`features/engine/models/01` or `engine/01`).
 
-## Anti-pattern checklist (for review)
-
-Flag a doc claimed to be a model if:
-
-- [ ] Title is a concept word (system, lifecycle, loop, validation, pipeline) with no element name attached
-- [ ] Body is a list of types tied by theme, no central thing
-- [ ] Subject is a single bare enum, fieldless signal, or simple payload record with no design discussion
-- [ ] Most content is rules about an element defined in another doc
-- [ ] Body says "this composes existing surfaces" or "no new concept needed"
-- [ ] Doc body would be `definition + field list` with nothing substantive beyond — no design space
-
-## Heuristics (judgement calls)
+## Heuristics
 
 - 🟡 **Default = support.** Promotion to model needs a reason: substantial depth, independent consumption, supports forming around the element.
 - 🟡 **Test for design space:** would the doc body be substantively more than `definition + field list`? If no, no design space → support.
 - 🟡 **Test for independence:** do consumers reach for the element directly, or always via a parent? Direct → promote candidate. Always via parent → support.
-- 🟡 **When a model gets too big,** look for sub-elements that could promote (split). If multiple peers without a clear central, you've discovered a feature.
-- 🟡 **When models in the same feature feel coupled,** check if they're really one model with separated supports.
 
-## Patterns (abstract, timeless)
-
-✅ **"X class as a model"** — title names a class, body explains responsibilities + sub-types + design choices.
-
-✅ **"X service as a model"** — title names a service interface, body explains its contract methods + write protocol + slice/state managed.
-
-✅ **"X contract as a model"** — title names a typed contract, body explains methods consumers implement + anti-scope + composition.
-
-✅ **"X data type as a model" (when has design space)** — title names a structured type, body explains authoring contract + evolution + integration. Pure-data central element passes when design space justifies a focused doc (e.g., a game-config bundle, a snapshot type with typed sub-templates).
-
-❌ **"X system as a model" without a central service** — collection of types tied by the X theme, no central load-bearing element. Fix: identify the load-bearing element if any (rename), or dissolve into supports.
-
-❌ **"X enum as a model"** — bare enum dedicated doc with no design space. Fix: place enum as support inside the model that uses its parent element.
-
-❌ **"X loop as a model" without a central orchestrator** — describes how multiple existing surfaces interact. Fix: fold into feature root as a recipe; if there's a real orchestrator class, retitle the model after it.
-
-## Anchor cases (stable real examples)
+## Anchor cases
 
 - ✅ `engine/01` — central: `GameEngine` class. Behavior + design space.
 - ✅ `engine/03` — central: `IAvailableActions` service. Behavior + design space.
