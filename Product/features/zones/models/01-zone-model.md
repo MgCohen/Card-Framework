@@ -1,41 +1,27 @@
 ---
 type: model
 status: settled
-references: root
+references: [features/entities/models/02-runtime-surface.md, features/cards/models/01-card-model.md, Product/decisions/0006-zone-visibility-model.md]
 tags: [#zones, #model]
 ---
 
-# Zone Model
+# Zone Model — model
 
-This document outlines the conceptual model for zones. The internal sub-questions left open in earlier drafts ("Open Questions Left For Later") were settled in session-20260501-1602; see ADR-0001 (zone shape), ADR-0002 (visibility), and ADR-0003 (insertion API) for the locked verdicts.
+## What it is
 
-Related docs:
+A zone is a group of cards. It carries identity, a definition that describes how it organizes its contents, and the runtime data that backs its behavior (membership and any per-zone-type values like a counter or recipe progress). Optional ownership lives on the `OwnershipState` slice (read via `zone.GetOwner(state)`).
 
-- [Core Glossary](ledgers/GLOSSARY.md)
-- [Entity, Definition, And Instance Model](features/entities/models/01-definition-instance-model.md)
-- [Card Model](features/cards/models/01-card-model.md)
-- [ADR-0001 — Zone shape](features/zones/decisions/0001-zone-shape.md)
-- [ADR-0002 — Visibility model](features/zones/decisions/0002-visibility-model.md)
-- [ADR-0003 — Insertion API](features/zones/decisions/0003-insertion-api.md)
-- [ADR-0005 — Objects over IDs](decisions/0005-objects-over-ids.md)
-
-## Model Summary
-
-A zone is a group of cards. It carries identity, a definition that describes how it organizes its contents, and the runtime data that backs its behavior (membership and any per-zone-type values like a counter or recipe progress). Optional ownership lives on a separate `OwnershipState` slice (read via `zone.GetOwner(state)`).
-
-The working model is:
-
-> Zone = thin handle (id + definition) + contents slice + per-zone-type runtime slice + (optional) entry in OwnershipState.
+> Zone = thin handle (`Ref<Zone> SelfRef` + protected `Definition` + `Storage`) + `ZoneContentsState` slice + per-zone-type runtime slice + (optional) entry in `OwnershipState`.
 
 Zones are groups of cards. They can represent structured game concepts like hands, decks, discard piles, battlefields, stacks, shops, and production slots. **Card packs are not zones** — a pack is an entity that, when activated, generates new card instances; it does not contain pre-existing cards. **Reward offers, drafts, and choice surfaces are not zones either** — those are decisions, modeled through the action/decision system.
 
-Zones should not own broad gameplay legality. A larger game/action rules layer decides whether an actor may move an instance into, out of, or within a zone. Once a move is approved, the zone owns how its contents are arranged and what bookkeeping happens.
+Zones use the entity bridge for any variables they declare. Most zones (hand, deck, discard) declare zero variables and pay no cost. Zones that need runtime values (a counter, recipe progress) declare them on `ZoneDefinition.DefinedVariables` and read/write through `zone.Storage`. Zones should not own broad gameplay legality — that's a game/action rules concern. Once a move is approved, the zone owns how its contents are arranged and what bookkeeping happens.
 
-**Zones use the entity bridge for any variables they declare.** A zone with no declared variables (most zones — hand, deck, discard) simply has an empty `EntityState` slice and inherits everything from definition defaults. A zone that needs runtime values (a counter, recipe progress) declares them on `ZoneDefinition.DefinedVariables` and reads/writes through `zone.Storage`. The moment a concept needs stat-bearing semantics with rich modifier stacks at scale, that's still fine on a zone — but typically those concerns belong on a different entity that may have a zone associated with it.
+## Contracts
 
-## Zone Shape
+### Zone class
 
-A zone is an `InstanceWithSlices<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`:
+A zone is `class Zone : InstanceWithSlices<ZoneDefinition>` (unsealed) carrying typed `Ref<Zone> SelfRef`:
 
 ```csharp
 public class Zone : InstanceWithSlices<ZoneDefinition>
@@ -60,160 +46,52 @@ public class Zone : InstanceWithSlices<ZoneDefinition>
 }
 ```
 
-Zone is a class (handle), not a record. It is **not sealed** (project convention: default to unsealed). There is one `Zone` instance per `Ref<Zone>` in the running engine, held in `store.Catalog`. Mutable zone data (contents, owner, declared variables) lives in slices.
+`Zone` is a class (handle), not a record. **Not sealed** (project convention: default to unsealed). One `Zone` instance per `Ref<Zone>` in the running engine, held in `store.Catalog`. Mutable zone data (contents, owner, declared variables) lives in slices.
 
-Note the read-API split: `GetCardRefs(IStateScope state)` returns the unstable `CardRef`s from the zone's slice (state-only); `GetCards(Store store)` performs the two-hop resolution (`CardRef → CardMapState → Ref<Card> → Catalog → Card`) and so requires `Store` access. State-only consumers (presentation projections, history filters) use the ref form; handler code that wants typed handles uses the resolved form.
+The read-API split: `GetCardRefs(IStateScope state)` returns the unstable `CardRef`s from the zone's slice (state-only); `GetCards(Store store)` performs the two-hop resolution (`CardRef → CardMapState → Ref<Card> → Catalog → Card`) and so requires `Store` access. State-only consumers (presentation projections, history filters) use the ref form; handler code that wants typed handles uses the resolved form.
 
 Cards, zones, and players all share the typed `Ref<T>` family — `Ref<Card>`, `Ref<Zone>`, `Ref<Player>` — all derived from the polymorphic `Reference` base. Targeting works uniformly: an effect that picks "a card or a zone" takes `Reference` and handles both through `Resolve`.
 
-Zone runtime state lives across:
-
-1. **`ZoneContentsState`** — generic, framework-owned. Keyed by the zone. Holds an ordered `ImmutableList<CardRef>` referencing cards via their current `CardRef`. Per the [Card Model](features/cards/models/01-card-model.md), `CardRef` rotates on every move — the contents list is updated atomically by the same mutators that rotate the ref. When a game needs richer per-entry structure (slot keys, group keys, spatial coordinates), it adds fields on its own design pass — the framework doesn't pre-define those hooks.
-2. **`OwnershipState`** — generic, framework-owned, applicable to any catalog-registered handle. `Dictionary<Reference, Actor>`. Both Cards and Zones read ownership through this slice.
-3. **Per-zone-type runtime slices** — game-authored. Carry typed values for that zone type — e.g., `PileState { Counter }`, `RecipeStackState { Progress }`. Independent slices; no shared shape across zone types.
-
-Zone configuration lives on the `ZoneDefinition`: capacity, ordering rules, insertion behavior, default visibility policy. Different zone types vary by definition data, not by class hierarchy.
-
-See [ADR-0001](features/zones/decisions/0001-zone-shape.md) for full reasoning.
-
-### Zone Definition
+### `ZoneDefinition`
 
 The authored base data for a kind of zone. `ZoneDefinition : DefinitionWithSlices` (which inherits from `Scaffold.EntityDefinition` and implements `ISliceProvider`). Carries authored configuration (capacity, ordering rules, insertion behavior, default visibility policy) plus a parameterless `GetInitialSlices()` that declares the per-zone slices to install at spawn (a `PileDefinition` returns `new PileState(Counter: 0, Target: Target)`; a `RecipeStackDefinition` returns `new RecipeStackState(Progress: 0, Active: null)`).
 
-Examples:
+Zone runtime state lives across:
 
-- Player hand zone definition.
-- Draw pile zone definition.
-- Discard pile zone definition.
-- MTG stack zone definition.
-- Stacklands physical stack zone definition.
-- Shop row zone definition.
-
-### Zone Object (Runtime)
-
-The runtime zone in a session — a `Zone : InstanceWithSlices<ZoneDefinition>` carrying typed `Ref<Zone> SelfRef`. Owner is read via `zone.GetOwner(state)` from `OwnershipState`.
+1. **`EntityState`** (framework-owned, from the entity bridge). Keyed by `Ref<Zone>`. Holds any variables the zone definition declares; for most zones (hand, deck, discard), this is empty.
+2. **`ZoneContentsState`** (framework-owned, generic). Keyed by the zone. Holds an ordered `ImmutableList<CardRef>` referencing cards via their current `CardRef`. Per the [Card Model](features/cards/models/01-card-model.md), `CardRef` rotates on every move — the contents list is updated atomically by the same mutators that rotate the ref.
+3. **`OwnershipState`** (framework-owned, generic across all catalog-registered handles; defined in `cards/`). `Dictionary<Reference, IActor>`. Both Cards and Zones read ownership through this slice.
+4. **Per-zone-type runtime slices** (game-authored). Carry typed values for that zone type — e.g., `PileState`, `RecipeStackState`. Independent slices; no shared shape across zone types.
 
 `Zone` is held in `store.Catalog`. Zones are spawned during `Build` from layout blocks declared on `GameDefinition.SharedZones` (game-shared zones — stack, battlefield, market) and `PlayerDefinition.PerPlayerZones` (per-player zones — hand, deck, discard, instantiated once per player actor). Per-match deviations from the standard layout flow through the optional `MatchSetup.ZoneOverlay` escape hatch. See [Game Definition](features/engine/models/07-game-definition.md) for the zone-layout contract and the factory's spawn-walk.
 
-Examples:
-
-- Player 1 hand.
-- Player 2 hand.
-- Current encounter draw pile.
-- Shared battlefield.
-- Active rules stack.
-- This specific physical stack on a board.
-
-## Core Responsibilities
+### Core responsibilities
 
 Zones should be described by responsibilities, not a fixed trait checklist.
 
-
-| Responsibility     | Meaning                                                                                            |
-| ------------------ | -------------------------------------------------------------------------------------------------- |
-| Contents           | Which instances are in the zone.                                                                   |
-| Arrangement        | How contents are ordered, grouped, stacked, slotted, or otherwise addressed.                       |
-| Capacity / Size    | Default size limits, count limits, slot limits, or similar organizational constraints.             |
+| Responsibility | Meaning |
+|---|---|
+| Contents | Which instances are in the zone. |
+| Arrangement | How contents are ordered, grouped, stacked, slotted, or otherwise addressed. |
+| Capacity / Size | Default size limits, count limits, slot limits, or similar organizational constraints. |
 | Insertion Behavior | Where an approved incoming instance goes: top, bottom, next slot, chosen index, grouped pile, etc. |
-| Removal Behavior   | How contents close gaps, reorder, unstack, or update after an instance leaves.                     |
-| Visibility         | What each actor/viewer can know about membership and details.                                      |
-| Change Bookkeeping | What state changes or history facts are emitted when contents change.                              |
-
+| Removal Behavior | How contents close gaps, reorder, unstack, or update after an instance leaves. |
+| Visibility | What each actor/viewer can know about membership and details. |
+| Change Bookkeeping | What state changes or history facts are emitted when contents change. |
 
 This avoids forcing all zones into a universal boolean trait list while keeping legality outside the zone.
 
-## Legality Boundary
+### Legality boundary
 
-The zone should not answer broad questions like:
+The zone should not answer broad questions like "Can this card type go here?" / "Is this actor allowed to move this card here?" / "Is this target valid?" — those are game/action rules questions.
 
-- Can this card type go here?
-- Is this actor allowed to move this card here?
-- Can this card be played from this source zone?
-- Does this effect ignore the normal maximum hand size?
-- Is this target valid?
+The zone may answer narrower organization questions: "How many instances are currently here?" / "What is the default capacity?" / "Where should an approved instance be inserted?" / "If full, what is the default organizational result?" / "Can the requested index/slot exist?" / "What changed when an instance was added or removed?"
 
-Those are game/action rules questions.
+Capacity is treated as an overridable/default organizational constraint, not an absolute law. A game rule or effect may force a move, ignore a limit, replace a limit, or choose a special insertion mode. The zone provides a default "this is full" answer, but that answer is data for the action rules to interpret. It does not prevent a higher-priority game effect from force-pushing an instance into the zone.
 
-The zone may answer narrower organization questions like:
+### Insertion API
 
-- How many instances are currently here?
-- What is the default capacity?
-- Where should an approved instance be inserted?
-- If this zone is full, what is the default organizational result?
-- Can the requested index/slot exist?
-- What changed when an instance was added or removed?
-
-Capacity should be treated as an overridable/default organizational constraint, not an absolute law. A game rule or effect may force a move, ignore a limit, replace a limit, or choose a special insertion mode.
-
-This means a zone can provide a default "this is full" answer, but that answer is data for the action rules to interpret. It should not prevent a higher-priority game effect from force-pushing an instance into the zone.
-
-## Contents And Arrangement
-
-A zone must be able to answer what it contains.
-
-Arrangement can vary by game:
-
-- Ordered list.
-- Unordered set.
-- Indexed slots.
-- Top/bottom pile.
-- Stack order.
-- Grouped piles.
-- Hidden sequence.
-- Game-specific structure.
-
-Spatial coordinates are not required by the core zone model. If a game needs spatial placement as rules data, that should be added by a spatial preset or game-specific model. If spatial placement is only visual, it belongs to presentation/layout.
-
-## Stack Zones
-
-Stacks should be modeled as zones with custom organization.
-
-### MTG-Style Rules Stack
-
-An MTG-style stack zone may define:
-
-- Ordered contents.
-- Top/bottom insertion behavior.
-- How contents are addressed for later resolution.
-- Who may see stack contents.
-
-Priority, legal actions, and resolution are scheduler/action rules. The stack zone can organize pending spell/ability instances, but it should not own the full priority system.
-
-### Stacklands-Style Physical Stack
-
-A Stacklands-style physical stack zone may define:
-
-- Which instances are stacked together.
-- Which instance is top/bottom.
-- How new approved instances are inserted.
-- How instances are removed or unstacked.
-
-Recipe matching, timers, production, automatic combat, and work are game systems that may observe or query the stack zone. The visual pile can be handled by presentation, but the fact that those instances are grouped together belongs to simulation.
-
-## Read API
-
-Per [ADR-0005](decisions/0005-objects-over-ids.md), framework APIs prefer the zone object over its ID. The zone is used directly as a slice key, and utility methods on the zone take state per call. There is no `Zones` injected service.
-
-```csharp
-// slice access (zone.SelfRef is the key)
-state.Get<ZoneContentsState>(zone.SelfRef);
-state.Get<PileState>(zone.SelfRef);      // game-authored per-zone-type slice
-
-// utility methods on the zone (sugar for slice reads)
-zone.GetCardRefs(state);                 // CardRefs only (state-only, no resolution)
-zone.GetCards(store);                    // resolves CardRefs → Card via CardMapState + Catalog
-zone.Count(state);
-zone.IsFull(state);                      // reads definition.Capacity vs current count
-zone.GetOwner(state);                    // reads OwnershipState
-```
-
-The `Zone` object is stateless beyond its identity — it does not hold a scope reference. Methods accept state (or store, when resolution is needed) per call, so a zone reference is timeless and can be passed across scope boundaries safely.
-
-Reverse queries — "what zone is this card in?" — currently scan `ZoneContentsState` slices. A derived index slice can be added when a real consumer demands it; deferred to backlog (`bl-card-location-index`) until then.
-
-## Insertion API
-
-A single payload carries zone insertion, with optional override fields for game effects that need to bypass zone defaults. See [ADR-0003](features/zones/decisions/0003-insertion-api.md) for full reasoning.
+A single payload carries zone insertion, with optional override fields for game effects that need to bypass zone defaults.
 
 ```csharp
 record InsertCardPayload(
@@ -246,18 +124,16 @@ The composite `MoveCardMutation` (remove + insert as one logical move, defined i
 
 "Forced" at the mutation level means bypassing zone defaults. The separate axis — "this insertion can't be cancelled by replacement effects" — lives at the `GameAction` / trigger-fold layer, not here.
 
-## Visibility Model
+### Visibility model
 
 Visibility uses two channels:
 
+| Channel | Question It Answers | Example |
+|---|---|---|
+| Membership Visibility | Can this actor know which instances are in this zone and how arranged? | A player sees the exact cards in their hand; an opponent may only see a count. |
+| Detail Visibility | Given a known instance, can this actor see its definition and variable data? | A face-down card may be visible as an instance but hide its definition. |
 
-| Channel               | Question It Answers                                                                | Example                                                                        |
-| --------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Membership Visibility | Can this actor know which instance IDs are in this zone and how they are arranged? | A player sees the exact cards in their hand; an opponent may only see a count. |
-| Detail Visibility     | Given a known instance ID, can this actor see its definition and variable data?    | A face-down card may be visible as an instance but hide its definition.        |
-
-
-### Zone visibility policy (definition-only)
+#### Zone visibility policy (definition-only)
 
 The zone's default visibility policy lives on the `ZoneDefinition` as authored data. It is a sealed record hierarchy with named common cases plus a `Custom` escape hatch:
 
@@ -314,25 +190,15 @@ public bool IsVisibleTo(IStateScope state, IActor actor)
 }
 ```
 
-The named cases serialize cleanly (constant cases) and round-trip through replay/save/network. `Custom` carries arbitrary resolution logic for game-specific rules (team-visible, faction-visible) but pays the serialization cost — see `bl-zone-visibility-custom-policy-serialization` in [`OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the deferred design of the Custom-serialization story.
+The named cases serialize cleanly (constant cases) and round-trip through replay/save/network. `Custom` carries arbitrary resolution logic for game-specific rules (team-visible, faction-visible) but pays the serialization cost — see `bl-zone-visibility-custom-policy-serialization` in `OPEN-ITEMS.md`.
 
-### Per-card visibility flag
+#### Per-card visibility flag
 
-Per-card runtime overrides live on `CardVisibilityState` (defined in the [Card Model § Card Visibility](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `Ref<Card>`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+Per-card runtime overrides live on `CardVisibilityState` (defined in the [Card Model § Card visibility](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `Ref<Card>`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
 
 Per-card overrides flow through `SetCardVisibilityMutation` (with `Hide` / `ShowAll` / `ShowToOwner` factories — see Card Model § Mutations).
 
-### Rules-side read
-
-Rules read visibility through the card object:
-
-```csharp
-card.IsVisibleTo(state, actor)
-```
-
-Visibility-conditional rules and triggers branch on this read. The predicate combines the zone's policy and the per-card flag.
-
-### Server / client model
+#### Server / client model
 
 The server is omniscient and stores canonical state. Visibility is applied as a **send-time filter** that **cuts data**, never alters identity. The server only sends to a client what that actor is allowed to see:
 
@@ -342,37 +208,33 @@ The server is omniscient and stores canonical state. Visibility is applied as a 
 
 The same filter runs locally and over the network — there is no per-actor ID divergence. All observers see the same canonical `CardRef` for a card; the only difference is whether they receive the card's data behind that ref.
 
-### Re-hide via server-side CardRef rotation
+#### Re-hide via server-side `CardRef` rotation
 
 Per the [Card Model](features/cards/models/01-card-model.md), every card carries two refs:
 
-- `Ref<Card>` — stable across the card's lifetime; used for variable storage (slice key), modifier storage, history, server-internal subscriptions, and as the catalog/registry key.
+- `Ref<Card>` — stable across the card's lifetime; used for variable storage (slice key), modifier storage, history, server-internal subscriptions, and as the catalog key.
 - `CardRef` — temporary; the slice key in `CardMapState` and the reference used in `ZoneContentsState`. Rotates on every move and on every visibility transition.
 
 When a card hides, `SetCardVisibilityMutation.Hide(card)` rotates the `CardRef` server-side: `CardMapState` swaps the old `CardRef` out (still pointing at the same `Ref<Card>`) and the new `CardRef` in, every `ZoneContentsState` containing the old ref swaps it for the new ref, and `CardVisibilityState[card.SelfRef]` updates. All observers — local and networked alike — see the new canonical ref. An observer who previously held the old ref sees it disappear; they cannot correlate the new ref with the old.
 
-The simulation-side `Ref<Card>` stays stable forever (preserves the entities Model invariant). Triggers, effects, attachments, and history all reference the `Card` object or its `Ref<Card>` — they are unaffected by ref rotation.
+The simulation-side `Ref<Card>` stays stable forever. Triggers, effects, attachments, and history all reference the `Card` object or its `Ref<Card>` — they are unaffected by ref rotation.
 
-See [ADR-0002](features/zones/decisions/0002-visibility-model.md) for full reasoning.
+Full mechanism + options weighed in [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) (project-wide cross-cutting decision: zones policy + cards override + presentation transport filter).
 
-## History Filtering
+### History filtering
 
 The server records a single canonical `HistoryEnvelope` stream with full `Ref<Card>`s and full data. Per-actor history views are produced at the transport boundary by applying detail gating:
 
-- **CardRef-bearing entries are passed through** — entries that reference cards by `CardRef` (e.g., `ZoneContentInserted(zone, ref)`, `CardRefRotated(oldRef, newRef)`) are sent to all observers. Since all observers see the same canonical `CardRef`, no translation is needed; the ref shown matches what the actor sees in live state.
+- **CardRef-bearing entries are passed through** — entries that reference cards by `CardRef` (e.g., `ZoneContentInserted(zone, ref)`, `CardRefRotated(oldRef, newRef)`) are sent to all observers. Since all observers see the same canonical `CardRef`, no translation is needed.
 - **Detail gating** — card-detail entries (`VariableChanged<T>`, modifier changes) are sent only to actors who have detail visibility on the affected card. **Movement entries** and **ref rotations** are always sent — the *fact* of movement and rotation is public.
 
 For genuinely-secret movements (where even the fact must be hidden from observers), the game models the interaction differently — the framework does not provide a "secret history" mode.
 
-See [ADR-0002](features/zones/decisions/0002-visibility-model.md) §History.
+Full reasoning in [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) §History.
 
-## Zone Movement
+### Zone movement
 
-Zone movement is a simulation-driven game action.
-
-The zone model should not assume presentation can directly move cards. A drag/drop interaction can request movement, but the simulation decides whether it is allowed.
-
-Expected flow:
+Zone movement is a simulation-driven game action. The zone model does not assume presentation can directly move cards. A drag/drop interaction can request movement, but the simulation decides whether it is allowed.
 
 ```mermaid
 sequenceDiagram
@@ -390,286 +252,178 @@ sequenceDiagram
   Sim->>Hist: Record movement result
 ```
 
+Movement is approved by simulation/game rules, while zones organize approved content changes. The exact action shapes live in `actions/`.
 
+### What zones do not own yet
 
-The exact names for request, command, task, event, and history are still pending. The important rule is that movement is approved by simulation/game rules, while zones organize approved content changes.
+Zones do not own these concerns by default:
 
-## What Zones Should Not Own Yet
-
-Zones should not own these concerns by default:
-
-- Visual layout.
-- Screen-space or world-space coordinates.
-- Pointer interactions.
-- Animation.
-- Broad gameplay legality.
-- Card type legality.
-- Actor permission rules.
-- Generated reward choices.
-- Draft choice semantics.
+- Visual layout, screen-space or world-space coordinates, pointer interactions, animation.
+- Broad gameplay legality, card type legality, actor permission rules.
+- Generated reward choices, draft choice semantics.
 - Networking transport.
 - Final actor/player ownership rules.
 
-Some game-specific zone types may incorporate spatial or reward behavior later, but the base zone model should stay focused on contents, organization, visibility, capacity defaults, and change bookkeeping.
+Some game-specific zone types may incorporate spatial or reward behavior later, but the base zone model stays focused on contents, organization, visibility, capacity defaults, and change bookkeeping.
 
-## Zone Examples
+## Invariants
 
+Model-local invariants. (See `zones.md ## Invariants` for feature-level rules — thin handles, shared `Reference` namespace with cards, legality outside the zone, ref rotation on move/visibility, simulation-driven movement, server-canonical with transport-boundary filter.)
 
-| Zone           | Contents                         | Organization                                         | Visibility Direction                               | External Game Systems                             |
-| -------------- | -------------------------------- | ---------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
-| Hand           | Card instances                   | Ordered or player-arranged list; optional size limit | Owner sees details; others may see count only      | Playability, discard rules, maximum hand effects. |
-| Deck           | Card instances                   | Ordered hidden pile                                  | Owner/opponent may see count but not order/details | Draw, shuffle, search, mill.                      |
-| Discard        | Card instances                   | Ordered or unordered pile                            | Usually public details                             | Search, recycle, graveyard effects.               |
-| Battlefield    | Card/unit instances              | Slots, rows, groups, or unordered presence           | Usually public details                             | Combat, presence, auras, targeting.               |
-| Rules Stack    | Pending spell/ability instances  | Ordered stack, usually top-insertion                 | Usually public details                             | Priority, legal additions, resolution.            |
-| Physical Stack | Card/resource instances          | Stack order/group                                    | Depends on game                                    | Recipes, timers, work, combat.                    |
-| Shop Row       | Offer instances                  | Indexed list                                         | Usually public details                             | Purchase rules, refresh rules, pricing.           |
+- **Membership references cards by current `CardRef`.** The `ZoneContentsState` list is updated atomically by the same mutators that rotate the ref.
+- **Zones use the entity bridge for declared variables.** Most zones declare zero variables; per-zone-type slices live alongside as game-authored slices.
+- **Capacity is a default, not a law.** The zone provides a "this is full" answer, but game effects can bypass via `BypassCapacity = true` on `InsertCardPayload`.
+- **`InsertPosition` is a sealed record hierarchy.** Each variant is its own type; pattern matching at the consumer side stays clean.
+- **`ZoneVisibilityPolicy` is a sealed record hierarchy.** Named common cases serialize cleanly; `Custom` carries arbitrary resolution but pays the serialization cost.
 
+## Decisions
+
+Linked: [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) — Visibility model: definition policy + per-card flag + server-side `CardRef` rotation. Cross-cutting (zones + cards + presentation).
+
+## Examples
+
+| Zone | Contents | Organization | Visibility Direction | External Game Systems |
+|------|----------|--------------|----------------------|------------------------|
+| Hand | Card instances | Ordered or player-arranged list; optional size limit | Owner sees details; others may see count only (`OwnerSeesOthersCount`) | Playability, discard rules, maximum hand effects. |
+| Deck | Card instances | Ordered hidden pile | Owner/opponent may see count but not order/details (`OwnerCountOthersNothing`) | Draw, shuffle, search, mill. |
+| Discard | Card instances | Ordered or unordered pile | Usually public details (`AllPublic`) | Search, recycle, graveyard effects. |
+| Battlefield | Card/unit instances | Slots, rows, groups, or unordered presence | Usually public details (`AllPublic`) | Combat, presence, auras, targeting. |
+| Rules Stack | Pending spell/ability instances | Ordered stack, usually top-insertion | Usually public details | Priority, legal additions, resolution. |
+| Physical Stack | Card/resource instances | Stack order/group | Depends on game | Recipes, timers, work, combat. |
+| Shop Row | Offer instances | Indexed list | Usually public details | Purchase rules, refresh rules, pricing. |
 
 Note: card packs are *not* zones. A pack is an entity with a generator effect; opening it executes an effect that creates new card instances and places them somewhere. Reward offers, drafts, and choice surfaces are also not zones — they flow through the action/decision system.
 
-## Deferred
+```csharp
+// Inserting a card at the top of a zone, bypassing capacity (force-effect)
+store.Execute(InsertCardPayload.AtTop(battlefield, summonedToken)
+    with { BypassCapacity = true });
 
-- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The framework does not pre-define a hook for this; a spatial-rules game's design pass adds the appropriate fields to the contents shape (or a parallel slice) when the requirements are concrete. See `bl-spatial-rule-attachment` in `OPEN-ITEMS.md`.
-- **Slot / group structure on contents** — battlefields with fixed rows or grouped piles. Same logic as spatial: no pre-defined hook; games add the fields when forced. The current contents shape is a flat `IReadOnlyList<Card>`.
+// Reading current contents (refs only)
+var refsInHand = p1Hand.GetCardRefs(state);
+
+// Reading current contents (resolved Card handles — requires Store)
+var cardsInHand = p1Hand.GetCards(store);
+
+// Reading effective visibility for a specific actor
+bool visible = card.IsVisibleTo(state, opponent);
+```
+
+## Open follow-ups
+
+- **Spatial rule attachment** — when games (e.g., Stacklands-style) need spatial coordinates as rules data rather than as presentation layout. The framework does not pre-define a hook for this; a spatial-rules game's design pass adds the appropriate fields when concrete requirements arrive. See `bl-spatial-rule-attachment` in `OPEN-ITEMS.md`.
+- **Slot / group structure on contents** — battlefields with fixed rows or grouped piles. Same logic as spatial: no pre-defined hook; games add the fields when forced. The current contents shape is a flat `IReadOnlyList<CardRef>`.
 - **Per-actor asymmetric reveals** — visibility states like "card visible to player A but not player B" are not first-class in the visibility model; games that need them model the reveal as a transient game-state slice. Per-actor map shape on the visibility flag was rejected as YAGNI.
-
-## Useful Invariants
-
-- Zones are thin `InstanceWithSlices<ZoneDefinition>` handles carrying `Ref<Zone> SelfRef`; their state lives in slices.
-- Zones share the `Identifier<Instance>` namespace with cards.
-- Zones do not have stats. Stat-bearing things are not zones.
-- Zones own contents, organization, capacity defaults, and change bookkeeping.
-- Zones do not own broad gameplay legality.
-- Zone membership references cards by their current `CardRef`; refs rotate on every move (per the Card Model).
-- Stack concepts can be modeled as zones with custom organization.
-- Spatial placement is not required in the base zone model.
-- Visibility uses membership and detail channels; rules read it via `card.IsVisibleTo(state, actor)`.
-- Server is canonical; visibility filtering at the transport boundary cuts data, never alters identity. Privacy across reveal-then-hide cycles is achieved by server-side `CardRef` rotation that all observers see.
-- Movement between zones is approved by game/action rules and organized by zones.
-- Card packs and reward offers are not zones.
-
+- **Reverse `CardRef → Zone` index** — `bl-card-location-index`; deferred until concrete consumer surfaces.
+- **`Custom` policy serialization** — `bl-zone-visibility-custom-policy-serialization`; the round-trip story for game-specific delegates needs design when the first multi-actor game forces it.
 
 ---
 
-# Provenance: Zone Model Decisions (from doc 11)
+*Below: provenance — early high-level direction (Q1–Q6) plus the locked specifics for zone shape (folded on 2026-05-08 from `features/zones/decisions/0001-zone-shape.md`, originally landed 2026-05-01 and amended twice on 2026-05-06 for the Plan A/B/C cascade and the open-seams pass) and insertion API (folded on 2026-05-08 from `features/zones/decisions/0003-insertion-api.md`, originally landed 2026-05-01). The visibility model's full options-weighed lives in the elevated [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) (originally `features/zones/decisions/0002-visibility-model.md`, elevated to project-wide on 2026-05-08); Q4 below references the original early framing only.*
 
-Atomic decisions captured below also become ADRs in `features/zones/decisions/` per phase 5 of the migration.
+The zone Model evolved in two phases. **Phase 1** (early Q1–Q6 below): high-level direction set in the original Zone Model Decisions doc — responsibilities-not-traits, spatial deferred, stacks-as-zones, two visibility channels (early framing), movement is normal action flow, generated choices deferred. **Phase 2** (Q7–Q8 below): internal-opens session settled the specific shapes — zone-as-thin-handle (folded ADR-0001) and insertion-API-as-single-payload (folded ADR-0003). The visibility mechanism was settled in the same Phase-2 session and elevated to a project-wide ADR (visibility requires coordinated implementation across zones + cards + presentation).
 
-# Zone Model Decisions
+## Options considered
 
-This document answers the Zones questions from [Open Questions](ledgers/OPEN-ITEMS.md). These are early research decisions, not final implementation contracts.
+### Q1 — Zone shape direction (early)
 
-## Status
+Should the zone be a trait checklist (`ordered`, `hidden`, `stackable`, `owned`, `public`, `capacityLimited`, ...) or a richer model with responsibilities and policies?
 
-The direction for zones is now:
+- **A — Trait checklist.** Rejected: gets awkward for stacks, reward offers, shop rows, production slots, card packs, shared battlefields with slots.
+- **B — Richer model with responsibilities (contents, organization, capacity behavior, visibility, change bookkeeping).** **Chosen.**
 
-- Zones should be richer models, not just a list of boolean traits.
-- Spatial placement is not a core zone concern for now.
-- MTG-style stacks and Stacklands-style stacks can both be modeled as zones with custom organization.
-- Zone visibility should be configurable per actor/player, but actor/player ownership concepts still need their own pass.
-- Zone movement is a normal simulation-driven game action, not a special out-of-band primitive.
-- Temporary choices, generated offers, drafts, and rewards are mostly action/decision-model questions and stay out of scope for this batch.
+The minimum zone model is a set of responsibilities (what instances are in the zone, how they're ordered, how new ones are inserted/removed, capacity behavior, change notifications, visibility). Game legality stays out — questions like "can this card type go here?" belong to the game/action rules layer.
 
-## Zone Shape
+### Q2 — Spatial placement (early)
 
-Question: what zone traits are mandatory in core?
+How should spatial board positions relate to zone membership?
 
-Decision: avoid designing zones as a trait checklist for now. A zone should be a richer model with contents, organization behavior, capacity/size behavior, visibility, and change bookkeeping.
+- **A — Bake spatial coordinates into zones.** Rejected: forces every zone to understand world positions, UI layout, 3D card placement; most zones only need simulation membership and ordering.
+- **B — Spatial placement is outside the core zone model.** **Chosen** — view-defined when only presentation; game-specific when physical position is part of rules; later spatial-system concern, not mandatory.
 
-Reasoning:
+The core zone model may support a generic position/order value, but does not require spatial coordinates.
 
-A trait-only model risks becoming a pile of booleans like `ordered`, `hidden`, `stackable`, `owned`, `public`, `capacityLimited`, and so on. That can describe simple zones, but it may become awkward for zones like:
+### Q3 — Stacks (early)
 
-- A Magic stack.
-- A Stacklands physical stack.
-- A reward offer.
-- A shop row.
-- A production slot.
-- A card pack.
-- A shared battlefield with slots.
+Are stacks zones, relationships, or both?
 
-Implication:
-
-The zone model should talk about responsibilities and policies rather than fixed traits. A zone can still expose configuration, but the base framework should not assume every zone is assembled from the same fixed trait set.
-
-Confidence: medium.
-
-Follow-up:
-
-Define the minimum zone model as a set of responsibilities:
-
-- What instances are in the zone.
-- How those instances are ordered or grouped.
-- How new instances are inserted or removed after the simulation has approved a change.
-- Whether the zone has default capacity/size behavior, and how that behavior can be overridden by game effects.
-- What change notifications or history facts are emitted when contents change.
-- What data is visible to which actors.
-
-Do not put game legality in the zone. Questions like "can this card type go here?" or "is this actor allowed to move this card here?" belong to the game/action rules layer.
-
-## Spatial Placement
-
-Question: how should spatial board positions relate to zone membership?
-
-Decision: spatial placement is outside the core zone model for now.
-
-Zones are primarily simulation logic. Spatial placement should be:
-
-- View-defined, when it is only presentation layout.
-- Game-specific, when physical position is part of the rules.
-- A later spatial-system concern, not a mandatory zone concern.
-
-Reasoning:
-
-The framework should not force every zone to understand world positions, UI layout, or 3D card placement. Most zones only need simulation membership and ordering. Stacklands-like games may need spatial rules, but that should be modeled deliberately by a spatial preset or game-specific zone type.
-
-Implication:
-
-The core zone model may support a generic position/order value, but not require spatial coordinates.
-
-Confidence: high.
-
-Follow-up:
-
-When we design presentation/interaction, define how views map zone contents to UI/2D/3D layouts without changing zone semantics.
-
-## Stacks
-
-Question: are stacks zones, relationships, or both?
-
-Decision: model stacks as zones with custom organization.
-
-This applies to both:
-
-- MTG-style rules stack.
-- Stacklands-style physical card stack.
+- **A — Separate "stack relationship" concept.** Rejected: duplicates membership information; complicates the type system.
+- **B — Model stacks as zones with custom organization.** **Chosen** — applies to both MTG-style rules stack and Stacklands-style physical stack.
 
 If multiple cards are in the same stack zone, the relationship is already represented by zone membership. The zone owns the organization that makes those members behave like a stack.
 
-Reasoning:
+### Q4 — Visibility (early framing; full mechanism in elevated ADR-0006)
 
-Treating stacks as zones keeps the model simple:
+How should hidden, partially visible, and viewer-specific state be modeled?
 
-- The stack contains instances.
-- The stack can define ordering.
-- The stack can define insertion and removal behavior.
-- The stack can define size/capacity behavior, if relevant.
-- The stack can expose visibility differently per actor.
+- **A — Single `hidden` boolean on a zone.** Rejected: insufficient — "something is there" and "I know what it is" are different concerns.
+- **B — Two channels (membership + detail), actor-specific configuration.** **Chosen as direction** — separates "something is there" from "I know what it is," matters for presentation, networking, replay, AI, hidden information, spectator/debug.
 
-Relationships may still exist for convenience or derived views, but the primary model should be zone membership.
+The specific runtime mechanism (definition policy + per-card flag + server-side `CardRef` rotation + history filtering) was settled later and elevated to project-wide ADR. See [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) for the full options weighed.
 
-Implication:
+### Q5 — Zone movement (early)
 
-Do not create a separate universal "stack relationship" concept yet. Start with stack zones and allow game rules or preset systems to decide what actions a stack enables.
+Should zone movement be a generic event, a task, or a specialized rules primitive?
 
-Confidence: medium-high.
+- **A — Specialized rules primitive.** Rejected: zone movement should not be a direct view operation or a special shortcut.
+- **B — Normal simulation-driven game action.** **Chosen** — flows through the same action pipeline as moving a card, changing a card, using a card, drawing a card, discarding a card, or placing a card into a stack.
 
-Follow-up:
+Expected shape: presentation/system creates an intent → game/action rules validate → simulation applies the approved state change → destination/source zones organize their contents → history/events record the result → triggers/reactions may respond.
 
-The Rules/Scheduler docs should later distinguish a rules stack zone from an effect scheduler data structure.
+### Q6 — Temporary choices and generated views (early)
 
-## Visibility
+How do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?
 
-Question: how should hidden, partially visible, and viewer-specific state be modeled?
-
-Decision: zones should support actor-specific visibility configuration, but actor/player/ownership semantics are still unresolved.
-
-Early visibility model should assume at least two channels:
-
-1. **Membership visibility**: whether an actor can know which instance IDs are in the zone, and in what order/grouping.
-2. **Detail visibility**: whether an actor can resolve the definition and variable data behind a visible instance ID.
-
-Examples:
-
-- A player may know their hand contains instance IDs A, B, C and see all details.
-- An opponent may know the hand has three cards but not know the instance IDs or definitions.
-- A deck may reveal count but hide order and details.
-- A discard pile may reveal membership, order, and full details.
-- A face-down card zone may reveal an instance exists but hide definition and variables.
-
-Reasoning:
-
-This separates "something is there" from "I know what it is." That separation will matter for presentation, networking, replay, AI, hidden information, and spectator/debug tools.
-
-Implication:
-
-Do not model visibility as a single `hidden` boolean on a zone. Visibility should eventually be queryable per actor and per data channel.
-
-Confidence: medium.
-
-Follow-up:
-
-Define actors, players, ownership, controller, and viewers before finalizing visibility APIs.
-
-## Zone Movement
-
-Question: should zone movement be a generic event, a task, or a specialized rules primitive?
-
-Decision: zone movement is a normal simulation-driven game action.
-
-Moving a card, changing a card, using a card, drawing a card, discarding a card, or placing a card into a stack all change game state. They should flow through the same general action pipeline once that pipeline is defined.
-
-Expected shape:
-
-1. Presentation or a system creates an intent/request.
-2. Game/action rules validate whether that movement or action is allowed.
-3. Simulation applies the approved state change.
-4. The destination/source zones organize their contents after the change.
-5. History/events record the result.
-6. Triggers/reactions may respond.
-
-Reasoning:
-
-Zone movement should not be a direct view operation or a special shortcut. Dragging a card might request movement, but the simulation approves and performs the actual move. The zone can say how to place the instance once the move is approved, but it should not be the authority for whether the move is legal.
-
-Implication:
-
-Do not define final `Event`, `Task`, or `Action` semantics in the zone docs. The zone docs should only state that movement is simulation driven and uses the same action flow as other game changes.
-
-Confidence: high.
-
-Follow-up:
-
-The next major research batch should define action/request/decision/task/event/history terminology and flow.
-
-## Temporary Choices And Generated Views
-
-Question: how do we model temporary views like reward offers, shops, card packs, draft picks, and generated choices?
-
-Decision: out of scope for the zone system for now.
-
-Generated choices are a bigger action/decision question. Some of these may eventually be zones, but we should not force that answer yet.
-
-Examples:
-
-- A reward offer might be a temporary zone.
-- A draft pick might be a decision with options, not a zone.
-- A card pack might be a zone, an effect, or a generated content source.
-- A shop row might be a zone plus economic rules.
-
-Reasoning:
-
-Trying to classify every temporary view as a zone now would mix zone modeling with action generation, decisions, rewards, economy, and presentation.
-
-Implication:
+- **A — Force these into the zone model.** Rejected: mixes zone modeling with action generation, decisions, rewards, economy, presentation.
+- **B — Out of scope for the zone system.** **Chosen** — bigger action/decision question. A reward offer might be a temporary zone; a draft pick might be a decision with options, not a zone; a card pack might be a zone, an effect, or a generated content source; a shop row might be a zone plus economic rules.
 
 Leave these cases open until the action/decision model exists.
 
-Confidence: high.
+### Q7 — Zone shape lock (formerly ADR-0001 — folded)
 
-Follow-up:
+The zone Model settled high-level direction (Q1–Q6) but left "are zones entities or lightweight records?" and "where does membership live?" unanswered. Both are load-bearing: triggers, effects, presentation, history, and targeting all depend on what a zone *is* in the type system.
 
-Revisit temporary/generated zones after command, decision, option, and action flow docs are written.
+User constraint surfaced during the design pass: zones are groups of cards; they can have runtime values (a counter), but the moment something has stat-bearing semantics with deep modifier stacks at scale, that's a different entity that may have a zone associated with it. **Decisive: no rich modifier-stack semantics on zones**, even though the bridge technically supports variables.
 
-## Decisions To Carry Forward
+- **A — Zones as `StateEntity<TZoneDef>` (full bridge with the original heavy adapter).** Rejected at the time — the bridge was 422 LOC of caching/multiplexing, too heavy for a no-variables zone.
+- **B — Zones as plain Store slices keyed by a separate `ZoneId` type.** Pure data. Rejected: breaks free targeting (effects that pick "a card or a zone" need a unified ID namespace), and forces every game to re-implement membership data structures.
+- **C — Zones as thin objects sharing the entity bridge.** Zone is `(Definition, Storage, SelfRef)`. State lives across `EntityState` (often empty), generic `ZoneContentsState`, `OwnershipState`, and per-zone-type runtime slices. Targeting works uniformly because cards and zones share `Reference` / `Ref<T>`. **Chosen** — and after Plan C trimmed the bridge to ~90 LOC, the cost of "always on the bridge" is negligible.
 
-- Zones are richer organization models, not just trait bags.
-- Spatial placement is not a core zone requirement.
-- Stacks are zones with custom organization.
-- Visibility needs at least membership and detail channels.
-- Zone visibility should be actor-specific later.
-- Zone movement is simulation driven and approved through normal action flow.
-- Game/action rules own legality; zones own contents, ordering, capacity defaults, and change bookkeeping.
-- Generated choices are deferred to the action/decision model.
+The ADR text evolved with main's design passes. The original named the bridge handle `StateEntity<ZoneDefinition>` and the polymorphic addressable type `IReference`; the Plan A/B/C cascade renamed them to `EntityInstance<ZoneDefinition>` and `Reference` (an abstract record); the open-seams pass introduced the framework parent `InstanceWithSlices<ZoneDefinition>` (consolidates `ISliceProvider` on the Instance side and exposes `Definition` as `protected`). `Zone` extends `InstanceWithSlices<ZoneDefinition>` in the current shape, is unsealed (project convention), and the previously-separate `ZoneRegistry` collapsed into `store.Catalog`.
 
+### Q8 — Insertion API lock (formerly ADR-0003 — folded)
+
+Zone insertion has two axes that game effects sometimes need to control beyond the zone's default behavior: **position** (top, bottom, specific index, specific slot) and **capacity** (respect or bypass).
+
+A separate axis — "this insertion can't be cancelled by replacement effects" — lives at the `GameAction` / trigger-fold layer, not at the zone mutation layer.
+
+For the payload shape:
+
+- **A — Single payload with optional override fields.** `InsertCardPayload { Zone, Card, Position, BypassCapacity }`. `Position` and `BypassCapacity` defaults mean "use zone definition's default"; explicit values override. Sugar via static factories. **Chosen.**
+- **B — Two payloads.** `InsertCardPayload` for standard, `ForceInsertCardPayload` for overrides. Rejected: duplicates mutator logic; effects pick which payload to use; framework grows two parallel paths for one concept.
+- **C — Multiple targeted payloads.** `InsertAtTopPayload`, `InsertAtBottomPayload`, `InsertAtSlotPayload`, `ForceInsertPayload`. Rejected: reads nicely at call sites but multiplies framework surface; forces a "which payload?" decision on every call.
+
+For the `Position` field shape:
+
+- **Discriminated union mixing parameterless and parameterized variants** (e.g., `Top | Bottom | AtIndex(int) | AtSlot(SlotKey)` as one enum). Rejected: structurally awkward — cases-with-data and cases-without-data on the same type read as "functions on an enum" in C#, even when expressed as a sealed hierarchy in trivia.
+- **Enum + optional `Index` field** (`enum InsertMode { ZoneDefault, Top, Bottom, AtIndex }; int? Index`). Rejected: invalid combinations are constructible (`Mode = Top, Index = 5`); flat shape but loses type safety.
+- **Sealed record hierarchy.** `abstract record InsertPosition; sealed record AtTop/AtBottom/AtIndex(int)/DefaultPosition`. Each variant is its own type with its own data. **Chosen.**
+
+## Rationale
+
+The chosen direction across Q1–Q8 produces a coherent shape:
+
+- **Responsibilities-not-traits** (Q1) keeps the model open for stacks, reward offers, shop rows, and other non-pile concepts without forcing them through a fixed boolean schema.
+- **Spatial out of scope** (Q2) avoids forcing every zone to understand layout; spatial-rules games add fields when concrete requirements arrive.
+- **Stacks-as-zones** (Q3) reuses zone membership for the relationship, with custom organization for ordering.
+- **Two visibility channels** (Q4) separates "something is there" from "I know what it is"; the runtime mechanism in ADR-0006 cuts data per actor without altering identity.
+- **Movement is normal action flow** (Q5) keeps the action pipeline as the single approval/execution path; zones stay focused on organization.
+- **Generated choices deferred** (Q6) prevents mixing zone modeling with action/decision/reward/economy/presentation concerns.
+- **Zone-as-thin-handle on the entity bridge** (Q7) gives the polymorphic targeting benefit (zones and cards both addressable via `Reference`) without dragging in heavy modifier-stack expectations.
+- **Single insertion payload + sealed record hierarchy** (Q8) gives one mutator, one payload type, one mental model, with type-safe variant data.
+
+## Consequences
+
+- **Enables:** zones and cards both addressable via `Reference` and share the typed `Ref<T>` family → polymorphic targeting works uniformly; membership has a single canonical home (`ZoneContentsState`); per-zone-type runtime values have a typed home; the entity-bridge cost is negligible after Plan C; one mutator/payload for insertion with composite `MoveCardMutation` forwarding the same options; visibility branching is a one-line predicate (`card.IsVisibleTo`); `CardRef` rotation runs the same locally and over the wire (no per-actor ID divergence); per-actor reveal-then-hide privacy without breaking simulation-side `Ref<Card>` invariants.
+- **Constrains:** zones should not be used as the home for rich stat-bearing semantics with deep modifier stacks (a game concept needing stats belongs on a different entity that *has* a zone, not a zone with stats); zone owner is read-only on the handle (mutations go through `OwnershipState`); server-internal subscriptions must use `Card`/`Ref<Card>` (never `CardRef`); client-visible state and projections must use `CardRef`; override semantics live on the payload (game effects that "force" insertion express it through `BypassCapacity = true` and explicit `Position`).
+- **Decisions to carry forward:** zones are richer organization models, not trait bags; spatial placement is not a core requirement; stacks are zones with custom organization; visibility uses membership + detail channels with definition-policy + per-card flag + server-side ref rotation; zone movement is simulation-driven via normal action flow; game/action rules own legality; zones own contents, ordering, capacity defaults, and change bookkeeping; generated choices deferred to action/decision model.
