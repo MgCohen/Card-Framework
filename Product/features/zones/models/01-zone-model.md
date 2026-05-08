@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/cards/models/01-card-model.md, Product/decisions/0006-zone-visibility-model.md]
+references: [features/entities/models/02-runtime-surface.md, features/cards/models/01-card-model.md, Product/decisions/0008-zone-visibility-model.md]
 tags: [#zones, #model]
 ---
 
@@ -219,7 +219,7 @@ When a card hides, `SetCardVisibilityMutation.Hide(card)` rotates the `CardRef` 
 
 The simulation-side `Ref<Card>` stays stable forever. Triggers, effects, attachments, and history all reference the `Card` object or its `Ref<Card>` — they are unaffected by ref rotation.
 
-Full mechanism + options weighed in [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) (project-wide cross-cutting decision: zones policy + cards override + presentation transport filter).
+Full mechanism + options weighed in [`Product/decisions/0008-zone-visibility-model.md`](Product/decisions/0008-zone-visibility-model.md) (project-wide cross-cutting decision: zones policy + cards override + presentation transport filter).
 
 ### History filtering
 
@@ -230,7 +230,7 @@ The server records a single canonical `HistoryEnvelope` stream with full `Ref<Ca
 
 For genuinely-secret movements (where even the fact must be hidden from observers), the game models the interaction differently — the framework does not provide a "secret history" mode.
 
-Full reasoning in [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) §History.
+Full reasoning in [`Product/decisions/0008-zone-visibility-model.md`](Product/decisions/0008-zone-visibility-model.md) §History.
 
 ### Zone movement
 
@@ -278,7 +278,7 @@ Model-local invariants. (See `zones.md ## Invariants` for feature-level rules �
 
 ## Decisions
 
-Linked: [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) — Visibility model: definition policy + per-card flag + server-side `CardRef` rotation. Cross-cutting (zones + cards + presentation).
+Linked: [`Product/decisions/0008-zone-visibility-model.md`](Product/decisions/0008-zone-visibility-model.md) — Visibility model: definition policy + per-card flag + server-side `CardRef` rotation. Cross-cutting (zones + cards + presentation).
 
 ## Examples
 
@@ -319,7 +319,7 @@ bool visible = card.IsVisibleTo(state, opponent);
 
 ---
 
-*Below: provenance — early high-level direction (Q1–Q6) plus the locked specifics for zone shape (folded on 2026-05-08 from `features/zones/decisions/0001-zone-shape.md`, originally landed 2026-05-01 and amended twice on 2026-05-06 for the Plan A/B/C cascade and the open-seams pass) and insertion API (folded on 2026-05-08 from `features/zones/decisions/0003-insertion-api.md`, originally landed 2026-05-01). The visibility model's full options-weighed lives in the elevated [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) (originally `features/zones/decisions/0002-visibility-model.md`, elevated to project-wide on 2026-05-08); Q4 below references the original early framing only.*
+*Below: provenance — early high-level direction (Q1–Q6) plus the locked specifics for zone shape (folded on 2026-05-08 from `features/zones/decisions/0001-zone-shape.md`, originally landed 2026-05-01 and amended twice on 2026-05-06 for the Plan A/B/C cascade and the open-seams pass) and insertion API (folded on 2026-05-08 from `features/zones/decisions/0003-insertion-api.md`, originally landed 2026-05-01). The visibility model's full options-weighed lives in the elevated [`Product/decisions/0008-zone-visibility-model.md`](Product/decisions/0008-zone-visibility-model.md) (originally `features/zones/decisions/0002-visibility-model.md`, elevated to project-wide on 2026-05-08); Q4 below references the original early framing only.*
 
 The zone Model evolved in two phases. **Phase 1** (early Q1–Q6 below): high-level direction set in the original Zone Model Decisions doc — responsibilities-not-traits, spatial deferred, stacks-as-zones, two visibility channels (early framing), movement is normal action flow, generated choices deferred. **Phase 2** (Q7–Q8 below): internal-opens session settled the specific shapes — zone-as-thin-handle (folded ADR-0001) and insertion-API-as-single-payload (folded ADR-0003). The visibility mechanism was settled in the same Phase-2 session and elevated to a project-wide ADR (visibility requires coordinated implementation across zones + cards + presentation).
 
@@ -359,7 +359,7 @@ How should hidden, partially visible, and viewer-specific state be modeled?
 - **A — Single `hidden` boolean on a zone.** Rejected: insufficient — "something is there" and "I know what it is" are different concerns.
 - **B — Two channels (membership + detail), actor-specific configuration.** **Chosen as direction** — separates "something is there" from "I know what it is," matters for presentation, networking, replay, AI, hidden information, spectator/debug.
 
-The specific runtime mechanism (definition policy + per-card flag + server-side `CardRef` rotation + history filtering) was settled later and elevated to project-wide ADR. See [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) for the full options weighed.
+The specific runtime mechanism (definition policy + per-card flag + server-side `CardRef` rotation + history filtering) was settled later and elevated to project-wide ADR. See [`Product/decisions/0008-zone-visibility-model.md`](Product/decisions/0008-zone-visibility-model.md) for the full options weighed.
 
 ### Q5 — Zone movement (early)
 

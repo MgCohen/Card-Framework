@@ -328,7 +328,7 @@ This model's zone-related follow-ups have been settled — see the Zone Model an
 - ~~Is a zone always an entity instance, or can some zones be lightweight session records?~~ → Resolved: zones are thin domain objects (not entities), state in slices. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
 - ~~Is zone membership a variable, relationship, Store slice, or combination?~~ → Resolved: `ZoneContentsState` slice. ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
 - ~~How does ordered or grouped arrangement work inside zones?~~ → Resolved: `ZoneContentsState` carries an ordered `ImmutableList<CardRef>`; per-entry slot/group structure is deferred (see `bl-spatial-rule-attachment` in `OPEN-ITEMS.md`). ([ADR-0001](features/zones/decisions/0001-zone-shape.md))
-- ~~How do visibility and ownership interact?~~ → Resolved: zone definition policy + per-card flag enum + server-side `CardRef` rotation. ([ADR-0006](Product/decisions/0006-zone-visibility-model.md))
+- ~~How do visibility and ownership interact?~~ → Resolved: zone definition policy + per-card flag enum + server-side `CardRef` rotation. ([ADR-0008](Product/decisions/0008-zone-visibility-model.md))
 
 
 ---
