@@ -1,13 +1,14 @@
 ---
 type: adr
 status: accepted
-tags: [#adr, #actions, #validation]
+references: [features/actions/models/01-command-pipeline.md, features/presentation/models/01-presentation-loop.md, features/engine/models/02-gamerules-contract.md]
+tags: [#adr, #actions, #validation, #cross-cutting]
 ---
 
 # ADR-0007 — Five validation layers, with handler.Validate authoritative
 
-Date: 2026-04-29
-Context-doc: features/actions/models/01-command-pipeline.md
+Date: 2026-04-29 (elevated from `features/actions/decisions/0007-five-validation-layers.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across actions + engine + presentation, with each layer owned by a different feature)
+Context-docs: `features/actions/models/01-command-pipeline.md`, `features/presentation/models/01-presentation-loop.md`, `features/engine/models/02-gamerules-contract.md`
 Proposal: features/presentation/models/01-presentation-loop.md, features/actions/models/01-command-pipeline.md
 
 ## Amendment — 2026-05-07 (triggers + dispatch design pass)
