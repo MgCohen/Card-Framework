@@ -1,13 +1,14 @@
 ---
 type: adr
 status: accepted
-tags: [#adr, #zones, #visibility, #history, #cards]
+references: [features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/presentation/models/01-presentation-loop.md]
+tags: [#adr, #zones, #visibility, #history, #cards, #cross-cutting]
 ---
 
-# ADR-0002 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
+# ADR-0006 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
 
-Date: 2026-05-01
-Context-doc: features/zones/models/01-zone-model.md
+Date: 2026-05-01 (elevated from `features/zones/decisions/0002-visibility-model.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across cards + zones + presentation)
+Context-docs: `features/cards/models/01-card-model.md`, `features/zones/models/01-zone-model.md`, `features/presentation/models/01-presentation-loop.md`
 Proposal: session-20260501-1602-zone-model-internal-opens
 
 ## Context
@@ -84,5 +85,5 @@ For genuinely-secret movements (where even the fact must be hidden from observer
 
 - **Enables:** server-side rules can branch on visibility with a one-line predicate; the same `CardRef` rotation runs locally and over the wire — no per-actor ID divergence; reveal-then-hide privacy works without breaking simulation-side invariants on `Ref<Card>`; the framework's transport filter is purely a *data cutter*, not a transformer.
 - **Constrains:** server-internal subscriptions (triggers, effects, attachments, history references intended for subscriber dispatch) must use `Card` objects or `Ref<Card>` — never `CardRef` — otherwise rotations break them. Client-visible state and projections must use `CardRef` — otherwise the privacy mechanism doesn't apply.
-- **Reverts:** the original ADR-0002 selected per-actor transport alias for the privacy mechanism. This was reversed in the same session per the "play the same locally vs networked" principle. The `Ephemeral Instance ID` glossary entry that referred to the old transport-alias model is deprecated; the framework no longer maintains a per-actor alias map.
+- **Reverts:** the originally-considered "per-actor transport alias" privacy mechanism (Option A in the per-actor mechanism section above) was reversed in the same session per the "play the same locally vs networked" principle. The `Ephemeral Instance ID` glossary entry that referred to the old transport-alias model is deprecated; the framework no longer maintains a per-actor alias map.
 - **Audit:** asymmetric reveals (visible to one specific opponent only) are deferred — a game that needs them models the reveal as a transient game-state slice ("opponent X currently knows card Y") separate from the canonical visibility flag.

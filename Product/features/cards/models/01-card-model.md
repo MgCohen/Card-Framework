@@ -131,7 +131,7 @@ Owner mutations go through the Store like any other state change — there is no
 
 ### Card visibility — `CardVisibilityState`
 
-Visibility uses a per-card runtime override on top of the zone's default policy (the policy itself lives on `ZoneDefinition` — see [`features/zones/decisions/0002-visibility-model.md`](features/zones/decisions/0002-visibility-model.md)). The override is a state slice keyed by `Ref<Card>`:
+Visibility uses a per-card runtime override on top of the zone's default policy (the policy itself lives on `ZoneDefinition` — see [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md)). The override is a state slice keyed by `Ref<Card>`:
 
 ```csharp
 public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
@@ -228,7 +228,7 @@ Model-local invariants. (See `cards.md ## Invariants` for feature-level rules �
 
 ## Decisions
 
-*n/a — no elevated ADR.*
+Linked: [`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md) — Visibility model: definition policy + per-card flag + server-side `CardRef` rotation. Cross-cutting (zones + cards + presentation). Shapes the `CardRef` rotation mechanism this Model implements and the `CardVisibilityState` per-card override slice.
 
 ## Examples
 
@@ -337,5 +337,5 @@ Mutations that write `CardMapState` carry the new `CardRef` as a payload field. 
 
 - **Enables:** cards have a clear canonical home — `EntityState` slice keyed by `Ref<Card>`, plus `CardMapState` for the privacy layer (both snapshotted, both rollback for free); the framework supports privacy across reveal-then-hide cycles via server-side ref rotation; "play the same locally vs networked" — the same `CardRef` rotation runs in both modes; server-internal subscriptions reference Cards by `Card` object or `Ref<Card>` and are unaffected by ref rotation.
 - **Constrains:** any state slice or projection that is sent to clients must reference cards by `CardRef`, not by `Ref<Card>` (otherwise the privacy filter doesn't work). Server-internal state must reference cards by `Card` or `Ref<Card>`, not by `CardRef` (otherwise rotations cascade through subscribers).
-- **Reverts/replaces:** the original Zones visibility model's "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. The visibility ADR (`features/zones/decisions/0002-visibility-model.md`) reflects this.
+- **Reverts/replaces:** the original Zones visibility model's "per-actor transport alias" mechanism is replaced by server-side `CardRef` rotation. The visibility ADR ([`Product/decisions/0006-zone-visibility-model.md`](Product/decisions/0006-zone-visibility-model.md), elevated from `features/zones/decisions/0002-visibility-model.md` on 2026-05-08) reflects this.
 - **Cascade:** existing references to card identity in `effects/`, `engine/`, `actions/`, `presentation/` need a sweep — server-internal vs client-visible distinction. Surfaced on demand by `/builder:lint` (per §5.7).
