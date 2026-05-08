@@ -59,7 +59,7 @@ The feature has one Model. See `models/01-presentation-loop.md` for the four-lay
 
 | Model | Role |
 |---|---|
-| [`models/01-presentation-loop.md`](models/01-presentation-loop.md) | The four-layer loop (Store / IntentMapper / AffordanceMap / View); snapshot-driven reactive flow; validation layering on the presentation side; transport-boundary visibility filter |
+| [`01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) | The four-layer loop (Store / IntentMapper / AffordanceMap / View); snapshot-driven reactive flow; validation layering on the presentation side; transport-boundary visibility filter |
 
 ## Invariants
 

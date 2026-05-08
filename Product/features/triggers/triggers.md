@@ -58,7 +58,7 @@ The feature has one Model. See `models/01-trigger-fold.md` for the type hierarch
 
 | Model | Role |
 |---|---|
-| [`models/01-trigger-fold.md`](models/01-trigger-fold.md) | Type hierarchy, trigger fold mechanic, subscription + execution surfaces, per-instance registration, pipeline-shape integration |
+| [`01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) | Type hierarchy, trigger fold mechanic, subscription + execution surfaces, per-instance registration, pipeline-shape integration |
 
 ## Invariants
 

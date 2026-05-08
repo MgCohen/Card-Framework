@@ -59,8 +59,8 @@ The feature has two Models. The conceptual model lives in `01-definition-instanc
 
 | Model | Role |
 |---|---|
-| [`models/01-definition-instance-model.md`](models/01-definition-instance-model.md) | Conceptual model: definitions, instances, variables, modifiers, attachments, composition; bridge boundary (Store + entities); mutation payload conventions |
-| [`models/02-runtime-surface.md`](models/02-runtime-surface.md) | Concrete API: `InstanceWithSlices<TDef>` handle, `IEntityVariableStorage` read/mutation surface, subscriptions, `Modifiers` factory, lifecycle (`store.Catalog` + `StoreEntities.Spawn`), authoring reference, worked examples |
+| [`01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) | Conceptual model: definitions, instances, variables, modifiers, attachments, composition; bridge boundary (Store + entities); mutation payload conventions |
+| [`02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) | Concrete API: `InstanceWithSlices<TDef>` handle, `IEntityVariableStorage` read/mutation surface, subscriptions, `Modifiers` factory, lifecycle (`store.Catalog` + `StoreEntities.Spawn`), authoring reference, worked examples |
 
 ## Invariants
 

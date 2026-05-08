@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md, features/engine/models/05-game-factory.md, features/engine/models/07-game-definition.md, features/zones/models/01-zone-model.md, Product/decisions/0005-objects-over-ids.md]
+references: [features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md, features/engine/models/05-game-factory.md, features/engine/models/07-game-definition.md, features/zones/models/01-zone-model.md, decisions/0005-objects-over-ids.md]
 tags: [#players, #actor, #entity, #player-definition, #model]
 ---
 

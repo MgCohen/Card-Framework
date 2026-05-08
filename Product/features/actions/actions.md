@@ -87,8 +87,8 @@ Validation is layered explicitly. **`handler.Validate` is authoritative at dispa
 
 | Model | Role |
 |---|---|
-| [`models/01-command-pipeline.md`](models/01-command-pipeline.md) | Pipeline mechanics; the six shapes (`PlayerIntent`, `ActionTemplate`, `GameCommand`, `StateMutation`, `CommandResult`, `HistoryEnvelope`); `IIntentMapper` contract; relationship to triggers and effects |
-| [`models/02-availability-snapshot.md`](models/02-availability-snapshot.md) | Typed `ActionTemplate` per command type; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks; `PlayerChoice` shape; eligibility framing |
+| [`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) | Pipeline mechanics; the six shapes (`PlayerIntent`, `ActionTemplate`, `GameCommand`, `StateMutation`, `CommandResult`, `HistoryEnvelope`); `IIntentMapper` contract; relationship to triggers and effects |
+| [`02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) | Typed `ActionTemplate` per command type; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks; `PlayerChoice` shape; eligibility framing |
 
 ## Invariants
 
