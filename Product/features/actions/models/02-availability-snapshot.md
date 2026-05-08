@@ -1,52 +1,31 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md]
-tags: [#actions, #snapshot, #availability]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, Product/decisions/0007-five-validation-layers.md]
+tags: [#actions, #snapshot, #templates, #model]
 ---
 
-# Action Availability and Mapping — The Snapshot Shape
+# Availability Snapshot — model
 
-This document defines the shape of the available-actions snapshot and the mapping from a player's choice back into a resolved `GameCommand`. It supersedes [doc 27 §5](features/presentation/models/01-presentation-loop.md) (snapshot element type) and reshapes parts of §4, §6, §9, §10, §11, §12 — the changes are summarised in [§7](#7-implications-across-existing-docs) below.
+## What it is
 
-[Doc 29](features/engine/models/03-snapshot-pipeline.md) further refines this doc: the generic `ActionAvailability` record is replaced by typed `ActionTemplate` subtypes per command type, and the eager-vs-lazy discussion in [§6](#6-where-eligibility-lives) is replaced by an "on-demand by the rule" posture. Refinements are noted inline.
+The shape of `AvailableActionsSnapshot` — the typed `ActionTemplate` records the rule publishes through `IAvailableActions` and the presentation layer consumes to render UI affordances. Each command type has a paired `ActionTemplate` subtype carrying the per-action shape (targets, modes, parameters); a shared abstract base lets snapshot machinery store templates uniformly. This Model owns the snapshot's *shape*; the *production pipeline* (who writes when, validation posture) lives in [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
 
-The shape was sketched against Pile Counter (the floor) and a Hearthstone-like scenario (the ceiling for what this shape natively expresses), with prior-art reference to the [Kettle protocol](https://github.com/HearthSim/kettle-design/wiki/6.-Player-Simulator-interaction) used by [SabberStone](spikes/sabberstone-architecture.md) and [Fireplace](spikes/fireplace-architecture.md).
+The snapshot is the rule's **best-effort approximation** of what's currently legal. Per-binding `handler.Validate` runs at dispatch (authoritative); the snapshot may be stale. UI gates (`AffordanceMap`) project from the snapshot; dispatch catches stale bindings.
 
-Builds on:
+## Contracts
 
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` contract
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — sample game; degenerate projection of this shape
-- [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — presentation loop; introduced the `AvailableActions` slot
-- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — typed templates, service-driven publication, on-demand validation
-
----
-
-## 1. Why This Doc Exists
-
-Doc 27 settled snapshot ownership (state slot, framework-defined) but locked the element type to fully-resolved `GameCommand`. The Pile Counter sketch makes that look fine — 12 candidates, one action type, discrete targets. It isn't fine for any game with more than one of:
-
-- Multiple target slots per action (multi-target spells, attacker→target pairing)
-- Modal cards (choose-one effects)
-- Parameterised actions (X-cost spells, choose-N selections)
-- Continuous parameters (pay any X, distribute N among any subset)
-
-Enumerating "every legal `GameCommand`" in those cases is either combinatorially huge (Hearthstone), unbounded (X-cost), or just structurally wrong for the UI — the player picks card-then-target, not 30 separate "Lightning Bolt at A / B / C / …" entries.
-
-Hearthstone's solution is the Kettle **OptionsBlock**: a hierarchy of `Option → main_option + sub_options → entity + targets[]`. A multi-target spell is *one* option with a `targets` array, not N options. Modal cards add `sub_options`. The client sends back `(option_index, sub_option_index, target_id)`. This doc adapts that pattern.
-
----
-
-## 2. The Shape
-
-> **Refined by [doc 29 §3](features/engine/models/03-snapshot-pipeline.md):** the single generic `ActionAvailability` record is replaced by **typed `ActionTemplate` subtypes per command type**, with a shared abstract base. `Id: ActionId` becomes `Type CommandType` (the command's type, used directly as the discriminator). The building blocks below (`TargetSlot`, `ModeOption`, `ParameterSpec`) remain valid as fields on subtypes that need them.
-
-The base + a couple of subtype examples:
+### The shape
 
 ```csharp
+public sealed record AvailableActionsSnapshot(
+    IReadOnlyList<ActionTemplate> Templates);
+
 public abstract record ActionTemplate(
-    Type      CommandType,
+    Type      CommandType,    // the registered command type — replaces stringly-typed ActionId
     EntityId? Source);
+
+// Examples — game-specific subtypes per command:
 
 public sealed record MoveCardTemplate(
     Ref<Card>                Card,
@@ -61,12 +40,21 @@ public sealed record CastSpellTemplate(
     : ActionTemplate(typeof(CastSpellCommand), Spell);
 ```
 
-The original generic shape — kept here for reference because the building blocks are still useful when an action does carry slots/modes/parameters:
+> **Boundary note.** `Ref<T>` and `Reference` fields on `ActionTemplate` subtypes are **boundary-correct** per [ADR-0005](Product/decisions/0005-objects-over-ids.md). `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IIntentMapper` to build `GameCommand`s. Rule-side code constructing templates derives refs from held objects (`card.SelfRef`, `spell.SelfRef`).
+
+Two simplifications:
+
+- **`Type CommandType` instead of an `ActionId` parallel registry.** The handler registry is already keyed by command type; `IIntentMapper` dispatches on it; history serialises it. No parallel string-id registry.
+- **Targets are `IReadOnlyList<Reference>` uniformly.** The entity model says everything targetable is addressable. Whether the entity is a card, slot, player, or zone is a per-action concern; the snapshot layer doesn't need to know.
+
+### Building blocks
+
+`TargetSlot`, `ModeOption`, `ParameterSpec` are reusable building blocks for `ActionTemplate` subtypes that need them. A `MoveCardTemplate` doesn't carry `Modes` or `Parameters` because it doesn't need them — typed shapes let each action surface only what it actually has.
 
 ```csharp
 public sealed record TargetSlot(
     string                  Name,
-    IReadOnlyList<EntityId> Legal);
+    IReadOnlyList<Reference> Legal);
 
 public sealed record ModeOption(
     string                    Label,
@@ -78,56 +66,83 @@ public sealed record OneOf<T> (string Name, IReadOnlyList<T> Choices)           
 public sealed record Subset<T>(string Name, IReadOnlyList<T> Pool, int Min, int Max)  : ParameterSpec(Name);
 ```
 
-| Field on base | Meaning |
-|---|---|
-| `CommandType` | Which command to construct — the registered command `Type`. Replaces the parallel `ActionId` registry |
-| `Source` | Entity acting (the card cast, the minion attacking). Nullable for sourceless actions like `EndTurn` |
+### `PlayerChoice`
 
-Per-subtype fields express the action's shape directly: `Destinations: IReadOnlyList<EntityId>` for a move, `Targets + Modes + XCost` for a spell, etc. Targets are uniformly `EntityId` lists ([doc 10's instance/entity model](features/entities/models/01-definition-instance-model.md)) — whether the entity is a card, slot, player, or zone is a per-action concern.
-
-> **ADR-0005 boundary note.** `Ref<T>` and `Reference` fields in `ActionTemplate` subtypes are **boundary-correct**. `ActionTemplate` records are snapshot wire-form — transported to the presentation layer and consumed by `IntentMapper`. Rule-side code constructing templates derives refs from held objects (`card.SelfRef`); the template stores refs because it is the boundary form. See [ADR-0005](decisions/0005-objects-over-ids.md).
-
-The template is the spec. `GameCommand` remains the resolved dispatch. The two are bridged by `PlayerChoice`:
+The data the player committed to, bound by `IIntentMapper.Map(template, choice)` against a template:
 
 ```csharp
 public sealed record PlayerChoice(
     int                                   TemplateIndex,
     int?                                  ModeIndex,
-    IReadOnlyList<EntityId>               Targets,
+    IReadOnlyList<Reference>              Targets,
     IReadOnlyDictionary<string, object>   Parameters);
 ```
 
-The IntentMapper switches on the typed template subtype to bind:
+Shape is provisional under typed templates — may collapse to positional + parameters once `IIntentMapper` implementations stabilize.
+
+### `IIntentMapper` becomes typed
+
+The mapper switches on the typed template subtype to produce a well-formed command. Decision-unaware: produces the same command shape whether or not a decision is open.
 
 ```csharp
-public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
+public sealed class PileCounterIntentMapper : IIntentMapper
 {
-    MoveCardTemplate  m => new MoveCardCommand(m.Card, state.LocateCard(m.Card), (Ref<Zone>)choice.Targets[0]),
-    CastSpellTemplate c => BindSpell(c, choice),
-    _ => throw new InvalidOperationException($"unknown template: {template}")
-};
+    private readonly IStateScope state;
+    public PileCounterIntentMapper(IStateScope state) => this.state = state;
+
+    public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
+    {
+        MoveCardTemplate m => new MoveCardCommand(
+            Card: m.Card,
+            From: LocateCard(state.Get<PilesState>(), m.Card),
+            To:   (Ref<Zone>)choice.Targets[0]),
+        _ => throw new InvalidOperationException($"unknown template: {template}")
+    };
+}
 ```
 
-No string-keyed slot lookup; each template subtype names its own fields. This is symmetric to Kettle's server-side option formatter (`Util.KettleOptionToPlayerTask`) but typed end-to-end.
+No string-keyed slot lookup; the template's fields name themselves. `IStateScope` is injected for normal state-driven mapping (locating the card's current pile).
 
----
+### Where eligibility lives
 
-## 3. Pile Counter Projection (the Floor)
+The snapshot is produced by the rule (`GameRulesRuntime.Evaluate` per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md)) and effects mid-execution (decision pickers). The rule decides:
 
-Pile Counter has one action, one target slot, no modes, no parameters. With typed templates ([doc 29 §3](features/engine/models/03-snapshot-pipeline.md)) and service-driven publication ([doc 29 §2](features/engine/models/03-snapshot-pipeline.md)), the snapshot is published from inside `Evaluate` (per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained` is deleted):
+1. **Per-template eligibility** — which template types are even relevant in the current game state. Cheap; filters whole categories.
+2. **Per-binding eligibility** — for each template, enumerate legal bindings (targets, modes, parameter values). May or may not run `handler.Validate` against each binding; that's an opt-in cost the rule decides per-game.
+
+The framework default is **on-demand validation** — `handler.Validate` is authoritative at dispatch and runs every time. The rule may *additionally* call `handler.Validate` during enumeration to prune templates whose every binding fails — but the framework doesn't auto-validate every candidate. See below-divider Q2 for the full options weighed.
+
+### Where the shape strains
+
+- **Cross-card combinatorics.** A template that needs to filter by combinations of cards across a hand forces enumeration of every binding; `Subset<T>` parameter supports it but per-binding validation cost is real.
+- **Cost-side combinatorics.** Variable-cost spells (X-cost, choice of mana sources) multiply binding count. Template carries `IntRange` for X.
+- **Distribute-among-many.** "Deal 5 damage divided among any number of targets" needs a per-target-amount map; templates that need this define their own bound shape (`WeightedSubset` not yet shipped — add when forced).
+- **Cross-slot relational constraints.** "Select 2 from A and 1 from B with combined cost ≤ 5" — currently the rule encodes this in per-binding generation. No framework hook.
+- **Per-player snapshots.** Currently the snapshot is global (or implicitly per-actor in single-actor games); per-player snapshots in multi-actor games defer until multiplayer lands.
+
+## Invariants
+
+Model-local invariants. (See `actions.md ## Invariants` for feature-level rules.)
+
+- **One template type per command type.** Each `GameCommand` subclass has a paired `ActionTemplate` subtype.
+- **`CommandType` discriminator is `Type`.** No parallel `ActionId` string registry.
+- **`Source` is on the abstract base.** Every action originates from a source entity (or null for sourceless actions like `EndTurn`). Nullable by design.
+- **Targets are `IReadOnlyList<Reference>` uniformly.** No per-game target-type baking.
+- **Templates are immutable records.** Snapshot mutation requires producing a new template list and calling `Actions.Set`.
+- **`IIntentMapper.Map` is decision-unaware.** It produces commands the same way whether or not a decision is open.
+
+## Decisions
+
+Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) — Five validation layers, with `handler.Validate` authoritative. Per-template eligibility (the snapshot's first filter) is one of the five layers; `AffordanceMap` (presentation-side projection of this snapshot) is the second; `IntentMapper.Map` (well-formedness check during template→command mapping) is the third. Cross-cutting (engine + actions + presentation).
+
+## Examples
+
+### Pile Counter (the floor)
+
+Single command type (`MoveCardCommand`); template per source pile.
 
 ```csharp
-public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
-{
-    var pileStates = _pileRefs.Select(r => State.Get<PileState>(r));
-
-    if (pileStates.All(p => p.Counter == p.Target))
-        return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
-
-    Actions.Set(BuildSnapshot());
-    return Array.Empty<GameAction>();
-}
-
+// Rule-side, inside Evaluate (per ADR-0006)
 private AvailableActionsSnapshot BuildSnapshot()
 {
     var lastMove  = State.Get<LastMoveState>().Move;
@@ -140,7 +155,7 @@ private AvailableActionsSnapshot BuildSnapshot()
 
         var topCardRef  = contents[^1];
         var topInstance = State.Get<CardMapState>().InstanceOf(topCardRef);
-        if (lastMove?.Card.Equals(topInstance) == true) continue;
+        if (lastMove?.Card.Equals(topInstance) == true) continue;   // per-template suppression
 
         var destinations = _pileRefs
             .Where(p => !p.Equals(sourceRef))
@@ -152,59 +167,31 @@ private AvailableActionsSnapshot BuildSnapshot()
 
     return new AvailableActionsSnapshot(templates);
 }
+
+Actions.Set(BuildSnapshot());
 ```
 
-Compared to a flat-command sketch, three things change:
+UI receives N templates (one per non-empty source pile, minus suppressed). Rendering: highlighted top cards, each with valid drop targets.
 
-1. **Snapshot shrinks from cross-product to per-source.** Up to 12 candidate `MoveCardCommand`s collapse to ≤ 4 `MoveCardTemplate` entries.
-2. **`AffordanceMap` becomes a one-liner** — the template already is "card → destinations":
+### Hearthstone-like (the ceiling)
 
-   ```csharp
-   moveTargets = snapshot.Templates
-       .OfType<MoveCardTemplate>()
-       .ToDictionary(
-           t => t.Card,
-           t => t.Destinations.Cast<Ref<Zone>>().ToList());
-   ```
+State: active player's main phase. Hand has a vanilla minion (Fire Fly), a target spell (Fireball), a modal spell (Wrath: choose-one), an X-cost spell. Board: own minions A (ready) and B (sick); opponent minions C, D, hero H.
 
-3. **IntentMapper switches on the template type:**
-
-   ```csharp
-   public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
-   {
-       MoveCardTemplate m => new MoveCardCommand(
-           m.Card,
-           state.LocateCard(m.Card),
-           (Ref<Zone>)choice.Targets[0]),
-       _ => throw new InvalidOperationException($"unknown: {template}")
-   };
-   ```
-
-The collapse is graceful: a single-field template (`Destinations`) is barely more verbose than a flat command.
-
-The "twice in a row" rule lives in `Evaluate`'s snapshot-building step (per-template suppression) because the runtime needs to skip the *entire* template for that card, not reject individual `MoveCardCommand`s. `Validate` still owns it as the authoritative check; the runtime is exercising the predicate during enumeration. This is the per-template / per-binding split — see [§6](#6-where-eligibility-lives).
-
----
-
-## 4. Hearthstone-like Projection (the Ceiling for this Shape)
-
-State: active player's main phase. Hand has Fire Fly (vanilla 2/2, cost 1), Fireball ("deal 6 to a target," cost 4), Wrath ("Choose One — deal 3 to a minion / deal 1 to a minion and draw," cost 2), and X-Burn (hypothetical: "pay X mana, deal X to a target"). Board: own minions A (ready) and B (sick); opponent minions C, D, hero H. 5 mana.
-
-Each action gets its own typed template:
+Six template types cover the turn surface; flat-`GameCommand` enumeration of the same state would be ~50 commands:
 
 ```csharp
 new PlayMinionTemplate(
-    Source: fireFlyId,
+    Source: fireFlyRef,
     BoardSlots: legalBoardSlots),
 
 new CastSpellTemplate(
-    Spell:   fireballId,
+    Spell:   fireballRef,
     Targets: [ minionA, minionB, minionC, minionD, heroH, ownHero ],
     XCost:   null,
     Modes:   []),
 
 new CastSpellTemplate(
-    Spell:   wrathId,
+    Spell:   wrathRef,
     Targets: [],
     XCost:   null,
     Modes: [
@@ -215,27 +202,24 @@ new CastSpellTemplate(
     ]),
 
 new CastSpellTemplate(
-    Spell:   xBurnId,
+    Spell:   xBurnRef,
     Targets: [ minionA, minionB, minionC, minionD, heroH, ownHero ],
     XCost:   new IntRange("X", Min: 1, Max: 5),
     Modes:   []),
 
 new MinionAttackTemplate(
-    Source:  minionAId,
+    Source:  minionARef,
     Targets: [ minionC, minionD, heroH ]),
 
 // summoning-sick minion B is excluded from the snapshot entirely
-
 new EndTurnTemplate(),
 ```
 
-Six entries cover the whole turn surface. Flat-`GameCommand` enumeration of the same state: Fireball would be 6 commands, Wrath 8 (2 × 4), X-Burn 30 (5 × 6), attacks 3 — about 50 versus 6.
-
-Player picks "X-Burn for X=3 at Minion C." IntentMapper:
+Player picks "X-Burn for X=3 at Minion C." `IIntentMapper`:
 
 ```csharp
 // PlayerChoice { TemplateIndex = 3, ModeIndex = null,
-//                Targets = [ minionCId ],
+//                Targets = [ minionCRef ],
 //                Parameters = { "X" → 3 } }
 
 return new CastSpellCommand(
@@ -245,95 +229,46 @@ return new CastSpellCommand(
     Parameters: choice.Parameters);
 ```
 
-The resolved command carries fully-bound targets and parameters; the typed template carried the spec with its own field names.
+The resolved command carries fully-bound targets and parameters; the typed template carried the spec with its own field names. Six entries cover the whole turn surface.
 
----
+## Open follow-ups
 
-## 5. Where the Shape Strains
-
-- **Cross-card combinatorics (MTG, "two Shocks on one creature").** Each Shock is its own template. The snapshot doesn't express *combined* plans. UI is fine — players act one at a time. AI is not — same limitation Forge accepts. Out of scope at this layer.
-- **Cost-side combinatorics (MTG mana).** "Pay 1UUU" with hybrid sources, fetches, Mana Confluences. Expressible as a `Subset<EntityId>` parameter over mana sources with min/max picks, but legality of the chosen subset is a mana-solver inside `Validate`. The template declares the slot; the predicate inside `Validate` does the work.
-- **"Distribute 5 damage among any number of creatures."** Needs a richer parameter shape — per-pick numeric weight, not a flat subset. Add a `WeightedSubset` spec when a game forces it.
-- **"Target two different creatures."** Cross-slot relational constraints. Either compute slot B's `Legal` lazily (after slot A is chosen — implies multi-stage UI) or accept that snapshot lists are *loosely* legal and `Validate` catches relational violations. Probably the second.
-- **Hidden-information / per-player snapshots.** Doesn't change this shape. Engine produces N snapshots, one per actor; `GameState.AvailableActions` becomes a per-player slot. Open elsewhere.
-
----
-
-## 6. Where Eligibility Lives
-
-Pile Counter's "twice in a row" rule lives in the runtime's snapshot enumeration inside `Evaluate` (suppresses the whole template for that card). Pile Counter's "source non-empty / source ≠ destination" sits in `handler.Validate`. Both are legality checks; they live in different layers. Why?
-
-- **Validate operates on a fully-bound command** (`MoveCardCommand(Card, From, To)`). Once the source is fixed, `From != To` is a per-resolved-command check.
-- **The "twice in a row" rule fixes the *whole template*** — there is no `(From, To)` binding for which the rule allows that card to move. Suppressing it at template level is honest; suppressing every per-binding command separately is wasteful.
-
-So eligibility splits:
-
-- **Per-template** — the rule decides which template entries appear at all. Cheap; one decision per source/action.
-- **Per-binding** — `Validate` decides whether a chosen target/parameter combination is legal. Authoritative; same role as today.
-
-This breaks doc 27 §9's line "the snapshot is built by *running* `handler.Validate` against every candidate." Strictly, the snapshot is built by:
-
-1. The rule generates candidate templates (per-template eligibility).
-2. The rule may *optionally* call `Handlers.Validate` to prune templates whose every binding fails. This is on-demand, not automatic.
-3. The IntentMapper binds player choice into a resolved command.
-4. `Validate` runs at dispatch on the resolved command. Authoritative.
-
-Step 2 is the approximation. Step 4 is the truth. The snapshot can show actions that are loosely legal; `Validate` catches the bindings that aren't. The UI's `AffordanceMap` is still a projection of "things the rule and validate together think are likely legal."
-
-> **Refined by [doc 29 §2](features/engine/models/03-snapshot-pipeline.md):** the eager-vs-lazy framing below is replaced by **on-demand validation**. The rule does *not* automatically run `handler.Validate` against candidates during build. The default is per-template eligibility only; per-binding `Validate` is a tool the rule explicitly uses when it wants exhaustive coverage (e.g., a turn-start snapshot for a small game; a debugger UI). Scope of validation is a per-game decision, not a framework default.
-
-The earlier eager-vs-lazy framing (kept here for reference; superseded by on-demand):
-
-- **Eager** — rule pre-validates every binding while building the snapshot. Snapshot is exhaustive. Cost: O(templates × bindings). Pile Counter: cheap. Hearthstone: bounded. MTG: expensive.
-- **Lazy** — rule emits templates with cheap eligibility; per-binding validation runs at dispatch only. Cost: O(templates). UI may show drag-drop affordances that fail at dispatch, surfaced as a toast.
-
----
-
-## 7. Implications Across Existing Docs
-
-Follow-up edits — applied in [doc 29's §8 implications table](features/engine/models/03-snapshot-pipeline.md) (with overlaps from this doc's original list). Both rounds of edits have been applied to docs 25, 26, 27.
-
-> **Note:** This table reflects the original two-round propagation (this doc + doc 29). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), `OnQueueDrained`, `IntakeContext`, and `DrainResult` are all deleted entirely; snapshot publication folds into `Evaluate`. The rows below are kept as historical record of the propagation that landed at the time.
-
-| Doc | Section | Change |
-|---|---|---|
-| 25 | §2 Interface | Methods take only ephemeral data; services injected at construction. `IntakeContext` collapses (later deleted entirely per ADR-0006) |
-| 25 | §6 (`OnQueueDrained`) | `DrainResult` shrinks to `Dispatch` only; snapshot writes through `IAvailableActions.Set`. (Both `OnQueueDrained` and `DrainResult` later deleted per ADR-0006; snapshot publication folds into `Evaluate`.) |
-| 25 | §10 (Open Items) | State-pattern decision resolved (services injected) |
-| 26 | §9.1 (state shape) | `AvailableActions` is `AvailableActionsSnapshot` |
-| 26 | §9.6 (the rule) | Rewrite per [§3](#3-pile-counter-projection-the-floor) |
-| 26 | §9.3 (intent mapper) | Switches on typed template subtype |
-| 26 | §9.7 (engine intake) | `IntakeContext` collapsed (later deleted per ADR-0006) |
-| 26 | §9.8 (bootstrap) | Engine builder constructs services and injects into runtime constructor |
-| 26 | §10 / §11 | Templates instead of commands; service-driven publication; Q1/Q10/Q13 resolved |
-| 27 | §4 State Shape | `AvailableActions` is `AvailableActionsSnapshot` |
-| 27 | §5 Element Type | Rewritten — typed templates, not resolved commands |
-| 27 | §6 AffordanceMap | Pattern-matches typed templates |
-| 27 | §9 Validation Layers | Per-template eligibility tier added; snapshot is approximate; `Validate` at dispatch is authoritative |
-| 27 | §10 End-to-End Trace | Step 12 is `Actions.Set`, not engine-writes-snapshot |
-| 27 | §11 Decisions Locked | Flip element-type line; service-driven publication |
-| 27 | §12 (snapshot publication) | Folded into `Evaluate` per ADR-0006; `DrainResult` deleted |
-
----
-
-## 8. Open Items
-
-- **Modes vs. Parameters unification.** A mode is structurally a discrete-choice parameter that bundles target slots. Could fold into `Parameters` with a `ChoiceWithTargets` spec. Aesthetically cleaner; ergonomically heavier on IntentMapper. Coin flip.
+- **Modes vs. Parameters unification.** A mode is structurally a discrete-choice parameter that bundles target slots. Could fold into `Parameters` with a `ChoiceWithTargets` spec. Aesthetically cleaner; ergonomically heavier on `IIntentMapper`.
 - **`ParameterSpec` taxonomy.** `IntRange`, `OneOf<T>`, `Subset<T>` cover the survey. Add `WeightedSubset` and `FreeText` when forced; structured-input cases (declare attackers/blockers as a multi-edge bipartite assignment) deserve their own spec.
 - **Multi-stage / staged target picking.** Cross-slot constraints want either lazy slot resolution or `Validate`-as-final-arbiter. Pick one before MTG-shaped games arrive.
-- ~~**Eager vs. lazy binding validation.**~~ Resolved by [doc 29 §2](features/engine/models/03-snapshot-pipeline.md): on-demand by the rule, no automatic eager validation. Per-game decision.
 - **`Source` nullability.** Sourceless actions (`EndTurn`) make `Source` nullable. Could instead model `EndTurn` as having a player-source. Aesthetic; defer.
-- **`PlayerChoice` shape under typed templates.** Targets sketched as `IReadOnlyList<EntityId>` (positional). May want named for ergonomics in templates with several distinct slots. Pin when IntentMapper is implemented ([doc 29 §9](features/engine/models/03-snapshot-pipeline.md)).
-- **Type erasure on `Parameters`.** `IReadOnlyDictionary<string, object>` is loose. Generic per-spec parameters would force compile-time matching but balloon types. Probably stay loose; IntentMapper is the only consumer.
+- **`PlayerChoice` shape under typed templates.** Targets sketched as `IReadOnlyList<Reference>` (positional). May want named for ergonomics in templates with several distinct slots. Pin when `IIntentMapper` is implemented.
+- **Type erasure on `Parameters`.** `IReadOnlyDictionary<string, object>` is loose. Generic per-spec parameters would force compile-time matching but balloon types. Probably stay loose; `IIntentMapper` is the only consumer.
+- **Per-player snapshots.** Multi-actor games may need per-actor template filtering or per-actor slices. Pin when multiplayer lands.
 
 ---
 
-## 9. Related
+*Below: provenance — feature-internal decisions folded on 2026-05-08 from `features/actions/decisions/0001-typed-action-template.md` and `features/actions/decisions/0002-on-demand-validation.md` (both originally landed 2026-04-29). Single-feature scope (the snapshot's shape and validation posture are owned by actions; engine consumes the shape via `IAvailableActions`, presentation consumes via state subscription, but neither co-decides).*
 
-- [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `GameRules` interface
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — Pile Counter; degenerate projection
-- [features/presentation/models/01-presentation-loop.md](features/presentation/models/01-presentation-loop.md) — presentation loop; primary consumer
-- [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — typed templates, service-driven publication, on-demand validation
-- [Kettle protocol — Player Simulator interaction](https://github.com/HearthSim/kettle-design/wiki/6.-Player-Simulator-interaction) — prior art
-- `spikes/sabberstone-architecture.md` — Hearthstone task/option flow
-- `spikes/fireplace-architecture.md` — Hearthstone JSON option indexing
+## Options considered
+
+### Q1 — Template typing (formerly ADR-0001 — folded)
+
+The snapshot needs a way to describe "what command can be issued, against what targets, with what choices." Earlier sketches used a string-keyed `ActionId` plus a slot dictionary; this turned `IIntentMapper` into a reflection-flavored switch and made composition awkward.
+
+- **A — String-keyed `ActionId` + slot dictionary.** Rejected — stringly-typed; hostile to evolution; reflection-flavored mapper.
+- **B — Generic `ActionTemplate<TCommand>` only (no abstract base).** Rejected — templates must be storable in a uniform list.
+- **C — Shared abstract base `ActionTemplate` (`CommandType: Type`, `Source: EntityId?`) with a typed subtype per command.** **Chosen.** Each command type has a paired `ActionTemplate` subtype; `IIntentMapper` switches on subtype.
+
+### Q2 — Validation posture (formerly ADR-0002 — folded)
+
+Eligibility was framed as "eager pre-validation vs lazy evaluation." Both extremes have problems: eager pays the cost up front for everything; lazy means presentation can offer commands the rule won't accept.
+
+- **A — Eager pre-validation of every binding during snapshot build.** Rejected — cost grows with `targets × candidates × validators`.
+- **B — Lazy evaluation only at dispatch.** Rejected — UI can't gate buttons accurately.
+- **C — On-demand validation: per-template eligibility filters whole templates; per-binding `Validate` runs at dispatch (authoritative) and on-demand by the rule when it wants exhaustive coverage.** **Chosen.**
+
+## Rationale
+
+Q1's typed-base + per-command subtype shape gives compile-time `IIntentMapper` safety, eliminates the parallel `ActionId` registry, and makes template authoring symmetric to handler authoring (every new command ships a paired template). Q2's on-demand posture lets games choose their cost — floor games stay cheap; strict games opt into exhaustive enumeration. Together they keep the snapshot lean and the dispatch path authoritative.
+
+## Consequences
+
+- **Enables:** compile-time `IIntentMapper` safety; `ActionId` retirement (the `Type` is the identifier); snapshot builds at floor-game cost; opt-in exhaustive checks for games that demand them; rule-controlled validation cost.
+- **Constrains:** every new command type ships a paired template; presentation must accept that "template offered" is weaker than "guaranteed valid"; `AffordanceMap` layer absorbs UI-side gating.
+- **Cascade:** `IIntentMapper` consumes typed templates (per `actions/01`); `IAvailableActions` writes the snapshot (per `engine/03`); `AffordanceMap` reads the snapshot (per `presentation/01`).
