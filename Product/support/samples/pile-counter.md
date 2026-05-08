@@ -103,7 +103,7 @@ This game forces the framework to express:
 - **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
 - **Move history of size 1.** "Last card moved" is a sliver of state that doesn't fit on a card or a zone — it's *game-level* memory. It lives in a singleton `LastMoveState` slice declared by the `GameDefinition`'s `GetInitialSlices()`.
 - **`GameDefinition` bundle composition.** The puzzle's deck, pile targets, and initial deal flow through a `PileCounterGameDefinition` bundle. Tests the bundle shape from [`engine/07-game-definition.md`](features/engine/models/07-game-definition.md).
-- **Match setup commands.** After `engine.StartMatch()`, the runtime dispatches `CreateCardMutation` calls to spawn each card into its target pile. Tests the setup-command pattern from [`engine/06 §4.4`](features/engine/models/06-match-lifecycle.md).
+- **Match setup commands.** After `engine.StartMatch()`, the runtime dispatches `CreateCardMutation` calls to spawn each card into its target pile. Tests the setup-command pattern from [`engine.md §Match setup`](features/engine/engine.md).
 
 This game does **not** test:
 
@@ -183,7 +183,7 @@ public sealed record MoveCardCommand(
     Ref<Zone> From,
     Ref<Zone> To) : GameAction;
 
-// EndMatchCommand is framework-owned (engine/06 §4.2). Pile Counter does not
+// EndMatchCommand is framework-owned (engine/06 §Transitions are commands). Pile Counter does not
 // declare its own end-of-match command; Evaluate dispatches the framework's.
 
 // Result
@@ -533,7 +533,7 @@ public static class PileCounterBootstrap
         engine.StartMatch();   // dispatches StartMatchCommand → MatchStartedSignal → Lifecycle = Started
 
         // Setup commands — runtime-driven setup is the recommended pattern (per
-        // engine/06 §4.4). PileCounterRulesRuntime's first OnQueueDrained dispatches
+        // engine.md §Match setup). PileCounterRulesRuntime's first OnQueueDrained dispatches
         // CreateCardMutation calls to spawn each card into its target pile per
         // puzzle.Deal. After setup completes the runtime publishes the initial
         // AvailableActions snapshot.
@@ -581,7 +581,7 @@ These are decisions the Pile Counter sketch forced or confirmed. Each affects th
 - **`AffordanceMap` is game-specific** and lives in the UI/gateway layer. Computed from snapshot. Framework doesn't define it.
 - **Three rejection paths:** AvailableActions (UI prophylactic) / Engine lifecycle gate (framework, `NotStarted`/`Ended`) / `handler.Validate` (per-command legality, authoritative) / Before-fold `Cancel` (card-effect).
 - **`GameDefinition` bundle composition.** `PileCounterGameDefinition` consolidates Rules + CardCatalog + SharedZones + DefaultPlayerDefinition + game-singleton slices. Per-puzzle variation flows through the constructor. [`engine/07`](features/engine/models/07-game-definition.md).
-- **Match setup runs after StartMatch via runtime-driven setup commands.** The runtime's first `Evaluate` dispatches `CreateCardMutation` calls per `puzzle.Deal`. [`engine/06 §4.4`](features/engine/models/06-match-lifecycle.md).
+- **Match setup runs after StartMatch via runtime-driven setup commands.** The runtime's first `Evaluate` dispatches `CreateCardMutation` calls per `puzzle.Deal`. [`engine.md §Match setup`](features/engine/engine.md).
 - **Engine intake order (try-get):** lifecycle gate → `pipeline.Validate` → enqueue. `engine.Dispatch(GameAction action, out string? reason)` returns `bool`; matches `pipeline.Validate`'s shape.
 - **Rules layer is split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime).** Definition is `[SerializeField]` data; runtime constructor takes the definition + Scaffold `IStateScope` + `IAvailableActions` + any game-specific subsystems. Two-method contract (`FilterTriggers` + `Evaluate`); per-match factory uses container open-generic resolution ([`engine/02 §2`](features/engine/models/02-gamerules-contract.md), [`engine/05`](features/engine/models/05-game-factory.md)).
 - **Definition / Instance layered on framework parents.** `CardDefinition` / `ZoneDefinition` / `PlayerDefinition` inherit from `DefinitionWithSlices`; `Card` / `Zone` / `Player` inherit from `InstanceWithSlices<TDef>`. `Definition` is `protected` on the instance side. Per the open-seams design pass.

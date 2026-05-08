@@ -67,7 +67,7 @@ public sealed record EngineState(
     GameCommand?    CurrentCommand) : BaseState;
 ```
 
-- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate ([`engine/01`](features/engine/models/01-evaluation-loop.md) / [`engine/06`](features/engine/models/06-match-lifecycle.md)), inspection, debugging, and future replay/save support.
+- **Purpose.** Tracks engine execution state — match lifecycle phase, whether a drain is in progress, and which command is currently executing. Load-bearing for the framework's lifecycle gate ([`engine/01 §Lifecycle gate`](features/engine/models/01-evaluation-loop.md)), inspection, debugging, and future replay/save support. Lifecycle types are defined in [`engine/06`](features/engine/models/06-match-lifecycle.md).
 - **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`.
 - **Written by.** Engine internals only. The lifecycle field is written by the framework `StartMatchHandler` / `EndMatchHandler` via the framework mutator; the running flag and current command are updated on drain start/stop and before/after each `pipeline.Execute`. Not writable by game authors.
 - **Read by.** The engine's `Dispatch` lifecycle gate, tooling, debugger, and any game logic that needs to know "is the match active?" or "is the engine currently draining?".

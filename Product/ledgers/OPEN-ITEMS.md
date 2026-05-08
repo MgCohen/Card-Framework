@@ -51,7 +51,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/engine/models/07-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
 
 - id: oq-effect-cancellation-on-match-end | kind: question | **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await` (target picker, choose-one prompt, chained dispatch), the awaiting effect is still alive. Engine needs a story for cancellation: thread a `CancellationToken` through `IHandlerContext` / `IEffectScope`, hard-cancel via `IDisposable`, or accept that orphaned awaiters resolve into a closed match. Surfaced from the engine match-lifecycle design pass; deferred from that pass because it touches the effect contract, not lifecycle.
-  References: `Product/features/effects/models/01-async-dispatch.md`, `Product/features/effects/models/04-effect-flow.md`, `Product/features/engine/models/06-match-lifecycle.md` §10.
+  References: `Product/features/effects/models/01-async-dispatch.md`, `Product/features/effects/models/04-effect-flow.md`, `Product/features/engine/models/06-match-lifecycle.md`.
 
 - id: oq-intent-template-lookup | kind: question | **Intent → template lookup** — `IIntentMapper.Map(ActionTemplate, PlayerChoice)` requires a pre-resolved template, but how the gateway/store picks the matching `ActionTemplate` from the snapshot for a raw `PlayerIntent` is undocumented. The "(or builds one from the intent)" clause in presentation/01 §10 step 6 is unexplained.
   References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.

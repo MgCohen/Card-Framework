@@ -178,7 +178,7 @@ public interface IMatchBuilder
 
 ### Behavior resolution at `Build`
 
-The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)). The factory:
+The factory operates **inside** a per-match DI scope opened by the host (or app-level controller) — scope lifetime is the host's responsibility, not the factory's (see [`engine.md §Disposal split`](features/engine/engine.md)). The factory:
 
 1. Registers the `MatchSetup.Game.Rules` definition instance into the surrounding scope (so the runtime constructor can take its typed `TDefinition` parameter).
 2. Resolves `GameRulesRuntime<TDefinition>` via container open-generic resolution — `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))` — picking up the definition, framework services, and any game-specific subsystems in one constructor call.
@@ -186,7 +186,7 @@ The factory operates **inside** a per-match DI scope opened by the host (or app-
 4. Resolves `ICommandPipeline` (which resolves handlers from the container at dispatch time).
 5. Resolves `IIntentMapper` if the game registered one.
 6. Constructs the `Store` and walks the slice-installation pseudocode from [Game Definition §Build walk](features/engine/models/07-game-definition.md): framework slices auto-seeded, then per-spawn instances (zones, players) spawned from the layout blocks + overlays, then game-singletons from `GameDefinition.GetInitialSlices()`, then manual `MatchSetup.InitialSlices` overlay.
-7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md)).
+7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine.md §Disposal split`](features/engine/engine.md)).
 
 The factory does not register behaviors itself — those came in via the installer. The factory only assembles them. The runtime is single-phase constructed: when its constructor returns, every dependency is bound; there is no separate `Initialize` hook.
 
@@ -209,7 +209,7 @@ The exception carries the full error list, not just the first.
 
 ### Engine state at return
 
-After `Build` returns, the `GameEngine` is in `EngineLifecycle.NotStarted` — framework slices are seeded (including `EngineState { Lifecycle: NotStarted, IsRunning: false, CurrentCommand: null }`), game-authored slices hold their initial values, and the lifecycle gate rejects any `Dispatch` that isn't `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to transition to `Started` and open the engine for normal play; that call internally dispatches `StartMatchCommand`, which emits `MatchStartedSignal` and flips the lifecycle. Match-specific setup (deal opening hands, advance to first phase) is *not* a factory or `StartMatch` parameter — it is the host's or runtime's responsibility, expressed as ordinary commands dispatched after `StartMatch`. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+After `Build` returns, the `GameEngine` is in `EngineLifecycle.NotStarted` — framework slices are seeded (including `EngineState { Lifecycle: NotStarted, IsRunning: false, CurrentCommand: null }`), game-authored slices hold their initial values, and the lifecycle gate rejects any `Dispatch` that isn't `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to transition to `Started` and open the engine for normal play; that call internally dispatches `StartMatchCommand`, which emits `MatchStartedSignal` and flips the lifecycle. Match-specific setup (deal opening hands, advance to first phase) is *not* a factory or `StartMatch` parameter — it is the host's or runtime's responsibility, expressed as ordinary commands dispatched after `StartMatch`. See [`engine.md §Match setup`](features/engine/engine.md).
 
 ### Mode-specific command vocabularies
 
@@ -226,7 +226,7 @@ The factory does not accept a per-match handler pool. Vocabulary differences bet
 7. **Engine is in `NotStarted` at return.** No commands have been dispatched; no drain has run; the lifecycle gate rejects all `Dispatch` calls except `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to open the engine; match-specific setup is dispatched as ordinary commands after that.
 8. **Mode-specific command vocabularies are rules-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in `GameRulesRuntime` and the snapshot.
 9. **Single-phase runtime construction.** `GameRulesRuntime<TDefinition>` is fully constructed by the container in one shot — no two-phase Initialize. Definition + framework services + game subsystems all flow through the constructor.
-10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine/06 §Disposal boundary`](features/engine/models/06-match-lifecycle.md).
+10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine.md §Disposal split`](features/engine/engine.md).
 11. **Build orders per-spawn first, singletons second.** Zones (from layout blocks + overlay) and players (from actors + definition overlay) spawn before game-singleton slices install. Singletons that need actor refs as data start with default/null values; setup commands populate them after `engine.StartMatch()`.
 
 ## Decisions

@@ -66,7 +66,7 @@ The factory pairs them via DI container open-generic resolution: a game installe
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Player input → command resolution | Game | `IIntentMapper` |
 | UI affordance projection | Game (presentation) | `AffordanceMap` |
-| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) |
+| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-evaluation-loop.md) (surface + gate) and [`engine/06`](features/engine/models/06-match-lifecycle.md) (lifecycle types) |
 | Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`) |
 | Broader session lifecycle (pause, concede, disconnect, multi-match) | Game | External controller wrapping `GameEngine` (out of scope here) |
 
@@ -250,7 +250,7 @@ Earlier drafts of this contract included an `OnIncomingCommand` (a.k.a. `Route`)
 
 - **Command-queue routing isn't what games actually customize.** Walking through Stacklands, Hearthstone, and MTG concretely showed that the framework FIFO is sufficient for command-level scheduling. What differs across game styles is *effect-level* orchestration (when an effect starts, whether effects nest / batch / stack).
 - **Per-command primitives are framework-level.** Modify, cancel, replace, dispatch — these operate on the in-flight command via `IEffectScope` during the trigger fold. They don't need a runtime hook.
-- **Pause/ended gating moved to the lifecycle gate.** Framework checks `EngineState.Lifecycle` at `engine.Dispatch` and rejects pre-`StartMatch`/post-`FinishMatch` dispatches uniformly. See [`engine/06-match-lifecycle.md §Intake gates`](features/engine/models/06-match-lifecycle.md).
+- **Pause/ended gating moved to the lifecycle gate.** Framework checks `EngineState.Lifecycle` at `engine.Dispatch` and rejects pre-`StartMatch`/post-`FinishMatch` dispatches uniformly. See [`engine/01 §Lifecycle gate`](features/engine/models/01-evaluation-loop.md).
 - **Game-flow legality lives in `pipeline.Validate`.** Handler-side validation (`handler.Validate`) catches command-specific legality.
 
 The forthcoming effect-pipeline surface is where game-level scheduling decisions live. Until it lands, MTG-style stack semantics is expressible via game-state zones (the stack is a `ZoneContentsState`) plus `Evaluate` watching that zone and dispatching `ResolveTopOfStack`-style follow-ups.

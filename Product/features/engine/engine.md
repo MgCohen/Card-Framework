@@ -81,7 +81,7 @@ The feature has **seven Models**, organized as three concentric layers.
 
 **Snapshot & state (Models 03–04):** the snapshot production pipeline ([`03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions` service-driven model, typed `ActionTemplate` per command type, on-demand validation posture) and the GameState slice catalog ([`04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — framework-owned vs game-authored tier, the four subscription channels, atomic batches via `Store.ExecuteBatch`).
 
-**Match construction & lifecycle (Models 05–07):** match construction ([`05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer split between DI installation and per-match factory, container open-generic resolution for `GameRulesRuntime<TDefinition>`), match lifecycle ([`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) — `EngineLifecycle`, framework-owned `StartMatchCommand`/`EndMatchCommand`, `MatchOutcome` hierarchy, disposal boundary), and the `GameDefinition` bundle + factory walk ([`07-game-definition.md`](features/engine/models/07-game-definition.md) — bundle shape, `ISliceProvider`, layout blocks, the canonical six-step Build walk).
+**Match construction & lifecycle (Models 05–07):** match construction ([`05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer split between DI installation and per-match factory, container open-generic resolution for `GameRulesRuntime<TDefinition>`), match lifecycle types ([`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) — `EngineLifecycle` enum, framework-owned `StartMatchCommand`/`EndMatchCommand` and handlers, `MatchStartedSignal`/`MatchEndedSignal`, `MatchOutcome` hierarchy), and the `GameDefinition` bundle + factory walk ([`07-game-definition.md`](features/engine/models/07-game-definition.md) — bundle shape, `ISliceProvider`, layout blocks, the canonical six-step Build walk). The `GameEngine` lifecycle methods + intake gate behavior live in [`01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md); setup-command patterns and the disposal split between engine and host live in this feature root (§Match setup and §Disposal split below).
 
 The execution arc spans these:
 
@@ -92,6 +92,101 @@ The execution arc spans these:
 5. **Drain loop.** Each `engine.Dispatch(action)` lifecycle-gates → `pipeline.Validate` → enqueue. Drain dequeues, calls `pipeline.Execute` (before-fold via `FilterTriggers` + `ITriggerPipeline` → handler → after-fold → envelope published), then `runtime.Evaluate(action, result)` for state-based follow-ups. The runtime publishes snapshots via `Actions.Set` from inside `Evaluate`. (Models 01 + 02 + 03.)
 6. **Match end.** Runtime returns `EndMatchCommand` from `Evaluate` (state-based win condition), or host calls `engine.FinishMatch(outcome)`. `EndMatchHandler` emits `MatchEndedSignal` and flips lifecycle. Already-queued tail drains naturally; new dispatches reject. Host observes via signal in `HistoryState` or state subscription on `EngineState.Lifecycle`. (Model 06.)
 7. **Disposal.** Host disposes the per-match DI scope; `engine.Dispose()` ensures `FinishMatch(Aborted("Disposed"))` if not already ended and disposes the runtime if `IDisposable`. Scope teardown is the host's responsibility; engine never sees the scope object. (Models 05 + 06.)
+
+## Match setup
+
+After `engine.StartMatch()` returns, the engine is in `Started` but the world is content-empty: zones spawned by `Build` exist but hold no cards; players exist with default variable values; game-singleton slices that needed actor refs (e.g. `TurnState.Active`) are still null. **Setup commands** are the framework's pattern for populating this content.
+
+There is no special framework primitive for setup — setup commands are ordinary `GameAction`s dispatched through the normal pipeline, identifiable only by *when* they run (between `StartMatchCommand` and the first player-driven action). The framework supports two dispatch paths; games may use either or both.
+
+### Host-driven setup
+
+The simplest pattern: the host (the code that called `engine.StartMatch()`) dispatches setup commands directly after `StartMatch` returns.
+
+```csharp
+var engine = factory.Create(matchSetup);
+engine.StartMatch(out _);                              // dispatches StartMatchCommand
+
+// Host-driven setup commands
+foreach (var (zoneRef, cardDefs) in puzzle.InitialDeals)
+    foreach (var def in cardDefs)
+        engine.Dispatch(new CreateAndInsertCardCommand(def, zoneRef), out _);
+
+engine.Dispatch(new BeginFirstTurnCommand(firstPlayer), out _);
+
+// At this point, normal play begins.
+```
+
+Use this when the host knows the setup steps statically — solo puzzles, tutorials, scripted scenarios, tests.
+
+### Runtime-driven setup
+
+Alternative: the `GameRulesRuntime` returns setup commands from its first `Evaluate` invocation. The drain after `StartMatchCommand` is the runtime's first opportunity to act; commands returned from `Evaluate` queue immediately and run before the host's next `Dispatch`.
+
+```csharp
+public class StandardMagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
+{
+    public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
+    {
+        if (State.Get<SetupPhaseState>().Complete) return Array.Empty<GameAction>();
+
+        var actions = new List<GameAction>();
+
+        // Deal opening hands, decide first player, advance to first phase, …
+        foreach (var player in GetPlayers(State))
+            for (int i = 0; i < Definition.StartingHandSize; i++)
+                actions.Add(new DrawCardCommand(player));
+
+        actions.Add(new BeginFirstTurnCommand(ChooseFirstPlayer(State)));
+        actions.Add(new MarkSetupCompleteCommand());
+
+        return actions;
+    }
+}
+```
+
+Use this when setup logic is rule-defined (depends on game data, varies by mode) rather than host-defined. The runtime owns the timing and the order; the host doesn't need to know what setup looks like. Per ADR-0002 the runtime holds zero gameplay state — track setup completion via a state slice (e.g. `SetupPhaseState`), not a runtime field.
+
+### Recommended pattern
+
+For most games, **runtime-driven setup is the cleaner default** — it keeps setup logic next to the game's other rules, survives replay (the runtime re-runs the same logic deterministically given the same `Definition` and seed), and frees the host from needing to know game-specific setup details. Host-driven setup is the right call for tests and scripted scenarios where you specifically want to bypass the runtime's setup logic.
+
+Setup commands flow through the trigger fold like any other commands — `OnBefore<DrawCardCommand>` triggers fire on the opening-hand draws if any are registered. This is usually the desired behavior; games that need triggers to *not* fire during setup can guard via game state (e.g. a `SetupPhase` flag in `EngineState` or a per-game state slice).
+
+### Naming convention
+
+Framework-owned commands carry the `MatchCommand` suffix (`StartMatchCommand`, `EndMatchCommand`). Game-authored setup commands have no required suffix; conventional names are `BeginFirstTurnCommand`, `DealOpeningHandsCommand`, `Setup<X>Command`. Choose names that read well in history envelopes — they appear in the canonical record alongside player actions.
+
+## Disposal split
+
+Two distinct teardowns, owned by different layers:
+
+| Concern | Owner | When |
+|---|---|---|
+| Runtime instance disposal (if `IDisposable`) | `GameEngine` | `engine.Dispose()` |
+| Per-match DI scope disposal | Host / outer controller | After observing match end |
+
+`engine.Dispose()` releases what the engine itself constructed or holds:
+
+1. If `Lifecycle != Ended`, call `FinishMatch(new MatchOutcome.Aborted("Disposed"))`. The end command runs through the pipeline, `MatchEndedSignal` lands in history, lifecycle flips.
+2. If the runtime implements `IDisposable`, dispose it.
+3. Mark internal state as disposed; subsequent `Dispatch` / `StartMatch` / `FinishMatch` throw `ObjectDisposedException`.
+
+The engine does **not** dispose the per-match DI scope. The factory's `Build` operates within an outer-owned scope ([`engine/05 §Behavior resolution`](features/engine/models/05-game-factory.md)); the same outer layer that opened the scope tears it down. A typical app-level flow:
+
+```
+1. GameSessionController opens a per-match VContainer scope.
+2. factory.NewMatch().With...().Build()  → engine resolved within that scope.
+3. engine.StartMatch()                   → match runs.
+4. ... gameplay ...
+5. Match ends (runtime dispatches EndMatchCommand, host calls FinishMatch,
+   or engine.Dispose triggers Aborted).
+6. Controller observes Lifecycle = Ended (via state subscription, or signal,
+   or polling) and disposes the VContainer scope, which cascades through
+   game subsystems registered scope-locally (IStackSystem, IDeckSystem, ...).
+```
+
+The engine surfaces `MatchEndedSignal` in history; the controller hooks it however it likes. The framework does not ship a "match-end callback" mechanism on the engine — observation is via state or history, both of which already exist.
 
 ## Invariants
 
