@@ -189,7 +189,7 @@ None today. Cards' state surface is fully covered by the entity-variable bridge 
 
 ## 3. Aggregates
 
-`Store.RegisterAggregate` ships in Scaffold; framework hasn't pinned a use case (`engine/04 §9` open follow-up).
+`Store.RegisterAggregate` ships in Scaffold; framework hasn't pinned a use case (`state.md §Open` follow-up).
 
 | Candidate | Reads | Status |
 |---|---|---|

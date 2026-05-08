@@ -174,7 +174,7 @@ Each `GameCommand` type has exactly one registered handler (per [`engine/02 §Po
 
 ### `StateMutation` — payload-keyed mutators
 
-Handlers do not write state inline. They call `ctx.Store.Execute(payload)`; Scaffold's registry fans out to every mutator registered for `TPayload` and commits atomically. See [`effects/04 §Writes`](features/effects/models/04-effect-flow.md) and [`engine/04 §Atomic batches`](features/engine/models/04-gamestate-slices.md).
+Handlers do not write state inline. They call `ctx.Store.Execute(payload)`; Scaffold's registry fans out to every mutator registered for `TPayload` and commits atomically. See [`effects/04 §Writes`](features/effects/models/04-effect-flow.md) and [`state.md §Atomic batches`](features/state/state.md).
 
 ```csharp
 // Inside a handler:
