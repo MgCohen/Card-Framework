@@ -58,6 +58,8 @@ The locked context this sketch must respect:
 
 **D10 — `ctx.CurrentChain` is NOT exposed publicly.** The chain scope is bound implicitly when the handler context is constructed (drain → null; `scope.Dispatch` from inside an effect → the calling chain). `ctx.RunEffect(instance)` uses the bound chain internally; handlers don't need to thread it through.
 
+**D11 — Handler envelope IS the atomicity boundary.** Every `Store.Execute(payload)` inside a single handler is buffered; subscribers receive one logical step when the envelope closes. The mutator runs eagerly (state changes computed in order; later payloads see earlier ones in the buffer), but external visibility is deferred to envelope close. Handler-throws roll the buffer back. `Store.ExecuteBatch(...)` becomes a niche tool for cross-handler grouping (rare; `scope.Dispatch` already provides that). Implication: a before-fold trigger reading state mid-handler sees pre-handler state — correct semantic, worth pinning.
+
 ## Type hierarchy
 
 ```csharp
@@ -250,7 +252,7 @@ Drain:
     var action = pending.Dequeue()
     var result = pipeline.Execute(action, chainScope: null)   // ← null at top-level
                                        │
-                                       ├─ open envelope
+                                       ├─ open envelope                   // begins atomicity scope (D11)
                                        ├─ before-fold:
                                        │    foreach trigger in available:
                                        │      var triggerInstance = WrapAsInstance(trigger, action)
@@ -260,7 +262,7 @@ Drain:
                                        ├─ handler.Handle(action, ctx where ctx.RunEffect uses chain=null)
                                        │    handler may: ctx.RunEffect(activeInstance)
                                        ├─ after-fold: same shape as before
-                                       └─ close envelope
+                                       └─ close envelope                  // commit buffered payloads
     var followUps = runtime.Evaluate(action, result)
     foreach (f in followUps) pending.Enqueue(f)
 
@@ -291,9 +293,9 @@ Inside an effect's Execute (called from a chain):
 
 Three handler shapes covering the common base cases. Listed before effects because effects compose over commands.
 
-### `MoveCardAction` — multiple slice payloads via batch
+### `MoveCardAction` — multiple slice payloads, atomic via envelope
 
-Handler dispatches the slice-level payloads itself (instead of wrapping them in a `CompositeAction` like `MoveCardMutation`). `Store.ExecuteBatch` commits them atomically — subscribers see one logical step.
+Handler dispatches the slice-level payloads itself (instead of wrapping them in a `CompositeAction` like `MoveCardMutation`). Per D11, the handler envelope is the atomicity boundary — payloads buffer and commit on envelope close, so subscribers see one logical step without an explicit batch.
 
 ```csharp
 public sealed record MoveCardAction(
@@ -316,17 +318,17 @@ public sealed class MoveCardHandler : ICommandHandler<MoveCardAction, MoveCardRe
 
     public Task<MoveCardResult> Handle(MoveCardAction cmd, IHandlerContext ctx)
     {
-        // Three slice mutators, batched for atomic visibility:
+        // Three slice mutators dispatched in order. The handler envelope (D11)
+        // buffers them; subscribers see one logical step on envelope close.
         //   1. Remove old CardRef from source zone (ZoneContentsState).
-        //   2. Rotate the CardRef in CardMapState (privacy policy — every move rotates).
+        //   2. Rotate the CardRef in CardMapState (privacy — every move rotates).
         //   3. Insert new CardRef into destination zone (ZoneContentsState).
         var oldRef = cmd.Card.GetRef(ctx.Store);
         var newRef = CardRef.NewRef();
 
-        ctx.Store.ExecuteBatch(
-            new RemoveCardFromZonePayload(cmd.From, oldRef),
-            new RotateCardRefPayload(cmd.Card, newRef),
-            new InsertCardPayload(cmd.To, cmd.Card, cmd.Position ?? new DefaultPosition()));
+        ctx.Store.Execute(new RemoveCardFromZonePayload(cmd.From, oldRef));
+        ctx.Store.Execute(new RotateCardRefPayload(cmd.Card, newRef));
+        ctx.Store.Execute(new InsertCardPayload(cmd.To, cmd.Card, cmd.Position ?? new DefaultPosition()));
 
         return Task.FromResult(new MoveCardResult());
     }
