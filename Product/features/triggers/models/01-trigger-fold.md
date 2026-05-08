@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-flow.md, Product/decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-flow.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#triggers, #reactions, #fold, #model]
 ---
 

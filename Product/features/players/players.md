@@ -47,7 +47,7 @@ The feature has one Model. See `models/01-player-model.md` for the `IActor` inte
 
 | Model | Role |
 |---|---|
-| [`models/01-player-model.md`](models/01-player-model.md) | `IActor` interface, `Player` and `PlayerDefinition` shapes, variable bag for primary state, `ISliceProvider` adoption, per-player slice conventions, mutation flow |
+| [`01-player-model.md`](features/players/models/01-player-model.md) | `IActor` interface, `Player` and `PlayerDefinition` shapes, variable bag for primary state, `ISliceProvider` adoption, per-player slice conventions, mutation flow |
 
 ## Invariants
 

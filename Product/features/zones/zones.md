@@ -56,7 +56,7 @@ The feature has one Model. See `models/01-zone-model.md` for the handle, the thr
 
 | Model | Role |
 |---|---|
-| [`models/01-zone-model.md`](models/01-zone-model.md) | Zone handle, three state slice categories, insertion API, visibility model, history filtering, zone-movement flow |
+| [`01-zone-model.md`](features/zones/models/01-zone-model.md) | Zone handle, three state slice categories, insertion API, visibility model, history filtering, zone-movement flow |
 
 ## Invariants
 

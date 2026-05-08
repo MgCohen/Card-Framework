@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, Product/decisions/0007-five-validation-layers.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #snapshot, #templates, #model]
 ---
 

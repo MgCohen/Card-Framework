@@ -64,10 +64,10 @@ The feature has four Models. The execution arc spans them:
 
 | Model | Role |
 |---|---|
-| [`models/01-async-dispatch.md`](models/01-async-dispatch.md) | Layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths; decisions-as-commands; `IEffectScope` |
-| [`models/02-replacement-prevention.md`](models/02-replacement-prevention.md) | Three before-fold outcomes; `ITriggerPipeline` ownership; `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
-| [`models/03-ongoing-effects.md`](models/03-ongoing-effects.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
-| [`models/04-effect-flow.md`](models/04-effect-flow.md) | Mid-execution lifecycle: service surfaces (`IEffectScope`, `IHandlerContext`, `ICommandAwaiter`); type-only decision routing; mutation discipline; uniform gateway boundary |
+| [`01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) | Layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths; decisions-as-commands; `IEffectScope` |
+| [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) | Three before-fold outcomes; `ITriggerPipeline` ownership; `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
+| [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
+| [`04-effect-flow.md`](features/effects/models/04-effect-flow.md) | Mid-execution lifecycle: service surfaces (`IEffectScope`, `IHandlerContext`, `ICommandAwaiter`); type-only decision routing; mutation discipline; uniform gateway boundary |
 
 ## Invariants
 

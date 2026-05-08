@@ -11,19 +11,13 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-**Effect-pipeline design pass — iterating in a spike file.** The session settled enough to capture as a working sketch but isn't ready to land in canonical Models. Locked context, decisions, types, services, flow, snippets, and a traced MTG flow live at [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until that sketch settles.
+**Template-migration wave landed.** All nine features (`cards`, `zones`, `triggers`, `actions`, `presentation`, `players`, `entities`, `effects`, `engine`) now follow the post-simplification feature/Model template. 21 ADRs handled across the wave: 2 elevated to project-wide (`decisions/0007-five-validation-layers.md`, `decisions/0008-zone-visibility-model.md`; ADR-0006 was already project-wide), the rest folded into Model provenance below the `---` divider. A cross-Model anchor sweep accompanied the wave.
 
-Working shape (from the spike — not yet locked into Models):
+Migration landed via PRs #107 (cards), #108 (zones), #109 (triggers + ADR-0006→0008 ref fix), #110 (actions + ADR-0007 elevation), #111 (presentation), #112 (players), #113 (entities — rebased to fix the ADR-0008 conflict on landing), and #114 (effects + engine + sweep — rebased onto main; the entities commit was skipped during rebase since #113 already supplied it).
 
-- `IEffectPipeline` as injected service, symmetric with `ICommandPipeline`. Framework default = inline (Stacklands); games swap for stack-zone (MTG) / queue-zone (Hearthstone).
-- `EffectDefinition` (recipe; lambdas like `Trigger<T>`, subclass optional) + `EffectInstance` (runtime record `(Source, EffectId, Bindings)`).
-- State holds `EffectInstance` records (immutable). MTG stack zone, Hearthstone trigger queue = game-authored slices over these records. State authoritative; UI projects.
-- Runtime stays at `FilterTriggers + Evaluate`. No `ScheduleEffect` on the runtime.
-- Chain scope only created when an effect runs. Drain doesn't construct scopes. `pipeline.Execute(action, chainScope?)` takes optional scope; trigger fold inherits the calling chain. Re-entrance via `Fired` set.
-- Two verbs: `IEffectPipeline.RunEffect(instance, parent)` (scheduling decision) + `EffectInstance.Execute(scope)` extension (direct execution; used by resolution handlers to bypass scheduling).
-- Triggers compile into effects: `Trigger<T>` is authoring sugar; the fold wraps a matched trigger as `EffectInstance` and calls `RunEffect`.
+Sweep follow-up (this turn): linter found bare relative `models/...` links across the nine feature index pages (S1) and `Product/decisions/...` `references:` entries with the leading `Product/` prefix on six Models (S2). Both fixed in place. ADR-0003's `Product/ledgers/` listing was deduplicated — `ALIGNMENT-DEBT.md` removed and the duplicate `OPEN-ITEMS.md` collapsed (T1).
 
-Earlier this session: triggers + dispatch design pass + runtime-contract reshape — closed and **patch cascade landed** ([PR #104](https://github.com/MgCohen/Card-Framework/pull/104)) introducing ADR-0006 (two-pipeline architecture), the runtime contract reshape (try-get `Dispatch`, two-method runtime, deletions of `Route` / `IIntakeQueue` / etc.), and the three-level model (commands / effects / triggers ⊆ effects).
+Earlier in the broader project: triggers + dispatch design pass + runtime-contract reshape — closed and **patch cascade landed** ([PR #104](https://github.com/MgCohen/Card-Framework/pull/104)) introducing ADR-0006 (two-pipeline architecture), the runtime contract reshape (try-get `Dispatch`, two-method runtime, deletions of `Route` / `IIntakeQueue` / etc.), and the three-level model (commands / effects / triggers ⊆ effects). Effect-pipeline working sketch lives at [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) — still pre-canonical.
 
 Two parallel cascades landed earlier (2026-05-06) via [PR #102](https://github.com/MgCohen/Card-Framework/pull/102):
 
@@ -49,19 +43,18 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Iterating on [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md)** — keep refining the sketch until the shape is settled enough to convert to canonical Models (`effects/04`, `effects/01`, `triggers/01`, `engine/02`, `engine/01`, plus a new ADR-0007 and glossary + open-items updates). Don't update Models from this in-flight design; load it back from the spike when ready.
+**Migration wave is closed; pick the next thread.** The doc tree is now uniform under the new template. Candidate next threads:
 
-Open follow-ups surfaced by the sketch (not blocking, listed for later promotion):
+- **Resume the effect-pipeline spike.** [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) is still pre-canonical — converting it would touch `effects/04`, `effects/01`, `triggers/01`, `engine/02`, `engine/01`, plus a new ADR and glossary + open-items updates.
+- **Resolve top open items.** `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`.
+- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract.
+- **Promote a `considered` feature** (`authoring`, `interaction`, `networking`).
+
+Open follow-ups carried forward from the effect-pipeline sketch:
 
 - `oq-effect-authoring` — recipe shape inside `EffectDefinition.Execute` (data, code, graph, hybrid). Authoring feature scope.
 - `oq-runtime-as-state-evaluator` — long-term direction; `FilterTriggers` is the next candidate to revisit.
 - `oq-session-state-machine` — richer engine lifecycle (Connecting / Started / Running / Reconnecting / Ended / ShowingResults) on top of the current 3-state `EngineLifecycle`.
-
-Alternative threads if iteration on the spike pauses:
-
-- **Resolve top open items.** `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`.
-- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract.
-- **Promote a `considered` feature** (`authoring`, `interaction`, `networking`).
 
 ---
 
