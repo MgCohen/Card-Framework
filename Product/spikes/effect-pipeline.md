@@ -58,6 +58,10 @@ The locked context this sketch must respect:
 
 **D10 — `ctx.CurrentChain` is NOT exposed publicly.** The chain scope is bound implicitly when the handler context is constructed (drain → null; `scope.Dispatch` from inside an effect → the calling chain). `ctx.RunEffect(instance)` uses the bound chain internally; handlers don't need to thread it through.
 
+**D11 — Handler envelope IS the atomicity boundary.** Every `Store.Execute(payload)` inside a single handler is buffered; subscribers receive one logical step when the envelope closes. The mutator runs eagerly (state changes computed in order; later payloads see earlier ones in the buffer), but external visibility is deferred to envelope close. Handler-throws roll the buffer back. `Store.ExecuteBatch(...)` becomes a niche tool for cross-handler grouping (rare; `scope.Dispatch` already provides that). Implication: a before-fold trigger reading state mid-handler sees pre-handler state — correct semantic, worth pinning.
+
+**D12 — Validation lives in optional `IValidator<TCmd>`s, not on the handler.** `ICommandHandler<TCmd, TResult>` exposes only `Handle`. Commands with preconditions register one or more `IValidator<TCmd>` services; the pipeline runs them in registration order before `Handle`, fail-fast on the first false. Commands with no preconditions register none and skip the step. Snapshot legality (`IAvailableActions`) consumes the same validators. Cascade impact: drops `Validate` from `ICommandHandler`, rewires `actions/01`'s pipeline contract, and rewires `actions/02`'s snapshot legality. Validator ordering / composition rules deferred (see follow-ups).
+
 ## Type hierarchy
 
 ```csharp
@@ -84,13 +88,18 @@ public class EffectDefinition
 }
 
 // Triggers — authoring sugar over EffectDefinition with a typed payload.
+// Receives `self` (the wrapped EffectInstance carrying registration metadata —
+// Source = registration owner, Bindings = bound parameters) plus the typed
+// command. The fold matches a trigger to an incoming GameCommand, wraps it as
+// an EffectInstance, and invokes Execute via the same pipeline path as active
+// effects. The wrap mechanism is runtime-internal (gap #6).
 public abstract class Trigger<T> where T : GameCommand
 {
-    public virtual bool Validate(T command, IEffectScope scope) => true;
-    public abstract Task Execute(T command, IEffectScope scope);
+    public EffectId Id { get; }
+    protected Trigger(EffectId id) => Id = id;
 
-    // The fold uses this to wrap a matched trigger as an EffectInstance.
-    // The intercepted command is captured in Bindings.InterceptedCommand.
+    public virtual bool Validate(EffectInstance self, T command, IEffectScope scope) => true;
+    public abstract Task Execute(EffectInstance self, T command, IEffectScope scope);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -116,7 +125,9 @@ public static class EffectInstanceExtensions
 {
     public static Task Execute(this EffectInstance instance, IEffectScope scope)
     {
-        var source = scope.Store.Catalog.Resolve(instance.Source);
+        // scope.State.Resolve(reference) is assumed to provide catalog lookup —
+        // IStateScope is the read-only surface (state slices + handle resolve).
+        var source = scope.State.Resolve(instance.Source);
         var def    = source.Definition.GetEffect(instance.Id);
 
         return def.Validate(instance, scope)
@@ -160,7 +171,7 @@ public sealed class InlineEffectPipeline : IEffectPipeline
     public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
         // Re-entrance guard within an existing chain.
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return;
 
         var chain = parent is null
@@ -172,45 +183,59 @@ public sealed class InlineEffectPipeline : IEffectPipeline
 }
 
 // ─────────────────────────────────────────────────────────────
-// Handler context — exposes the pipeline; chain bound implicitly
+// Handler context — sync, atomic, may mutate. Chain bound implicitly.
+// Surface trimmed to common base case (Q2 rule); rare-use services
+// (IModifierFactory, IAvailableActions, ICommandAwaiter) → DI.
 // ─────────────────────────────────────────────────────────────
 
 public interface IHandlerContext
 {
-    Store              Store           { get; }
-    IAvailableActions  Actions         { get; }
-    ICommandAwaiter    Resolver        { get; }
-    IModifierFactory   Modifiers       { get; }
-    IEffectPipeline    EffectPipeline  { get; }   // for advanced cases
+    Store Store { get; }                            // slice reads + mutator dispatch (Store.Execute)
+    void  Emit(GameSignal signal);                  // explicit-meaning history channel
 
-    // Sugar: EffectPipeline.RunEffect(instance, currentChain).
+    // Sugar over IEffectPipeline.RunEffect(instance, currentChain).
     // currentChain is bound when the context is constructed:
     //   - null when the handler runs a drain-initiated command
     //   - the calling chain when the handler runs inside scope.Dispatch
+    // Placement on the handler (vs forcing a wrapping effect) is pending — see concern #2.
     Task RunEffect(EffectInstance instance);
 }
 
 // ─────────────────────────────────────────────────────────────
-// The chain scope — what an effect's Execute receives
+// The chain scope — what an effect's Execute receives.
+// Async, orchestrates, never mutates directly (mutation discipline:
+// only handlers invoke mutators; effects receive IStateScope, not Store).
 // ─────────────────────────────────────────────────────────────
 
 public interface IEffectScope
 {
-    IStateScope                  State        { get; }
-    Store                        Store        { get; }    // catalog reads + execute helpers
-    IModifierFactory             Modifiers    { get; }
-    EffectInstance?              Origin       { get; }    // root of this chain (null for trigger-without-source cases)
-    IReadOnlySet<EffectInstance> Fired        { get; }    // re-entrance guard
+    IStateScope State { get; }                      // slice reads + catalog resolve
 
-    // Inline dispatch — runs the action's full pipeline NOW, this scope is passed through.
+    // Inline dispatch — runs the action's full pipeline NOW; this scope is passed through.
     Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
+
+    // Await a player/system decision (target picker, choice, mode, etc.).
+    // Renamed from `Resolver`/`ICommandAwaiter` so the call site reads as the intent.
+    Task<TResult> Decide<TResult>(/* decision request shape, TBD */) where TResult : DecisionResult;
 
     // Schedule a sub-effect via the pipeline. Pipeline decides inline vs deferred.
     Task RunEffect(EffectInstance instance);
 
-    // Trigger primitives:
+    // Chain metadata — root + re-entrance set. Tucked away so the top-level surface stays small.
+    IChainInfo Chain { get; }
+
+    // Before-fold trigger primitives. Runtime-checked phase: throws when invoked outside
+    // before-fold. Deliberate runtime-check (vs type-narrowed subtype) — revisit if
+    // false-positive misuse becomes a real bug source.
     void Cancel(string? reason = null);
-    void Replace(GameAction next);   // before-fold only
+    void Replace(GameAction next);
+}
+
+// Chain-info sub-property — kept off the top-level scope surface.
+public interface IChainInfo
+{
+    EffectInstance?              Origin { get; }    // root of this chain (debug + game-author tracing)
+    IReadOnlySet<EffectInstance> Fired  { get; }    // re-entrance guard
 }
 ```
 
@@ -229,7 +254,7 @@ Drain:
     var action = pending.Dequeue()
     var result = pipeline.Execute(action, chainScope: null)   // ← null at top-level
                                        │
-                                       ├─ open envelope
+                                       ├─ open envelope                   // begins atomicity scope (D11)
                                        ├─ before-fold:
                                        │    foreach trigger in available:
                                        │      var triggerInstance = WrapAsInstance(trigger, action)
@@ -239,7 +264,7 @@ Drain:
                                        ├─ handler.Handle(action, ctx where ctx.RunEffect uses chain=null)
                                        │    handler may: ctx.RunEffect(activeInstance)
                                        ├─ after-fold: same shape as before
-                                       └─ close envelope
+                                       └─ close envelope                  // commit buffered payloads
     var followUps = runtime.Evaluate(action, result)
     foreach (f in followUps) pending.Enqueue(f)
 
@@ -257,42 +282,331 @@ Inside an effect's Execute (called from a chain):
         ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
 ```
 
-## Building a simple effect — Lightning Bolt
+## Validation surface (proposed)
+
+Per D12: validation moves off the handler into separate `IValidator<TCmd>` services. The handler interface drops to a single method.
 
 ```csharp
-// On the card's definition. Effects authored inline with lambdas.
-public sealed class LightningBoltCardDefinition : CardDefinition
+// Updated handler interface — Handle only.
+public interface ICommandHandler<TCmd, TResult>
+    where TCmd   : GameAction
+    where TResult: CommandResult
 {
-    public override IReadOnlyList<EffectDefinition> Effects { get; } = new[]
+    Task<TResult> Handle(TCmd cmd, IHandlerContext ctx);
+}
+
+// New validator interface — optional, registered per command type.
+public interface IValidator<TCmd> where TCmd : GameAction
+{
+    bool Validate(TCmd cmd, IStateScope state, out string? reason);
+}
+```
+
+Pipeline integration (sketch):
+
+```csharp
+public bool Validate(GameCommand command, IStateScope state, out string? reason)
+{
+    reason = null;
+    if (command is not GameAction action) return true;
+
+    // Open-generic resolve all IValidator<TCmd> registered for the command's runtime type.
+    foreach (var validator in services.ResolveValidators(action.GetType()))
+        if (!validator.Validate(action, state, out reason))
+            return false;
+
+    return true;
+}
+```
+
+Sample validators replacing the inline `Validate` from earlier handler sketches:
+
+```csharp
+public sealed class MoveCardSourceMembershipValidator : IValidator<MoveCardAction>
+{
+    public bool Validate(MoveCardAction cmd, IStateScope state, out string? reason)
     {
-        new EffectDefinition(
+        if (!cmd.From.GetContents(state).Contains(cmd.Card.GetRef(state)))
+        { reason = "card not in source zone"; return false; }
+        reason = null;
+        return true;
+    }
+}
+
+public sealed class DealDamageNonNegativeValidator : IValidator<DealDamageToPlayerAction>
+{
+    public bool Validate(DealDamageToPlayerAction cmd, IStateScope state, out string? reason)
+    {
+        if (cmd.Amount < 0) { reason = "amount cannot be negative"; return false; }
+        reason = null;
+        return true;
+    }
+}
+```
+
+`ApplyBuffAction` registers no validator — always-legal at dispatch.
+
+## Framework conveniences (assumed by samples)
+
+- **Implicit `EntityInstance<TDef>` → `Ref<TDef>` conversion.** Payloads/actions accepting a `Ref<T>` can take a handle directly:
+  ```csharp
+  public static implicit operator Ref<TDef>(EntityInstance<TDef> instance) => instance.SelfRef;
+  ```
+  Samples below pass handles where refs are expected (`new SetBaseValuePayload(player, ...)` rather than `(player.SelfRef, ...)`).
+- **Trigger registration** (per-instance via authoring layer) is out of scope here — see `oq-effect-authoring` and gap #6. Samples show the authored `Trigger<T>` shape; the wrap-to-`EffectInstance` step is runtime-internal.
+
+## Sample commands
+
+Three handler shapes covering the common base cases. Listed before effects because effects compose over commands.
+
+### `MoveCardAction` — multiple slice payloads, atomic via envelope
+
+Handler dispatches the slice-level payloads itself (instead of wrapping them in a `CompositeAction` like `MoveCardMutation`). Per D11, the handler envelope is the atomicity boundary — payloads buffer and commit on envelope close, so subscribers see one logical step without an explicit batch.
+
+```csharp
+public sealed record MoveCardAction(
+    Card Card,
+    Zone From,
+    Zone To,
+    InsertPosition? Position = null) : GameAction;
+
+public sealed record MoveCardResult() : CommandResult;
+
+public sealed class MoveCardHandler : ICommandHandler<MoveCardAction, MoveCardResult>
+{
+    // Preconditions live in MoveCardSourceMembershipValidator (per D12).
+    public Task<MoveCardResult> Handle(MoveCardAction cmd, IHandlerContext ctx)
+    {
+        // Three slice mutators dispatched in order. The handler envelope (D11)
+        // buffers them; subscribers see one logical step on envelope close.
+        //   1. Remove old CardRef from source zone (ZoneContentsState).
+        //   2. Rotate the CardRef in CardMapState (privacy — every move rotates).
+        //   3. Insert new CardRef into destination zone (ZoneContentsState).
+        var oldRef = cmd.Card.GetRef(ctx.Store);
+        var newRef = CardRef.NewRef();
+
+        ctx.Store.Execute(new RemoveCardFromZonePayload(cmd.From, oldRef));
+        ctx.Store.Execute(new RotateCardRefPayload(cmd.Card, newRef));
+        ctx.Store.Execute(new InsertCardPayload(cmd.To, cmd.Card, cmd.Position ?? new DefaultPosition()));
+
+        return Task.FromResult(new MoveCardResult());
+    }
+}
+```
+
+### `DealDamageToPlayerAction` — read + mutate + emit
+
+The representative shape: read state, dispatch a payload, emit a `GameSignal` so triggers can react.
+
+```csharp
+public sealed record DealDamageToPlayerAction(
+    Player Target,
+    int Amount,
+    Reference? Source = null) : GameAction;
+
+public sealed record DealDamageResult(int Dealt) : CommandResult;
+
+public sealed class DealDamageToPlayerHandler
+    : ICommandHandler<DealDamageToPlayerAction, DealDamageResult>
+{
+    // Preconditions live in DealDamageNonNegativeValidator (per D12).
+    public Task<DealDamageResult> Handle(DealDamageToPlayerAction cmd, IHandlerContext ctx)
+    {
+        // Domain payload — mutator handles the variable bookkeeping (whether
+        // health is base value, a modifier stack, or a damage counter is the
+        // game's choice; the handler doesn't care).
+        ctx.Store.Execute(new ApplyDamagePayload(cmd.Target, cmd.Amount));
+        ctx.Emit(new DamageDealtSignal(cmd.Target, cmd.Amount, cmd.Source));
+
+        return Task.FromResult(new DealDamageResult(Dealt: cmd.Amount));
+    }
+}
+```
+
+### `ApplyBuffAction` — DI-injected service usage
+
+`IModifierFactory` is no longer on `IHandlerContext` (per Q2 — not a base-case service). Handlers that need it inject it. Same pattern for `ICommandAwaiter` if a sync handler unusually needed one (it shouldn't, but the pattern is the same).
+
+```csharp
+public sealed record ApplyBuffAction(
+    EntityInstance<EntityDefinition> Target,
+    Variable Key,
+    int Amount,
+    Reference Source) : GameAction;
+
+public sealed record ApplyBuffResult(ModifierId Id) : CommandResult;
+
+public sealed class ApplyBuffHandler : ICommandHandler<ApplyBuffAction, ApplyBuffResult>
+{
+    private readonly IModifierFactory _modifiers;
+    public ApplyBuffHandler(IModifierFactory modifiers) => _modifiers = modifiers;
+
+    // No validator registered for ApplyBuffAction — always-legal at dispatch (per D12).
+    public Task<ApplyBuffResult> Handle(ApplyBuffAction cmd, IHandlerContext ctx)
+    {
+        var entry = _modifiers.Create(
+            cmd.Key,
+            new IntAddModifier { Amount = cmd.Amount },
+            new ModifierSource(cmd.Source, Order: 0));
+
+        ctx.Store.Execute(new AddModifierPayload(cmd.Target, entry));
+
+        return Task.FromResult(new ApplyBuffResult(entry.Id));
+    }
+}
+```
+
+## Sample effects
+
+> **Authoring boundary.** Each card's `Effects` list is treated as *already populated* by the time the runtime reads it. *How* it gets populated — code-side registration, serialized asset import, definition editor — is the authoring layer's job (`oq-effect-authoring`) and out of scope here. This spike pins the *shape* of an `EffectDefinition`; not how the catalog gets filled.
+
+Five shapes covering the trigger-and-effect verb space: active-with-target, active-no-target, before-fold `Replace`, after-fold `Dispatch`, before-fold `Cancel`.
+
+Effects are authored as subclasses of `EffectDefinition` with lambdas baked into the constructor — readable, reusable, addressable by type.
+
+### Lightning Bolt — active effect with target
+
+```csharp
+public sealed class LightningBoltDamageEffect : EffectDefinition
+{
+    public LightningBoltDamageEffect()
+        : base(
             id: EffectIds.LightningBoltDamage,
             execute: async (instance, scope) =>
             {
-                var target = instance.Bindings.Targets[0];
-                await scope.Dispatch(new DealDamageAction
-                {
-                    Target = target,
-                    Amount = 3,
-                });
+                var target = scope.State.Resolve<Player>(instance.Bindings.Targets![0]);
+                await scope.Dispatch<DealDamageResult>(
+                    new DealDamageToPlayerAction(target, Amount: 3, Source: instance.Source));
             })
         // Validate omitted — defaults to "always valid"
-    };
+    { }
+}
+
+// Card definition — `Effects` is treated as already populated. The literal
+// initializer is illustrative only; the spike makes no claim about who/how
+// filled the list (authoring concern).
+public sealed class LightningBoltCardDefinition : CardDefinition
+{
+    public override IReadOnlyList<EffectDefinition> Effects { get; }
+        = new EffectDefinition[] { new LightningBoltDamageEffect() };
 }
 ```
+
+### Draw a card — active effect, no target
+
+Floor case: a single `Dispatch`, no decision, no target binding. Source is the player drawing.
+
+```csharp
+public sealed class DrawCardEffect : EffectDefinition
+{
+    public DrawCardEffect()
+        : base(
+            id: EffectIds.DrawCard,
+            execute: async (instance, scope) =>
+            {
+                var owner = scope.State.Resolve<Player>(instance.Source);
+                var deck  = owner.Deck;     // declared on PlayerDefinition.PerPlayerZones
+                var hand  = owner.Hand;
+                var top   = deck.GetTopCard(scope.State);
+
+                if (top is null) return;    // empty deck — game-side rule decides what happens
+
+                await scope.Dispatch<MoveCardResult>(
+                    new MoveCardAction(top, From: deck, To: hand, Position: Position.AtTop));
+            })
+    { }
+}
+```
+
+### Bloodlust — before-fold trigger using `Replace`
+
+A passive: the controller's outgoing damage is +1. Authored as a `Trigger<T>` over `DealDamageToPlayerAction`; registered (per-instance) as before-fold on the controller's actor.
+
+```csharp
+public sealed class IncreaseOutgoingDamageTrigger : Trigger<DealDamageToPlayerAction>
+{
+    public IncreaseOutgoingDamageTrigger() : base(EffectIds.IncreaseOutgoingDamage) { }
+
+    public override Task Execute(
+        EffectInstance self,
+        DealDamageToPlayerAction command,
+        IEffectScope scope)
+    {
+        // self.Source is the registration owner — typed payload, no cast needed.
+        if (command.Source != self.Source) return Task.CompletedTask;
+
+        scope.Replace(command with { Amount = command.Amount + 1 });   // ← Replace verb (before-fold only)
+        return Task.CompletedTask;
+    }
+}
+```
+
+### Vampiric — after-fold trigger using `Dispatch`
+
+When the controller deals damage, heal them by half (round down). After-fold: damage already applied, this is a reaction.
+
+```csharp
+public sealed class HealOwnerOnDamageTrigger : Trigger<DealDamageToPlayerAction>
+{
+    public HealOwnerOnDamageTrigger() : base(EffectIds.HealOwnerOnDamage) { }
+
+    public override async Task Execute(
+        EffectInstance self,
+        DealDamageToPlayerAction command,
+        IEffectScope scope)
+    {
+        if (command.Source != self.Source || command.Amount <= 0) return;
+
+        // HealActorAction handler is symmetric to DealDamageToPlayerHandler —
+        // dispatches an ApplyHealPayload, emits HealedSignal.
+        var owner = scope.State.Resolve<Player>(self.Source);
+        await scope.Dispatch<HealActorResult>(
+            new HealActorAction(owner, command.Amount / 2));
+    }
+}
+```
+
+### Lockdown — before-fold trigger using `Cancel`
+
+A passive that silences a marked actor: any cast attempt by them is cancelled. The silenced actor is bound at registration time (carried in `self.Bindings.Targets`).
+
+```csharp
+public sealed class SilenceActorTrigger : Trigger<CastSpellAction>
+{
+    public SilenceActorTrigger() : base(EffectIds.SilenceActor) { }
+
+    public override Task Execute(
+        EffectInstance self,
+        CastSpellAction command,
+        IEffectScope scope)
+    {
+        var silenced = (Ref<Player>)self.Bindings.Targets![0];
+        if (command.Caster.SelfRef != silenced) return Task.CompletedTask;
+
+        scope.Cancel(reason: "silenced");                          // ← Cancel verb (before-fold only)
+        return Task.CompletedTask;
+    }
+}
+```
+
+### Coverage map
+
+| Shape | Authored as | Sample |
+|---|---|---|
+| Active effect, with target, single Dispatch | `EffectDefinition` | Lightning Bolt |
+| Active effect, no target | `EffectDefinition` | Draw a Card |
+| Before-fold trigger, `Replace` verb | `Trigger<DealDamageToPlayerAction>` | Bloodlust (+1 damage) |
+| After-fold trigger, `Dispatch` reaction | `Trigger<DealDamageToPlayerAction>` | Vampiric (heal-on-damage) |
+| Before-fold trigger, `Cancel` verb | `Trigger<CastSpellAction>` | Lockdown (silence) |
+
+What's still uncovered: `scope.Decide` (target picker / choice prompt) and `scope.RunEffect` (sub-effect scheduling from inside a chain). Surface for both. Defer until those design questions settle (`Decide` shape is TBD; `RunEffect` placement depends on concern #2).
 
 A handler that *casts* the spell builds the `EffectInstance` with bound parameters and asks the pipeline to schedule it:
 
 ```csharp
 public sealed class CastSpellHandler : ICommandHandler<CastSpellCommand, CastSpellResult>
 {
-    public bool Validate(CastSpellCommand cmd, IStateScope state, out string? reason)
-    {
-        // ... mana cost check, target legality, timing ...
-        reason = null;
-        return true;
-    }
-
+    // Mana-cost / target-legality / timing checks live in IValidator<CastSpellCommand>s (per D12).
     public async Task<CastSpellResult> Handle(CastSpellCommand cmd, IHandlerContext ctx)
     {
         // 1) Pay costs and move card to game-state stack zone.
@@ -380,7 +694,7 @@ public sealed class MtgStackEffectPipeline : IEffectPipeline
     public Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
         // Re-entrance guard still applies to the calling chain.
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return Task.CompletedTask;
 
         _store.Execute(new PushToStackPayload(instance));
@@ -418,17 +732,7 @@ public sealed class ResolveTopOfStackHandler
 {
     private readonly IEffectScopeFactory _scopes;
 
-    public bool Validate(ResolveTopOfStackAction _, IStateScope state, out string? reason)
-    {
-        if (state.Get<StackContentsState>().IsEmpty)
-        {
-            reason = "stack empty";
-            return false;
-        }
-        reason = null;
-        return true;
-    }
-
+    // Stack-not-empty precondition lives in IValidator<ResolveTopOfStackAction> (per D12).
     public async Task<ResolveTopOfStackResult> Handle(
         ResolveTopOfStackAction _, IHandlerContext ctx)
     {
@@ -462,7 +766,7 @@ public sealed class HearthstoneTriggerQueueEffectPipeline : IEffectPipeline
 
     public async Task RunEffect(EffectInstance instance, IEffectScope? parent)
     {
-        if (parent is not null && parent.Fired.Contains(instance))
+        if (parent is not null && parent.Chain.Fired.Contains(instance))
             return;
 
         var queue = _store.Get<TriggerQueueState>();
@@ -569,6 +873,7 @@ public abstract class GameRulesRuntime<TDefinition>
 - **`EffectChainScope` factory shape** — `_scopes.NewRoot(instance)` / `_scopes.Extend(parent, instance)` is one shape. Could also be static methods on `EffectChainScope` itself. Mechanical detail; pin during implementation.
 - **`EffectDefinition.Validate`** — semantics under re-entrance and cancellation. Probably "Validate=false → skip silently"; aligns with `Trigger<T>.Validate`.
 - **Whether `Trigger<T>` survives** as a separate authoring type, or collapses entirely into `EffectDefinition` with `InterceptedCommand` in bindings. Probably keeps as authoring sugar — typed payload is ergonomic for game authors.
+- **Validator ordering / composition.** D12 says "registration order, fail-fast on first false." Open: explicit ordering hooks (priority weight, named groups), how a snapshot-side aggregate compose `reason` strings across multiple failures, sync-vs-async (probably sync), and whether validators can mutate or only read.
 
 ## Known content gaps in this sketch
 
@@ -590,7 +895,7 @@ Surfaced in the post-write review (2026-05-07). These are *exposition* gaps — 
 
 **Clarity gaps:**
 
-4. **`Origin` field semantics opaque.** `IEffectScope.Origin: EffectInstance?` exists but the runtime only consults `Fired` for re-entrance. If `Origin` is for debugging/tracing, say so. If it has a real role, name it.
+4. ~~**`Origin` field semantics opaque.**~~ *Resolved.* `Origin` and `Fired` moved to `IEffectScope.Chain` (sub-property). `Chain.Origin` is documented as debug + game-author tracing; `Chain.Fired` is the re-entrance guard the runtime consults.
 
 5. **"Why two verbs" rationale buried.** D8 explains the mechanism but the *reason* (resolution-handler-via-RunEffect would re-push onto the MTG stack and loop) lives 200 lines later in the resolution-handler comment. Pull that "why" up to D8.
 
@@ -618,6 +923,7 @@ Surfaced in the post-write review (2026-05-07). These are *exposition* gaps — 
 
 Out of scope for this iteration:
 
+- **Effect authoring / registration.** How `EffectDefinition`s get authored, registered, serialized, or attached to a card's `Effects` list. The spike pins the *shape* of `EffectDefinition`; how the list gets populated lives in the authoring layer (`oq-effect-authoring`).
 - The exact API surface for constructing `EffectChainScope` instances.
 - How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
 - Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
@@ -635,6 +941,8 @@ When iteration settles, propagate to canonical Models:
 - `Product/features/effects/models/01-async-dispatch.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
 - `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
 - `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
-- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature.
+- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
+- `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
+- `Product/features/actions/models/02-availability-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
 - `Product/ledgers/OPEN-ITEMS.md` — resolve `oq-effect-pipeline` by deletion; add `oq-effect-authoring`, `oq-runtime-as-state-evaluator`, `oq-session-state-machine`.
 - `Product/ledgers/GLOSSARY.md` — entries for `EffectDefinition`, `EffectInstance`, `EffectBindings`, `IEffectPipeline`, chain scope, `Fired` set.
