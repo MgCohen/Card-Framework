@@ -96,13 +96,53 @@ A doc under `ledgers/` — registry / index files like `FEATURE-MAP.md`, `OPEN-I
 
 ---
 
-## Examples (within models)
+## Examples — good and bad calls
 
-Worked code traces inside model bodies.
+Concrete cases that ground the rules. Each entry: the doc (or proposed doc), the verdict, and the reasoning.
 
-- 🟡 **Examples exercise the canonical surface,** typically through implementation. Cross-doc examples are fine — an example in model A using methods defined in model B is valid because examples *demonstrate composition*, they don't define surfaces.
-- 🟡 **Pile Counter is the canonical reference example** — full trace lives at `support/samples/pile-counter.md`; other models reference it for end-to-end flow.
-- 🔴 **When does an example earn its own doc** (vs. living inline in a model)? Working principle: when it's referenced from multiple models or when it's substantial enough to dwarf the model body.
+### Model — earns its file ✅
+
+- **`engine/06` (Match Lifecycle System).** Defines the lifecycle FSM, the gate rules, and the framework-required implementation that realizes them (commands, handlers, signals, `MatchOutcome`). Multiple consumers reference it: `engine/01` for the gate, `engine/04` for `EngineLifecycle`, effects-cancellation question, presentation observers. *Why it earns:* defines a coherent system; implementations live with the system because they realize it.
+- **`engine/01` (Game Engine).** Defines the `GameEngine` class — the orchestrator. Loop, queue, drain, `Dispatch`, lifecycle-method sugar. *Why it earns:* canonical home for `GameEngine`, no other doc owns the class.
+- **`engine/03` (Snapshot Production).** Defines `IAvailableActions` service and the `AvailableActionsState` slice. *Why it earns:* canonical home for the production service. (The snapshot *shape* lives in `actions/02` — different system.)
+- **`engine/05` (Game Factory).** Defines `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer DI split. *Why it earns:* canonical home for match construction.
+- **`actions/01` (Command Pipeline).** Defines the action-flow vocabulary (`PlayerIntent`, `GameCommand`, `CommandHandler`, `CommandResult`, `HistoryEnvelope`) and now the `HistoryState` slice. *Why it earns:* canonical home for the command-pipeline contract.
+
+### Model — does not earn its file ❌
+
+- **`effects/02-replacement-prevention` (current state).** Composes `OnBefore<T>` (canonical in `triggers/01`) + `IEffectScope` (canonical in `effects/04`). The "three before-fold outcomes" is a *rule* about how the existing pipeline composes, not a new surface. *Verdict:* folds into `effects.md` feature root.
+- **`effects/03-ongoing-effects` (current state).** Author explicitly says: *"No new pipeline concept is needed — the attachment uses the same entity, trigger, and action machinery as everything else."* Recipe over existing surfaces. *Verdict:* folds into `effects.md` feature root.
+- **Pre-refactor `engine/06` (Match Lifecycle Types).** Before reframing, the doc mixed canonical types with method-extensions to `GameEngine` (defined in `engine/01`) and gate behavior (a rule about `Dispatch`). The leaks belonged in `engine/01`; the patterns (setup, disposal split) belonged in `engine.md`. *Outcome:* leaks moved out, doc reframed as the "lifecycle system" and earned its file under that framing.
+
+### Feature — earns its file ✅
+
+- **`state` (feature-root only).** Integrates Scaffold.State as the framework's state primitive. No models — the feature root is the canonical doc. *Why it earns:* load-bearing infrastructure with no canonical home before; consumers across every other feature reference it.
+- **`engine`.** Multi-model feature with a feature root that carries synthesis (vocabulary, architecture spanning seven models, cross-model invariants), plus recipes/conventions (setup commands, disposal split). *Why it earns:* coherent capability; feature root is a real synthesis, not a TOC.
+
+### Feature — split candidate 🔴
+
+- *(none surfaced yet — entry kept open for when one appears)*
+
+### Spike → Model promotion ✅
+
+- **`spikes/effect-pipeline.md`.** Currently exploring effect-level orchestration (`oq-effect-pipeline`). Carries a "When this lands" pointer at where the canonical model would live. *Why it's a good spike:* explicit resolution path, scoped to one open question.
+
+### Draft → canonical promotion ✅
+
+- **This doc (`_drafts/doc-rules.md`).** Iterates on rules across multiple doc types in one place. Promotion target named: `_workflow/PRODUCT-BUILDER.md`. *Why it's a good draft:* moving rules ought to churn the canonical workflow doc less often; a draft amortizes the iteration into one promote commit.
+
+### Folded ADR ✅
+
+- **Match-lifecycle decisions.** Single-feature scope; no project-wide ADR — the design folded into `engine/06`'s `## Options considered` / `## Rationale`. *Why folded:* no cross-feature reach.
+- **ADR-0006 (two-pipeline architecture).** Cross-feature (engine + actions + effects). Lives in `decisions/`. *Why standalone:* every affected feature references it.
+
+### Glossary entry — done right ✅
+
+- **`EngineLifecycle`.** One-line: "Public match-lifecycle enum on `GameEngine`: `NotStarted`/`Started`/`Ended`." Plus pointer to `Match Lifecycle §Lifecycle states`. *Why it's good:* no restating; canonical home pointer.
+
+### Glossary entry — drift risk 🔴
+
+- *Section refs in GLOSSARY have decayed before* (e.g. `§4.1` numbering when sections renumber). Working fix: use section names instead of numbers. Caught and updated this session for the lifecycle terms.
 
 ---
 
