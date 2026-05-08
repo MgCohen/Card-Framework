@@ -270,6 +270,6 @@ After full migration, these patterns are ready for codification:
 
 (Note: total ADRs is 23 not 24 — earlier audit miscounted by 1; effects had 3 not 4.)
 
-Project-wide ADRs grew from 5 (`0001-adopt-workflow` through `0005-objects-over-ids`) to 7 (added `0006-zone-visibility-model`, `0007-five-validation-layers`).
+Project-wide ADRs grew from 5 (`0001-adopt-workflow` through `0005-objects-over-ids`) to 7 (added `0008-zone-visibility-model` — number bumped past `0006-two-pipeline-architecture` which landed on main during the migration; `0007-five-validation-layers`).
 
 `features/<feature>/decisions/` directories: all removed.

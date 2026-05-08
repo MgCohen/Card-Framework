@@ -5,9 +5,9 @@ references: [features/cards/models/01-card-model.md, features/zones/models/01-zo
 tags: [#adr, #zones, #visibility, #history, #cards, #cross-cutting]
 ---
 
-# ADR-0006 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
+# ADR-0008 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
 
-Date: 2026-05-01 (elevated from `features/zones/decisions/0002-visibility-model.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across cards + zones + presentation)
+Date: 2026-05-01 (elevated from `features/zones/decisions/0002-visibility-model.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across cards + zones + presentation; renumbered from 0006 to 0008 on 2026-05-08 to resolve number collision with the pre-existing `0006-two-pipeline-architecture.md`)
 Context-docs: `features/cards/models/01-card-model.md`, `features/zones/models/01-zone-model.md`, `features/presentation/models/01-presentation-loop.md`
 Proposal: session-20260501-1602-zone-model-internal-opens
 
