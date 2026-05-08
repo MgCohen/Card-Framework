@@ -55,6 +55,19 @@ A doc under `spikes/`. Pre-settled exploration.
 
 ---
 
+## Research / Reference
+
+A doc capturing external knowledge: studied games, explored codebases, prior-art surveys, pattern catalogs. Currently scattered (some live in `spikes/`, some in project-root `RESEARCH_BACKUP/`); home TBD — likely `Product/research/` (or `Product/reference/`).
+
+- 🟡 **Research has no resolution path.** Unlike spikes, research isn't aimed at a settled outcome. It's reference material; consulted, not resolved.
+- 🟡 **Models / features cite research** when a design decision drew on it. Research is the source the canonical doc references; the canonical doc is what authors and AI consult day-to-day.
+- 🟡 **Research can be revisited and refined.** A second pass on the same game with new context appends or rewrites in place — not archived as superseded.
+- 🟡 **Spike vs research test.** Does the doc have a "when this lands, X gets settled" pointer? Yes → spike. No → research. (A doc that started as a spike but no longer has a resolution path has drifted into research; reclassify.)
+- 🔴 **Canonical home for research** TBD. Working candidates: `Product/research/<topic>.md` (per-topic), `Product/research/games/<game>.md` (per-game studies), `Product/research/patterns/<pattern>.md` (pattern catalogs).
+- 🔴 **What about `RESEARCH_BACKUP/` outside Product?** Some research already lives there, outside the Product workflow entirely. Decide: import into `Product/research/`, link to from Product, or leave where it is.
+
+---
+
 ## Draft
 
 A doc under `_drafts/`. In-flight content not yet at its canonical home.
@@ -127,6 +140,10 @@ Concrete cases that ground the rules. Each entry: the doc (or proposed doc), the
 
 - **`spikes/effect-pipeline.md`.** Currently exploring effect-level orchestration (`oq-effect-pipeline`). Carries a "When this lands" pointer at where the canonical model would live. *Why it's a good spike:* explicit resolution path, scoped to one open question.
 
+### Spike that's actually research 🔴
+
+- *(survey TBD — likely candidates: any doc in `spikes/` or `RESEARCH_BACKUP/` that captures studied games / patterns / codebases without a "when this lands" pointer. These should reclassify to `Product/research/` once that home is decided.)*
+
 ### Draft → canonical promotion ✅
 
 - **This doc (`_drafts/doc-rules.md`).** Iterates on rules across multiple doc types in one place. Promotion target named: `_workflow/PRODUCT-BUILDER.md`. *Why it's a good draft:* moving rules ought to churn the canonical workflow doc less often; a draft amortizes the iteration into one promote commit.
@@ -151,6 +168,7 @@ Concrete cases that ground the rules. Each entry: the doc (or proposed doc), the
 - **Cross-cutting "system" identification.** When a system spans multiple features (e.g. lifecycle = engine + state + actions), which feature owns the system model? Currently: the feature most central to the system's purpose (lifecycle → engine, even though state/EngineState slice is involved).
 - **Boundary between feature root and model when a feature has only one model.** Should the model fold into the feature root? Currently: keep separate so the feature root stays a synthesis layer and the model carries the design.
 - **What about content that's framework-convention but doesn't belong to any feature?** e.g. naming conventions, file layout, the canonical-home rule itself. Lives in `_workflow/PRODUCT-BUILDER.md`.
+- **Research home.** `Product/research/` not yet established. Pick a structure (per-topic? per-game? per-pattern?) and audit `spikes/` + `RESEARCH_BACKUP/` for content that should reclassify.
 
 ---
 
