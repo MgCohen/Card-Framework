@@ -41,6 +41,57 @@ The framework commits to two distinct registration boundaries:
 - Caller calls `factory.Create(matchSetup)` (or fluent equivalent) with per-match data.
 - Factory returns a configured `GameEngine` ready for first `Dispatch`.
 
+### Registration contract
+
+The full inventory of what each side registers, organized by bucket. This is the load-bearing reference game authors use when writing their installer.
+
+#### Framework-auto-registered (no game action required)
+
+The framework `EngineInstaller` registers every framework service the engine needs at runtime:
+
+| Service / type | Lifetime | Purpose |
+|---|---|---|
+| `Store` | Singleton (per match scope) | Canonical state container; owns slices and the catalog |
+| `IStateScope` | Resolves through `Store` | Read-only state surface |
+| `IAvailableActions` | Singleton | Snapshot service consumed by `GameRulesRuntime` |
+| `IIntakeQueue` | Singleton | Pending command queue (shape per `oq-intake-queue`) |
+| `ICommandPipeline` | Singleton | Dispatch + before/after fold orchestration |
+| `IGameFactory` | Singleton | The factory itself |
+| Framework mutators for `EntityState`, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`, `EngineState`, `HistoryState`, `AvailableActionsState`, `LastMoveState` | Singleton, `AsImplementedInterfaces` | Bridge primitives + framework-owned slices |
+| `IModifierFactory` | Singleton | Deterministic modifier-id allocator |
+
+Game installers **do not** register any of these. Doing so produces a `Build` validation error (duplicate registration).
+
+#### Game-required (must be registered for `Build` to succeed)
+
+| Registration | Form | Purpose |
+|---|---|---|
+| `GameRulesRuntime<TDefinition>` for the game's definition type | `Register<GameRulesRuntime<TPileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient)` | The game-specific runtime brain |
+| One `Mutator<TState, TPayload>` per game-authored slice | `Register<PileCounterMutator>(Lifetime.Singleton).AsImplementedInterfaces()` | Each slice declared via `ISliceProvider` needs at least one mutator (warning, not error — see Validation below) |
+| One `ICommandHandler<TCommand, TResult>` per game-authored `GameAction` | `Register<TMoveCardHandler>(Lifetime.Singleton).AsImplementedInterfaces()` | Handler resolution at dispatch time |
+
+`Build` throws an aggregate exception if any required registration is missing.
+
+#### Game-optional
+
+| Registration | Purpose |
+|---|---|
+| `IIntentMapper` implementation | Required only if the game uses the gateway intent → action flow; pure-headless games may omit |
+| Game-specific subsystems (`IStackSystem`, `IDeckSystem`, `IPuzzleFactory`, …) | Whatever the runtime constructor declares as dependencies |
+| Per-actor / per-game services | Game's choice |
+
+#### Resolution at `Build`
+
+The factory resolves registrations in this order:
+
+1. `MatchSetup.Game.Rules` (a `GameRulesDefinition` instance) is registered into the per-match scope so the runtime constructor can take it as a typed parameter.
+2. `GameRulesRuntime<TDefinition>` resolved via container open-generic resolution: `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))`.
+3. `IEnumerable<Mutator>` collection-resolved; primes the `Store`.
+4. `ICommandPipeline` resolved (handlers resolve at dispatch time).
+5. `IIntentMapper` resolved when present.
+
+The factory itself never sees `IContainerBuilder` or `IObjectResolver` — those are owned by the host or app-level controller. The factory is constructor-injected by VContainer with the resolver it needs.
+
 ### `IGameFactory`
 
 ```csharp
@@ -175,7 +226,7 @@ public static class PileCounterBootstrap
 
         return gameFactory.NewMatch()
             .WithGame(new PileCounterGameDefinition(puzzle))   // bundle: Rules + zones + cards + GetInitialSlices()
-            .WithActors(new SoloPlayer(ActorId.Player1))       // Player : EntityInstance<PlayerDefinition>, IActor
+            .WithActors(new SoloPlayer(ActorId.Player1))       // Player : InstanceWithSlices<PlayerDefinition>, IActor
             .WithSeed(puzzle.Seed)
             .Build();
     }
@@ -213,7 +264,7 @@ public sealed class PileCounterInstaller : IInstaller
     public void Install(IContainerBuilder builder)
     {
         builder.Register<MoveCardHandler>          (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<PileMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<PileCounterMutator>       (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<LastMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<GameRulesRuntime<PileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient);
         builder.Register<PileCounterIntentMapper>  (Lifetime.Singleton).AsImplementedInterfaces();

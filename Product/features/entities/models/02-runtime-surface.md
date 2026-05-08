@@ -14,15 +14,25 @@ Audience: handler authors, effect authors, presentation projections, replay/snap
 
 ---
 
-## 1. The Handle — `EntityInstance<TDef>`
+## 1. The Handle — `InstanceWithSlices<TDef>`
 
-Every entity at runtime is referenced through a typed handle:
+Every entity at runtime is referenced through a typed handle. The base handle is `Scaffold.EntityInstance<TDef>` (external — pairs `(Definition, Storage)` with no identity). The framework introduces a parent — `InstanceWithSlices<TDef>` — that consolidates the `ISliceProvider` contract on the Instance side and tightens `Definition`'s exposure:
 
 ```csharp
-public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinition
+// Scaffold (external): Scaffold.Entities
+public class EntityInstance<TDef> where TDef : IEntityDefinition
 {
-    public TDef                     Definition { get; }
-    public IEntityVariableStorage   Storage    { get; }
+    public TDef                   Definition { get; }
+    public IEntityVariableStorage Storage    { get; }
+}
+
+// Card Framework parent — adds ISliceProvider, hides Definition from external consumers
+public class InstanceWithSlices<TDef> : Scaffold.EntityInstance<TDef>, ISliceProvider
+    where TDef : IEntityDefinition
+{
+    // Definition is shadowed as protected at this layer.
+    // Subclasses can read it; external consumers cannot navigate to it.
+    protected new TDef Definition => base.Definition;
 
     // Default: instance delegates to its definition for initial slices.
     // Override in subclasses for spawn-time customization (rare).
@@ -33,13 +43,15 @@ public class EntityInstance<TDef> : ISliceProvider where TDef : IEntityDefinitio
 }
 ```
 
-`EntityInstance<TDef>` is identity-free at the base. Concrete subclasses (`Card`, `Zone`, `Player`) carry typed `Ref<TSubclass> SelfRef` — the stable runtime identity. Storage is `IEntityVariableStorage` — typically `StoreVariableStorage(store, selfRef)` for store-backed variables, or `LocalVariableStorage(parent)` for overlays.
+`InstanceWithSlices<TDef>` is identity-free at the base. Concrete subclasses (`Card`, `Zone`, `Player`) carry typed `Ref<TSubclass> SelfRef` — the stable runtime identity. They are **not sealed** (project convention: default to unsealed); games may subclass for typed re-export or game-side helpers. Storage is `IEntityVariableStorage` — typically `StoreVariableStorage(store, selfRef)` for store-backed variables, or `LocalVariableStorage(parent)` for overlays.
 
-The handle exposes everything callers need: read access, mutation, subscriptions, slice declaration. Concrete subclasses add their typed identity. Spawn through `store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) or the typed subclass helper (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`). Live handles are resolved from the catalog: `store.Catalog.Resolve(selfRef)`.
+The handle exposes read access, mutation, subscriptions, and slice declaration. Concrete subclasses add their typed identity. Spawn through `store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) or the typed subclass helper (`Card.Spawn`, `Zone.Spawn`, `Player.Spawn`). Live handles are resolved from the catalog: `store.Catalog.Resolve(selfRef)`.
 
-`EntityInstance<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityState` rows; handles are re-created from the catalog after `LoadSnapshot`.
+`InstanceWithSlices<TDef>` is **not** a `State`. Snapshots only contain canonical `EntityState` rows; handles are re-created from the catalog after `LoadSnapshot`.
 
-**`ISliceProvider` on both Definition and Instance.** Both `EntityDefinition` and `EntityInstance<TDef>` implement `ISliceProvider`. Default implementation on the instance delegates to the definition; this lets the factory's spawn loop work instance-centric (`foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`) without reaching back into definitions per spawn. Concrete subclasses override on the instance side only when spawn-time customization is needed (rare). See [Game Definition](features/engine/models/07-game-definition.md) for the factory's spawn-walk pseudocode.
+**`Definition` access discipline.** `Definition` is `protected` on `InstanceWithSlices<TDef>` so subclasses (framework or game-side) can read it; external consumers cannot navigate to `instance.Definition`. Game code that genuinely needs typed authored-field reads can subclass `Card` / `Zone` / `Player` and re-expose `Definition` (or specific fields) — this is allowed, but **discouraged** in framework conventions. Prefer reading authored data through the variable bag (`card.Storage.GetVariable<int>(Vars.Cost)`); the variable channel round-trips through serialization, replay, and snapshot cleanly. Direct typed `Definition` reads couple the consumer to the typed Definition subclass and break under transformation (definition swap).
+
+**`ISliceProvider` on both Definition and Instance.** `DefinitionWithSlices` (the framework parent for `Scaffold.EntityDefinition`) and `InstanceWithSlices<TDef>` (the framework parent for `Scaffold.EntityInstance<TDef>`) both implement `ISliceProvider`. The default instance implementation delegates to the definition; this lets the factory's spawn loop work instance-centric (`foreach instance: foreach slice in instance.GetInitialSlices(): store.Install(slice, key: instance.SelfRef)`) without reaching back into definitions per spawn. Concrete subclasses override on the instance side only when spawn-time customization is needed (rare). See [Game Definition](features/engine/models/07-game-definition.md) for the factory's spawn-walk pseudocode.
 
 **Slices don't carry their own primary key.** Storage is keyed externally by the factory using the instance's `SelfRef`. Reference-shaped fields inside slice *values* (e.g., `LastMoveState(Ref<Card>, From, To)`) are *data*, not keys. This convention applies uniformly across framework slices (`EntityState`, `ZoneContentsState`, `OwnershipState`, etc.).
 
@@ -77,17 +89,30 @@ FloatVariableValue v = card.Storage.GetVariable<float>(Vars.Speed);  // wrong: a
 
 Authors never see `VariableValue` subclasses on the read side unless they're working with the lower-level inspection methods.
 
-**Identity and definition.** Concrete handles expose `SelfRef`. `card.Definition` returns the typed definition — useful for reading authored fields:
+**Identity and definition.** Concrete handles expose `SelfRef` publicly. `Definition` is `protected` (per §1) — external consumers cannot navigate to `instance.Definition`. The framework convention is to read authored data through the variable bag:
 
 ```csharp
 var villager = store.Catalog.Resolve(villagerRef);
-VillagerJob job = villager.Definition.Job;   // authored field on the typed definition
+int hp = villager.Storage.GetVariable<int>(Vars.Health);   // through the bag (preferred)
 ```
+
+For typed-non-variable authored data (typed enums, complex records on the definition), game code may subclass the framework handle and expose what it needs:
+
+```csharp
+// Game-side: opt-in re-export via subclass.
+public class VillagerHandle : Card
+{
+    // Subclass-only access to the protected Definition; re-export at the game's discretion.
+    public VillagerJob Job => ((VillagerDefinition)base.Definition).Job;
+}
+```
+
+This pattern is allowed but discouraged — typed `Definition` reads couple the consumer to the typed Definition subclass and break under transformation (definition swap). Prefer modelling game-specific authored data as variables in the bag.
 
 **Polymorphism.** Code that should work against either store-backed or overlay-backed handles holds the storage interface or the entity handle:
 
 ```csharp
-void Inspect<TDef>(EntityInstance<TDef> e) where TDef : IEntityDefinition { ... }
+void Inspect<TDef>(InstanceWithSlices<TDef> e) where TDef : IEntityDefinition { ... }
 ```
 
 ### 2.1 Direct slice access
@@ -156,7 +181,7 @@ The framework releases per-variable subscriptions when the storage adapter is di
 
 ### 4.1 Default surface — `IEntityVariableStorage`
 
-**Handlers and framework code prefer the storage adapter over raw payloads.** Holding an `EntityInstance<TDef>` (or a concrete subclass like `Card`) and calling methods on its `Storage` is the recommended default. Raw `ctx.Store.Execute(payload)` is the documented fallback only for batch authoring, history-replay tooling, and paths that hold a `Ref<T>` but not a handle (see §4.2).
+**Handlers and framework code prefer the storage adapter over raw payloads.** Holding an `InstanceWithSlices<TDef>` (or a concrete subclass like `Card`) and calling methods on its `Storage` is the recommended default. Raw `ctx.Store.Execute(payload)` is the documented fallback only for batch authoring, history-replay tooling, and paths that hold a `Ref<T>` but not a handle (see §4.2).
 
 ```csharp
 public interface IEntityVariableStorage  // mutation surface (read members elided)
@@ -306,7 +331,7 @@ public interface ICatalog
 Project-side, typed subclass spawn helpers wrap `StoreEntities.Spawn` and return the typed handle:
 
 ```csharp
-public sealed class Card : EntityInstance<CardDefinition>
+public class Card : InstanceWithSlices<CardDefinition>
 {
     public Ref<Card> SelfRef { get; init; }
 

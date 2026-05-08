@@ -13,7 +13,7 @@ A `Player` is the framework's baseline subtype of actor representing a seated, e
 
 ```
 IActor (interface, carries ActorId)
-├── Player : EntityInstance<PlayerDefinition>, IActor       (entity-backed seated participant)
+├── Player : InstanceWithSlices<PlayerDefinition>, IActor   (entity-backed seated participant)
 └── World, Environment, Bot, Market : record (ActorId)      (lightweight non-entity actors)
 ```
 
@@ -34,7 +34,7 @@ The polymorphic actor type. Anything that can own things in the simulation imple
 
 ```csharp
 // Entity-backed
-public sealed class Player : EntityInstance<PlayerDefinition>, IActor
+public class Player : InstanceWithSlices<PlayerDefinition>, IActor
 {
     public Ref<Player> SelfRef { get; init; }
     public ActorId     Id      { get; init; }
@@ -59,7 +59,7 @@ If a richer Actor surface is ever needed (capabilities, role-typed dispatch, etc
 ## `Player` class
 
 ```csharp
-public sealed class Player : EntityInstance<PlayerDefinition>, IActor
+public class Player : InstanceWithSlices<PlayerDefinition>, IActor
 {
     public Ref<Player> SelfRef { get; init; }
     public ActorId     Id      { get; init; }   // satisfies IActor
@@ -74,6 +74,8 @@ public sealed class Player : EntityInstance<PlayerDefinition>, IActor
 }
 ```
 
+`Player` is **not sealed** (project convention: default to unsealed). Game code may subclass for typed re-export of authored Definition fields or game-specific helper methods; per-player-type subclassing for asymmetric games (`MageHero : Player`, `WarriorHero : Player`) is also acceptable but consider whether `PlayerDefinitionOverlay` (per-actor `PlayerDefinition` overrides) is the cleaner mechanism.
+
 `Player` carries two identities:
 
 - **`SelfRef : Ref<Player>`** — typed runtime identity. Allocated by `store.Catalog.AllocateRef<Player>()` at spawn. Used for entity-state slice keying, per-player slice keying, server-internal subscriptions, and any catalog lookup.
@@ -84,15 +86,16 @@ Both refs are stable for the player's lifetime. There's at most one live `Player
 ## `PlayerDefinition`
 
 ```csharp
-public abstract class PlayerDefinition : Scaffold.EntityDefinition, ISliceProvider
+public abstract class PlayerDefinition : DefinitionWithSlices
 {
     // Per-player zones declared at the framework level (hand, deck, discard, …).
     // The factory spawns one Zone per entry, per player actor, at Build.
     public abstract IEnumerable<ZoneDefinition> PerPlayerZones { get; }
 
-    // Per-player non-variable slices. Default empty; concrete subclasses
-    // override to declare game-specific per-player state.
-    public virtual IEnumerable<BaseState> GetInitialSlices()
+    // Per-player non-variable slices. Default empty (inherited from
+    // DefinitionWithSlices); concrete subclasses override to declare
+    // game-specific per-player state.
+    public override IEnumerable<BaseState> GetInitialSlices()
         => Array.Empty<BaseState>();
 
     // Variables (StartingLife, StartingMana, etc.) flow through the entity-bridge
@@ -101,7 +104,7 @@ public abstract class PlayerDefinition : Scaffold.EntityDefinition, ISliceProvid
 }
 ```
 
-`PlayerDefinition` adopts `ISliceProvider` from day one (per the domain modeling design pass, Q2 + Q11 — symmetric with `ZoneDefinition` and `CardDefinition`). Most per-player primary state is variables (in `EntityState` via the bridge); `GetInitialSlices()` is reserved for non-variable per-player state — a complex `ManaPool` record, a list of per-player abilities, custom per-player status enums.
+`PlayerDefinition` inherits the framework parent `DefinitionWithSlices : Scaffold.EntityDefinition, ISliceProvider` (per the open-seams pass, Q1 — symmetric with `ZoneDefinition` and `CardDefinition`). Most per-player primary state is variables (in `EntityState` via the bridge); `GetInitialSlices()` is reserved for non-variable per-player state — a complex `ManaPool` record, a list of per-player abilities, custom per-player status enums.
 
 `PerPlayerZones` is the player's layout block. The factory walks it at `Build` and spawns one `Zone` per entry per player actor (so a Magic player with `[Hand, Library, Graveyard]` gets three zones spawned at `Build`). See [Game Definition § Build walk](features/engine/models/07-game-definition.md).
 
@@ -192,7 +195,7 @@ Per-player state mutations follow the same patterns as other entity instances:
 Player creation flows through `Player.Spawn` (the typed wrapper around `StoreEntities.Spawn<PlayerDefinition>`):
 
 ```csharp
-public sealed class Player : EntityInstance<PlayerDefinition>, IActor
+public class Player : InstanceWithSlices<PlayerDefinition>, IActor
 {
     public static Player Spawn(Store store, PlayerDefinition def, ActorId actorId)
     {
@@ -234,14 +237,14 @@ The framework does not provide an `ActorId → Ref<Player>` index out of the box
 
 - **One `Player` per `Ref<Player>`** in the running engine — held in `store.Catalog`.
 - **`Player` carries both `Ref<Player>` (entity identity) and `ActorId` (actor identity).** Both are stable for the player's lifetime. The mapping is held on the `Player` handle itself; no separate slice needed.
-- **`PlayerDefinition` adopts `ISliceProvider` from day one** with default empty `GetInitialSlices()`. Per-player non-variable slices are declared by concrete subclasses; per-player primary state is variables in the bag.
+- **`PlayerDefinition` inherits `DefinitionWithSlices`** (and through it, `ISliceProvider`) with default empty `GetInitialSlices()`. Per-player non-variable slices are declared by concrete subclasses; per-player primary state is variables in the bag.
 - **Per-player zones are structural** — declared in `PlayerDefinition.PerPlayerZones`, instantiated per player actor at `Build`. Stable over the match lifetime in normal play.
 - **Per-player slice-shape convention is a recommendation, not enforcement.** Per-player-keyed for substantial primary state; singleton-with-dict for cross-cutting indexes.
 - **Non-entity actors (`World`, `Environment`, `Bot`, `Market`) have no entity bridge.** They are lightweight records implementing `IActor`. They cannot own variables or per-instance slices; their participation is purely as `IActor` values in framework slices like `OwnershipState`.
 
 ## Related
 
-- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — entity bridge foundation; `EntityInstance<TDef>` and the entity-state slice that `Player` participates in.
+- [`features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — entity bridge foundation; `InstanceWithSlices<TDef>` parent and the entity-state slice that `Player` participates in.
 - [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) — handle / read / mutation surface; `ISliceProvider` instance-delegates-to-definition default.
 - [`features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — `MatchSetup`, `IMatchBuilder`, factory `Build` validation. `Actors` is `IReadOnlyList<IActor>`; `PlayerDefinitionOverlay` provides per-actor overrides for asymmetric games.
 - [`features/engine/models/07-game-definition.md`](features/engine/models/07-game-definition.md) — `GameDefinition.DefaultPlayerDefinition`, the factory's `Build` walk, layout-block contract.

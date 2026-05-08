@@ -90,30 +90,30 @@ public sealed record HistoryState(
 Game authors define slices as immutable records:
 
 ```csharp
-public sealed record PilesState(
-    IReadOnlyDictionary<PileId, Pile> Piles) : BaseState;
+// Per-zone-type slice — keyed externally at pile.SelfRef (Ref<Zone>) by the
+// factory walk per zones/01.
+public sealed record PileState(int Counter, int Target) : BaseState;
 
+// Singleton — no keying.
 public sealed record LastMoveState(LastMove? Move) : BaseState;
 ```
 
 Rules:
 - **One slice, one concern.** Each slice owns exactly one piece of game state.
-- **Immutable.** All mutations produce a new record via `with { }` or a helper method (e.g. `WithCardMoved`).
+- **Immutable.** All mutations produce a new record via `with { }` or a helper method.
 - **No cross-slice mutation.** A mutator owns one slice's output. It may read sibling slices through the `IStateScope scope` parameter on `Change`, but it never writes them.
+- **Slices don't carry their own primary key.** The factory keys per-instance slices externally using the spawned instance's `SelfRef`. Reference-shaped fields inside slice values are *data*, not keys.
 
-Initial slice values flow into match construction through the factory; mutators are registered in the game's VContainer installer (the factory collection-resolves them at `Build`):
+Initial slice values come from `ISliceProvider.GetInitialSlices()` on the relevant Definition kind (per [`engine/07-game-definition.md`](features/engine/models/07-game-definition.md)). The factory's Build walk installs each returned slice keyed at the instance's `SelfRef` (per-zone, per-card, per-player) or unkeyed (game-singleton). Mutators are registered in the game's VContainer installer; the factory collection-resolves them at `Build`:
 
 ```csharp
 // Game installer (one-time, app-level):
-builder.Register<PileMoveMutator> (Lifetime.Singleton).AsImplementedInterfaces();
-builder.Register<LastMoveMutator> (Lifetime.Singleton).AsImplementedInterfaces();
+builder.Register<PileCounterMutator> (Lifetime.Singleton).AsImplementedInterfaces();
+builder.Register<LastMoveMutator>    (Lifetime.Singleton).AsImplementedInterfaces();
 
-// Match construction (per match):
-factory.NewMatch()
-    .WithInitialSlices(
-        new PilesState(initialPiles),
-        new LastMoveState(Move: null))
-    .Build();
+// Per-zone PileState slices come from PileDefinition.GetInitialSlices() at
+// spawn — game authors don't seed them through MatchSetup.InitialSlices.
+// Game-singleton slices come from PileCounterGameDefinition.GetInitialSlices().
 ```
 
 The factory registers framework-owned slices internally at `Build`. Game authors never seed `AvailableActionsState`, `EngineState`, or `HistoryState`. See [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md) for the full match-construction contract.
@@ -122,11 +122,11 @@ The factory registers framework-owned slices internally at `Build`. Game authors
 
 ## 5. Reading State
 
-All consumers read state through `IStateScope.Get<TState>()` regardless of tier:
+All consumers read state through `IStateScope.Get<TState>(...)` regardless of tier:
 
 ```csharp
-// GameRulesRuntime reading game-authored slice
-var piles = state.Get<PilesState>().Piles.Values;
+// GameRulesRuntime reading per-zone slice
+var pile = state.Get<PileState>(pileRef);
 
 // Trigger condition reading framework-owned slice
 var snap = scope.State.Get<AvailableActionsState>().Snapshot;
@@ -137,10 +137,10 @@ var log = scope.Get<HistoryState>().Envelopes;
 
 There is no special accessor for framework slices. `IStateScope` is the uniform read surface for everything.
 
-For ref-keyed slices (e.g. one `PileState` per `PileId`), pass the reference:
+For ref-keyed slices (e.g. one `PileState` per pile zone, keyed by `Ref<Zone>`), pass the reference:
 
 ```csharp
-var hand = scope.Get<PileState>(PileId.Hand);
+var pile = scope.Get<PileState>(pileRef);
 ```
 
 Enumerate every slice of a type — and recover the reference for each — via:
@@ -172,8 +172,8 @@ Four subscription channels, ordered by specificity:
 // 1. Singleton (default-ref) slice — e.g. EngineState, TurnState.
 store.Subscribe<EngineState>(handler);
 
-// 2. Specific ref-keyed slice — e.g. one PileState by PileId.
-store.Subscribe<PileState>(PileId.Hand, handler);
+// 2. Specific ref-keyed slice — e.g. one PileState by Ref<Zone>.
+store.Subscribe<PileState>(pileRef, handler);
 
 // 3. Every reference for a type — fires for any pile, any entity, any …
 store.SubscribeAllReferences<PileState>(handler);
@@ -182,7 +182,7 @@ store.SubscribeAllReferences<PileState>(handler);
 store.SubscribeAny((reference, baseState, ev) => { … });
 
 // Symmetric unsubscribe
-store.Unsubscribe<PileState>(PileId.Hand, handler);
+store.Unsubscribe<PileState>(pileRef, handler);
 ```
 
 Use cases by channel:
@@ -190,26 +190,26 @@ Use cases by channel:
 | Channel | Typical caller | Example |
 |---|---|---|
 | `Subscribe<TState>(handler)` | Presentation, projections watching a singleton | "Re-render when `TurnState` changes" |
-| `Subscribe<TState>(reference, handler)` | Per-instance view binding | "Re-render this pile's stack when its `PileState` changes" |
+| `Subscribe<TState>(reference, handler)` | Per-instance view binding | "Re-render this pile's score when its `PileState` changes" |
 | `SubscribeAllReferences<TState>` | Engine, broad projections | "Watch every entity's `EntityState` for analytics" |
 | `SubscribeAny` | Debugger, replay recorder | "Log every state change with reference + event type" |
 
-For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on `EntityInstance<TDef>` — see [`features/entities/models/02-runtime-surface.md` §3](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view; entities/02 §3.2 documents when to reach for it.
+For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`features/entities/models/02-runtime-surface.md` §3](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view; entities/02 §3.2 documents when to reach for it.
 
 ### 6.1 Lifetime
 
 The store does not return an `IDisposable` from these slice-level methods (unlike the entity handle's `Subscribe`, which does). Callers that need symmetric teardown hold the handler delegate and call `Unsubscribe` on disposal:
 
 ```csharp
-private readonly Action<Reference, PileState, StateChangeEvent> handHandler;
+private readonly Action<Reference, PileState, StateChangeEvent> pileHandler;
 
-public HandView(Store store) {
-    handHandler = (_, state, ev) => Render(state);
-    store.Subscribe<PileState>(PileId.Hand, handHandler);
+public PileView(Store store, Ref<Zone> pileRef) {
+    pileHandler = (_, state, ev) => Render(state);
+    store.Subscribe<PileState>(pileRef, pileHandler);
 }
 
 public void Dispose() {
-    store.Unsubscribe<PileState>(PileId.Hand, handHandler);
+    store.Unsubscribe<PileState>(pileRef, pileHandler);
 }
 ```
 
@@ -269,5 +269,5 @@ For the entity-side specifics (factory output flowing into raw `AddModifierPaylo
 - [features/entities/models/02-runtime-surface.md §4.5](features/entities/models/02-runtime-surface.md) — entity-side batch composition
 - [features/engine/models/02-gamerules-contract.md](features/engine/models/02-gamerules-contract.md) — `IAvailableActions` service, `GameRulesRuntime<T>` constructor
 - [features/engine/models/03-snapshot-pipeline.md](features/engine/models/03-snapshot-pipeline.md) — snapshot production, `IAvailableActions.Set`
-- [support/samples/pile-counter.md](support/samples/pile-counter.md) — working example of game-authored slices (`PilesState`, `LastMoveState`)
+- [support/samples/pile-counter.md](support/samples/pile-counter.md) — working example of game-authored slices (per-zone `PileState`, singleton `LastMoveState`)
 - [ledgers/OPEN-ITEMS.md](ledgers/OPEN-ITEMS.md) — `HistoryEnvelope` typed definition

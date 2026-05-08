@@ -14,6 +14,14 @@ Proposal: session-20260501-1602-zone-model-internal-opens
 
 Original ADR text named the bridge handle `StateEntity<CardDefinition>` and the empty marker `IReference`; both have been replaced. The bridge handle is now `EntityInstance<TDef>` (identity-free at the base, with concrete subclasses carrying typed `Ref<TSubclass> SelfRef`); the polymorphic addressable type is `Reference` (an abstract record). `CardMapState` is the privacy-rotation indirection layer mapping `CardRef → Ref<Card>`; live `Card` handles are held in `store.Catalog` and `CardRegistry`. The decision and consequences below have been rewritten to reflect this; the original options-considered analysis still stands.
 
+## Amendment — 2026-05-06 (open-seams pass)
+
+Two further refinements landed the same day:
+
+1. **Framework parent class layering.** `Card` now extends `InstanceWithSlices<CardDefinition>` rather than `Scaffold.EntityInstance<CardDefinition>` directly. `InstanceWithSlices<TDef>` is the framework parent that consolidates the `ISliceProvider` contract on the Instance side and exposes `Definition` as `protected`. The discussion below referencing `EntityInstance<CardDefinition>` should be read as `InstanceWithSlices<CardDefinition>` for new code; behaviorally equivalent.
+2. **`CardRegistry` removed.** `store.Catalog` is now the single registry for stable handle resolution. Resolution from a public `CardRef` is two-hop: `CardRef → CardMapState → Ref<Card> → Catalog → Card`. The Card Model's "Resolution surfaces" section pins the mechanism.
+3. **`Card` is unsealed.** Project convention (open-seams Q4): default to unsealed unless there's a strong reason to seal. Game code may subclass for typed re-export of authored Definition fields.
+
 ## Context
 
 The zone-model design pass surfaced that the framework had no explicit answer to "where does a card live as data?" The entities Model implied cards exist as bridge-handle instances, but those handles were anchored in an engine-side `InstanceId → (definition, store)` registry — engine-state, not Store-state. That registry has to be re-built on `LoadSnapshot` and lives outside the snapshot/rollback system.
@@ -51,7 +59,7 @@ For the Card type's generic parameter:
 **Card is a non-generic class extending `EntityInstance<CardDefinition>` and carrying typed `Ref<Card> SelfRef`.** It is a thin handle — no mutable data on the class itself. All mutable card state (variables, modifiers, current public ref, owner, visibility) lives in Store slices. Per-card-type variants (Fireball, Goblin, etc.) are distinct `CardDefinition` instances; the framework provides one `Card` class.
 
 ```csharp
-public sealed class Card : EntityInstance<CardDefinition>
+public class Card : InstanceWithSlices<CardDefinition>
 {
     public Ref<Card> SelfRef { get; init; }
 
@@ -60,7 +68,7 @@ public sealed class Card : EntityInstance<CardDefinition>
     public CardRef GetRef(IStateScope state) =>
         state.Get<CardMapState>().RefOf(SelfRef);
 
-    public Actor? GetOwner(IStateScope state) =>
+    public IActor? GetOwner(IStateScope state) =>
         state.Get<OwnershipState>().OwnerOf(SelfRef);
 
     public override bool Equals(object? obj) =>

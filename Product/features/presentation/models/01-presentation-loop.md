@@ -117,9 +117,9 @@ Trade-off accepted: the UI never reads typed templates directly for rendering. I
 The `AffordanceMap` is the UI's actual reading surface. It's built from the snapshot, lives in the gateway/UI layer, and is recomputed whenever `AvailableActions` changes.
 
 ```csharp
-public sealed class PileCounterAffordances
+public class PileCounterAffordances
 {
-    private readonly Dictionary<Ref<Card>, IReadOnlyList<PileId>> moveTargets;
+    private readonly Dictionary<Ref<Card>, IReadOnlyList<Ref<Zone>>> moveTargets;
 
     public PileCounterAffordances(AvailableActionsSnapshot snapshot)
     {
@@ -127,20 +127,20 @@ public sealed class PileCounterAffordances
             .OfType<MoveCardTemplate>()
             .ToDictionary(
                 t => t.Card,
-                t => (IReadOnlyList<PileId>)t.Destinations.Cast<PileId>().ToList());
+                t => (IReadOnlyList<Ref<Zone>>)t.Destinations.Cast<Ref<Zone>>().ToList());
     }
 
     public bool CanDrag(Ref<Card> card)
         => moveTargets.ContainsKey(card);
 
-    public IReadOnlyList<PileId> ValidDrops(Ref<Card> card)
-        => moveTargets.GetValueOrDefault(card, Array.Empty<PileId>());
+    public IReadOnlyList<Ref<Zone>> ValidDrops(Ref<Card> card)
+        => moveTargets.GetValueOrDefault(card, Array.Empty<Ref<Zone>>());
 }
 ```
 
 The map pattern-matches on typed template subtypes — no string-keyed slot lookup, no command construction. Each template already exposes its data as named fields.
 
-> **ADR-0005 boundary note.** `Ref<Card>` keys in `Dictionary<Ref<Card>, ...>` and `Ref<Card> card` parameters in `CanDrag`/`OnDrop` are **boundary-correct** here. The `AffordanceMap` is the presentation-side consumer of the engine's wire-form snapshot — presentation works in terms of refs because it receives the snapshot from the boundary, not a live object graph. See [ADR-0005](decisions/0005-objects-over-ids.md).
+> **ADR-0005 boundary note.** `Ref<Card>` and `Ref<Zone>` keys in the dictionary and parameters of `CanDrag`/`OnDrop` are **boundary-correct** here. The `AffordanceMap` is the presentation-side consumer of the engine's wire-form snapshot — presentation works in terms of refs because it receives the snapshot from the boundary, not a live object graph. See [ADR-0005](decisions/0005-objects-over-ids.md).
 
 **Properties:**
 - Pure projection of `AvailableActions`. No additional state.
@@ -152,7 +152,7 @@ The map pattern-matches on typed template subtypes — no string-keyed slot look
 ## 7. View (Renders + Captures Input)
 
 ```csharp
-public sealed class PileCounterView
+public class PileCounterView
 {
     private readonly IGameStore store;
     private PileCounterAffordances affordances;
@@ -172,20 +172,24 @@ public sealed class PileCounterView
 
     private void Render()
     {
-        foreach (var pile in store.State.Piles)
+        foreach (var pileRef in PileCounterGameDefinition.PileRefsAt(store.State))
         {
-            DrawPileScore(pile.Score, pile.Target);
-            if (pile.Cards.Count == 0) { DrawEmptySlot(pile.Id); continue; }
+            var pile     = store.State.Get<PileState>(pileRef);
+            var contents = store.State.Get<ZoneContentsState>(pileRef).Cards;
+            DrawPileScore(pile.Counter, pile.Target);
 
-            var top = pile.TopCard;
-            DrawCard(top, draggable: affordances.CanDrag(top.SelfRef));
+            if (contents.Count == 0) { DrawEmptySlot(pileRef); continue; }
+
+            var topRef      = contents[^1];
+            var topInstance = store.State.Get<CardMapState>().InstanceOf(topRef);
+            DrawCard(topRef, draggable: affordances.CanDrag(topInstance));
         }
     }
 
     public void OnDragStart(Ref<Card> card)
         => HighlightPiles(affordances.ValidDrops(card));
 
-    public void OnDrop(Ref<Card> card, PileId destination)
+    public void OnDrop(Ref<Card> card, Ref<Zone> destination)
     {
         if (!affordances.ValidDrops(card).Contains(destination))
             return;   // defensive — UI shouldn't have allowed this drop
@@ -262,7 +266,7 @@ A player makes a move in Pile Counter:
    2. **`handler.Validate(action, state, out reason)`** — passes (snapshot prevented obviously illegal intents; this catches stale bindings).
    3. Action lands in the engine's framework-private FIFO queue.
 9. **Drain begins.** Pipeline runs: before-fold (no triggers) → `MoveCardHandler.Handle` → after-fold (no triggers) → envelope published.
-10. **State mutators fire.** Handler called `ctx.Store.Execute(new MoveCardPayload(...))`; Scaffold's payload-keyed registry fans out to `PileMoveMutator` (writes `PilesState`) and `LastMoveMutator` (writes `LastMoveState`); both commit atomically.
+10. **State mutations fire.** Handler called `ctx.Store.ExecuteBatch(...)` with the framework's `MoveCardMutation` (CompositeAction — handles `ZoneContentsState` + `CardMapState` rotation atomically) plus game-side payloads (`AdjustPileCounterPayload` × 2 for source/destination counters, `SetLastMovePayload` for the last-move memory). All committed atomically as one batch; one slice update event per affected slice.
 11. **`runtime.Evaluate`** runs — checks if all piles match targets. If yes, returns `[EndMatchCommand]`; engine enqueues it. If not, the runtime publishes a fresh snapshot inside the same `Evaluate` call via `Actions.Set(...)` and returns `[]`.
 12. **Drain reaches empty queue.** No `OnQueueDrained` callback (per [ADR-0006](decisions/0006-two-pipeline-architecture.md)); the snapshot was already published in step 11.
 13. **Store fires `OnStateChanged`.** Loop returns to step 2.

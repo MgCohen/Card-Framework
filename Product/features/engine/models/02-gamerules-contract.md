@@ -411,10 +411,10 @@ See [`support/samples/pile-counter.md`](support/samples/pile-counter.md) for the
 ## 10. Open Items
 
 - **Effect pipeline shape** — the substantive open design surface. How does the runtime express effect-level orchestration (when each effect starts, whether nesting / batching / stacking)? Per ADR-0006, separate from command routing. Tracked as `oq-effect-pipeline`.
-- **`GameState` slice catalog** — concrete catalog of slices (`PilesState`, `LastMoveState`, `ZonesState`, `TurnState`, `AvailableActionsState`, etc.) the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal. See `engine/04-gamestate-slices.md`.
+- **`GameState` slice catalog** — concrete catalog of slices (per-zone `PileState`, `LastMoveState`, `TurnState`, `AvailableActionsState`, framework-owned `ZoneContentsState` / `CardMapState` / `OwnershipState` / `EntityState`, etc.) the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal. See `engine/04-gamestate-slices.md`.
 - **Action pipeline cleanup** — handler lookup, validate, execute, trigger folds need to be drawn explicitly in one place rather than scattered across docs.
 - **`IHandlerRegistry` shape** — final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc.
-- **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround.
+- **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing).
 - **`GameRulesRuntime` composition** — module composition contract (provider/policy ordering, enable-disable). Service surface supports it mechanically; pin when first composed game forces it. Tracked as `oq-gamerules-composition`.
 
 ### Resolved

@@ -114,7 +114,7 @@ Two simplifications from doc 28's draft:
 ### IntentMapper becomes typed
 
 ```csharp
-public sealed class PileCounterIntentMapper : IIntentMapper
+public class PileCounterIntentMapper : IIntentMapper
 {
     private readonly IStateScope state;
     public PileCounterIntentMapper(IStateScope state) => this.state = state;
@@ -123,13 +123,19 @@ public sealed class PileCounterIntentMapper : IIntentMapper
     {
         MoveCardTemplate m => new MoveCardCommand(
             Card: m.Card,
-            From: LocateCard(state.Get<PilesState>(), m.Card),
-            To:   (PileId)choice.Targets[0]),
+            From: LocateCard(state, m.Card),
+            To:   (Ref<Zone>)choice.Targets[0]),
         _ => throw new InvalidOperationException($"unknown template: {template}")
     };
 
-    private static PileId LocateCard(PilesState piles, Ref<Card> card)
-        => piles.Piles.First(kv => kv.Value.Cards.Any(c => c.SelfRef.Equals(card))).Key;
+    private static Ref<Zone> LocateCard(IStateScope state, Ref<Card> card)
+    {
+        var cardRef = state.Get<CardMapState>().RefOf(card);
+        foreach (var pileRef in PileCounterGameDefinition.PileRefsAt(state))
+            if (state.Get<ZoneContentsState>(pileRef).Cards.Contains(cardRef))
+                return pileRef;
+        throw new InvalidOperationException($"card {card} not in any pile");
+    }
 }
 ```
 
@@ -237,7 +243,8 @@ Three reasons:
 ```csharp
 public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
 {
-    private readonly IActor _player;
+    private readonly IActor                   _player;
+    private readonly IReadOnlyList<Ref<Zone>> _pileRefs;
 
     public PileCounterRulesRuntime(
         PileCounterRulesDefinition definition,
@@ -246,40 +253,45 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
         IReadOnlyList<IActor>      actors)
         : base(definition, state, actions)
     {
-        _player = actors.Single();
+        _player   = actors.Single();
+        _pileRefs = PileCounterGameDefinition.PileRefsAt(state);
     }
 
     // FilterTriggers omitted — base class ships a virtual identity default.
 
     public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
     {
-        var piles = State.Get<PilesState>().Piles.Values;
+        var pileStates = _pileRefs.Select(r => State.Get<PileState>(r));
 
         // Win check: all piles match their target?
-        if (piles.All(p => p.Score == p.Target))
+        if (pileStates.All(p => p.Counter == p.Target))
             return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
 
         // No state-based follow-ups. Publish snapshot at this moment.
-        Actions.Set(BuildSnapshot(piles));
+        Actions.Set(BuildSnapshot());
         return Array.Empty<GameAction>();
     }
 
-    private AvailableActionsSnapshot BuildSnapshot(IEnumerable<Pile> piles)
+    private AvailableActionsSnapshot BuildSnapshot()
     {
-        var lastMove = State.Get<LastMoveState>().Move;
+        var lastMove  = State.Get<LastMoveState>().Move;
         var templates = new List<ActionTemplate>();
 
-        foreach (var pile in piles.Where(p => p.Cards.Count > 0))
+        foreach (var sourceRef in _pileRefs)
         {
-            var top = pile.TopCard;
-            if (lastMove?.Card == top.Id) continue;   // per-template suppression
+            var contents = State.Get<ZoneContentsState>(sourceRef).Cards;
+            if (contents.Count == 0) continue;
 
-            var destinations = piles
-                .Where(p => p.Id != pile.Id)
-                .Select(p => (Reference)p.Id)
+            var topCardRef  = contents[^1];
+            var topInstance = State.Get<CardMapState>().InstanceOf(topCardRef);
+            if (lastMove?.Card.Equals(topInstance) == true) continue;   // per-template suppression
+
+            var destinations = _pileRefs
+                .Where(p => !p.Equals(sourceRef))
+                .Cast<Reference>()
                 .ToList();
 
-            templates.Add(new MoveCardTemplate(top.Id, destinations));
+            templates.Add(new MoveCardTemplate(topInstance, destinations));
         }
 
         return new AvailableActionsSnapshot(templates);
@@ -287,7 +299,7 @@ public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesD
 }
 ```
 
-The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>()`; slice types (`PilesState`, `LastMoveState`) live in [support/samples/pile-counter.md §9.1](support/samples/pile-counter.md). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnIncomingCommand` and no `OnQueueDrained` — the runtime contributes via `Evaluate` only, and the framework FIFO handles command queueing.
+The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Validate` calls during build — per-binding legality runs at dispatch. State is read fresh per access through `State.Get<TState>(...)`; slice types (`PileState` per-pile, `LastMoveState` singleton) and the runtime's full sketch live in [support/samples/pile-counter.md §9](support/samples/pile-counter.md). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `OnIncomingCommand` and no `OnQueueDrained` — the runtime contributes via `Evaluate` only, and the framework FIFO handles command queueing.
 
 ---
 
