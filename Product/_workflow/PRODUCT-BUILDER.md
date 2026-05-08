@@ -93,9 +93,11 @@ Product/
 
 **Snapshots** are timestamp-named (`sessions/<UTC-YYYYMMDD>-<HHMM>-<slug>.md`) and opt-in — produced only when `/builder:snapshot` is invoked to freeze a milestone (see §4.6). The chronological spine is `SESSION-CHECKPOINT.md`, kept current as work happens; snapshots are sparse references, not a per-session log.
 
-**Spikes** stay flat with descriptive filenames (`spikes/scaffold-state-fit.md`, `spikes/sabberstone-patterns.md`). No counter — spikes don't have natural ordering and most are single-doc.
+**Spikes** stay flat with descriptive filenames (`spikes/scaffold-state-fit.md`, `spikes/effect-pipeline.md`). No counter — spikes don't have natural ordering and most are single-doc. Spikes are *active* design exploration with a resolution path; once concluded, they fold into model(s) or are abandoned.
 
-**Cross-references.** Use the path: `features/actions/models/03` or `features/actions/03` shorthand. The `features/` and `spikes/` prefixes are non-negotiable in references — keeps grep precise and globs clean.
+**Research / reference** material (studied games, codebase analyses, prior-art surveys, pattern catalogs) lives flat under `research/` with descriptive filenames (`research/sabberstone-architecture.md`, `research/fireplace-architecture.md`). Distinguished from spikes by the absence of a resolution path — research is consulted, not resolved.
+
+**Cross-references.** Use the path: `features/actions/models/03` or `features/actions/03` shorthand. The `features/`, `spikes/`, and `research/` prefixes are non-negotiable in references — keeps grep precise and globs clean.
 
 ### Where cross-cutting docs live
 

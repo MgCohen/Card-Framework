@@ -1,8 +1,7 @@
 ---
-type: spike
-status: concluded
+type: research
 forward-link: features/actions/
-tags: [#spike, #deckmech, #command-pipeline]
+tags: [#research, #prior-art, #deckmech, #command-pipeline]
 ---
 
 # DeckMech Command Pipeline Reference
