@@ -60,6 +60,8 @@ The locked context this sketch must respect:
 
 **D11 — Handler envelope IS the atomicity boundary.** Every `Store.Execute(payload)` inside a single handler is buffered; subscribers receive one logical step when the envelope closes. The mutator runs eagerly (state changes computed in order; later payloads see earlier ones in the buffer), but external visibility is deferred to envelope close. Handler-throws roll the buffer back. `Store.ExecuteBatch(...)` becomes a niche tool for cross-handler grouping (rare; `scope.Dispatch` already provides that). Implication: a before-fold trigger reading state mid-handler sees pre-handler state — correct semantic, worth pinning.
 
+**D12 — Validation lives in optional `IValidator<TCmd>`s, not on the handler.** `ICommandHandler<TCmd, TResult>` exposes only `Handle`. Commands with preconditions register one or more `IValidator<TCmd>` services; the pipeline runs them in registration order before `Handle`, fail-fast on the first false. Commands with no preconditions register none and skip the step. Snapshot legality (`IAvailableActions`) consumes the same validators. Cascade impact: drops `Validate` from `ICommandHandler`, rewires `actions/01`'s pipeline contract, and rewires `actions/02`'s snapshot legality. Validator ordering / composition rules deferred (see follow-ups).
+
 ## Type hierarchy
 
 ```csharp
@@ -280,6 +282,70 @@ Inside an effect's Execute (called from a chain):
         ↳ MTG: pushes onto state (this chain not extended; future drain step resolves separately)
 ```
 
+## Validation surface (proposed)
+
+Per D12: validation moves off the handler into separate `IValidator<TCmd>` services. The handler interface drops to a single method.
+
+```csharp
+// Updated handler interface — Handle only.
+public interface ICommandHandler<TCmd, TResult>
+    where TCmd   : GameAction
+    where TResult: CommandResult
+{
+    Task<TResult> Handle(TCmd cmd, IHandlerContext ctx);
+}
+
+// New validator interface — optional, registered per command type.
+public interface IValidator<TCmd> where TCmd : GameAction
+{
+    bool Validate(TCmd cmd, IStateScope state, out string? reason);
+}
+```
+
+Pipeline integration (sketch):
+
+```csharp
+public bool Validate(GameCommand command, IStateScope state, out string? reason)
+{
+    reason = null;
+    if (command is not GameAction action) return true;
+
+    // Open-generic resolve all IValidator<TCmd> registered for the command's runtime type.
+    foreach (var validator in services.ResolveValidators(action.GetType()))
+        if (!validator.Validate(action, state, out reason))
+            return false;
+
+    return true;
+}
+```
+
+Sample validators replacing the inline `Validate` from earlier handler sketches:
+
+```csharp
+public sealed class MoveCardSourceMembershipValidator : IValidator<MoveCardAction>
+{
+    public bool Validate(MoveCardAction cmd, IStateScope state, out string? reason)
+    {
+        if (!cmd.From.GetContents(state).Contains(cmd.Card.GetRef(state)))
+        { reason = "card not in source zone"; return false; }
+        reason = null;
+        return true;
+    }
+}
+
+public sealed class DealDamageNonNegativeValidator : IValidator<DealDamageToPlayerAction>
+{
+    public bool Validate(DealDamageToPlayerAction cmd, IStateScope state, out string? reason)
+    {
+        if (cmd.Amount < 0) { reason = "amount cannot be negative"; return false; }
+        reason = null;
+        return true;
+    }
+}
+```
+
+`ApplyBuffAction` registers no validator — always-legal at dispatch.
+
 ## Framework conveniences (assumed by samples)
 
 - **Implicit `EntityInstance<TDef>` → `Ref<TDef>` conversion.** Payloads/actions accepting a `Ref<T>` can take a handle directly:
@@ -308,14 +374,7 @@ public sealed record MoveCardResult() : CommandResult;
 
 public sealed class MoveCardHandler : ICommandHandler<MoveCardAction, MoveCardResult>
 {
-    public bool Validate(MoveCardAction cmd, IStateScope state, out string? reason)
-    {
-        if (!cmd.From.GetContents(state).Contains(cmd.Card.GetRef(state)))
-        { reason = "card not in source zone"; return false; }
-        reason = null;
-        return true;
-    }
-
+    // Preconditions live in MoveCardSourceMembershipValidator (per D12).
     public Task<MoveCardResult> Handle(MoveCardAction cmd, IHandlerContext ctx)
     {
         // Three slice mutators dispatched in order. The handler envelope (D11)
@@ -350,13 +409,7 @@ public sealed record DealDamageResult(int Dealt) : CommandResult;
 public sealed class DealDamageToPlayerHandler
     : ICommandHandler<DealDamageToPlayerAction, DealDamageResult>
 {
-    public bool Validate(DealDamageToPlayerAction cmd, IStateScope state, out string? reason)
-    {
-        if (cmd.Amount < 0) { reason = "amount cannot be negative"; return false; }
-        reason = null;
-        return true;
-    }
-
+    // Preconditions live in DealDamageNonNegativeValidator (per D12).
     public Task<DealDamageResult> Handle(DealDamageToPlayerAction cmd, IHandlerContext ctx)
     {
         // Domain payload — mutator handles the variable bookkeeping (whether
@@ -388,9 +441,7 @@ public sealed class ApplyBuffHandler : ICommandHandler<ApplyBuffAction, ApplyBuf
     private readonly IModifierFactory _modifiers;
     public ApplyBuffHandler(IModifierFactory modifiers) => _modifiers = modifiers;
 
-    public bool Validate(ApplyBuffAction cmd, IStateScope state, out string? reason)
-    { reason = null; return true; }
-
+    // No validator registered for ApplyBuffAction — always-legal at dispatch (per D12).
     public Task<ApplyBuffResult> Handle(ApplyBuffAction cmd, IHandlerContext ctx)
     {
         var entry = _modifiers.Create(
@@ -555,13 +606,7 @@ A handler that *casts* the spell builds the `EffectInstance` with bound paramete
 ```csharp
 public sealed class CastSpellHandler : ICommandHandler<CastSpellCommand, CastSpellResult>
 {
-    public bool Validate(CastSpellCommand cmd, IStateScope state, out string? reason)
-    {
-        // ... mana cost check, target legality, timing ...
-        reason = null;
-        return true;
-    }
-
+    // Mana-cost / target-legality / timing checks live in IValidator<CastSpellCommand>s (per D12).
     public async Task<CastSpellResult> Handle(CastSpellCommand cmd, IHandlerContext ctx)
     {
         // 1) Pay costs and move card to game-state stack zone.
@@ -687,17 +732,7 @@ public sealed class ResolveTopOfStackHandler
 {
     private readonly IEffectScopeFactory _scopes;
 
-    public bool Validate(ResolveTopOfStackAction _, IStateScope state, out string? reason)
-    {
-        if (state.Get<StackContentsState>().IsEmpty)
-        {
-            reason = "stack empty";
-            return false;
-        }
-        reason = null;
-        return true;
-    }
-
+    // Stack-not-empty precondition lives in IValidator<ResolveTopOfStackAction> (per D12).
     public async Task<ResolveTopOfStackResult> Handle(
         ResolveTopOfStackAction _, IHandlerContext ctx)
     {
@@ -838,6 +873,7 @@ public abstract class GameRulesRuntime<TDefinition>
 - **`EffectChainScope` factory shape** — `_scopes.NewRoot(instance)` / `_scopes.Extend(parent, instance)` is one shape. Could also be static methods on `EffectChainScope` itself. Mechanical detail; pin during implementation.
 - **`EffectDefinition.Validate`** — semantics under re-entrance and cancellation. Probably "Validate=false → skip silently"; aligns with `Trigger<T>.Validate`.
 - **Whether `Trigger<T>` survives** as a separate authoring type, or collapses entirely into `EffectDefinition` with `InterceptedCommand` in bindings. Probably keeps as authoring sugar — typed payload is ergonomic for game authors.
+- **Validator ordering / composition.** D12 says "registration order, fail-fast on first false." Open: explicit ordering hooks (priority weight, named groups), how a snapshot-side aggregate compose `reason` strings across multiple failures, sync-vs-async (probably sync), and whether validators can mutate or only read.
 
 ## Known content gaps in this sketch
 
@@ -905,6 +941,8 @@ When iteration settles, propagate to canonical Models:
 - `Product/features/effects/models/01-async-dispatch.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
 - `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
 - `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
-- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature.
+- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
+- `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
+- `Product/features/actions/models/02-availability-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
 - `Product/ledgers/OPEN-ITEMS.md` — resolve `oq-effect-pipeline` by deletion; add `oq-effect-authoring`, `oq-runtime-as-state-evaluator`, `oq-session-state-machine`.
 - `Product/ledgers/GLOSSARY.md` — entries for `EffectDefinition`, `EffectInstance`, `EffectBindings`, `IEffectPipeline`, chain scope, `Fired` set.
