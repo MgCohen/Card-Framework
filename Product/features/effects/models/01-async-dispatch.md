@@ -106,22 +106,11 @@ HistoryEnvelope
 
 ### `IEffectScope`
 
-The effect interacts with the pipeline through an `IEffectScope`:
+The effect interacts with the pipeline through an `IEffectScope`. The full interface is defined in [`04-effect-flow.md` §IEffectScope](features/effects/models/04-effect-flow.md); this Model uses one member:
 
-```csharp
-public interface IEffectScope
-{
-    Store             Store     { get; }    // for catalog reads (`Catalog.Resolve`)
-    IModifierFactory  Modifiers { get; }    // deterministic modifier-entry construction
-    Task<TResult> Dispatch<TResult>(GameAction action) where TResult : CommandResult;
-}
-```
-
-`IEffectScope.Dispatch` runs the action **immediately and inline** — before fold → handler → after fold → envelope published — and returns the `CommandResult`. The effect is suspended at the `await` until the action completes. The engine queue is not involved; the action never enters it.
+`scope.Dispatch(action)` runs the action **immediately and inline** — before fold → handler → after fold → envelope published — and returns the `CommandResult`. The effect is suspended at the `await` until the action completes. The engine queue is not involved; the action never enters it.
 
 `engine.Dispatch` and `scope.Dispatch` are not the same thing. An effect always uses the scope. Trigger reactions and evaluator follow-ups always use the engine. Mixing them would break the execution model.
-
-The full mid-execution surface (`State`, `Cancel`, `Replace`, the matching `IHandlerContext` and `ICommandAwaiter`) is settled in [`04-effect-flow.md`](features/effects/models/04-effect-flow.md). This Model defines the dispatch entry point only.
 
 ## Invariants
 

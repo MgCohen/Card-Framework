@@ -113,7 +113,7 @@ public interface ITriggerSystem
 
 ### Execution — `ITriggerPipeline`
 
-The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both interfaces. The authoritative shape is defined in [`effects/02 §3`](features/effects/models/02-replacement-prevention.md):
+The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both `ITriggerSystem` and `ITriggerPipeline`.
 
 ```csharp
 public interface ITriggerPipeline
@@ -136,9 +136,16 @@ public sealed record TriggerFoldResult(
     string?      CancelReason,
     bool         IsReplaced,
     GameAction?  Replacement);
+
+// Each registration wraps a Trigger<T> as non-generic delegates for pipeline dispatch.
+public sealed record TriggerMatch(
+    Reference                              Owner,      // ADR-0005: stable subscription key — Ref<T> survives CardRef rotations
+    int                                    Priority,   // lower runs first; default 0
+    Func<GameCommand, IEffectScope, bool>  Condition,
+    Func<GameCommand, IEffectScope, Task>  Execute);
 ```
 
-The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`.
+The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`. The replacement-prevention semantics consumed by the fold (three before-fold outcomes, replace-of-replacement) are owned by [`effects/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md).
 
 ### The fold mechanic
 
@@ -265,39 +272,12 @@ scope.Execute(new MoveCardComposite(source, zone)); // CompositeAction — befor
 
 `scope.Emit` and `scope.Execute` are the scope-level equivalents of `engine.Dispatch` for non-queued types. A handler should never dispatch another `GameAction` directly — that's an `Effect`'s responsibility.
 
-### Updated pipeline shape
+### Pipeline integration
 
-`RunPreHooks` from earlier drafts is replaced by `ITriggerPipeline.RunBefore`. The pipeline holds `ITriggerPipeline` (the execution surface); card abilities hold `ITriggerSystem` (the subscription surface). One `TriggerSystem` class implements both.
+The full `pipeline.Execute(action)` shape (envelope open → filter → before-fold → handler → after-fold → envelope close) is owned by [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md). Trigger-side notes:
 
-```csharp
-public async Task<CommandResult> Execute(GameAction action)
-{
-    using var envelope = history.OpenEnvelope(BuildCause(action));
-
-    var candidates = triggerRegistry.GetMatches(action);
-    var available  = rules.FilterTriggers(candidates, action, TriggerPhase.Before);
-    var scope      = scopeFactory.CreateForTrigger();
-    var before     = await triggerPipeline.RunBefore(action, available, scope);
-
-    if (before.IsCancelled)
-        return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
-
-    if (before.IsReplaced)
-    {
-        history.CloseAndPublish(envelope, CommandResult.Replaced);
-        engine.Dispatch(before.Replacement);
-        return CommandResult.Replaced;
-    }
-
-    var result = Handle(before.FinalCommand, envelope);
-
-    await triggerPipeline.RunAfter(before.FinalCommand, result, available, scope);
-
-    return history.CloseAndPublish(envelope, result);
-}
-```
-
-`CompositeAction` and `GameSignal` use a lighter path — trigger folds only, no handler, no envelope of their own; their entries fold into the parent command's envelope.
+- The pipeline holds `ITriggerPipeline` (execution surface); card abilities hold `ITriggerSystem` (subscription surface). One `TriggerSystem` class implements both.
+- `CompositeAction` and `GameSignal` use a lighter path — trigger folds only, no handler, no envelope of their own; their entries fold into the parent command's envelope.
 
 ## Invariants
 

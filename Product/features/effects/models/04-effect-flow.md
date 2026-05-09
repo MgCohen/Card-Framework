@@ -87,42 +87,14 @@ public interface IStoreScope : IStateScope
 - `IStoreScope` — adds the event handler for subscriptions. Used where presentation/observers need it.
 - **`GameState` is not a single record.** State lives as multiple slices (typed `BaseState` subclasses) keyed in the store. There is no `state.Piles` or `state.LastMove` field — those reads become `scope.Get<PileState>(pileRef)` / `scope.Get<LastMoveState>()`. The catalog of slice types is its own open thread (checkpoint task #2).
 
-#### Writes — `Store.Execute<TPayload>` + `Mutator<TState, TPayload>` (Scaffold)
+#### Writes — `ctx.Store.Execute(payload)`
 
-Mutation goes through Scaffold's `Store` and its registered-mutator pipeline.
+The `Store` / `Mutator<TState, TPayload>` mechanic (payload-keyed dispatch, fan-out, atomic commit, sibling reads via `IStateScope`) is owned by [`state/state.md`](features/state/state.md). What this Model pins is the effects-side discipline:
 
-```csharp
-// from Scaffold.States — concrete class
-public sealed class Store : IStoreScope
-{
-    // Payload-keyed: looks up every mutator registered for TPayload, runs them all,
-    // commits the overlay atomically. This is the path the handler uses.
-    public void Execute<TPayload>(TPayload payload);
-
-    // Direct mutator invocation — bypasses the registry. Used when a single, known
-    // mutator must run (rare in handler code; mostly engine bootstrap and tests).
-    public void ExecuteMutator<TState>(Mutator<TState> mutator) where TState : State;
-    public void ExecuteMutator<TState, TPayload>(Mutator<TState, TPayload> mutator, TPayload payload)
-        where TState : State;
-
-    public void RegisterMutator<TState, TPayload>(Mutator<TState, TPayload> mutator) where TState : State;
-}
-
-public abstract class Mutator<TState, TPayload> where TState : State
-{
-    public abstract TState Change(TState state, TPayload payload, IStateScope scope);
-}
-```
-
-The framework hands handlers the concrete `Store`; they call `ctx.Store.Execute(payload)` to write. Effects do **not** receive `Store` for writes — they get `IStateScope` (read-only) on `IEffectScope`.
-
-The shape this gives us:
-
-- **`TPayload` types are boundary-correct for `Reference` / `Ref<T>` use.** Mutator payloads are the Store's wire form — they persist, serialize, and transport analogously to `GameCommand`s. `Ref<Card>`, `Ref<Zone>`, and the polymorphic `Reference` are boundary-correct in payload records per [ADR-0005](Product/decisions/0005-objects-over-ids.md). Handler code *building* a payload should derive refs from held objects (`card.SelfRef`, `zone.SelfRef`) rather than storing raw refs in locals.
+- **Effects do not receive `Store` for writes.** `IEffectScope` exposes read-only `IStateScope`. Only handlers see the concrete `Store` via `IHandlerContext`.
+- **Only handlers invoke mutators**, by calling `ctx.Store.Execute(payload)` (or `ctx.Store.ExecuteBatch(...)`).
 - **Payload is a dedicated type, not the command.** A "last move" mutator takes a `LastMovePayload`, never `MoveCardCommand`. Payloads are framework-owned; commands are pipeline-owned.
-- **One payload, many mutators.** Mutators are registered per `TPayload` at engine bootstrap. When the handler dispatches one payload through `Store.Execute(payload)`, **every mutator registered for that payload type runs**, each producing its own slice's new state. The handler does not enumerate which mutators exist; the registry does.
-- **Mutators read sibling slices through `IStateScope`.** A mutator computing the new `LastMoveState` can look up the current `ZoneContentsState`, `PileState`, etc. via the `scope` parameter on `Change`.
-- **Atomic commit.** All mutators that fire from one `Execute` call commit together via the runner's overlay. No half-applied state is visible.
+- **`TPayload` carries `Reference` / `Ref<T>` directly** — payloads are boundary-correct per [ADR-0005](Product/decisions/0005-objects-over-ids.md).
 
 #### `IEffectScope`
 

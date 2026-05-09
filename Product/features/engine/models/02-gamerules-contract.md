@@ -185,7 +185,7 @@ Called by the pipeline once per command, twice per execution (one before-fold, o
 public enum TriggerPhase { Before, After }
 ```
 
-The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`effects/02 §ITriggerPipeline`](features/effects/models/02-replacement-prevention.md). `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
+The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`triggers/01 §Execution`](features/triggers/models/01-trigger-fold.md) for the `ITriggerPipeline` contract and [`effects/02 §ITriggerPipeline`](features/effects/models/02-replacement-prevention.md) for its role in the before-fold. `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
 
 **Why the phase parameter.** Some games want different availability rules before vs. after:
 

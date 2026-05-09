@@ -58,14 +58,14 @@ The feature has four Models. The execution arc spans them:
 3. **Replacement / prevention** (Model 02). Before-fold runs through `ITriggerPipeline.RunBefore` (after `GameRulesRuntime.FilterTriggers` filters availability). Triggers may `scope.Cancel(reason)` (action stopped), call `scope.Replace(next)` (action replaced), or modify the command (return without scope call). Replacement creates a fresh fold for `next`.
 4. **Handler execution** (Model 04 §Mutation Discipline). If not cancelled/replaced, the handler runs. Handlers invoke mutators via `ctx.Store.Execute(payload)`; one payload fans out to all registered mutators atomically. Effects do not mutate.
 5. **Ongoing effects** (Model 03). Attachment entities subscribe to triggers (`OnAfter<TurnStartSignal>`, etc.), tick or react over time, dispatch `DestroyEntityAction` on themselves when done. The framework Cleanup hook calls `RemoveAll(self)` on subscriptions and `RemoveModifiersBySourcePayload(target, attachment.SelfRef)` for any modifiers sourced to the destroyed attachment.
-6. **After-fold + envelope** (Model 02 §Updated Pipeline Shape). After the handler returns, `ITriggerPipeline.RunAfter` runs reactions (which dispatch via `engine.Dispatch` — separate envelopes; framework FIFO). The original envelope publishes with the `CommandResult`.
+6. **After-fold + envelope.** After the handler returns, `ITriggerPipeline.RunAfter` runs reactions (which dispatch via `engine.Dispatch` — separate envelopes; framework FIFO). The original envelope publishes with the `CommandResult`. Pipeline shape lives in [`actions/01 §Pipeline mechanics`](features/actions/models/01-command-pipeline.md).
 
 ## Composition
 
 | Model | Role |
 |---|---|
 | [`01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) | Layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths; decisions-as-commands; `IEffectScope` |
-| [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) | Three before-fold outcomes; `ITriggerPipeline` ownership; `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
+| [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) | Three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
 | [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
 | [`04-effect-flow.md`](features/effects/models/04-effect-flow.md) | Mid-execution lifecycle: service surfaces (`IEffectScope`, `IHandlerContext`, `ICommandAwaiter`); type-only decision routing; mutation discipline; uniform gateway boundary |
 

@@ -70,47 +70,15 @@ trigger D condition: (c) => c is HealAction      → true on c1  — fires norma
 
 If B substitutes `DamageAction` with `HealAction`, any trigger watching for `DamageAction` no longer applies. Any trigger watching for `HealAction` applies as if it was always the event. This is correct by construction — no loop detection or special casing required.
 
-### `ITriggerPipeline` — owns the mechanical process
+### `ITriggerPipeline` — role in the before-fold
 
-The trigger execution mechanics are extracted behind `ITriggerPipeline`. This interface owns:
+Trigger execution is owned by `ITriggerPipeline` (interface body, `TriggerFoldResult`, `TriggerMatch` defined in [`triggers/01-trigger-fold.md` §Execution](features/triggers/models/01-trigger-fold.md)). For replacement / prevention, what matters here:
 
-- Collecting registered subscriptions that match a command type
-- Ordering them (FIFO, priority, choice-dispatch)
-- Running the fold
+- The pipeline receives an already-filtered `available` list — `GameRulesRuntime.FilterTriggers` decides eligibility upstream (see "Availability policy" below).
+- The pipeline orders the matches (FIFO, priority, choice-dispatch) and runs the fold.
+- Triggers communicate Modification / Cancellation / Substitution through `IEffectScope`; the pipeline reads scope state after each `Execute` to determine the outcome.
 
-```csharp
-public interface ITriggerPipeline
-{
-    Task<TriggerFoldResult> RunBefore(
-        GameCommand command,
-        IReadOnlyList<TriggerMatch> available,
-        IEffectScope scope);
-
-    Task RunAfter(
-        GameCommand command,
-        CommandResult result,
-        IReadOnlyList<TriggerMatch> available,
-        IEffectScope scope);
-}
-
-public sealed record TriggerFoldResult(
-    GameCommand    FinalCommand,
-    bool           IsCancelled,
-    string?        CancelReason,
-    bool           IsReplaced,
-    GameAction?    Replacement);
-
-// Each registration wraps a Trigger<T> as non-generic delegates for pipeline dispatch.
-public sealed record TriggerMatch(
-    Reference                              Owner,      // ADR-0005: stable subscription key — Ref<T> survives CardRef rotations
-    int                                    Priority,    // lower runs first; default 0
-    Func<GameCommand, IEffectScope, bool>  Condition,
-    Func<GameCommand, IEffectScope, Task>  Execute);
-```
-
-The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRules` before the pipeline receives it (see "Availability policy" below).
-
-Both methods are `async Task`. The default implementation completes synchronously via `Task.FromResult` — no allocation overhead for the common case. The async signature exists so that custom pipelines can genuinely await a `Decision` without special casing.
+Both `RunBefore` and `RunAfter` are `async Task` so custom pipelines can genuinely await a decision (e.g. controller-choice ordering) without special casing.
 
 ### Priority convention
 
@@ -169,44 +137,6 @@ This separates two distinct concerns:
 | "What does each trigger do?" | `AbilityDefinition` |
 
 `GameRules` never holds a reference to `ITriggerPipeline` or the trigger registry. It only receives a list of `TriggerMatch` candidates and returns a filtered subset.
-
-### Updated pipeline shape
-
-The command pipeline calls `GameRules.FilterTriggers` before handing candidates to `ITriggerPipeline`:
-
-```csharp
-public async Task<CommandResult> Execute(GameAction action)
-{
-    using var envelope = history.OpenEnvelope(BuildCause(action));
-
-    // 1. Collect all registered matches for this type
-    var candidates = triggerRegistry.GetMatches(action);
-
-    // 2. GameRules filters for availability
-    var available = rules.FilterTriggers(candidates, action, state);
-
-    // 3. ITriggerPipeline orders and runs the before-fold
-    var scope  = scopeFactory.CreateForTrigger();
-    var before = await triggerPipeline.RunBefore(action, available, scope);
-
-    if (before.IsCancelled)
-        return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
-
-    if (before.IsReplaced)
-    {
-        history.CloseAndPublish(envelope, CommandResult.Replaced);
-        engine.Dispatch(before.Replacement);   // fresh command, own fold from scratch
-        return CommandResult.Replaced;
-    }
-
-    var result = Handle(before.FinalCommand, envelope);
-
-    // 4. ITriggerPipeline runs the after-fold
-    await triggerPipeline.RunAfter(before.FinalCommand, result, available, scope);
-
-    return history.CloseAndPublish(envelope, result);
-}
-```
 
 ### Prevention as modification
 
