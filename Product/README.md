@@ -16,7 +16,7 @@ The Card Framework is a Unity card-game framework. Two layers connected by statu
 
 Drift between contract and code is the failure mode this workflow exists to prevent. The rules below are load-bearing — skipping them defers cost into a future consistency pass; it never saves a session.
 
-The formal workflow specification with rationale is at [`_workflow/PRODUCT-BUILDER.md`](_workflow/PRODUCT-BUILDER.md). **Don't read it in normal operation** — this file is sufficient. Open it only when the workflow itself is in question.
+The full workflow specification lives at [`_workflow/PRODUCT-BUILDER.md`](_workflow/PRODUCT-BUILDER.md) — the rulebook spine. This README is the daily-operation entry point and points into PRODUCT-BUILDER for the canonical specs (folder layout, cross-reference convention, archive convention, cascade rules, lint rules). Open PRODUCT-BUILDER when you need the rule, not for orientation.
 
 ---
 
@@ -81,7 +81,7 @@ Watch for these conditions and act when they fire. Tell the human what you're do
 | A feature gains/loses a Model or shifts dependencies | Refresh `ledgers/FEATURE-MAP.md`. |
 | Concrete work is deferred ("we'll do this later") | Append to `ledgers/OPEN-ITEMS.md` with a trigger condition. Don't leave it as a comment in the checkpoint scratch. |
 | A durable open question surfaces | Append to `ledgers/OPEN-ITEMS.md`. Ephemeral questions go in `SESSION-CHECKPOINT.md ## Scratch`. |
-| A Spike is reaching its end | Update its status (`concluded` / `graduated` / `archived`). Add forward links if it informed a Model/ADR. Spikes are static once resolved — don't re-edit them as downstream evolves. |
+| A Spike is reaching its end | Update its status (`graduated` if a Model/ADR informed by it has landed; `concluded` otherwise). Add the forward link for `graduated`. Spikes are static once resolved — don't re-edit them as downstream evolves. |
 | A token is renamed | Run `/builder:promote-glossary <old> -> <new>` — appends to `_workflow/retired-tokens.json` so the linter can surface lingering uses with the replacement. |
 
 ---
@@ -125,9 +125,9 @@ A Feature can't sit at a higher tier than its lowest *qualifying* Model (qualify
 
 ---
 
-## Two ledgers
+## Ledgers
 
-`ledgers/` carries two independent ledgers. Distinct shapes and lifecycles. Don't dual-write.
+`ledgers/` carries three independent ledgers. Distinct shapes and lifecycles. Don't dual-write.
 
 ### `OPEN-ITEMS.md` — loose ends
 
@@ -171,39 +171,7 @@ Mid-project (not bootstrap), a new feature is a deliberate event with a four-ste
 
 ## Folder layout
 
-```
-Product/
-  README.md                  # this file (operating manual)
-  SESSION-CHECKPOINT.md      # live spine — updated continuously
-  sessions/                  # sparse milestone archive (snapshots only)
-  _archive/                  # retired ledgers, legacy session notes, etc.
-  _docs/                     # per-type rulebooks + skeletons (model, feature, adr, ...)
-  _workflow/
-    PRODUCT-BUILDER.md       # routing hub + workflow triggers
-    EMOJI-LEGEND.md
-    retired-tokens.json
-  ledgers/
-    OPEN-ITEMS.md            # durable loose ends
-    GLOSSARY.md              # canonical vocabulary + changelog
-    FEATURE-MAP.md           # bird's-eye view + mermaid graph
-  general/
-    VISION / GAME-ARCHETYPES / ARCHITECTURE / ROADMAP /
-    RECOMMENDATIONS         # orientation
-  decisions/NNNN-<slug>.md   # project-wide ADRs (cross-cutting only)
-  features/<feature>/
-    <feature>.md             # feature root (Purpose / Boundaries / Composition / …)
-    models/NN-<slug>.md      # Models (provenance section absorbs feature-internal decisions)
-    archive/                 # superseded / cancelled docs in this feature
-  spikes/<slug>.md           # exploration; flat, no counter
-  support/
-    samples/<slug>.md        # concrete reference instances
-    prior-art/<slug>.md      # frozen external reference
-```
-
-External:
-- `PLANS/` — implementation slices. Internals not workflow-specified.
-- `Assets/` — Unity code. The artifact `implemented` Models point at.
-- `RESEARCH_BACKUP/` — pre-migration snapshot. Read-only.
+Canonical layout lives at [`_workflow/PRODUCT-BUILDER.md` §Folder layout](_workflow/PRODUCT-BUILDER.md#folder-layout). Single source — don't duplicate it here.
 
 ---
 
@@ -225,7 +193,7 @@ The point is that step 3 is *visible*. Surfacing the dependents on demand replac
 
 ## When you need more depth
 
-- **The full spec with rationale:** [`_workflow/PRODUCT-BUILDER.md`](_workflow/PRODUCT-BUILDER.md). Open this only when the workflow itself is in question — not for daily operation.
+- **The full workflow specification:** [`_workflow/PRODUCT-BUILDER.md`](_workflow/PRODUCT-BUILDER.md). Canonical for folder layout, cross-reference convention, archive convention, cascade rules, and lint rules. Open it for the rule, not for orientation.
 - **Per-type rulebooks + skeletons:** [`_docs/`](_docs/) — 9 doc types, each with its own rulebook.
 - **Why a particular thing was decided (feature-internal):** the relevant Model's provenance section (below the `---` divider).
 - **Why a cross-cutting decision was made:** the relevant ADR in `decisions/`.
