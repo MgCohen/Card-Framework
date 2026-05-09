@@ -1,11 +1,11 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #snapshot, #templates, #model]
 ---
 
-# Availability Snapshot — model
+# Available Actions Snapshot — model
 
 ## What it is
 
@@ -271,4 +271,4 @@ Q1's typed-base + per-command subtype shape gives compile-time `IIntentMapper` s
 
 - **Enables:** compile-time `IIntentMapper` safety; `ActionId` retirement (the `Type` is the identifier); snapshot builds at floor-game cost; opt-in exhaustive checks for games that demand them; rule-controlled validation cost.
 - **Constrains:** every new command type ships a paired template; presentation must accept that "template offered" is weaker than "guaranteed valid"; `AffordanceMap` layer absorbs UI-side gating.
-- **Cascade:** `IIntentMapper` consumes typed templates (per `actions/01`); `IAvailableActions` writes the snapshot (per `engine/03`); `AffordanceMap` reads the snapshot (per `presentation/01`).
+- **Cascade:** `IIntentMapper` consumes typed templates (per [`02-intent-mapper`](features/actions/models/02-intent-mapper.md)); `IAvailableActions` writes the snapshot (per `engine/03`); `AffordanceMap` reads the snapshot (per `presentation/01`).

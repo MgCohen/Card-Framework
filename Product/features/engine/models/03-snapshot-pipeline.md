@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md, features/effects/models/04-effect-flow.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-effect-flow.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 
@@ -9,7 +9,7 @@ tags: [#engine, #snapshot, #available-actions]
 
 ## What it is
 
-How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
+How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
 
 ```csharp
 public interface IAvailableActions
@@ -293,7 +293,7 @@ The reasoning, in three points:
 - **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
 - **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04 §Open follow-ups`](features/effects/models/04-effect-flow.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
-- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/02-availability-snapshot.md)).
+- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/05-available-actions-snapshot.md)).
 - **`PlayerChoice` shape under typed templates.** With typed templates, `IntentMapper` switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<Reference>` + `IReadOnlyDictionary<string, object>` parameters. Pin when `IntentMapper` is implemented.
 
 ---

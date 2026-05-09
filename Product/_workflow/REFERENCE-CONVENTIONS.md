@@ -38,7 +38,7 @@ Comma-separated list of `Product/`-rooted absolute paths in `[brackets]`. Use th
 ---
 type: model
 status: settled
-references: [features/engine/models/01-evaluation-loop.md, features/actions/models/02-availability-snapshot.md]
+references: [features/engine/models/01-evaluation-loop.md, features/actions/models/05-available-actions-snapshot.md]
 ---
 ```
 
@@ -87,7 +87,7 @@ find Product/features/ -name 'archive' -type d
 Append `#section-<n>` for numbered sections, or `#<lowercase-kebab-heading>` for named sections, after the path. No URL encoding — if a heading would require encoding, rename the heading.
 
 ```markdown
-[available actions §4](features/actions/models/02-availability-snapshot.md#section-4)
+[available actions §4](features/actions/models/05-available-actions-snapshot.md#section-4)
 [zone model "Open Questions Left For Later"](features/zones/models/01-zone-model.md#open-questions-left-for-later)
 ```
 

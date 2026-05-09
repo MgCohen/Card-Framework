@@ -105,7 +105,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 
 ### `actions` (settled)
 - [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `root`
-- [`models/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) — settled, references: `actions/01`, `engine/03` ⚠️ (see cycle)
+- [`models/02-availability-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/01`, `engine/03` ⚠️ (see cycle)
 
 ### `triggers` (settled)
 - [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `engine/01`

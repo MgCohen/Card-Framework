@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/triggers/models/01-trigger-fold.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-flow.md]
+references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/triggers/models/01-trigger-fold.md, features/engine/models/02-gamerules-contract.md]
 tags: [#actions]
 ---
 
@@ -63,13 +63,15 @@ Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline
 
 ## Architecture
 
-The feature has two Models:
+The feature has five Models. Each is the canonical home for one load-bearing element of the action pipeline:
 
-1. **Command pipeline** (Model 01) — defines `PlayerIntent`, `GameCommand`, `CommandResult`, `HistoryEnvelope`, the pipeline mechanics (validate → handler → mutators → envelope), the relationship to triggers (before-fold / after-fold), and the `IIntentMapper` contract.
+1. **`ICommandPipeline`** ([`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md)) — the dispatch flow: lifecycle gate → validate → enqueue → drain (before-fold → handler → after-fold → envelope) → evaluate. Type hierarchy reference. Framework-FIFO routing per ADR-0006.
+2. **`IIntentMapper`** ([`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md)) — the boundary that turns `PlayerIntent` (UI/AI/network/etc) into a typed `GameCommand`. Owns `PlayerIntent` and `IntentGateway` as its tied surfaces.
+3. **`ICommandHandler<TCommand, TResult>`** ([`03-command-handler.md`](features/actions/models/03-command-handler.md)) — the per-command resolver. `Validate` (authoritative) + `Handle` (writes via mutators, returns typed `CommandResult`).
+4. **`HistoryEnvelope`** ([`04-history-envelope.md`](features/actions/models/04-history-envelope.md)) — the grouping unit observers consume. One per `GameAction`. `HistoryState` slice holds the ordered envelope log.
+5. **`AvailableActionsSnapshot`** ([`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md)) — typed `ActionTemplate` per command type; `PlayerChoice` shape; eligibility framing.
 
-2. **Availability snapshot** (Model 02) — defines `ActionTemplate` (typed per command type), `PlayerChoice`, `AvailableActionsSnapshot` shape; per-template eligibility filtering posture; bridge to `IIntentMapper.Map` (template + choice → command).
-
-The pipeline writes envelopes that observers consume; the snapshot tells observers what's *currently possible*. They share the `IntentMapper` boundary — snapshot templates flow through the mapper to become commands.
+The six shapes that flow through the pipeline (`PlayerIntent` → `ActionTemplate` → `GameCommand` → `StateMutation` → `CommandResult` → `HistoryEnvelope`) are owned across these models plus `triggers/` (`GameCommand` type hierarchy) and `state/` (`StateMutation`).
 
 ### The five validation layers
 
@@ -87,8 +89,11 @@ Validation is layered explicitly. **`handler.Validate` is authoritative at dispa
 
 | Model | Role |
 |---|---|
-| [`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) | Pipeline mechanics; the six shapes (`PlayerIntent`, `ActionTemplate`, `GameCommand`, `StateMutation`, `CommandResult`, `HistoryEnvelope`); `IIntentMapper` contract; relationship to triggers and effects |
-| [`02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md) | Typed `ActionTemplate` per command type; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks; `PlayerChoice` shape; eligibility framing |
+| [`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) | `ICommandPipeline`; dispatch flow; type-hierarchy reference; framework-FIFO routing |
+| [`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) | `IIntentMapper` + `PlayerIntent` + `IntentGateway` (input boundary) |
+| [`03-command-handler.md`](features/actions/models/03-command-handler.md) | `ICommandHandler<TCommand, TResult>` + `CommandResult` (per-command resolver) |
+| [`04-history-envelope.md`](features/actions/models/04-history-envelope.md) | `HistoryEnvelope` + `HistoryState` slice (envelope log) |
+| [`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) | `AvailableActionsSnapshot`, typed `ActionTemplate`, `PlayerChoice`, eligibility |
 
 ## Invariants
 
