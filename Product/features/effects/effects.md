@@ -51,23 +51,55 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 
 ## Architecture
 
-The feature has four Models. The execution arc spans them:
+The feature has four Models. Each is the canonical home for one load-bearing C# type of the effects layer:
 
-1. **Dispatch initiation** (Model 01 §Two Dispatch Paths). An effect calls `scope.Dispatch(action)` — runs the action's full lifecycle inline (before-fold → handler → after-fold → envelope published). The effect awaits and cannot proceed until the action completes (including any decision it requires).
-2. **Decision routing** (Model 04 §Decision Routing). When an action's handler awaits player input, it calls `ctx.Resolver.Wait<TCommand>()`, writes a snapshot via `ctx.Actions.Set(...)`, suspends. Player intent → `IntentMapper.Map` → `SelectTargetCommand` → `engine.Dispatch` → pre-pipeline `awaiter.TryResolve` matches → handler resumes. Type-only routing; no `DecisionId`.
-3. **Replacement / prevention** (Model 02). Before-fold runs through `ITriggerPipeline.RunBefore` (after `GameRulesRuntime.FilterTriggers` filters availability). Triggers may `scope.Cancel(reason)` (action stopped), call `scope.Replace(next)` (action replaced), or modify the command (return without scope call). Replacement creates a fresh fold for `next`.
-4. **Handler execution** (Model 04 §Mutation Discipline). If not cancelled/replaced, the handler runs. Handlers invoke mutators via `ctx.Store.Execute(payload)`; one payload fans out to all registered mutators atomically. Effects do not mutate.
-5. **Ongoing effects** (Model 03). Attachment entities subscribe to triggers (`OnAfter<TurnStartSignal>`, etc.), tick or react over time, dispatch `DestroyEntityAction` on themselves when done. The framework Cleanup hook calls `RemoveAll(self)` on subscriptions and `RemoveModifiersBySourcePayload(target, attachment.SelfRef)` for any modifiers sourced to the destroyed attachment.
-6. **After-fold + envelope** (Model 02 §Updated Pipeline Shape). After the handler returns, `ITriggerPipeline.RunAfter` runs reactions (which dispatch via `engine.Dispatch` — separate envelopes; framework FIFO). The original envelope publishes with the `CommandResult`.
+1. **`Effect`** ([`01-effect.md`](features/effects/models/01-effect.md)) — the orchestrator type; layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths (`engine.Dispatch` vs `scope.Dispatch`).
+2. **`IEffectScope`** ([`02-effect-scope.md`](features/effects/models/02-effect-scope.md)) — the effect's runtime surface: read-only `State`, catalog `Store`, `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel.
+3. **`IHandlerContext`** ([`03-handler-context.md`](features/effects/models/03-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
+4. **`ICommandAwaiter`** ([`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
+
+The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler executes via its `IHandlerContext` (3), awaiting player input through `ICommandAwaiter` (4) for decisions. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-runtime-surface.md` §Attachment-entity usage](features/entities/models/02-runtime-surface.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
+
+### Three layers, capabilities
+
+| Layer | Read state | Mutate state | Dispatch action | Await player |
+|---|---|---|---|---|
+| **`Effect`** | Yes (via `scope.State`) | **No** | Yes (`scope.Dispatch`) | No (only by dispatching a decision action) |
+| **`ICommandHandler`** | Yes (via `ctx.Store`) | Yes — by invoking mutators | No | Yes (decision handlers only) |
+| **`Mutator<TState, TPayload>`** | Yes (current state in; sibling slices via `IStateScope`) | **Yes — only producer of new state** | No | No |
+
+Three principles fall out of this table:
+
+- **Mutation flows through mutators, never directly.** A mutator's `Change(state, payload, scope)` returning a new `TState` is the only path that produces state. Handlers don't write state inline; effects can't write state at all.
+- **Only handlers invoke mutators.** Mutators are not auto-fired off command dispatch. The handler for a command decides which mutators to run and with what payload.
+- **Effects orchestrate, never mutate.** An effect's job is to sequence dispatches and thread their results. State change happens entirely inside the dispatched actions' handlers.
+
+### Cancellation discipline
+
+Two cancellation cases exist; both surface through the same channel.
+
+**Action cancelled by the before-fold.** A registered `OnBefore<T>` returns `FoldResult.Cancel(reason)`. The action's handler never runs. The effect's `await scope.Dispatch(...)` resolves with a `CommandResult` carrying the cancellation. The effect inspects the result and decides whether to continue:
+
+```csharp
+var damage = await scope.Dispatch(new DealDamageAction { Target = t, Amount = 6 });
+if (damage.IsCancelled) return;        // shield absorbed; effect ends gracefully
+await scope.Dispatch(new MoveToDiscardAction { Source = source });
+```
+
+**Effect aborts itself.** The effect calls `scope.Cancel()` when it knows it cannot continue (e.g. the targeted entity has been removed by a previous dispatch). The effect's `Execute` task completes; no further dispatches run.
+
+The framework invariant: **cancellation of one `GameAction` never automatically cancels the orchestrating effect.** The effect is the only place that decides whether the chain should continue.
 
 ## Composition
 
 | Model | Role |
 |---|---|
-| [`01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) | Layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths; decisions-as-commands; `IEffectScope` |
-| [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) | Three before-fold outcomes; `ITriggerPipeline` ownership; `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
-| [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
-| [`04-effect-flow.md`](features/effects/models/04-effect-flow.md) | Mid-execution lifecycle: service surfaces (`IEffectScope`, `IHandlerContext`, `ICommandAwaiter`); type-only decision routing; mutation discipline; uniform gateway boundary |
+| [`01-effect.md`](features/effects/models/01-effect.md) | `Effect` type + layer hierarchy + two dispatch paths |
+| [`02-effect-scope.md`](features/effects/models/02-effect-scope.md) | `IEffectScope` (effect's runtime surface) |
+| [`03-handler-context.md`](features/effects/models/03-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
+| [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |
+
+Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md); ongoing-effect attachment-entity pattern lives in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
 
 ## Invariants
 
@@ -85,11 +117,12 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 
 ## Boundaries
 
-**Owns:** the layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; decisions-as-commands shape; `IEffectScope`, `IHandlerContext`, `ICommandAwaiter` interfaces; ongoing-effect attachment-entity pattern + Cleanup hook contract; before-fold three-outcomes (modify / cancel / replace); replacement-of-replacement via fold; `Effect.Validate` pre-execution gate.
+**Owns:** the `Effect` abstract type; layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; decisions-as-commands shape; `IEffectScope`, `IHandlerContext`, `ICommandAwaiter` interfaces; `Effect.Validate` pre-execution gate; mutation discipline (effects-can't-mutate); cancellation discipline (cancel never auto-cancels orchestrating effect).
 
 **Does not own:**
 - `GameCommand` type hierarchy (the type system) → `triggers/`
-- Trigger registration, fold execution mechanics → `triggers/`
+- Trigger registration, fold execution mechanics, before-fold outcomes, replacement priority → `triggers/`
+- Attachment-entity usage pattern (ongoing effects realized as entities) → `entities/`
 - `GameRulesRuntime.FilterTriggers` (availability policy) → `engine/`
 - Engine framework FIFO routing, drain → `engine/`
 - `IAvailableActions`, snapshot shape → `engine/`

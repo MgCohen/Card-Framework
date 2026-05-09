@@ -30,32 +30,38 @@ Ask:
 Product/
   README.md
   SESSION-CHECKPOINT.md
+  _docs/
+    model.md
+    feature.md
+    adr.md
+    spike.md
+    research.md
+    sample.md
+    checkpoint.md
+    ledger.md
+    draft.md
   _workflow/
     PRODUCT-BUILDER.md
     EMOJI-LEGEND.md
-    REFERENCE-CONVENTIONS.md
     retired-tokens.json
-    _templates/
   ledgers/
   decisions/
   general/
   features/<feature>/
     models/
-    decisions/
     archive/
+  research/
   spikes/
   support/
     samples/
-    prior-art/
   sessions/
 ```
 
-Drop `.gitkeep` in every empty leaf so git tracks the structure. For each feature, `archive/` gets its own `.gitkeep` — it starts empty and receives docs only when a status flips to `Superseded` or `Cancelled` (§5.14). `sessions/` gets a `.gitkeep` — it stays empty until `/builder:snapshot` is invoked (§4.6).
+Drop `.gitkeep` in every empty leaf so git tracks the structure. For each feature, `archive/` gets its own `.gitkeep` — it starts empty and receives docs only when a status flips to `Superseded` or `Cancelled`. `sessions/` gets a `.gitkeep` — it stays empty until `/builder:snapshot` is invoked.
 
-### 3. Drop templates into `_workflow/_templates/`
+### 3. Drop per-type rulebooks into `_docs/`
 
-Seven files extracted from `PRODUCT-BUILDER.md` §4.1–§4.5 + §4.7 + §5.14:
-- `spike.md`, `feature.md`, `model.md`, `sample.md`, `adr.md`, `checkpoint.md`, `archive.md`.
+Nine files, each carrying the rules + skeleton for one doc type: `model.md`, `feature.md`, `adr.md`, `spike.md`, `research.md`, `sample.md`, `checkpoint.md`, `ledger.md`, `draft.md`. The skeletons live at the bottom of each rulebook (instantiate via `/builder:new`).
 
 (§4.6 Snapshot and §4.8 Plan are descriptive prose only — no template files.)
 
@@ -69,7 +75,7 @@ Also seed `_workflow/retired-tokens.json` as an empty array `[]`. The registry g
 
 ### 5. Project-wide ADR scaffold
 
-Create `Product/decisions/0001-adopt-workflow.md` from the ADR template (`_workflow/_templates/adr.md`). Status `accepted`. Body should cite the new project's `_workflow/PRODUCT-BUILDER.md`.
+Create `Product/decisions/0001-adopt-workflow.md` from the ADR template (`Product/_docs/adr.md` (skeleton at the bottom)). Status `accepted`. Body should cite the new project's `_workflow/PRODUCT-BUILDER.md`.
 
 ### 6. Write VISION.md
 
@@ -77,7 +83,7 @@ Create `Product/decisions/0001-adopt-workflow.md` from the ADR template (`_workf
 
 ### 7. Seed `SESSION-CHECKPOINT.md`
 
-Create `Product/SESSION-CHECKPOINT.md` from the checkpoint template (`_workflow/_templates/checkpoint.md`). Active focus: *"what is this project?"*. The "Where we stopped" paragraph notes the bootstrap. The "Open items snapshot" links back to whatever durable items the user named in step 1.
+Create `Product/SESSION-CHECKPOINT.md` from the checkpoint template (`Product/_docs/checkpoint.md` (skeleton at the bottom)). Active focus: *"what is this project?"*. The "Where we stopped" paragraph notes the bootstrap. The "Open items snapshot" links back to whatever durable items the user named in step 1.
 
 ### 8. Drop README
 

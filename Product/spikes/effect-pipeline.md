@@ -28,7 +28,7 @@ The locked context this sketch must respect:
 - Command pipeline is framework-FIFO; `engine.Dispatch(GameAction, out string? reason)` is try-get; `runtime` contract is `FilterTriggers + Evaluate`; no `OnIncomingCommand` / `OnQueueDrained` / `IIntakeQueue` / `Route` / etc.
 - `IEffectScope.Dispatch` runs `GameAction`s **inline** — pipeline.Execute → fold → handler → fold → envelope, awaited synchronously by the calling effect.
 - `engine.Dispatch` is queued — framework-FIFO, runs after current `pipeline.Execute` returns.
-- Mutation discipline (per [`effects/04` §10](features/effects/models/04-effect-flow.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
+- Mutation discipline (per [`effects.md` §Mutation discipline](features/effects/effects.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
 - `IHandlerContext` exposes `Store`, `Actions` (snapshot writer), `Resolver` (decision awaiter), `Modifiers`. **No `RunEffect` surface today** — that's the documented gap this sketch closes.
 - ADR-0002 (refreshed) — runtime holds zero **gameplay** state. Engine-internal plumbing is fine on the engine; gameplay state lives in Scaffold slices.
 
@@ -928,7 +928,7 @@ Out of scope for this iteration:
 - How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
 - Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
 - Multi-actor decision interleaving inside effects (e.g., MTG split-second).
-- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `effects/02-replacement-prevention.md`); this sketch doesn't add new constraints there.
+- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `triggers/01-trigger-fold.md`); this sketch doesn't add new constraints there.
 
 ## When this lands
 
@@ -937,12 +937,12 @@ Out of scope for this iteration:
 When iteration settles, propagate to canonical Models:
 
 - **New ADR:** `Product/decisions/0007-effect-pipeline-shape.md` — locks the architecture.
-- `Product/features/effects/models/04-effect-flow.md` — substantial revision (new types, services, chain semantics, two execution verbs).
-- `Product/features/effects/models/01-async-dispatch.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
+- `Product/features/effects/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
+- `Product/features/effects/models/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
 - `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
 - `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
-- `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
+- `Product/features/engine/models/01-game-engine.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
 - `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
-- `Product/features/actions/models/02-availability-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
+- `Product/features/actions/models/05-available-actions-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
 - `Product/ledgers/OPEN-ITEMS.md` — resolve `oq-effect-pipeline` by deletion; add `oq-effect-authoring`, `oq-runtime-as-state-evaluator`, `oq-session-state-machine`.
 - `Product/ledgers/GLOSSARY.md` — entries for `EffectDefinition`, `EffectInstance`, `EffectBindings`, `IEffectPipeline`, chain scope, `Fired` set.

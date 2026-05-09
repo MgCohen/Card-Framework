@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md]
 tags: [#triggers]
 ---
 

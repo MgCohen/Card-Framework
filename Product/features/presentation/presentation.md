@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/02-availability-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/effects/models/04-effect-flow.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/04-history-envelope.md, features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/effects/models/02-effect-scope.md]
 tags: [#presentation]
 ---
 

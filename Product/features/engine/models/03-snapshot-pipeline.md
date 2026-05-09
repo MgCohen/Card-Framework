@@ -1,15 +1,15 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/02-availability-snapshot.md, features/effects/models/04-effect-flow.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-command-awaiter.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 
-# Snapshot Pipeline — model
+# Snapshot Production — model
 
 ## What it is
 
-How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/02-availability-snapshot.md`](features/actions/models/02-availability-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
+How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
 
 ```csharp
 public interface IAvailableActions
@@ -53,6 +53,22 @@ public interface IAvailableActions
 - **`Clear`** — erase the snapshot (between phases, between decisions, etc.).
 
 Behind the service the engine runs an internal mutator that writes to `AvailableActionsState`. The service is the only public write path.
+
+### The `AvailableActionsState` slice
+
+`IAvailableActions` writes to a framework-owned `BaseState` slice — the canonical home for the published snapshot. Reads go through `IStateScope.Get<AvailableActionsState>()` like any other slice.
+
+```csharp
+public sealed record AvailableActionsState(
+    AvailableActionsSnapshot Snapshot) : BaseState;
+```
+
+- **Purpose.** Holds the current available-actions snapshot. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), publication is purely runtime-driven — typically from inside `Evaluate` when the runtime detects its own follow-ups are exhausted, or from effects mid-execution.
+- **Written by.** `IAvailableActions` service via a framework-internal mutator. Game authors write through the service, never directly.
+- **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
+- **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
+
+The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/state/state.md) for the framework-vs-game-authored convention and the auto-seeding rule.
 
 ### Default trigger: `runtime.Evaluate` at drain-end
 
@@ -152,13 +168,13 @@ public sealed record AvailableActionsSnapshot(
     IReadOnlyList<ActionTemplate> Templates);
 ```
 
-There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted). "Is an await open?" is answered by `ICommandAwaiter` ([`effects/04 §Decision routing`](features/effects/models/04-effect-flow.md)), not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
+There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted). "Is an await open?" is answered by `ICommandAwaiter` ([`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)), not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
 
 The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor to type-only routing. See "Open follow-ups."
 
 ### Effect-side symmetry
 
-Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. The full contract — `IHandlerContext` shape, type-only decision routing, await semantics — is settled in [`effects/04-effect-flow.md`](features/effects/models/04-effect-flow.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate` surface, no decision-id field — type-only routing answers "is a decision open?"); decision handlers `await ctx.Resolver.Wait<TCommand>()`.
+Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. `IHandlerContext` shape lives in [`effects/03-handler-context.md`](features/effects/models/03-handler-context.md); type-only decision routing and await semantics live in [`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate` surface, no decision-id field — type-only routing answers "is a decision open?"); decision handlers `await ctx.Resolver.Wait<TCommand>()`.
 
 A target-picker decision handler under that model:
 
@@ -274,10 +290,10 @@ The reasoning, in three points:
 
 ## Open follow-ups
 
-- **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
-- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04 §Open follow-ups`](features/effects/models/04-effect-flow.md).
+- **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`state/state.md`](features/state/state.md).
+- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04-command-awaiter.md` §Open follow-ups](features/effects/models/04-command-awaiter.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
-- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/02-availability-snapshot.md)).
+- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/05-available-actions-snapshot.md)).
 - **`PlayerChoice` shape under typed templates.** With typed templates, `IntentMapper` switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<Reference>` + `IReadOnlyDictionary<string, object>` parameters. Pin when `IntentMapper` is implemented.
 
 ---

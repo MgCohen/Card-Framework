@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-flow.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md, features/effects/models/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#triggers, #reactions, #fold, #model]
 ---
 
@@ -39,7 +39,7 @@ abstract record GameSignal      : GameCommand;   // not executable — trigger s
 | `CompositeAction` | Inline, within parent handler | No | No |
 | `GameSignal` | Nothing — no execution step | No | No |
 
-**`CompositeAction` vs `Effect`.** `CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit. An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [`features/effects/models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) for the full layer hierarchy.
+**`CompositeAction` vs `Effect`.** `CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit. An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [`features/effects/models/01-effect.md`](features/effects/models/01-effect.md) for the full layer hierarchy.
 
 ### `Trigger<T>` — the base type
 
@@ -113,7 +113,7 @@ public interface ITriggerSystem
 
 ### Execution — `ITriggerPipeline`
 
-The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both interfaces. The authoritative shape is defined in [`effects/02 §3`](features/effects/models/02-replacement-prevention.md):
+The pipeline runs the trigger fold through `ITriggerPipeline`. This is a pipeline-internal surface; game authors never call it directly. One `TriggerSystem` class implements both `ITriggerSystem` and `ITriggerPipeline`.
 
 ```csharp
 public interface ITriggerPipeline
@@ -136,9 +136,16 @@ public sealed record TriggerFoldResult(
     string?      CancelReason,
     bool         IsReplaced,
     GameAction?  Replacement);
+
+// Each registration wraps a Trigger<T> as non-generic delegates for pipeline dispatch.
+public sealed record TriggerMatch(
+    Reference                              Owner,      // ADR-0005: stable subscription key — Ref<T> survives CardRef rotations
+    int                                    Priority,   // lower runs first; default 0
+    Func<GameCommand, IEffectScope, bool>  Condition,
+    Func<GameCommand, IEffectScope, Task>  Execute);
 ```
 
-The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`.
+The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`. The replacement-prevention semantics consumed by the fold (three before-fold outcomes, replace-of-replacement) are owned by [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md).
 
 ### The fold mechanic
 
@@ -154,11 +161,81 @@ cN = command passed to handler (unless scope.Cancel was called)
 
 **Cancel or replace (`GameAction` only):** A trigger calls `scope.Cancel()` or `scope.Replace(next)` during `Execute`. Either stops the fold. The original command does not execute. A replacement dispatches as a fresh command through the channel — it goes through its own full trigger fold from scratch.
 
+### Before-fold outcomes
+
+Every `OnBefore<T>` trigger produces one of three outcomes, communicated through `IEffectScope` rather than a return value:
+
+| Outcome | What happens | Example |
+|---|---|---|
+| **Modification** | Same type, different property values | Reduce `DealDamageAction.Amount` from 5 to 3 |
+| **Cancellation** | Event is stopped; handler never runs | Shield absorbs hit; action cancelled |
+| **Substitution** | Different `GameAction` type dispatched in place | `DealDamageAction` → `HealAction` |
+
+```csharp
+// Inside Trigger<T>.Execute:
+scope.Cancel("shield absorbed");           // cancellation
+scope.Replace(new ShieldAbsorbAction(…));  // substitution
+// (returning without a scope call) = modification or no-op
+```
+
+Modification is expressed by replacing the command with a copy that has different property values (records are immutable):
+
+```csharp
+var reduced = cmd with { Amount = Math.Max(0, cmd.Amount - shieldValue) };
+scope.Replace(reduced);
+```
+
+`FoldResult` (`Keep`/`Cancel`/`Replace`) is a pipeline-internal discriminator on `TriggerFoldResult` — not part of the game-author API. The pipeline reads scope state after `Execute` returns to determine which outcome occurred.
+
+### Replacement-of-replacements is fold-natural
+
+No special mechanism is needed. The fold evaluates each trigger's condition against the *current command* — the output of all prior triggers in the fold sequence:
+
+```
+c0 = DealDamageAction { Amount: 5 }
+
+trigger B condition: (c) => c is DealDamageAction → true on c0
+trigger B react:     DealDamageAction → HealAction → c1 = HealAction { Amount: 5 }
+
+trigger C condition: (c) => c is DealDamageAction → FALSE on c1 — does not fire
+trigger D condition: (c) => c is HealAction      → true on c1  — fires normally
+```
+
+If B substitutes `DealDamageAction` with `HealAction`, any trigger watching for `DealDamageAction` no longer applies. Any trigger watching for `HealAction` applies as if it was always the event. Correct by construction — no loop detection or special casing required.
+
+### Priority and ordering
+
+Priority is an `int` on each `OnBefore`/`OnAfter` registration call, defaulting to `0`. Lower value runs first in the fold. The default `FifoPipeline` sorts by priority ascending before running (stable sort preserves registration order among ties). A game that wants to change the convention overrides sorting inside its custom `ITriggerPipeline` — the value is just data.
+
+```csharp
+// Normal ability — default priority
+triggers.OnBefore<DealDamageAction>(condition, react, owner: self);
+
+// Self-preservation ability — runs before other replacements
+triggers.OnBefore<DealDamageAction>(condition, react, owner: self, priority: -10);
+```
+
+The framework ships a `FifoPipeline : ITriggerPipeline` that stable-sorts by `Priority` ascending, runs the fold, and returns completed tasks. Games that need MTG-style controller-choice ordering swap in a custom implementation that:
+
+1. Detects multiple applicable triggers
+2. Dispatches a `ChooseReplacementOrderAction` (a normal decision, same pattern as `RequestTargetAction`)
+3. Awaits the result
+4. Runs the fold in the chosen order
+
+### History when replaced
+
+When command A is replaced by B:
+
+- A's envelope is closed and published with `CommandResult.Replaced` — appears in history as a command that was dispatched but did not execute.
+- B is dispatched fresh via `engine.Dispatch` (validates + enqueues onto the framework FIFO command queue). B gets its own full fold from scratch. B's envelope is a sibling, not a child, of A's.
+
+History shows both: "A was replaced" and "B executed." The causal link between them is preserved via `OriginCommandId` threading if A and B share the same originating intent. See [`actions/04-history-envelope.md`](features/actions/models/04-history-envelope.md) for envelope shape.
+
 ### Context — deleted
 
 `Context` is deleted (S19). Triggers receive `IEffectScope` directly — the same surface effects use. The subscribing entity's identity (`Self`) and any per-instance data are closure-captured at registration, not carried on a context type. State reads go through `scope.State.Get<TState>()`. Reactions dispatch through `scope.Dispatch(...)`.
 
-See [`features/effects/models/04-effect-flow.md` §4.3](features/effects/models/04-effect-flow.md) for the full `IEffectScope` definition.
+See [`features/effects/models/02-effect-scope.md` §4.3](features/effects/models/02-effect-scope.md) for the full `IEffectScope` definition.
 
 ### Reactions and the dispatch channel
 
@@ -265,39 +342,12 @@ scope.Execute(new MoveCardComposite(source, zone)); // CompositeAction — befor
 
 `scope.Emit` and `scope.Execute` are the scope-level equivalents of `engine.Dispatch` for non-queued types. A handler should never dispatch another `GameAction` directly — that's an `Effect`'s responsibility.
 
-### Updated pipeline shape
+### Pipeline integration
 
-`RunPreHooks` from earlier drafts is replaced by `ITriggerPipeline.RunBefore`. The pipeline holds `ITriggerPipeline` (the execution surface); card abilities hold `ITriggerSystem` (the subscription surface). One `TriggerSystem` class implements both.
+The full `pipeline.Execute(action)` shape (envelope open → filter → before-fold → handler → after-fold → envelope close) is owned by [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md). Trigger-side notes:
 
-```csharp
-public async Task<CommandResult> Execute(GameAction action)
-{
-    using var envelope = history.OpenEnvelope(BuildCause(action));
-
-    var candidates = triggerRegistry.GetMatches(action);
-    var available  = rules.FilterTriggers(candidates, action, TriggerPhase.Before);
-    var scope      = scopeFactory.CreateForTrigger();
-    var before     = await triggerPipeline.RunBefore(action, available, scope);
-
-    if (before.IsCancelled)
-        return history.CloseAndPublish(envelope, CommandResult.Cancelled(before.CancelReason));
-
-    if (before.IsReplaced)
-    {
-        history.CloseAndPublish(envelope, CommandResult.Replaced);
-        engine.Dispatch(before.Replacement);
-        return CommandResult.Replaced;
-    }
-
-    var result = Handle(before.FinalCommand, envelope);
-
-    await triggerPipeline.RunAfter(before.FinalCommand, result, available, scope);
-
-    return history.CloseAndPublish(envelope, result);
-}
-```
-
-`CompositeAction` and `GameSignal` use a lighter path — trigger folds only, no handler, no envelope of their own; their entries fold into the parent command's envelope.
+- The pipeline holds `ITriggerPipeline` (execution surface); card abilities hold `ITriggerSystem` (subscription surface). One `TriggerSystem` class implements both.
+- `CompositeAction` and `GameSignal` use a lighter path — trigger folds only, no handler, no envelope of their own; their entries fold into the parent command's envelope.
 
 ## Invariants
 
@@ -371,6 +421,18 @@ When multiple triggers fire on one event, they need to be aggregated into a sing
 - **A — Synchronous broadcast, first listener wins.** Rejected — no story for replacement, prevention, or priority.
 - **B — Per-event subscription lists with manual aggregation.** Rejected — every event reinvents the loop; no shared semantics.
 - **C — A fold over registered triggers, producing an aggregated `TriggerFoldResult` consumed by the engine.** **Chosen.** Priority and replacement/prevention are expressed as fold steps. The engine consumes the result; effects don't write the loop.
+
+### Q3 — Replacement priority (formerly `effects/02 §Q1` — folded 2026-05-09)
+
+> Originally a single-feature decision in `triggers/01-trigger-fold.md`. Folded here when before-fold was dissolved (per the type-required Model rule — before-fold is a step inside `ITriggerPipeline.RunBefore`, not a model of its own).
+
+Replacement effects ("if X would happen, instead Y") and prevention effects ("X doesn't happen") need a deterministic priority story. Without one, two replacements in the same fold produce nondeterministic outcomes.
+
+- **A — Order replacements by registration time.** Rejected — registration order isn't a deterministic, replay-safe property across save/load and multiplayer.
+- **B — Player-controlled tie-breaks at every collision.** Rejected — spams decisions for negligible gain in floor cases.
+- **C — Fold-ordered priority.** Replacements declare priority ranks; the trigger fold consumes them in rank order; ties break by stable, explicit ordering (e.g., source entity ID). **Chosen.**
+
+Explicit priority on each registration plus stable tie-break gives deterministic replay across replacement-heavy effects without forcing a player decision at every collision. Games that want player-controlled ordering opt in via a custom `ITriggerPipeline` that dispatches a `ChooseReplacementOrderAction`. Authoring cost is small (one `priority` argument with a default of 0); the determinism payoff is large.
 
 ### Q2 — `OnBefore<T>` / `OnAfter<T>` (formerly ADR-0002 — folded)
 

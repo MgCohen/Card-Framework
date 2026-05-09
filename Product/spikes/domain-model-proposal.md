@@ -189,7 +189,7 @@ None today. Cards' state surface is fully covered by the entity-variable bridge 
 
 ## 3. Aggregates
 
-`Store.RegisterAggregate` ships in Scaffold; framework hasn't pinned a use case (`engine/04 §9` open follow-up).
+`Store.RegisterAggregate` ships in Scaffold; framework hasn't pinned a use case (`state.md §Open` follow-up).
 
 | Candidate | Reads | Status |
 |---|---|---|
@@ -271,7 +271,7 @@ Either:
 
 - [`Product/SESSION-CHECKPOINT.md`](SESSION-CHECKPOINT.md) — `oq-game-definition` design pass suspended after Q1 lock; this proposal is the input to Stages 2-3.
 - [`Product/spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — sibling spike on whether to drop the entities + entities.states packages. Affects §1 hierarchy and §2.5 of this proposal if it lands.
-- [`Product/features/engine/models/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — current slice tier model (framework-owned vs game-authored).
+- [`Product/features/state/state.md`](features/state/state.md) — current slice tier model (framework-owned vs game-authored).
 - [`Product/features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — current factory + `MatchSetup`; Q1 lock reshapes this.
 - [`Product/features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — `ZoneDefinition` and per-zone-type runtime slices.
 - [`Product/features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `CardDefinition`, `CardMapState`, current entity-bridge wiring.

@@ -73,13 +73,13 @@ Built from 8 parallel audits (one per feature) against the spec at commit `2f9c4
 | `actions/decisions/0008` | Intent vocabulary rename | `actions/models/01-command-pipeline.md` | fold |
 | `cards/decisions/0001` | Card shape | `cards/models/01-card-model.md` | elevate (re-triaged) — **already done in cards migration** |
 | `effects/decisions/0001` | Async layer hierarchy | `effects/models/01-async-dispatch.md` | fold |
-| `effects/decisions/0003` | Replacement priority | `effects/models/02-replacement-prevention.md` | elevate (re-triaged) |
+| `effects/decisions/0003` | Replacement priority | `effects/models/02-before-fold.md` | elevate (re-triaged) |
 | `engine/decisions/0001` | GameRules as class with services | `engine/models/02-gamerules-contract.md` | fold |
 | `engine/decisions/0002` | GameRules zero state | `engine/models/02-gamerules-contract.md` | fold |
 | `engine/decisions/0003` | Snapshot in GameState | `engine/models/04-gamestate-slices.md` | elevate (re-triaged) |
 | `engine/decisions/0004` | Snapshot writer is `IAvailableActions` | `engine/models/03-snapshot-pipeline.md` | elevate (re-triaged) |
 | `engine/decisions/0005` | State pattern (immutable, redux-like) | `engine/models/04-gamestate-slices.md` | fold |
-| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-evaluation-loop.md` | fold |
+| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-game-engine.md` | fold |
 | `triggers/decisions/0001` | Trigger fold semantics | `triggers/models/01-trigger-fold.md` | fold |
 | `triggers/decisions/0002` | OnBefore<T> / OnAfter<T> replace CommandPreHook | `triggers/models/01-trigger-fold.md` | elevate (re-triaged) |
 | `zones/decisions/0001` | Zone shape | `zones/models/01-zone-model.md` | fold |
@@ -114,13 +114,13 @@ Sized as per-feature deltas. Mechanical = template rename only. Synthesis = new 
 ### `effects/`
 
 - **Feature root.** Full reshape. Add Vocabulary (Effect / GameAction / CompositeAction / Dispatch x2 / Fold x3 outcomes / Attachment / Decision / Mutator / Envelope — agent listed). Add Architecture (the 6-phase effect lifecycle arc the agent identified). Add Invariants (consolidate the 9 in Model 04 §10 + 6 more visible across Models 01–03).
-- **Models (4).** `01-async-dispatch.md`, `02-replacement-prevention.md`, `03-ongoing-effects.md` are well-shaped — mostly section renames. `04-effect-flow.md` is exceptionally dense (~450 lines, 11 numbered sections including "9 pinned invariants") — **flag for possible split** during migration; not in scope here.
+- **Models (4).** `01-async-dispatch.md`, `02-before-fold.md`, `03-attachment-entity.md` are well-shaped — mostly section renames. `04-effect-flow.md` is exceptionally dense (~450 lines, 11 numbered sections including "9 pinned invariants") — **flag for possible split** during migration; not in scope here.
 - **ADRs.** 2 fold (0001, 0003) + 1 supersede-then-fold (0002).
 
 ### `engine/` (largest by Models)
 
 - **Feature root.** Full reshape. Add Vocabulary (8 terms from agent: OriginCommandId, Drain, IntakeResult/DrainResult, EngineLifecycle, MatchOutcome, Snapshot, GameRulesDefinition vs Runtime, MatchSetup). Add Architecture (the Factory → Lifecycle → Loop → GameRules-hooks → Snapshot → State flow that the agent diagrammed). Add Invariants (8 cross-Model rules: lifecycle gate, zero-rule-state, service injection, snapshot-in-state, framework-vs-game slices, lifecycle mirror, signals-in-envelopes, ADR-0005 immutability).
-- **Models (6).** `01-evaluation-loop.md` through `06-match-lifecycle.md` are all well-structured. Mostly section renames + provenance backfill.
+- **Models (6).** `01-game-engine.md` through `06-match-lifecycle.md` are all well-structured. Mostly section renames + provenance backfill.
 - **ADRs.** 6 fold (0001, 0002, 0003, 0004, 0005, 0006) — all folded into Models in the same feature; no elevations.
 
 ### `entities/`
