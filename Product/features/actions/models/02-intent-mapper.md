@@ -73,7 +73,7 @@ public interface IIntentMapper
 }
 ```
 
-The mapper switches on the typed `ActionTemplate` subtype to produce a well-formed command. **Each game ships its own implementation.** **Decision-unaware** — produces the same command shape whether or not a decision is open. The engine's pre-pipeline awaiter check (per [`effects/04-effect-flow.md`](features/effects/models/04-effect-flow.md)) intercepts decision-matching commands before the normal pipeline runs.
+The mapper switches on the typed `ActionTemplate` subtype to produce a well-formed command. **Each game ships its own implementation.** **Decision-unaware** — produces the same command shape whether or not a decision is open. The engine's pre-pipeline awaiter check (per [`effects/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)) intercepts decision-matching commands before the normal pipeline runs.
 
 ```csharp
 public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
@@ -135,4 +135,4 @@ Q1 keeps UI decoupled from command shapes — UI knows templates and choices; th
 
 - **Enables:** UI that only knows templates/choices; consistent reading of the pipeline; decision-unaware intake.
 - **Constrains:** every command needs a paired template; any code/doc still using `Request` is out of date.
-- **Cascade:** consumed by `presentation/01-presentation-loop.md` (`AffordanceMap` consumes typed templates); `effects/04-effect-flow.md` (engine pre-pipeline awaiter check intercepts decision-matching commands).
+- **Cascade:** consumed by `presentation/01-presentation-loop.md` (`AffordanceMap` consumes typed templates); `effects/06-command-awaiter.md` (engine pre-pipeline awaiter check intercepts decision-matching commands).

@@ -37,7 +37,7 @@ public interface ICommandHandler<TCommand, TResult>
 public abstract class CommandHandler<TCommand, TResult> : ICommandHandler { ... }
 ```
 
-Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/04-effect-flow.md`](features/effects/models/04-effect-flow.md)).
+Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)).
 
 `handler.Validate` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — and the **authoritative** one.
 
@@ -65,7 +65,7 @@ Cancellation shape (flag on the base record vs. typed `CancelledResult` subtype)
 
 ### `IHandlerContext`
 
-The handler's runtime surface — `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`. Defined in [`effects/04-effect-flow.md`](features/effects/models/04-effect-flow.md).
+The handler's runtime surface — `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`. Defined in [`effects/05-handler-context.md`](features/effects/models/05-handler-context.md).
 
 ## Invariants
 
@@ -73,7 +73,7 @@ The handler's runtime surface — `Store` (read + execute mutators + catalog), `
 - **One handler per command type.** DI registration is closed-generic (`ICommandHandler<DealDamageCommand, DamageResult>`). Multiple registrations for the same `TCommand` are an error at container build.
 - **Handlers return typed `CommandResult` subtypes.** Effects branch on these.
 - **Handlers are the only layer that issues mutators.** Effects sequence commands; mutators write state; handlers bridge by calling `ctx.Store.Execute(payload)`.
-- **Handlers never dispatch other `GameAction`s.** Sequencing belongs to effects (per [`effects/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md)).
+- **Handlers never dispatch other `GameAction`s.** Sequencing belongs to effects (per [`effects/01-effect.md`](features/effects/models/01-effect.md)).
 - **`Handle` returns `Task<TResult>`.** Synchronous handlers return `Task.FromResult(...)`; only decision handlers genuinely await.
 
 ## Decisions

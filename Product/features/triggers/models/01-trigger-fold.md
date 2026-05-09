@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-flow.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/effects/models/04-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#triggers, #reactions, #fold, #model]
 ---
 
@@ -39,7 +39,7 @@ abstract record GameSignal      : GameCommand;   // not executable — trigger s
 | `CompositeAction` | Inline, within parent handler | No | No |
 | `GameSignal` | Nothing — no execution step | No | No |
 
-**`CompositeAction` vs `Effect`.** `CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit. An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [`features/effects/models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) for the full layer hierarchy.
+**`CompositeAction` vs `Effect`.** `CompositeAction` is a reusable group of `StateMutation`s used *inside a single handler*. It does not orchestrate other `GameAction`s — it only groups state changes for reuse and trigger-fold participation. Example: `MoveCardComposite` encapsulates a remove-then-insert as one logical state-change unit. An **Effect** is a separate, higher-level concept that orchestrates multiple `GameAction`s in sequence. Only effects sequence commands. A `GameAction` handler applies mutations (directly or via `CompositeAction`s) but never dispatches other `GameAction`s itself. See [`features/effects/models/01-effect.md`](features/effects/models/01-effect.md) for the full layer hierarchy.
 
 ### `Trigger<T>` — the base type
 
@@ -165,7 +165,7 @@ cN = command passed to handler (unless scope.Cancel was called)
 
 `Context` is deleted (S19). Triggers receive `IEffectScope` directly — the same surface effects use. The subscribing entity's identity (`Self`) and any per-instance data are closure-captured at registration, not carried on a context type. State reads go through `scope.State.Get<TState>()`. Reactions dispatch through `scope.Dispatch(...)`.
 
-See [`features/effects/models/04-effect-flow.md` §4.3](features/effects/models/04-effect-flow.md) for the full `IEffectScope` definition.
+See [`features/effects/models/04-effect-scope.md` §4.3](features/effects/models/04-effect-scope.md) for the full `IEffectScope` definition.
 
 ### Reactions and the dispatch channel
 

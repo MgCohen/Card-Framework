@@ -28,7 +28,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`, `Product/features/engine/models/02-gamerules-contract.md`.
 
 - id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `EffectDefinition.Execute` is currently a delegate (`Func<EffectInstance, IEffectScope, Task>`); the *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Surfaces concretely once the effect-pipeline sketch promotes to Models.
-  References: `Product/spikes/effect-pipeline.md`, `Product/features/effects/models/04-effect-flow.md`.
+  References: `Product/spikes/effect-pipeline.md`, `Product/features/effects/models/06-command-awaiter.md`.
 
 - id: oq-runtime-as-state-evaluator | kind: defer | **Runtime collapses toward pure state evaluator** — the runtime contract has progressively shrunk (`Route`/`OnIncomingCommand`/`OnQueueDrained`/`IIntakeQueue` deleted; today: `FilterTriggers + Evaluate`). Long-term direction surfaced during the effect-pipeline sketch: `FilterTriggers` is the next candidate to revisit, and the runtime might collapse to pure state evaluation + state-machine transitions. Not actionable now; revisit after effect-pipeline lands and at least one game stresses the surface.
   Trigger: post-effect-pipeline cascade + first composed-rules game.
@@ -42,7 +42,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/engine/models/02-gamerules-contract.md` §9.
 
 - id: oq-fsm-game-state | kind: question | **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were deleted (S15 Q6); snapshot carries templates only. Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives.
-  References: `Product/features/effects/models/04-effect-flow.md` §9.
+  References: `Product/features/effects/models/06-command-awaiter.md` §9.
 
 - id: oq-trigger-ordering | kind: question | **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else.
 
@@ -51,7 +51,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/engine/models/07-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
 
 - id: oq-effect-cancellation-on-match-end | kind: question | **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await` (target picker, choose-one prompt, chained dispatch), the awaiting effect is still alive. Engine needs a story for cancellation: thread a `CancellationToken` through `IHandlerContext` / `IEffectScope`, hard-cancel via `IDisposable`, or accept that orphaned awaiters resolve into a closed match. Surfaced from the engine match-lifecycle design pass; deferred from that pass because it touches the effect contract, not lifecycle.
-  References: `Product/features/effects/models/01-async-dispatch.md`, `Product/features/effects/models/04-effect-flow.md`, `Product/features/engine/models/06-match-lifecycle.md`.
+  References: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/06-command-awaiter.md`, `Product/features/engine/models/06-match-lifecycle.md`.
 
 - id: oq-intent-template-lookup | kind: question | **Intent → template lookup** — `IIntentMapper.Map(ActionTemplate, PlayerChoice)` requires a pre-resolved template, but how the gateway/store picks the matching `ActionTemplate` from the snapshot for a raw `PlayerIntent` is undocumented. The "(or builds one from the intent)" clause in presentation/01 §10 step 6 is unexplained.
   References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.
@@ -80,9 +80,9 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: next presentation or engine-wiring session; or whenever intent → template lookup is designed.
   References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/models/01-command-pipeline.md` §Q5 (provenance), `Product/features/presentation/models/01-presentation-loop.md` §8.
 
-- id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-effect-flow.md §3` defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
+- id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/06-command-awaiter.md (effect recipe still open)` defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
   Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
-  References: `Product/features/effects/models/04-effect-flow.md` §3, §9; `Product/general/ARCHITECTURE.md` §Authoring.
+  References: `Product/features/effects/models/06-command-awaiter.md` §3, §9; `Product/general/ARCHITECTURE.md` §Authoring.
 
 ## Tooling
 

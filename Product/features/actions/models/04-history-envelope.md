@@ -73,7 +73,7 @@ The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](feat
 
 ## Invariants
 
-- **One envelope per `GameAction`.** Effect-dispatched siblings share `OriginCommandId` but each gets its own envelope. The historical "child folds into parent envelope" model is retired (per [`effects/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md)).
+- **One envelope per `GameAction`.** Effect-dispatched siblings share `OriginCommandId` but each gets its own envelope. The historical "child folds into parent envelope" model is retired (per [`effects/01-effect.md`](features/effects/models/01-effect.md)).
 - **`OriginCommandId` is engine-threaded.** The engine copies it from the just-executed command onto every evaluator follow-up; effects do not need to set it.
 - **`OriginIntent` is recorded once, on the first envelope.** Subsequent envelopes in the chain share `OriginCommandId` but carry no `OriginIntent`.
 - **`HistoryState` is framework-only.** Game authors never declare or write to it.

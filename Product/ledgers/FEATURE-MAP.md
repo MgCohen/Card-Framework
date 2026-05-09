@@ -25,9 +25,9 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`entities`](features/entities/entities.md) | settled | 1 | Definition / Instance / Identifier model. Foundation for every runtime object. |
 | [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
 | [`cards`](features/cards/cards.md) | settled | 1 | `Card` handle on top of the entity bridge with privacy-rotating `CardRef`. |
-| [`actions`](features/actions/actions.md) | settled | 2 | Command pipeline (intent → command → handler → state) + availability snapshot. |
+| [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
 | [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
-| [`effects`](features/effects/effects.md) | settled | 4 | Async orchestration of action sequences. Replacement / prevention. Ongoing effects. Effect-flow contract (services, decision threading, mutation discipline). |
+| [`effects`](features/effects/effects.md) | settled | 6 | Effect orchestration + replacement / prevention + ongoing effects + effect scope + handler context + command awaiter (decision routing). |
 | [`engine`](features/engine/engine.md) | settled | 7 | `GameEngine` class, `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot production, framework slice tier conventions, game factory, match lifecycle system, `GameDefinition` bundle + `ISliceProvider` mechanism. The simulation core. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
@@ -104,17 +104,22 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/01-card-model.md`](features/cards/models/01-card-model.md) — settled, references: `entities/01`, `entities/02`, `zones/01`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `root`
-- [`models/02-availability-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/01`, `engine/03` ⚠️ (see cycle)
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `root`, `actions/02`, `actions/03`, `actions/04`, `triggers/01`, `effects/04`
+- [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
+- [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
+- [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
+- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/03` ⚠️ (see cycle)
 
 ### `triggers` (settled)
 - [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `engine/01`
 
 ### `effects` (settled)
-- [`models/01-async-dispatch.md`](features/effects/models/01-async-dispatch.md) — settled, references: `root`
-- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, references: `effects/01`
+- [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `root`, `effects/04`, `effects/06`
+- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, references: `effects/01`, `triggers/01`
 - [`models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) — settled, references: `effects/01`
-- [`models/04-effect-flow.md`](features/effects/models/04-effect-flow.md) — settled, references: `effects/01`, `engine/03`
+- [`models/04-effect-scope.md`](features/effects/models/04-effect-scope.md) — settled, references: `effects/01`, `effects/05`, `state`
+- [`models/05-handler-context.md`](features/effects/models/05-handler-context.md) — settled, references: `effects/04`, `effects/06`, `actions/03`, `state`, `entities/02`
+- [`models/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md) — settled, references: `effects/01`, `effects/05`, `actions/02`, `actions/03`, `engine/01`
 
 ### `engine` (settled)
 - [`models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — *Game Engine* — settled, references: `engine/02`, `engine/06`, `actions/01`, `state`

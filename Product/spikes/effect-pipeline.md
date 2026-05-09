@@ -28,7 +28,7 @@ The locked context this sketch must respect:
 - Command pipeline is framework-FIFO; `engine.Dispatch(GameAction, out string? reason)` is try-get; `runtime` contract is `FilterTriggers + Evaluate`; no `OnIncomingCommand` / `OnQueueDrained` / `IIntakeQueue` / `Route` / etc.
 - `IEffectScope.Dispatch` runs `GameAction`s **inline** — pipeline.Execute → fold → handler → fold → envelope, awaited synchronously by the calling effect.
 - `engine.Dispatch` is queued — framework-FIFO, runs after current `pipeline.Execute` returns.
-- Mutation discipline (per [`effects/04` §10](features/effects/models/04-effect-flow.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
+- Mutation discipline (per [`effects.md` §Mutation discipline](features/effects/effects.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
 - `IHandlerContext` exposes `Store`, `Actions` (snapshot writer), `Resolver` (decision awaiter), `Modifiers`. **No `RunEffect` surface today** — that's the documented gap this sketch closes.
 - ADR-0002 (refreshed) — runtime holds zero **gameplay** state. Engine-internal plumbing is fine on the engine; gameplay state lives in Scaffold slices.
 
@@ -937,8 +937,8 @@ Out of scope for this iteration:
 When iteration settles, propagate to canonical Models:
 
 - **New ADR:** `Product/decisions/0007-effect-pipeline-shape.md` — locks the architecture.
-- `Product/features/effects/models/04-effect-flow.md` — substantial revision (new types, services, chain semantics, two execution verbs).
-- `Product/features/effects/models/01-async-dispatch.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
+- `Product/features/effects/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
+- `Product/features/effects/models/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
 - `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
 - `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
 - `Product/features/engine/models/01-evaluation-loop.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.

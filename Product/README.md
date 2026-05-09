@@ -214,7 +214,7 @@ External:
 
 1. **Locate the contract.** Search `features/actions/models/`. Found `01-command-pipeline.md`. Read it.
 2. **Edit the Model.** Update `## Contracts`, `## Invariants`, and the affected `## Examples`. If the change required weighing alternatives, add a sub-section under `## Options considered` capturing the decision.
-3. **Walk downstream.** Run `/builder:deps Product/features/actions/models/01-command-pipeline.md`. Reverse-graph output: two dependents (`features/effects/models/01-async-dispatch.md`, `support/samples/pile-counter.md`).
+3. **Walk downstream.** Run `/builder:deps Product/features/actions/models/01-command-pipeline.md`. Reverse-graph output: two dependents (`features/effects/models/01-effect.md`, `support/samples/pile-counter.md`).
 4. **Fix in place.** Open each dependent and reconcile to the new contract. If a dependent needs *design judgment* rather than mechanical edit, open an OPEN-ITEMS entry instead.
 5. **Status check.** If `01-command-pipeline.md` was `implemented`, the change creates drift against `Assets/` code — flag this to the human; either patch the code or revert the Model to `settled`. If `settled`, the edit is a deliberate cascade event but status stays.
 6. **Update CHECKPOINT.** Reflect the changed state in `SESSION-CHECKPOINT.md` if the active focus shifted.

@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/04-effect-flow.md, features/engine/models/02-gamerules-contract.md, features/entities/models/02-runtime-surface.md]
+references: [features/effects/models/05-handler-context.md, features/engine/models/02-gamerules-contract.md, features/entities/models/02-runtime-surface.md]
 tags: [#engine, #state, #slices]
 ---
 

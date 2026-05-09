@@ -158,7 +158,7 @@ public sealed class MagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
 | Service | Purpose |
 |---|---|
 | `TDefinition Definition` | The serializable data object selected for this match (`GameDefinition.Rules`). Read config knobs through it. Immutable for the runtime's lifetime. |
-| `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/04` §Service surfaces](features/effects/models/04-effect-flow.md). |
+| `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/04-effect-scope.md`](features/effects/models/04-effect-scope.md). |
 | `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). |
 | Game-specific subsystems | Concrete runtimes inject whatever else they need (`IStackSystem`, `IDeckSystem`, …) via their own constructor. Registered in the game's installer. The framework knows nothing about them. |
 

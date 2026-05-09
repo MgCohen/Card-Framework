@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-async-dispatch.md, features/entities/models/01-definition-instance-model.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-replacement-prevention.md]
+references: [features/effects/models/01-effect.md, features/entities/models/01-definition-instance-model.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-replacement-prevention.md]
 tags: [#effects, #continuous, #ongoing]
 ---
 

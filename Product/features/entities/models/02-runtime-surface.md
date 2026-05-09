@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/effects/models/04-effect-flow.md, features/effects/models/03-ongoing-effects.md]
+references: [features/entities/models/01-definition-instance-model.md, features/effects/models/05-handler-context.md, features/effects/models/03-ongoing-effects.md]
 tags: [#entities, #runtime, #api, #model]
 ---
 

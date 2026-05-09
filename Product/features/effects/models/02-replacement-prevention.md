@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-async-dispatch.md, features/triggers/models/01-trigger-fold.md, features/engine/models/02-gamerules-contract.md]
+references: [features/effects/models/01-effect.md, features/triggers/models/01-trigger-fold.md, features/engine/models/02-gamerules-contract.md]
 tags: [#effects, #replacement, #prevention]
 ---
 
@@ -208,7 +208,7 @@ See [`triggers/models/01-trigger-fold.md`](features/triggers/models/01-trigger-f
 
 ## Open follow-ups
 
-- **`CommandResult` cancellation shape** — flag on the base record vs typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup. (Tracked in `04-effect-flow.md`.)
+- **`CommandResult` cancellation shape** — flag on the base record vs typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup. (Tracked in [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md).)
 - **Trigger ordering stability across save/load** — `FifoPipeline`'s registration-order tie-break depends on subscription registration sequence; whether that's stable across snapshots is tied to `oq-engine-builder`.
 
 ---

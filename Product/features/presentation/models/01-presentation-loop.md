@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/engine/models/02-gamerules-contract.md, features/effects/models/01-async-dispatch.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/engine/models/02-gamerules-contract.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#presentation, #loop, #available-actions, #model]
 ---
 
