@@ -32,13 +32,15 @@ The unit of canonical design. One model = one central element explained in depth
 - 🟢 **Has exactly one central element.** Fails if: title is a concept (lifecycle, validation, loop, pipeline, system) without a concrete thing behind it, or multiple peer elements tied only by a theme (= feature, not model).
 - 🟢 **Central element is concrete** — a class, interface, service, contract, or structured type. Fails if: subject is purely a concept, relationship, or convention.
 - 🟢 **Central element is load-bearing** — has its own behavior (methods, logic, runtime semantics) **OR** substantial design space (authoring contract, evolution rules, integration story, multi-consumer needs, validation/serialization concerns). Fails if: bare enum, fieldless signal, simple payload that's just shape, single-purpose value type with no design weight. Place those as support inside the model that defines or uses them.
+- 🟢 **Body shape is model work** — focused on one central element with its supports. Fails if: body reads as feature-root work (synthesis / architecture / vocabulary across multiple peer elements) **OR** contains ADR-shaped content (options A/B/C considered + rationale + consequences for a cross-feature decision). Those are other doc types masquerading as a model — split synthesis to feature root, decision to ADR.
 - 🟢 **The model is the central element's canonical home.** Fails if: defines rules / behaviors / extensions of an element defined elsewhere (→ that element's home), recipe composing existing surfaces (→ feature root), method extension to a class defined elsewhere (→ class's home).
 
 ## Decision flow
 
 1. **Identify the candidate central element.** No single concrete element → **NOT A MODEL.** Escalate to feature, or fold into existing model.
 2. **Check load-bearing.** Behavior present OR design space present → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
-3. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
+3. **Check body shape.** Body focused on the central element + its supports → continue. Body is synthesis-across-peers + ADR design pass → **NOT A MODEL.** Split into feature root + ADR.
+4. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
 
 ## Conventions (once decided)
 
@@ -52,8 +54,10 @@ The unit of canonical design. One model = one central element explained in depth
 ## Heuristics
 
 - 🟡 **Default = support.** Promotion to model needs a reason: substantial depth, independent consumption, supports forming around the element.
+- 🟡 **Title-content mismatch — fix the title first.** When body has a clear central element but title is process-shaped or concept-shaped, rename the title to name the element. Reclassification is the harder fallback, used only when the body has no central element to name.
 - 🟡 **Test for design space:** would the doc body be substantively more than `definition + field list`? If no, no design space → support.
 - 🟡 **Test for independence:** do consumers reach for the element directly, or always via a parent? Direct → promote candidate. Always via parent → support.
+- 🟡 **Test for body shape:** does the body discuss one element in depth, or synthesize across many? One-in-depth → model. Synthesis-across-many → feature root. Decision-with-options → ADR. A doc doing both feature work and ADR work bundled is two docs.
 
 ---
 
