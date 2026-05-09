@@ -1,14 +1,15 @@
 ---
 type: adr
 status: accepted
+references: [_workflow/PRODUCT-BUILDER.md]
 tags: [#adr, #workflow, #restructure]
 ---
 
 # ADR-0003 — Restructure Product/ folder layout
 
 Date: 2026-04-29
-Context-doc: _workflow/PRODUCT-BUILDER.md
-Proposal: _workflow/PRODUCT-BUILDER.md §1
+Context-doc: Product/_workflow/PRODUCT-BUILDER.md
+Proposal: Product/_workflow/PRODUCT-BUILDER.md §1
 
 ## Context
 

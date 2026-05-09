@@ -129,7 +129,7 @@ public class Card : InstanceWithSlices<CardDefinition>
 
 #### Resolve
 
-`store.Catalog.Resolve(ref)` returns the live handle, or throws if the ref is unknown. For tolerant lookup, use `TryResolve`. Per-kind registries (`CardRegistry.Get(refOfCard)`) are typically thin wrappers that throw on unknown.
+`store.Catalog.Resolve(ref)` returns the live handle, or throws if the ref is unknown. For tolerant lookup, use `TryResolve`. Per-kind game-specific registries can be thin wrappers around the catalog, but `CardRegistry` itself is retired (per the open-seams pass) — `store.Catalog.Resolve(refOfCard)` is the canonical resolution path.
 
 #### Destroy
 

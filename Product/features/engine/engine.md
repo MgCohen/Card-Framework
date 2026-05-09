@@ -93,6 +93,17 @@ The execution arc spans these:
 6. **Match end.** Runtime returns `EndMatchCommand` from `Evaluate` (state-based win condition), or host calls `engine.FinishMatch(outcome)`. `EndMatchHandler` emits `MatchEndedSignal` and flips lifecycle. Already-queued tail drains naturally; new dispatches reject. Host observes via signal in `HistoryState` or state subscription on `EngineState.Lifecycle`. (Model 01.)
 7. **Disposal.** Host disposes the per-match DI scope; `engine.Dispose()` ensures `FinishMatch(Aborted("Disposed"))` if not already ended and disposes the runtime if `IDisposable`. Scope teardown is the host's responsibility; engine never sees the scope object. (Models 01 + 05.)
 
+## Composition
+
+| Model | Role |
+|---|---|
+| [`01-game-engine.md`](features/engine/models/01-game-engine.md) | `GameEngine` orchestrator: drain, `Dispatch`, runtime call cadence, lifecycle gate (`NotStarted` / `Started` / `Ended`), lifecycle types (`EngineLifecycle`, `StartMatchCommand`/`EndMatchCommand`, signals, `MatchOutcome`) |
+| [`02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md) | `GameRulesDefinition` — pure-data half of the rules layer (`[Serializable]` config, asset-friendly, replay/save/network-safe); `DefinitionWithSlices` and `ISliceProvider` flow through |
+| [`03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) | `GameRulesRuntime<TDefinition>` — runtime brain (services, `FilterTriggers`, `Evaluate`, anti-scope, three rejection paths, MTG SBA known difference) |
+| [`04-available-actions.md`](features/engine/models/04-available-actions.md) | `IAvailableActions` service + `AvailableActionsState` slice + typed `ActionTemplate`s; on-demand validation posture; effect-side symmetry |
+| [`05-game-factory.md`](features/engine/models/05-game-factory.md) | `IGameFactory` + `MatchSetup` + `IMatchBuilder`; the two-layer split between DI installation and per-match factory; container open-generic resolution for `GameRulesRuntime<TDefinition>` |
+| [`06-game-definition.md`](features/engine/models/06-game-definition.md) | `GameDefinition` bundle (`Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, `GetInitialSlices()`); the canonical six-step Build walk; layout blocks |
+
 ## Match setup
 
 After `engine.StartMatch()` returns, the engine is in `Started` but the world is content-empty: zones spawned by `Build` exist but hold no cards; players exist with default variable values; game-singleton slices that needed actor refs (e.g. `TurnState.Active`) are still null. **Setup commands** are the framework's pattern for populating this content.

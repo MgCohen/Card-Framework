@@ -110,17 +110,17 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/01-card-model.md`](features/cards/models/01-card-model.md) — settled, references: `entities/01`, `entities/02`, `zones/01`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `root`, `actions/02`, `actions/03`, `actions/04`, `triggers/01`, `effects/02`
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `actions/02`, `actions/03`, `actions/04`, `triggers/01`, `effects/02`, `engine/03`, `decisions/0006`, `decisions/0007`
 - [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
 - [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
 - [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
 - [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/04` ⚠️ (see cycle)
 
 ### `triggers` (settled)
-- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `engine/01`
+- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `actions/01`, `engine/01`, `engine/03`, `effects/02`, `decisions/0006`
 
 ### `effects` (settled)
-- [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `root`, `effects/02`, `effects/04`
+- [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `triggers/01`, `actions/01`, `effects/02`, `effects/04`, `engine/01`
 - [`models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) — settled, references: `effects/01`, `effects/03`, `state`
 - [`models/03-handler-context.md`](features/effects/models/03-handler-context.md) — settled, references: `effects/02`, `effects/04`, `actions/03`, `state`, `entities/02`
 - [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`

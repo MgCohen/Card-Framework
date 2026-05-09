@@ -207,3 +207,19 @@ For a worked equip/unequip example (modifier built via factory, installed on the
 
 - **Modifier ordering policy across composition tiers.** Today `Order` is a single integer authored on the modifier subclass. When a game needs strict ordering across tiers (definition default → equipment → aura → zone → status), the `Order` integer covers it by convention; if richer tier semantics emerge, consider a `(Tier, Order)` tuple or named tiers. Defer until forced.
 - **Custom modifier authoring.** Authoring tools for `VariableModifier<T>` subclasses (inspector-friendly, validation, per-game catalogs) tracked under `bl-authoring-feature`.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (its shape follows directly from the Models referenced in `## Contracts` above and the project-wide ADRs they cite); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

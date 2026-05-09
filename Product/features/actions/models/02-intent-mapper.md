@@ -97,6 +97,10 @@ public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template
 
 Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) — `IIntentMapper.Map` is one of the five layers.
 
+## Examples
+
+For an end-to-end worked mapper (typed templates, switch on template type, `IStateScope` for state-driven mapping like locating the card's source pile), see the `PileCounterIntentMapper` in [`engine/04-available-actions.md` §IntentMapper becomes typed](features/engine/models/04-available-actions.md). The mapper there exercises both the typed-template switch and the decision-unaware property — it never queries "is a decision open?", just maps templates to commands.
+
 ## Open follow-ups
 
 - **`PlayerChoice` shape under typed templates** — may collapse to positional `IReadOnlyList<EntityId>` + `IReadOnlyDictionary<string, object>` parameters now that templates carry typed slot data. Pin when `IIntentMapper` is implemented.

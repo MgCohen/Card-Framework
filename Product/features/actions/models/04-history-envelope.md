@@ -78,6 +78,10 @@ The slice is a framework-owned tier slice — see [`state/state.md` §Slice tier
 - **`OriginIntent` is recorded once, on the first envelope.** Subsequent envelopes in the chain share `OriginCommandId` but carry no `OriginIntent`.
 - **`HistoryState` is framework-only.** Game authors never declare or write to it.
 
+## Decisions
+
+*n/a — no elevated ADR.* (The envelope shape and `HistoryState` slice are descriptive; they sit on top of the action pipeline ([`actions/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md)) and the framework slice tier model ([`state/state.md`](features/state/state.md)). No options-weighing specific to this Model.)
+
 ## Examples
 
 ### Pile Counter envelope
@@ -118,3 +122,19 @@ HistoryEnvelope #3
 
 - **Typed `HistoryEnvelope` C# record** — concrete record (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`, etc.). Pseudocode currently; pin when replay or multiplayer transport is designed.
 - **Mandatory `HistoryEnvelope` metadata** — partially settled (`OriginCommandId`, `OriginIntent`, `Actor`, `SourceInstance`, `Result`, `Entries`); typed record pin tracked here.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (envelope shape follows from the command-pipeline contract); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: root
+references: [root]
 tags: [#entities]
 ---
 

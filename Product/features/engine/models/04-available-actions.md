@@ -293,7 +293,7 @@ The reasoning, in three points:
 - **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`state/state.md`](features/state/state.md).
 - **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04-command-awaiter.md` §Open follow-ups](features/effects/models/04-command-awaiter.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
-- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/05-available-actions-snapshot.md)).
+- **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/05 §Open`](features/actions/models/05-available-actions-snapshot.md)).
 - **`PlayerChoice` shape under typed templates.** With typed templates, `IntentMapper` switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<Reference>` + `IReadOnlyDictionary<string, object>` parameters. Pin when `IntentMapper` is implemented.
 
 ---

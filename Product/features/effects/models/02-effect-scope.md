@@ -113,3 +113,19 @@ The deterministic `ModifierId` is allocated when `Create` is called (engine-owne
 ## Open follow-ups
 
 - **`IEffectScope` extension surface** — whether games can add custom services to `scope` for ergonomics (e.g. game-specific helpers) is undesigned. Workaround today is constructor-injecting services into `Effect` subclasses.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (its shape follows directly from the Models referenced in `## Contracts` above and the project-wide ADRs they cite); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

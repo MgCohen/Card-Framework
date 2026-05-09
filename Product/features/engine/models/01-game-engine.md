@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/state/state.md]
 tags: [#engine, #evaluation-loop, #orchestrator]
 ---
 

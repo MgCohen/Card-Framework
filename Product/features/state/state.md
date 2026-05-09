@@ -9,7 +9,7 @@ tags: [#state]
 
 ## What it is
 
-The framework's state primitive — the convention layer over the **`com.scaffold.states`** Unity package (Scaffold.State). Game state is **not** a single record; it lives as multiple typed `BaseState` slices in a Scaffold `Store`. Reads go through `IStateScope.Get<TState>()`; writes go through registered `Mutator<TState, TPayload>` instances dispatched via `Store.Execute(payload)`. Subscriptions and atomic batches are first-class. This feature is the canonical home for the slice-authoring pattern, the read/write surfaces, the four subscription channels, and the atomic-batch semantics. Framework-specific tier conventions (framework-owned vs game-authored, the auto-seed rule, the catalog index) layer on top in [`engine/04`](features/state/state.md).
+The framework's state primitive — the convention layer over the **`com.scaffold.states`** Unity package (Scaffold.State). Game state is **not** a single record; it lives as multiple typed `BaseState` slices in a Scaffold `Store`. Reads go through `IStateScope.Get<TState>()`; writes go through registered `Mutator<TState, TPayload>` instances dispatched via `Store.Execute(payload)`. Subscriptions and atomic batches are first-class. This feature is the canonical home for the slice-authoring pattern, the read/write surfaces, the four subscription channels, and the atomic-batch semantics. Framework-specific tier conventions (framework-owned vs game-authored, the auto-seed rule) live in §Slice tiers below; the framework-slice catalog index lives in [`engine.md` §Framework-owned slices](features/engine/engine.md).
 
 ```
                     Store (Scaffold.State)
@@ -250,9 +250,9 @@ Slices don't carry their own primary key. The factory keys per-instance slices e
 - The slice-authoring pattern (immutability, no cross-slice mutation, no own-key, payload-keyed mutators).
 
 **Does not own:**
-- Framework-vs-game tier split (auto-seeded framework slices, declared game-authored slices) → `engine/04`.
-- Catalog index of framework-owned slices → `engine/04`.
-- `ISliceProvider` contract (parameterless `GetInitialSlices()`) → `engine/07`.
+- Framework-vs-game tier split (auto-seeded framework slices, declared game-authored slices) → `state.md` §Slice tiers.
+- Catalog index of framework-owned slices → `state.md` §Slice tiers.
+- `ISliceProvider` contract (parameterless `GetInitialSlices()`) → `engine/06`.
 - Specific framework slice schemas (`AvailableActionsState`, `EngineState`, `HistoryState`) → their producing models.
 - Per-entity variable storage (`IEntityVariableStorage`, the entity-side `Subscribe(key, …)` surface) → `entities/02`.
 - The `Store`'s low-level package internals (memory layout, dispatch implementation) → `com.scaffold.states` package documentation.
@@ -261,7 +261,7 @@ Slices don't carry their own primary key. The factory keys per-instance slices e
 
 *Mirrors the front-matter `references:` array in human-readable form.*
 
-- **Upstream:** Scaffold.State package (`com.scaffold.states` — see [`DOCS/scaffold.md`](DOCS/scaffold.md) for how Scaffold packages are sourced and updated).
+- **Upstream:** Scaffold.State package (`com.scaffold.states` — see [`DOCS/scaffold.md`](../../../DOCS/scaffold.md) for how Scaffold packages are sourced and updated).
 - **Downstream:** every feature that reads or writes game state — `engine` (lifecycle, snapshot, factory), `actions` (history envelopes, command pipeline), `effects` (mutation discipline, handler context), `entities` (entity-bridge slices), `triggers`, `presentation`, and game authors.
 
 ## Open

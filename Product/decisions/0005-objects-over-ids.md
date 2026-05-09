@@ -1,13 +1,14 @@
 ---
 type: adr
 status: accepted
+references: [ledgers/GLOSSARY.md]
 tags: [#adr, #general, #conventions, #api]
 ---
 
 # ADR-0005 — Objects over IDs in framework APIs
 
 Date: 2026-05-01
-Context-doc: ledgers/GLOSSARY.md
+Context-doc: Product/ledgers/GLOSSARY.md
 Proposal: session-20260501-1602-zone-model-internal-opens
 
 ## Amendment — 2026-05-06 (Plan A/B/C cascade)
