@@ -52,8 +52,25 @@ Apply in order. The first failure determines the verdict.
 - Title: `# <Element Name> — model`. Element name is the C# type name.
 - Filename slug derives from the type — drop the `I` prefix on interfaces (`ICommandHandler` → `command-handler.md`), keep records/classes verbatim (`HistoryEnvelope` → `history-envelope.md`).
 - Topic-shaped or process-shaped titles ("decision-routing", "before-fold", "async-dispatch", "lifecycle", "pipeline-mechanics") are misclassifications. If the title is not a type name, the file is either misclassified (not a model) or correctly a model but mistitled. Re-run gate 1.
-- Body sections (per the skeleton): What it is, Contracts, Invariants, Decisions, Examples, Open follow-ups, Options considered, Rationale, Consequences. Strict order. Sections may be empty with stub `*n/a — <reason>.*` but cannot be reordered or omitted.
+- Body sections (per the skeleton): Concept, Definition, Supporting elements, Use cases, Invariants, Open follow-ups. Strict order; cannot be reordered. Concept, Definition, and Invariants are always required. Supporting elements, Use cases, and Open follow-ups may be empty with stub `*n/a — <reason>.*` but cannot be omitted.
 - Cross-references use `Product/`-rooted absolute paths (see `_workflow/PRODUCT-BUILDER.md` §Cross-references).
+
+## Section shape
+
+Each section has a fixed format. **Concept** is the prose section; Supporting-element descriptions may stretch to a short paragraph when one line can't carry the role. Everywhere else uses labels, snippets, and one-liners.
+
+| Section | Format |
+|---|---|
+| **Concept** | Prose. 1 sentence to a few short paragraphs. Orient the reader on what the type is and the role it plays. |
+| **Definition** | Code only — the central type's signature(s). No prose around the block. Comments only for behavior the signature can't express. |
+| **Supporting elements** | H3 per element. Heading = type name; role description (one line preferred, short paragraph when needed); code block. Tightly-coupled enums may sit under their consumer. |
+| **Use cases** | H3 per scenario. Heading = scenario name; one-line description; tight snippet. Only non-derivable compositions — skip single-call demos that are obvious from `Definition`. |
+| **Invariants** | Bold-label one-liners (`**Label** → rule.`). Pack choice + operational rule together when they share a concept (e.g. `**Identity** → two refs. Stable for X; ephemeral rotates for Y.`). |
+| **Open follow-ups** | Bullets, one line each. Reference the open-item id (`oq-` / `bl-` / etc.) plus brief description. |
+
+**Where design decisions go.** Choices that fit a one-liner: `## Invariants`. Choices that need rationale: [ADRs](Product/_docs/adr.md), linked from the relevant Invariant. The model doc never re-elaborates an ADR.
+
+**Prose budget.** Concept is the prose section. Supporting-element descriptions can stretch to a short paragraph when one line can't carry the role. Everywhere else uses one-liners — if Use cases, Invariants, or Open follow-ups need more, the wrong content is in them: extract to Concept, fold into an Invariant, or promote to an ADR.
 
 ## Heuristics
 
@@ -70,69 +87,172 @@ Rules apply at creation **and** retroactively. When a gate or rule changes, ever
 
 ## Skeleton
 
-Instantiate this for a new model. Fill in placeholders; preserve section order. Strict-order sections with empty content carry a stub line (`*n/a — <reason>.*`).
+Instantiate this for a new model. Fill in placeholders; preserve section order. See `## Section shape` above for per-section formatting rules. The Worked example below shows a fully-fleshed-out model.
 
     ---
     type: model
     status: draft
     references: [<upstream features or models, or the literal `root`>]
-    tags: []
+    tags: ["#<feature>", "#model"]
     ---
 
     # <Element Name> — model
 
-    ## What it is
+    ## Concept
 
-    High-level orientation in 30 seconds. SHOULD include a canonical artifact:
+    Prose orientation. What is this type in the system? What role does it play? Why does it exist? 1 sentence to a few short paragraphs.
 
-    | Model shape | Artifact form |
-    |---|---|
-    | Class / interface / contract | Code snippet (signatures + types) |
-    | Algorithm | Pseudocode |
-    | State machine / lifecycle | State diagram |
-    | Data structure / schema | Shape sketch |
-    | Pipeline / pass / phase | Arrow chain |
+    ## Definition
 
-    Stub `*n/a — see Contracts.*` permitted if no form fits.
+        <Central type signature(s). Code only — no prose around the block.>
 
-    ## Contracts
+    ## Supporting elements
 
-    What this model defines: types, interfaces, method signatures, semantics, forbidden behaviors. Implementation is welcome when the framework owns it; surface-only signatures are appropriate when implementation is game-supplied.
+    ### <SupportingTypeName>
+
+    One-line role description.
+
+        <Code block.>
+
+    ### <NextSupportingTypeName>
+
+    Short paragraph — for supporting types whose role doesn't fit one line.
+
+        <Code block.>
+
+    ## Use cases
+
+    ### <Scenario name>
+
+    One-line description.
+
+        <Tight snippet.>
 
     ## Invariants
 
-    Model-local rules. Cross-model rules live in the feature root's `## Invariants`, referenced by name.
-
-    ## Decisions
-
-    **Reserved for elevated ADRs.** Project-wide ADRs (per `_docs/adr.md` two-feature rule) that shape this model. Feature-internal decisions live below the divider, not here. Stub `*n/a — no elevated ADR.*` if none.
-
-    Linked: `Product/decisions/NNNN-<title>.md`
-
-    ## Examples
-
-    Consumers of the contract — user extensions and call-site usage. Stub `*n/a — see Contracts.*` if no consumer interaction fits.
+    - **<Label>** → <rule + operational consequence packed when they share a concept>.
+    - **<Label>** → <rule>.
+    - **<Label>** → [ADR-NNNN](Product/decisions/NNNN-<slug>.md). <One-line summary>.
 
     ## Open follow-ups
 
-    Unresolved threads. Promote durable items to `Product/ledgers/OPEN-ITEMS.md`.
+    - `<id>` — <brief description>.
+
+    *If a section has nothing to write, replace its body with a stub:* `*n/a — <reason>.*`
+
+## Worked example
+
+A trimmed instance of the skeleton above. Frozen — does not track [`features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) if that drifts.
 
     ---
+    type: model
+    status: settled
+    references: [features/entities/models/01-definition-instance-model.md, features/zones/models/01-zone-model.md]
+    tags: ["#cards", "#model"]
+    ---
 
-    *Below: provenance — what was considered, why we chose this, what it constrains. Feature-internal decisions live here; project-wide cross-cutting decisions get an ADR.*
+    # Card — model
 
-    ## Options considered
+    ## Concept
 
-    - **A** — rejected because ...
-    - **B** — rejected because ...
-    - **C** — chosen.
+    `Card` is the per-instance runtime handle for one card. Game code holds a `Card` to address a specific card across moves, visibility transitions, and snapshot/restore — the handle is stable identity, while the underlying client-facing `CardRef` rotates for privacy.
 
-    *Multi-decision models: accumulate `### Q-N — <slug>` sub-sections in narrative order, each with its own options / lean / rationale.*
+    The class is intentionally thin: only `SelfRef` plus protected refs to definition and storage. All mutable state (variables, modifiers, owner, visibility) lives in Store slices keyed by `SelfRef`. The framework provides one `Card` class — per-card variants live as `CardDefinition` instances, not as `Card` subclasses, so the runtime stays data-driven.
 
-    ## Rationale
+    ## Definition
 
-    Why the chosen approach. Skip if obvious.
+        public class Card : InstanceWithSlices<CardDefinition>
+        {
+            public Ref<Card> SelfRef { get; init; }
 
-    ## Consequences
+            public CardRef GetRef(IStateScope state)   => state.Get<CardMapState>().RefOf(SelfRef);
+            public IActor? GetOwner(IStateScope state) => state.Get<OwnershipState>().OwnerOf(SelfRef);
 
-    What this enables; what it constrains. Skip if obvious.
+            public override bool Equals(object? obj) => obj is Card other && SelfRef.Equals(other.SelfRef);
+            public override int  GetHashCode()       => SelfRef.GetHashCode();
+        }
+
+    ## Supporting elements
+
+    ### CardRef
+
+    Client-visible ref. Rotates on every move and visibility transition.
+
+        public readonly record struct CardRef(Guid Value)
+        {
+            public static CardRef NewRef() => new(Guid.NewGuid());
+        }
+
+    ### CardMapState
+
+    Privacy-rotation indirection.
+
+        public sealed record CardMapState : IState
+        {
+            public ImmutableDictionary<CardRef, Ref<Card>> RefToInstance { get; init; }
+            public ImmutableDictionary<Ref<Card>, CardRef> InstanceToRef { get; init; }
+
+            public Ref<Card> InstanceOf(CardRef @ref) => RefToInstance[@ref];
+            public CardRef   RefOf(Ref<Card> selfRef) => InstanceToRef[selfRef];
+        }
+
+    ### OwnershipState
+
+    Owner of any catalog handle (shared by Cards + Zones).
+
+        public sealed record OwnershipState : IState
+        {
+            public ImmutableDictionary<Reference, Actor> Owners { get; init; }
+            public Actor? OwnerOf(Reference selfRef);
+        }
+
+    ### CardVisibilityState
+
+    Per-card override on top of zone default.
+
+        public enum CardVisibility { Hidden, VisibleToOwner, VisibleToAll }
+
+        public sealed record CardVisibilityState : IState
+        {
+            public ImmutableDictionary<Ref<Card>, CardVisibility> Overrides { get; init; }
+            public CardVisibility? OverrideFor(Ref<Card> r);
+        }
+
+    ### Mutations
+
+    All `: CompositeAction` (pass through trigger fold). Rotators carry `NewRef` in payload for replay determinism.
+
+        public sealed record CreateCardMutation(CardDefinition Definition, Ref<Card> NewSelfRef, CardRef NewRef, Zone? IntoZone = null, InsertPosition? Position = null) : CompositeAction;
+        public sealed record MoveCardMutation(Card Card, CardRef NewRef, Zone Source, Zone Destination, InsertPosition Position, bool BypassCapacity = false) : CompositeAction;
+        public sealed record SetCardVisibilityMutation(Card Card, CardRef NewRef, CardVisibility Visibility) : CompositeAction;
+        public sealed record DestroyCardMutation(Card Card) : CompositeAction;
+
+    ## Use cases
+
+    ### Create + place
+
+    Spawn a card into a zone, then move it.
+
+        var card = store.CreateCard(fireballDefinition, p1Hand);
+        store.Execute(MoveCardMutation.AtTop(card, p1Hand, battlefield));
+
+    ### Resolve a CardRef
+
+    Two-hop lookup from a client-facing ref to the live `Card` handle.
+
+        var card = store.Catalog.Resolve(state.Get<CardMapState>().InstanceOf(someRef));
+
+    ## Invariants
+
+    - **Canonical home** → slice (snapshots; `store.Catalog` rebuilds on `LoadSnapshot`) + catalog (in-process). Slice holds typed refs only; never live `Card` handles.
+    - **Identity** → two refs. `Ref<Card>` stable for history & subscriptions; `CardRef` rotates on hide/move for privacy. Rotation writes only `CardMapState`. Client-visible state uses `CardRef`; server-internal uses `Card` or `Ref<Card>`.
+    - **Equality** → by `SelfRef`.
+    - **Type relation** → `Card` extends the bridge handle, reusing variable / modifier / definition machinery.
+    - **Generic parameter** → non-generic. Per-card variants live in `CardDefinition` subclasses; one runtime class keeps the framework data-driven.
+    - **Visibility** → [ADR-0008](Product/decisions/0008-zone-visibility-model.md). Zone default + per-card override + server-side `CardRef` rotation.
+
+    ## Open follow-ups
+
+    - `oq-move-validation-execution-drift` — concurrency between move-validate and move-execute.
+    - `oq-entity-destruction` — `Cleanup` hook for destroyed cards.
+    - `bl-card-resolution-helper-shape` — final form of the `CardRef → Card` two-hop helper.
