@@ -66,7 +66,7 @@ The factory pairs them via DI container open-generic resolution: a game installe
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Player input → command resolution | Game | `IIntentMapper` |
 | UI affordance projection | Game (presentation) | `AffordanceMap` |
-| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gate) and [`engine/06`](features/engine/models/06-match-lifecycle.md) (lifecycle types) |
+| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gate) and [`engine/06`](features/engine/models/01-game-engine.md) (lifecycle types) |
 | Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`) |
 | Broader session lifecycle (pause, concede, disconnect, multi-match) | Game | External controller wrapping `GameEngine` (out of scope here) |
 
@@ -393,7 +393,7 @@ See [`support/samples/pile-counter.md`](support/samples/pile-counter.md) for the
 ## Open follow-ups
 
 - **Effect pipeline shape** — the substantive open design surface. How does the runtime express effect-level orchestration (when each effect starts, whether nesting / batching / stacking)? Per ADR-0006, separate from command routing. Tracked as `oq-effect-pipeline`.
-- **`GameState` slice catalog** — concrete catalog of slices the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal. See [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
+- **`GameState` slice catalog** — concrete catalog of slices the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal. See [`state/state.md`](features/state/state.md).
 - **`IHandlerRegistry` shape** — final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc.
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing). See Q3 below.
 - **`GameRulesRuntime` composition** — module composition contract (provider/policy ordering, enable-disable). Service surface supports it mechanically; pin when first composed game forces it. Tracked as `oq-gamerules-composition`.

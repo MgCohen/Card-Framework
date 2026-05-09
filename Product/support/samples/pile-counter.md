@@ -1,7 +1,7 @@
 ---
 type: sample
 status: locked
-references: [features/engine/models/02-gamerules-contract.md, features/engine/models/05-game-factory.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-runtime-surface.md]
+references: [features/engine/models/02-gamerules-contract.md, features/engine/models/05-game-factory.md, features/engine/models/01-game-engine.md, features/engine/models/07-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-runtime-surface.md]
 tags: [#sample, #pile-counter]
 ---
 
@@ -88,7 +88,7 @@ No phases beyond "play until won." No automatic advancement, no idle effects.
 
 ## 6. Win Condition
 
-After a move resolves, if `pile.Counter == pile.Target` for **all four piles** simultaneously, the game ends and the player wins. The framework-owned `EndMatchCommand(MatchOutcome.Win(player))` is dispatched by the runtime's `Evaluate`; the framework `EndMatchHandler` emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+After a move resolves, if `pile.Counter == pile.Target` for **all four piles** simultaneously, the game ends and the player wins. The framework-owned `EndMatchCommand(MatchOutcome.Win(player))` is dispatched by the runtime's `Evaluate`; the framework `EndMatchHandler` emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. See [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
 
 There is no lose condition. The puzzle is always solvable from setup; the player keeps moving until they hit it.
 
@@ -100,7 +100,7 @@ This game forces the framework to express:
 
 - **Zones with stack ordering and a derived score.** The score is a per-zone value cached in a `PileState` slice keyed at the pile's `Ref<Zone>`. Maintaining the cache atomically with each move tests the per-zone-type slice + mutator pattern from [`zones/01-zone-model.md`](features/zones/models/01-zone-model.md).
 - **A single action type with legality rules.** Tests `handler.Validate` rejection (per-command legality), `AvailableActions` (the gateway needs to tell the UI which moves are legal), and how legality interacts with the "can't move same card twice in a row" memory.
-- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
 - **Move history of size 1.** "Last card moved" is a sliver of state that doesn't fit on a card or a zone — it's *game-level* memory. It lives in a singleton `LastMoveState` slice declared by the `GameDefinition`'s `GetInitialSlices()`.
 - **`GameDefinition` bundle composition.** The puzzle's deck, pile targets, and initial deal flow through a `PileCounterGameDefinition` bundle. Tests the bundle shape from [`engine/07-game-definition.md`](features/engine/models/07-game-definition.md).
 - **Match setup commands.** After `engine.StartMatch()`, the runtime dispatches `CreateCardMutation` calls to spawn each card into its target pile. Tests the setup-command pattern from [`engine.md §Match setup`](features/engine/engine.md).
@@ -595,7 +595,7 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 ### Resolved (in subsequent docs)
 
 - ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [`engine/03 §5`](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>(...)`.
-- ~~**Q3 — `EndGameCommand` semantics.**~~ Resolved by the `oq-engine-match-lifecycle` design pass. Pile Counter dispatches the framework-owned `EndMatchCommand(MatchOutcome.Win(player))`; the framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. Engine rejects subsequent dispatches via the lifecycle gate. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+- ~~**Q3 — `EndGameCommand` semantics.**~~ Resolved by the `oq-engine-match-lifecycle` design pass. Pile Counter dispatches the framework-owned `EndMatchCommand(MatchOutcome.Win(player))`; the framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. Engine rejects subsequent dispatches via the lifecycle gate. See [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
 - ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [`effects/03-handler-context.md`](features/effects/models/02-effect-scope.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)` or `ctx.Store.ExecuteBatch(...)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
 - ~~**Q9 — `IHandlerRegistry` shape.**~~ Resolved session-20260501-1132 Q1: registry is resolver-only (`ICommandHandler Resolve(GameCommand)`); validate/execute live on `ICommandPipeline`; game authors extend `CommandHandler<TCommand, TResult>`.
 - ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext`, `Pending`, and `IIntakeQueue` all deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Command queue is engine-private FIFO with no runtime service.

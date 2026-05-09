@@ -56,7 +56,7 @@ Each row down is more game-specific than the one above. The framework provides e
 
 ### State shape
 
-The snapshot lives in `GameState` as a framework-owned slice (per [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md)):
+The snapshot lives in `GameState` as a framework-owned slice (per [`state/state.md`](features/state/state.md)):
 
 ```csharp
 // Framework-owned slice
@@ -240,7 +240,7 @@ Model-local invariants. (See `presentation.md ## Invariants` for feature-level r
 
 **Synthesis.** This Model is a synthesis layer over decisions made in sibling features; the locked synthesis:
 
-- **Snapshot lives in state.** `AvailableActionsState.Snapshot` (typed templates only — no scope discriminator). Source: `engine/04-gamestate-slices.md` (folded ADR — snapshot-in-state).
+- **Snapshot lives in state.** `AvailableActionsState.Snapshot` (typed templates only — no scope discriminator). Source: `state/state.md` (folded ADR — snapshot-in-state).
 - **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template carrying source + slots/modes/parameters. Source: `actions/05-available-actions-snapshot.md` (Q1, formerly ADR-0001 — folded).
 - **Snapshot is written via `IAvailableActions`.** By the runtime (default from inside `Evaluate`) or by effects mid-execution. Engine never auto-publishes. Source: `engine/03-snapshot-pipeline.md` (folded ADR — snapshot-writer-iavailableactions) + ADR-0006.
 - **`AffordanceMap` is game-specific.** Lives in the gateway/UI layer; recomputed on every snapshot change; pattern-matches typed templates. Source: this Model's design pass (no source ADR).

@@ -36,7 +36,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: oq-session-state-machine | kind: defer | **Session-level state machine** — current `EngineLifecycle` is 3 states (`NotStarted` / `Started` / `Ended`). Real applications need richer states: `Connecting`, `Reconnecting`, `ShowingResults`, `SettingUp`, etc. The runtime is well-positioned to host a richer state machine alongside `Evaluate`. Pin when the first networked or session-aware game forces it.
   Trigger: first networked game, or first game that needs post-match flow (results screen, rematch lobby, etc.).
-  References: `Product/features/engine/models/06-match-lifecycle.md`, `Product/features/engine/models/01-game-engine.md`.
+  References: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
   References: `Product/features/engine/models/02-gamerules-contract.md` §9.
@@ -51,7 +51,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/engine/models/07-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
 
 - id: oq-effect-cancellation-on-match-end | kind: question | **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await` (target picker, choose-one prompt, chained dispatch), the awaiting effect is still alive. Engine needs a story for cancellation: thread a `CancellationToken` through `IHandlerContext` / `IEffectScope`, hard-cancel via `IDisposable`, or accept that orphaned awaiters resolve into a closed match. Surfaced from the engine match-lifecycle design pass; deferred from that pass because it touches the effect contract, not lifecycle.
-  References: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/06-match-lifecycle.md`.
+  References: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-intent-template-lookup | kind: question | **Intent → template lookup** — `IIntentMapper.Map(ActionTemplate, PlayerChoice)` requires a pre-resolved template, but how the gateway/store picks the matching `ActionTemplate` from the snapshot for a raw `PlayerIntent` is undocumented. The "(or builds one from the intent)" clause in presentation/01 §10 step 6 is unexplained.
   References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.

@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/02-gamerules-contract.md, features/engine/models/06-match-lifecycle.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/02-gamerules-contract.md, features/engine/models/01-game-engine.md]
 tags: [#engine, #evaluation-loop, #orchestrator]
 ---
 
@@ -9,7 +9,7 @@ tags: [#engine, #evaluation-loop, #orchestrator]
 
 ## What it is
 
-The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions), and a uniform lifecycle gate (`NotStarted` / `Started` / `Ended`) with public sugar (`StartMatch` / `FinishMatch`) that constructs and dispatches the framework-owned lifecycle commands. It does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command pipeline is **framework-owned** (no game customization on routing); effect-level orchestration is a separate forthcoming surface (`oq-effect-pipeline`). The lifecycle types — `EngineLifecycle` enum, `StartMatchCommand` / `EndMatchCommand`, `MatchStartedSignal` / `MatchEndedSignal`, `MatchOutcome` hierarchy — are defined in [`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions), and a uniform lifecycle gate (`NotStarted` / `Started` / `Ended`) with public sugar (`StartMatch` / `FinishMatch`) that constructs and dispatches the framework-owned lifecycle commands. It does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command pipeline is **framework-owned** (no game customization on routing); effect-level orchestration is a separate forthcoming surface (`oq-effect-pipeline`). The lifecycle types — `EngineLifecycle` enum, `StartMatchCommand` / `EndMatchCommand`, `MatchStartedSignal` / `MatchEndedSignal`, `MatchOutcome` hierarchy — are defined below in §Lifecycle types.
 
 ```csharp
 public sealed class GameEngine : IDisposable
@@ -149,7 +149,7 @@ public sealed class GameEngine : IDisposable
 - **Drain is not re-entered.** If a command is dispatched while the loop is already running, it is enqueued and picked up by the current drain cycle.
 - **Per-step evaluation.** The loop calls `runtime.Evaluate` after every action, not once at the end. This is what gives the engine per-step state-based awareness.
 - **`OriginCommandId` threading.** The engine copies `OriginCommandId` from the just-executed action onto every evaluator follow-up. `PlayCardCommand` and any chain members share the same `OriginCommandId`. The engine does this mechanically — the runtime does not need to set it.
-- **Lifecycle gate runs before `pipeline.Validate`.** Framework consults `EngineState.Lifecycle` and rejects ineligible dispatches uniformly. The full lifecycle system — gate rules, drain-tail-on-end semantics, the lifecycle types — lives in [`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+- **Lifecycle gate runs before `pipeline.Validate`.** Framework consults `EngineState.Lifecycle` and rejects ineligible dispatches uniformly. The full lifecycle system — gate rules, drain-tail-on-end semantics, the lifecycle types — lives in §Lifecycle types above.
 - **No `OnQueueDrained` callback.** Per ADR-0006, drain-end logic folds into `Evaluate` — the runtime detects "queue is about to empty" by observing state and its own follow-up emptiness, then publishes snapshots / dispatches phase advances from there.
 - **Evaluator follow-ups bypass `Validate` and the lifecycle gate.** Actions returned from `Evaluate` are produced by runtime logic and enter the queue directly. External entry points and trigger reactions still go through `Dispatch` (lifecycle gate + validate + enqueue).
 
@@ -191,7 +191,54 @@ public sealed class TurnTimerService
 
 ### Lifecycle gate enforcement
 
-`Dispatch` enforces the framework's lifecycle gate before delegating to `pipeline.Validate` — the implementation is shown inline in the `Dispatch` method body above. The gate consults `EngineState.Lifecycle` and admits a state-specific subset of commands; the full state × command rules table, the queue-tail-on-end semantics, and the lifecycle system as a whole are defined in [`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+`Dispatch` enforces the framework's lifecycle gate before delegating to `pipeline.Validate` — the implementation is shown inline in the `Dispatch` method body above. The gate consults `EngineState.Lifecycle` and admits a state-specific subset of commands per the rules table below.
+
+| Lifecycle | Command | Result |
+|---|---|---|
+| `NotStarted` | `StartMatchCommand` | Validate runs; handler flips to `Started` |
+| `NotStarted` | `EndMatchCommand` | Validate runs; handler flips to `Ended` (cancel-before-start) |
+| `NotStarted` | Any other | Reject(`"MatchNotStarted"`) before pipeline runs |
+| `Started` | `EndMatchCommand` | Validate runs; handler flips to `Ended` |
+| `Started` | Any other | Normal pipeline flow |
+| `Ended` | Anything | Reject(`"MatchEnded"`) before pipeline runs |
+
+**Queue tail drains naturally on end.** When `EndMatchCommand`'s handler flips `Lifecycle` to `Ended` mid-drain, the queue tail continues to execute — already-queued commands aren't pre-cleared. New `Dispatch` calls during the same drain hit the `Ended` gate and reject. Evaluator follow-ups bypass `Dispatch` (they go through the engine's internal `pending.Enqueue` after `Evaluate` returns), so they are *not* subject to the lifecycle gate; runtime authors who want to suppress evaluator follow-ups after match end check `EngineState.Lifecycle` from inside `Evaluate`.
+
+### Lifecycle types
+
+The framework-owned types that drive the lifecycle gate above. All defined here as supports for `GameEngine`.
+
+```csharp
+public enum EngineLifecycle
+{
+    NotStarted,   // Build returned an engine; StartMatch not yet called
+    Started,      // StartMatch ran; engine accepting Dispatch
+    Ended,        // FinishMatch ran; engine no longer accepting Dispatch
+}
+
+public sealed record StartMatchCommand : GameAction;
+public sealed record StartMatchResult(EngineLifecycle Lifecycle) : CommandResult;
+
+public sealed record EndMatchCommand(MatchOutcome Outcome) : GameAction;
+public sealed record EndMatchResult(MatchOutcome Outcome) : CommandResult;
+
+public sealed record MatchStartedSignal : GameSignal;
+public sealed record MatchEndedSignal(MatchOutcome Outcome) : GameSignal;
+
+public abstract record MatchOutcome
+{
+    public sealed record Win    (Actor   Winner, string? Reason = null) : MatchOutcome;
+    public sealed record Loss   (Actor   Loser,  string? Reason = null) : MatchOutcome;
+    public sealed record Draw   (string? Reason = null)                 : MatchOutcome;
+    public sealed record Aborted(string  Reason)                        : MatchOutcome;
+}
+```
+
+`engine.StartMatch()` is `Dispatch(new StartMatchCommand())`; `engine.FinishMatch(outcome)` is `Dispatch(new EndMatchCommand(outcome))`. Handlers (`StartMatchHandler`, `EndMatchHandler`) emit the corresponding signal via `ctx.Emit(...)` and flip `EngineState.Lifecycle` via the framework-internal `SetEngineLifecyclePayload` mutator. Three benefits fall out of running transitions through the pipeline rather than via direct flips: signals land in normal envelopes (no synthesized envelope path); triggers fire naturally (`OnAfter<MatchStartedSignal>` / `OnAfter<MatchEndedSignal>` reach the trigger fold); the first snapshot opportunity is free (`StartMatchCommand`'s drain runs `runtime.Evaluate` after the handler).
+
+`MatchOutcome` is a closed type hierarchy — abstract base + sealed subtypes. Consumers pattern-match. `Win` requires a winner; `Loss` covers solo/no-winner cases; `Draw` carries no actor; `Aborted` requires a reason (host-driven termination, dispose-without-finish). Multi-winner scenarios are a future extension — add `TeamWin(IReadOnlyList<Actor> Winners, ...)` when a real game forces it. `Reason` is free-form on every variant for now; structuring (enum, localization keys) is deferred.
+
+**End-of-match has one transition path, multiple entry points.** Runtime / effect drives by dispatching `EndMatchCommand` (typically from `Evaluate`); host drives via `engine.FinishMatch(outcome)`; `engine.Dispose` synthesizes `MatchOutcome.Aborted("Disposed")` if not already ended. All paths reach `EndMatchHandler.Handle`.
 
 ### The `EngineState` slice
 
@@ -204,19 +251,19 @@ public sealed record EngineState(
     GameCommand?    CurrentCommand) : BaseState;
 ```
 
-- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`. The enum and its semantics are defined by the lifecycle system in [`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
+- **`Lifecycle`** — `NotStarted | Started | Ended`. Source of truth for the framework's intake gate. Mirrored on `engine.Lifecycle` for host convenience. Written by the framework-internal `SetEngineLifecyclePayload` mutator from `StartMatchHandler` / `EndMatchHandler`. The enum and its semantics are defined in §Lifecycle types above.
 - **`IsRunning`** — drain flag. Updated on `Drain` start/stop. Consumers reading state mid-drain (rare) can detect re-entry.
 - **`CurrentCommand`** — the action currently executing through `pipeline.Execute`, or `null` between commands. Updated before/after each `pipeline.Execute` call.
 - **Seeded.** `EngineState(Lifecycle: NotStarted, IsRunning: false, CurrentCommand: null)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
 - **Written by.** Engine internals only. Not writable by game authors.
 
-The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/engine/models/04-gamestate-slices.md) for the framework-vs-game-authored convention.
+The slice is a framework-owned tier slice — see [`engine.md` §Framework-owned slices](features/engine/engine.md) for the catalog and [`state/state.md` §Slice tiers](features/state/state.md) for the framework-vs-game-authored convention.
 
 ### State pattern — `GameState` as Scaffold slices
 
 `GameState` is **not a single record**. State lives as multiple typed `BaseState` slices in a Scaffold `Store`. There is no `state.Piles`, `state.LastMove`, etc. Reads always go through `IStateScope.Get<TState>()`; writes always go through `Store.Execute(payload)` → registered `Mutator<TState, TPayload>`. The runtime reads through the injected `IStateScope`; it never mutates state directly. `IAvailableActions.Set` is the single write path for the snapshot — it itself goes through an internal mutator, not a direct field write.
 
-The full slice catalog (framework-owned vs game-authored, the `ISliceProvider` mechanism, subscriptions, atomic batches) is in [`04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
+The full slice catalog (framework-owned vs game-authored, the `ISliceProvider` mechanism, subscriptions, atomic batches) is in [`state/state.md`](features/state/state.md) and [`engine.md` §Framework-owned slices](features/engine/engine.md).
 
 ### Reading state, not the just-executed action
 
@@ -329,7 +376,7 @@ public IntentResult Submit(PlayerIntent request)
 3. **Per-step `Evaluate`.** Called after every action's `pipeline.Execute` returns, not once at end of drain. Drain-end behavior folds into `Evaluate` (snapshot publication, phase advance) — there is no `OnQueueDrained` callback.
 4. **`OriginCommandId` threading is mechanical.** The engine copies `OriginCommandId` from the just-executed action onto every evaluator follow-up. The runtime does not set it.
 5. **Evaluator follow-ups bypass `Validate`.** External dispatches and trigger reactions go through `Dispatch` (validate + enqueue); follow-ups returned from `Evaluate` enter the queue directly.
-6. **Lifecycle gate runs before `pipeline.Validate`.** Framework consults `EngineState.Lifecycle` first; per ADR-0006 there is no runtime-side intake hook. The gate's rules and the drain-tail-on-end semantics are defined by the lifecycle system in [`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md); `Dispatch` enforces them.
+6. **Lifecycle gate runs before `pipeline.Validate`.** Framework consults `EngineState.Lifecycle` first; per ADR-0006 there is no runtime-side intake hook. The gate's rules and the drain-tail-on-end semantics are defined by the lifecycle system in §Lifecycle types above; `Dispatch` enforces them.
 7. **`engine.StartMatch` / `engine.FinishMatch` are sugar.** They construct and dispatch the framework-owned lifecycle commands through `Dispatch`. No direct state writes from the public engine surface; lifecycle transitions flow through the normal pipeline.
 8. **`engine.Dispose` ensures end-of-match.** If `Lifecycle != Ended`, `Dispose` calls `FinishMatch(Aborted("Disposed"))` so `MatchEndedSignal` lands in history. Then disposes the runtime if `IDisposable`. The per-match DI scope is opened and torn down by the host — engine never sees the scope object.
 9. **Drain is not re-entered.** If a command is dispatched while drain is running, it is enqueued and picked up by the current cycle. Concurrency / async re-entry is an open follow-up.

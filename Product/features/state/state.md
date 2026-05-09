@@ -9,7 +9,7 @@ tags: [#state]
 
 ## What it is
 
-The framework's state primitive — the convention layer over the **`com.scaffold.states`** Unity package (Scaffold.State). Game state is **not** a single record; it lives as multiple typed `BaseState` slices in a Scaffold `Store`. Reads go through `IStateScope.Get<TState>()`; writes go through registered `Mutator<TState, TPayload>` instances dispatched via `Store.Execute(payload)`. Subscriptions and atomic batches are first-class. This feature is the canonical home for the slice-authoring pattern, the read/write surfaces, the four subscription channels, and the atomic-batch semantics. Framework-specific tier conventions (framework-owned vs game-authored, the auto-seed rule, the catalog index) layer on top in [`engine/04`](features/engine/models/04-gamestate-slices.md).
+The framework's state primitive — the convention layer over the **`com.scaffold.states`** Unity package (Scaffold.State). Game state is **not** a single record; it lives as multiple typed `BaseState` slices in a Scaffold `Store`. Reads go through `IStateScope.Get<TState>()`; writes go through registered `Mutator<TState, TPayload>` instances dispatched via `Store.Execute(payload)`. Subscriptions and atomic batches are first-class. This feature is the canonical home for the slice-authoring pattern, the read/write surfaces, the four subscription channels, and the atomic-batch semantics. Framework-specific tier conventions (framework-owned vs game-authored, the auto-seed rule, the catalog index) layer on top in [`engine/04`](features/state/state.md).
 
 ```
                     Store (Scaffold.State)
@@ -205,6 +205,28 @@ builder.Register<LastMoveMutator>    (Lifetime.Singleton).AsImplementedInterface
 ```
 
 Per-instance slices (one `PileState` per pile zone, one `EntityState` per card, …) come from each Definition's `GetInitialSlices()` at spawn — game authors don't seed them through `MatchSetup.InitialSlices`. Game-singleton slices come from `GameDefinition.GetInitialSlices()`.
+
+## Slice tiers
+
+The framework layers a two-tier convention over the underlying `Store`. The `Store` is happy to key however the caller asks; this is a framework rule, not a Scaffold-level constraint.
+
+| Tier | Who defines | Who seeds | Who writes |
+|---|---|---|---|
+| **Framework-owned** | Framework | `IGameFactory.Build` auto-seeds (see `Product/features/engine/models/05-game-factory.md`) | Framework-internal services / mutators only |
+| **Game-authored** | Game author | `ISliceProvider.GetInitialSlices()` on the relevant Definition; manual `MatchSetup.InitialSlices` overlay | Game-registered `Mutator<TState, TPayload>` |
+
+Framework-owned slices are invisible to the game author at bootstrap — always present, always written by the framework, readable by anyone via `IStateScope`. Including a framework-owned slice in `MatchSetup.InitialSlices` throws at validation. The catalog of framework-owned slices lives in [`engine.md` §Framework-owned slices](features/engine/engine.md).
+
+### External keying
+
+Slices don't carry their own primary key. The factory keys per-instance slices externally using the spawned instance's `SelfRef` (per-zone, per-card, per-player) or unkeyed (game-singleton). Reference-shaped fields inside slice values are *data*, not keys. This keeps per-instance slices enumerable by Definition kind.
+
+### Tier invariants
+
+1. **Framework-owned slices are auto-seeded at `Build()`.** Game authors never yield them in `MatchSetup.InitialSlices`; doing so throws at validation.
+2. **Framework-owned slices are written only by framework services.** No game-authored mutator may target them directly.
+3. **Game-authored slices register via `ISliceProvider`.** Per-instance slices come from the relevant Definition's `GetInitialSlices()` at spawn; game-singleton slices come from `GameDefinition.GetInitialSlices()`.
+4. **Slices don't carry their own primary key.** Storage is keyed externally by the factory at `instance.SelfRef`. Reference-shaped fields inside slices are data, not keys.
 
 ## Invariants
 

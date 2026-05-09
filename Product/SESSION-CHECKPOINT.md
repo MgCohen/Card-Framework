@@ -38,7 +38,7 @@ Two parallel cascades landed earlier (2026-05-06) via [PR #102](https://github.c
 - `zones/01-zone-model.md` — `Zone` unsealed; visibility policy replaced with the sealed-record `ZoneVisibilityPolicy` hierarchy; Read API split between `GetCardRefs(state)` and `GetCards(store)`.
 - `players/01-player-model.md` + `players/players.md` — `Player` unsealed; `PlayerDefinition` re-parented onto `DefinitionWithSlices`.
 - `engine/05-game-factory.md` — added "Registration contract" section.
-- `engine/06-match-lifecycle.md` — added §4.4 "Match setup".
+- `engine/01-game-engine.md` — added §4.4 "Match setup".
 - `engine/07-game-definition.md` — `ISliceProvider` reach-points reframed.
 - ADRs: `cards/decisions/0001` and `zones/decisions/0001` — open-seams amendments at the top + sample code updated.
 - `ledgers/GLOSSARY.md` — `CardRegistry` retired; `DefinitionWithSlices`, `InstanceWithSlices<TDef>`, `ZoneVisibilityPolicy` added; `Card`/`Zone`/`Player` entries updated.

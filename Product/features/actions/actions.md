@@ -122,7 +122,7 @@ Cross-Model rules that hold across both Models and shape how downstream features
 - `Effect` orchestration, `IEffectScope` → `effects/`
 - `IAvailableActions` service (writer) — the snapshot is published by → `engine/`
 - `GameRulesRuntime` four-method contract — `FilterTriggers` and `Evaluate` are owned by → `engine/`
-- `Mutator<TState, TPayload>` and `Store.Execute(payload)` mechanics → `engine/` (`engine/04-gamestate-slices`)
+- `Mutator<TState, TPayload>` and `Store.Execute(payload)` mechanics → `engine/` (`state/state`)
 - Engine lifecycle gate, framework FIFO, drain loop → `engine/`
 - Card-specific shape, zone-specific shape → `cards/`, `zones/`
 - UI presentation, `AffordanceMap` implementation → `presentation/`

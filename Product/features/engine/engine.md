@@ -79,9 +79,9 @@ The feature has **seven Models**, organized as three concentric layers.
 
 **Loop & contracts (Models 01–02):** the engine itself ([`01-game-engine.md`](features/engine/models/01-game-engine.md) — drain, `Dispatch`, runtime call cadence) and the rules-layer contract ([`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — `GameRulesDefinition` + `GameRulesRuntime<TDefinition>`, the two contract methods, the anti-scope of what does NOT belong on the runtime).
 
-**Snapshot & state (Models 03–04):** snapshot production ([`03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions` service, typed `ActionTemplate` per command type, on-demand validation posture, `AvailableActionsState` slice) and framework slice tier ([`04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — framework-owned vs game-authored tier, catalog index of framework slices, external-keying convention). The underlying state primitive (`Store`, `BaseState`, `IStateScope`, `Mutator<TState, TPayload>`, subscription channels, `ExecuteBatch`) is owned by [`state`](features/state/state.md), not by engine.
+**Snapshot:** snapshot production ([`03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — `IAvailableActions` service, typed `ActionTemplate` per command type, on-demand validation posture, `AvailableActionsState` slice). The underlying state primitive (`Store`, `BaseState`, `IStateScope`, `Mutator<TState, TPayload>`, subscription channels, `ExecuteBatch`) is owned by [`state`](features/state/state.md), not by engine. Framework slice tier conventions (framework-owned vs game-authored) live in [`state/state.md` §Slice tiers](features/state/state.md); the catalog of framework-owned slices is the §Framework-owned slices section in this feature root.
 
-**Match construction & lifecycle (Models 05–07):** match construction ([`05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer split between DI installation and per-match factory, container open-generic resolution for `GameRulesRuntime<TDefinition>`), match lifecycle types ([`06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) — `EngineLifecycle` enum, framework-owned `StartMatchCommand`/`EndMatchCommand` and handlers, `MatchStartedSignal`/`MatchEndedSignal`, `MatchOutcome` hierarchy), and the `GameDefinition` bundle + factory walk ([`07-game-definition.md`](features/engine/models/07-game-definition.md) — bundle shape, `ISliceProvider`, layout blocks, the canonical six-step Build walk). The `GameEngine` lifecycle methods + intake gate behavior live in [`01-game-engine.md`](features/engine/models/01-game-engine.md); setup-command patterns and the disposal split between engine and host live in this feature root (§Match setup and §Disposal split below).
+**Match construction & lifecycle:** match construction ([`05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer split between DI installation and per-match factory, container open-generic resolution for `GameRulesRuntime<TDefinition>`), and the `GameDefinition` bundle + factory walk ([`07-game-definition.md`](features/engine/models/07-game-definition.md) — bundle shape, `ISliceProvider`, layout blocks, the canonical six-step Build walk). The `GameEngine` lifecycle methods + intake gate behavior + lifecycle types (`EngineLifecycle` enum, `StartMatchCommand`/`EndMatchCommand`, signals, `MatchOutcome`) all live in [`01-game-engine.md`](features/engine/models/01-game-engine.md); setup-command patterns and the disposal split between engine and host live in this feature root (§Match setup and §Disposal split below).
 
 The execution arc spans these:
 
@@ -187,6 +187,20 @@ The engine does **not** dispose the per-match DI scope. The factory's `Build` op
 ```
 
 The engine surfaces `MatchEndedSignal` in history; the controller hooks it however it likes. The framework does not ship a "match-end callback" mechanism on the engine — observation is via state or history, both of which already exist.
+
+## Framework-owned slices
+
+Three slices are auto-seeded by the framework at `Build()` and written only by framework-internal services. Game authors never declare any of these in `MatchSetup.InitialSlices` — including one throws at validation. Each slice's schema lives at the system that produces it; this table is the catalog index.
+
+| Slice | Produced by | Schema canonical home |
+|---|---|---|
+| `EngineState` | Engine internals (drain start/stop, lifecycle handlers) | [`engine/01-game-engine.md` §The EngineState slice](features/engine/models/01-game-engine.md) |
+| `AvailableActionsState` | `IAvailableActions` service | [`engine/03-snapshot-pipeline.md` §The AvailableActionsState slice](features/engine/models/03-snapshot-pipeline.md) |
+| `HistoryState` | Engine history mutator (post-`pipeline.Execute`) | [`actions/04-history-envelope.md` §The HistoryState slice](features/actions/models/04-history-envelope.md) |
+
+The framework-vs-game-authored slice tier convention itself (who seeds what, who writes what) lives in [`state/state.md` §Slice tiers](features/state/state.md) — that's a state-primitive concern, not engine-specific.
+
+New framework-owned slices land at their producing system's canonical home and are added as a row above.
 
 ## Invariants
 

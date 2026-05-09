@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md, features/engine/models/04-gamestate-slices.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md, features/state/state.md, features/engine/models/01-game-engine.md, features/engine/models/07-game-definition.md]
 tags: [#engine, #factory, #bootstrap]
 ---
 
@@ -174,7 +174,7 @@ public interface IMatchBuilder
 
 ### Framework auto-seeded slices
 
-`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/engine/models/04-gamestate-slices.md) is the catalog index; each slice's schema lives with its producing system. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
+`Build` auto-seeds every framework-owned slice declared by per-feature Models with the initial values declared there. The full list is not enumerated here — [`engine/04 §Framework-owned slices`](features/state/state.md) is the catalog index; each slice's schema lives with its producing system. Game authors never include framework slices in `MatchSetup.InitialSlices`; doing so throws at validation.
 
 ### Behavior resolution at `Build`
 

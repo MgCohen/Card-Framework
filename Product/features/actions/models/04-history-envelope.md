@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/03-command-handler.md, features/engine/models/04-gamestate-slices.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/03-command-handler.md, features/state/state.md]
 tags: [#actions, #model, #history]
 ---
 
@@ -69,7 +69,7 @@ public sealed record HistoryState(
 - **Read by.** Presentation layer (history loop), networking (transport), replay tooling.
 - **Seeded.** `HistoryState(ImmutableList<HistoryEnvelope>.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
 
-The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/engine/models/04-gamestate-slices.md) for the framework-vs-game-authored convention.
+The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/state/state.md) for the framework-vs-game-authored convention.
 
 ## Invariants
 

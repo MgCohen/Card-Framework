@@ -68,7 +68,7 @@ public sealed record AvailableActionsState(
 - **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
 - **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
 
-The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/engine/models/04-gamestate-slices.md) for the framework-vs-game-authored convention and the auto-seeding rule.
+The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/state/state.md) for the framework-vs-game-authored convention and the auto-seeding rule.
 
 ### Default trigger: `runtime.Evaluate` at drain-end
 
@@ -290,7 +290,7 @@ The reasoning, in three points:
 
 ## Open follow-ups
 
-- **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
+- **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`state/state.md`](features/state/state.md).
 - **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04-command-awaiter.md` §Open follow-ups](features/effects/models/04-command-awaiter.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
 - **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/05-available-actions-snapshot.md)).

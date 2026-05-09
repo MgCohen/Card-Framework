@@ -28,7 +28,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
 | [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
-| [`engine`](features/engine/engine.md) | settled | 7 | `GameEngine` class, `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot production, framework slice tier conventions, game factory, match lifecycle system, `GameDefinition` bundle + `ISliceProvider` mechanism. The simulation core. |
+| [`engine`](features/engine/engine.md) | settled | 5 | `GameEngine` class (with lifecycle gate + types), `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot production, game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
@@ -120,13 +120,13 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`
 
 ### `engine` (settled)
-- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *Game Engine* — settled, references: `engine/02`, `engine/06`, `actions/01`, `state`
-- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`, `engine/05`
-- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — *Snapshot Production* — settled, references: `engine/02`, `actions/02` ⚠️ (see cycle), `state`
-- [`models/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — *Framework Slice Tier* — settled, references: `state`, `engine/05`, `engine/07`
-- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/07`, `engine.md`
-- [`models/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md) — settled, references: `engine/01`, `engine/02`, `engine/05`
-- [`models/07-game-definition.md`](features/engine/models/07-game-definition.md) — settled, references: `engine/05`, `engine/04`, `engine/02`, `zones/01`, `cards/01`, `players/01`, `entities/01`
+- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/02`, `actions/01`, `state`
+- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`, `engine/05` *(pending split into 02-game-rules-definition + 03-game-rules-runtime)*
+- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — *IAvailableActions* — settled, references: `engine/02`, `actions/02` ⚠️ *(pending rename to available-actions and renumber)*
+- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/02`, `engine/07`, `engine.md`
+- [`models/07-game-definition.md`](features/engine/models/07-game-definition.md) — settled, references: `engine/05`, `engine/02`, `zones/01`, `cards/01`, `players/01`, `entities/01` *(pending renumber to 06)*
+
+*Dissolved 2026-05-09:* `04-gamestate-slices.md` (pattern; tier conventions folded into `state/state.md` §Slice tiers, framework-slice catalog folded into `engine.md` §Framework-owned slices). `06-match-lifecycle.md` (multi-type bundle; lifecycle types folded into `engine/01-game-engine.md` §Lifecycle types as supports of `GameEngine`).
 
 ### `players` (settled)
 - [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/07`, `zones/01`, `decisions/0005`
