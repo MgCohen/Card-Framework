@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/04-history-envelope.md, features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/effects/models/02-effect-scope.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/04-history-envelope.md, features/actions/models/05-available-actions-snapshot.md, features/engine/models/04-available-actions.md, features/effects/models/02-effect-scope.md]
 tags: [#presentation]
 ---
 
@@ -102,4 +102,4 @@ See `ledgers/OPEN-ITEMS.md`:
 - **Snapshot revision tag** — useful for the UI to detect "I have a stale snapshot." Worth adding once we hit a concrete need.
 - **Animation timing** — the UI may want to defer rendering a new state until an animation completes. State updates fire immediately; the View needs an animation queue. Presentation-implementation concern; the framework provides the state events, not the queue.
 - **Multiplayer / hidden info per-actor affordances** — different players see different affordances. The snapshot may need scoping per actor in multi-actor games. Currently global; pin when multiplayer lands.
-- **Async-decision UI signal** — the snapshot dropped its scope discriminator (per `engine/03-snapshot-pipeline.md` §Snapshot shape); "you must respond here" is conveyed by the template set itself. If a richer "decision-active" UI signal becomes obviously needed, add it (likely as part of the FSM-shaped game state successor to type-only routing).
+- **Async-decision UI signal** — the snapshot dropped its scope discriminator (per `engine/04-available-actions.md` §Snapshot shape); "you must respond here" is conveyed by the template set itself. If a richer "decision-active" UI signal becomes obviously needed, add it (likely as part of the FSM-shaped game state successor to type-only routing).

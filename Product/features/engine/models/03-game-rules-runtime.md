@@ -1,20 +1,17 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/05-game-factory.md, features/triggers/models/01-trigger-fold.md, features/triggers/models/01-trigger-fold.md]
-tags: [#engine, #gamerules, #contract]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/04-available-actions.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/triggers/models/01-trigger-fold.md]
+tags: [#engine, #gamerules, #runtime]
 ---
 
-# GameRules Contract — model
+# Game Rules Runtime — model
 
 ## What it is
 
-The contract for the game-specific decision layer plugged into the engine — split into two cooperating types: **`GameRulesDefinition`** (pure `[SerializeField]`-bearing data, asset-friendly, replay/save/network-safe) and **`GameRulesRuntime<TDefinition>`** (stateful runtime brain holding framework services, game-specific subsystems, and a typed `Definition`). The runtime is DI-resolved per match via container open-generic resolution. The two contract methods today — `FilterTriggers` (which registered triggers are eligible) and `Evaluate` (state-based follow-up) — both have sensible defaults so games override only what they need. The effect-pipeline orchestration surface is intentionally absent — that's the next design pass (`oq-effect-pipeline`).
+The behavior half of the rules-layer split. **`GameRulesRuntime<TDefinition>`** is the stateful runtime brain plugged into the engine — generic on its [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) so concrete runtimes get a typed `Definition` without casting. Holds framework services (`IStateScope`, `IAvailableActions`), game-specific subsystems (e.g. `IStackSystem`, `IDeckSystem` for an MTG-like), and the immutable `Definition`. DI-resolved per match via container open-generic resolution. Two contract methods today — `FilterTriggers` (which registered triggers are eligible) and `Evaluate` (state-based follow-up) — both have sensible defaults so games override only what they need. The effect-pipeline orchestration surface is intentionally absent — that's the next design pass (`oq-effect-pipeline`).
 
 ```csharp
-[Serializable]
-public abstract class GameRulesDefinition { /* [SerializeField] config fields on subclasses */ }
-
 public abstract class GameRulesRuntime<TDefinition>
     where TDefinition : GameRulesDefinition
 {
@@ -46,13 +43,6 @@ It is **not** a place for command-specific legality, action handlers, ability lo
 
 Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does **not** own command-queue routing — that's framework FIFO. Effect-level orchestration (when each effect starts, whether effects nest / batch / stack) is a forthcoming surface; tracked as `oq-effect-pipeline`. The current runtime contract reflects only what's settled today.
 
-### The two-type split
-
-- **`GameRulesDefinition`** — pure `[SerializeField]`-bearing data class (non-`UnityObject`). Carries authored config (starting life, hand size, format-specific knobs). Asset-friendly, serializable, replay/save/network-safe. One per game-mode variant (Standard, Commander, Pauper).
-- **`GameRulesRuntime<TDefinition>`** — stateful runtime class. Holds framework services (`IStateScope`, `IAvailableActions`), game-specific subsystems (e.g. `IStackSystem`, `IDeckSystem` for an MTG-like), and a typed `Definition` of `TDefinition`. Implements the contract methods. DI-resolved per match.
-
-The factory pairs them via DI container open-generic resolution: a game installer registers `GameRulesRuntime<MagicRulesDefinition> → MagicRulesRuntime`; the factory takes the definition out of `GameDefinition.Rules` and resolves the runtime for it. See [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md) for the construction flow.
-
 ### Position in the system
 
 | Layer | Owner | Lives in |
@@ -62,24 +52,17 @@ The factory pairs them via DI container open-generic resolution: a game installe
 | Trigger ordering + fold execution | Framework (swappable) | `ITriggerPipeline` |
 | **Command-specific legality** + state mutation | **Per-action** | **`ICommandHandler.Validate` / `Handle`** |
 | Trigger reaction logic | Per-ability | `AbilityDefinition.Register` |
-| **Game-wide decisions** | **Game** | **`GameRulesRuntime<T>`** (with `GameRulesDefinition` carrying authored config) |
+| **Game-wide decisions** | **Game** | **`GameRulesRuntime<T>`** (this Model; with [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) carrying authored config) |
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Player input → command resolution | Game | `IIntentMapper` |
 | UI affordance projection | Game (presentation) | `AffordanceMap` |
-| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gate) and [`engine/06`](features/engine/models/01-game-engine.md) (lifecycle types) |
+| Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gate + lifecycle types) |
 | Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`) |
 | Broader session lifecycle (pause, concede, disconnect, multi-match) | Game | External controller wrapping `GameEngine` (out of scope here) |
 
 ### The interface
 
 ```csharp
-// Pure data. Asset-friendly. Replay/save/network-safe.
-[Serializable]
-public abstract class GameRulesDefinition
-{
-    // Concrete subclasses add [SerializeField] config fields.
-}
-
 // Stateful runtime brain. Generic on its definition type so concrete
 // runtimes get a typed Definition without casting. DI-resolved per match.
 public abstract class GameRulesRuntime<TDefinition>
@@ -120,7 +103,7 @@ public abstract class GameRulesRuntime<TDefinition>
 }
 ```
 
-Concrete runtimes extend the typed base and add their own subsystems:
+The Definition shape itself — `[Serializable]`-attributed pure data — is documented in [`engine/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md). Concrete runtimes extend the typed base and add their own subsystems:
 
 ```csharp
 public sealed class MagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
@@ -157,9 +140,9 @@ public sealed class MagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
 
 | Service | Purpose |
 |---|---|
-| `TDefinition Definition` | The serializable data object selected for this match (`GameDefinition.Rules`). Read config knobs through it. Immutable for the runtime's lifetime. |
+| `TDefinition Definition` | The serializable data object selected for this match (`GameDefinition.Rules`). Read config knobs through it. Immutable for the runtime's lifetime. Shape lives in [`engine/02`](features/engine/models/02-game-rules-definition.md). |
 | `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/02-effect-scope.md`](features/effects/models/02-effect-scope.md). |
-| `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). |
+| `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/04 §The service-driven model`](features/engine/models/04-available-actions.md). |
 | Game-specific subsystems | Concrete runtimes inject whatever else they need (`IStackSystem`, `IDeckSystem`, …) via their own constructor. Registered in the game's installer. The framework knows nothing about them. |
 
 `IIntakeQueue` is **not** in the injected services list — per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command queue is engine-private FIFO with no runtime service surface for routing.
@@ -242,7 +225,7 @@ public override IReadOnlyList<GameAction> Evaluate(GameAction action, CommandRes
 }
 ```
 
-The runtime can publish a snapshot at any moment by calling `Actions.Set(...)` — this is the single publication path. Effects mid-execution may also publish for target-picker / choose-one prompts. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
+The runtime can publish a snapshot at any moment by calling `Actions.Set(...)` — this is the single publication path. Effects mid-execution may also publish for target-picker / choose-one prompts. See [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md).
 
 ### Where command routing lives (it's not here)
 
@@ -285,7 +268,7 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRulesRuntime`
 |---|---|
 | **Command-specific legality** ("can this `MoveCard` run right now?") | `ICommandHandler<TCommand,_>.Validate` |
 | **Gameplay state** (last-move memory, stash buffers, phase counters) | Scaffold state slices in the `Store` (per "zero gameplay state" — see Q2 below) |
-| **Authored configuration** (starting life, hand size, format knobs) | `GameRulesDefinition` `[SerializeField]` fields, read through `Definition.X` |
+| **Authored configuration** (starting life, hand size, format knobs) | `GameRulesDefinition` `[SerializeField]` fields ([`engine/02`](features/engine/models/02-game-rules-definition.md)), read through `Definition.X` |
 | **Command-queue routing** (where this command goes in the queue) | Framework (engine FIFO; per ADR-0006). For effect-level batching/stacking, use a game-state zone plus `Evaluate` watching it. |
 | Action handler logic ("how does damage actually resolve") | `ICommandHandler<TCommand,_>.Handle` |
 | State mutation reacting to a command | Scaffold `Mutator<TState, TPayload>` registered against the payload the handler dispatches via `ctx.Store.Execute(payload)` |
@@ -296,7 +279,7 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRulesRuntime`
 | Player input → command resolution | `IIntentMapper` |
 | UI affordances | Presentation layer; `AffordanceMap` projects from `AvailableActionsState` |
 
-The runtime is purely for **game-wide flow decisions during play**: which triggers are eligible to fire, what runs next based on state, and (forthcoming) effect-level orchestration. Any logic that belongs to a specific card, action, or ability lives on that card, action, or ability. Any authored knob lives on the `GameRulesDefinition`.
+The runtime is purely for **game-wide flow decisions during play**: which triggers are eligible to fire, what runs next based on state, and (forthcoming) effect-level orchestration. Any logic that belongs to a specific card, action, or ability lives on that card, action, or ability. Any authored knob lives on the [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md).
 
 The runtime may hold *configuration* — rule modules, lookup tables, cached evaluators that are deterministic functions of inputs — and the immutable `Definition` reference. It must *not* hold gameplay memory. Test: if you reset the engine and replay all commands against a fresh `GameState`, does the runtime produce identical outputs without any of its own state being touched? It should. If a private field on the runtime influences an `Evaluate` output, that field belongs in `GameState` instead.
 
@@ -306,13 +289,13 @@ Engine-internal plumbing (the pending command queue, drain-cycle running flag) i
 
 A real game's runtime will grow large — phase rules, SBAs, ordering rules, available-actions computation. The base type intentionally does not bake composition in; that's an authoring concern, not a framework primitive.
 
-The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it. A future modular-rule tier (likely double-generic on definition + module) will compose alongside the central runtime — see `oq-gamerules-composition`.
+The `IAvailableActions` service surface (`Set` / `Append` / `Clear`, see [`engine/04 §The service-driven model`](features/engine/models/04-available-actions.md)) was designed to support module composition mechanically — multiple modules can `Append` contributions and an override module can `Set` to replace. The composition *contract* (provider/policy ordering, enable-disable, conflict resolution) is deliberately undesigned for now; pin when the first composed-rules game forces it. A future modular-rule tier (likely double-generic on definition + module) will compose alongside the central runtime — see `oq-gamerules-composition`.
 
 For games with one rule module, extend `GameRulesRuntime<TDefinition>` directly. The constructor takes the definition + two framework services + any game-specific subsystems; the contract methods do the work.
 
 ## Invariants
 
-1. **Two-type split with container open-generic resolution.** `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime); paired via `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))`.
+1. **Two-type split with container open-generic resolution.** [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) (data) + `GameRulesRuntime<TDefinition>` (runtime); paired via `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))`.
 2. **Synchronous contract methods.** `FilterTriggers` and `Evaluate` are synchronous — no `Task`, no awaits. Async lives in handlers / effects / `ITriggerPipeline`.
 3. **Zero gameplay state on the runtime.** Configuration is fine; gameplay memory is not. Engine-internal plumbing is not gameplay state.
 4. **Runtime never mutates state directly.** Mutation flows through `Store.Execute(payload)` → `Mutator<TState, TPayload>`. The only "write" the runtime performs is `Actions.Set`, which itself goes through an internal mutator.
@@ -412,6 +395,8 @@ The rules brain originally drifted between "interface returning rich shapes" and
 - **B — Static class with global services.** Rejected — makes per-game state impossible and breaks composition for multi-rule scenarios.
 - **C — Abstract class with constructor-injected services (Scaffold `IStateScope`, `IAvailableActions`); methods take only ephemeral data.** **Chosen.**
 
+The two-type split into `GameRulesDefinition` (data; [`engine/02`](features/engine/models/02-game-rules-definition.md)) + `GameRulesRuntime<TDefinition>` (this Model; runtime brain) is an outcome of Q1 — the runtime *needs* services injected; the data half doesn't. Splitting them lets each carry only what it needs and gives replay / save / network the asset-friendly serializable shape they require.
+
 **Amendment (2026-05-07).** The original Option C listed `IIntakeQueue` among the injected services. Per ADR-0006 (two-pipeline architecture), `IIntakeQueue` is deleted — the command queue is engine-private FIFO, with no runtime service surface for command-queue routing. The injected-services list is now `IStateScope` + `IAvailableActions`; the runtime contract methods are `FilterTriggers` and `Evaluate` (plus a forthcoming effect-pipeline surface from the next design pass). The shape — abstract class, services injected at construction, methods take only ephemeral data — is unchanged.
 
 ### Q2 — Zero gameplay state on the runtime
@@ -447,7 +432,7 @@ So in the framework, after-triggers fire *on the originating action* before `Eva
 
 The three decisions converge on a coherent shape:
 
-- **Q1 (services injected)** lets `FilterTriggers` and `Evaluate` shed boilerplate parameters and lets composition (multi-module rules) work mechanically — services pass through, not statically held.
+- **Q1 (services injected)** lets `FilterTriggers` and `Evaluate` shed boilerplate parameters and lets composition (multi-module rules) work mechanically — services pass through, not statically held. The two-type split (Definition data half / Runtime behavior half) is what falls out cleanly when the runtime needs services and the data doesn't.
 - **Q2 (zero gameplay state)** is what makes deterministic replay, snapshot/restore, and per-player view derivation trivial. Reset the engine, replay the commands, get the same outputs — because gameplay memory is in the Store, not on the runtime.
 - **Q3 (MTG SBA as known difference)** keeps the floor case simple. Adding a pre-after-fold evaluator hook would constrain the loop's shape for every game; documenting the difference and providing a workaround keeps the loop minimal until a real game forces the question.
 

@@ -1,11 +1,11 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-command-awaiter.md]
+references: [features/engine/models/03-game-rules-runtime.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-command-awaiter.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 
-# Snapshot Production — model
+# Available Actions — model
 
 ## What it is
 
@@ -68,7 +68,7 @@ public sealed record AvailableActionsState(
 - **Read by.** Gateway (pre-dispatch check), presentation layer, `GameRulesRuntime.Evaluate` for re-build.
 - **Seeded.** `AvailableActionsState(AvailableActionsSnapshot.Empty)` at `Build()` (framework auto-seeds; never declared in `MatchSetup.InitialSlices`).
 
-The slice is a framework-owned tier slice — see [`engine/04 §Two tiers`](features/state/state.md) for the framework-vs-game-authored convention and the auto-seeding rule.
+The slice is a framework-owned tier slice — see [`state/state.md` §Slice tiers](features/state/state.md) for the framework-vs-game-authored convention and the auto-seeding rule.
 
 ### Default trigger: `runtime.Evaluate` at drain-end
 
@@ -278,7 +278,7 @@ The runtime visibly owns enumeration. `Actions.Set` is the publish step. No `Val
 
 ### Rules-layer shape — historical note
 
-> **Historical.** The single-type `GameRules` from earlier drafts has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime), and per ADR-0006 the runtime no longer holds `IIntakeQueue` or implements `OnIncomingCommand` / `OnQueueDrained`. The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/02 §The interface`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
+> **Historical.** The single-type `GameRules` from earlier drafts has since been split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime), and per ADR-0006 the runtime no longer holds `IIntakeQueue` or implements `OnIncomingCommand` / `OnQueueDrained`. The service-injection rationale below still holds — it describes why services live on the runtime instead of being passed per-call. See [`engine/03 §The interface`](features/engine/models/03-game-rules-runtime.md) for the canonical contract.
 
 Methods take only what's ephemeral to the call. Everything that's a stable engine handle (state access, snapshot writer) is a constructor-injected service.
 

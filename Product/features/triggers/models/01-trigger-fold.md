@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md, features/effects/models/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/effects/models/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#triggers, #reactions, #fold, #model]
 ---
 
@@ -279,7 +279,7 @@ public abstract class GameRulesRuntime<TDefinition>
 }
 ```
 
-See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) for the canonical contract.
+See [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) for the canonical contract.
 
 #### Game-style scheduling examples
 
@@ -452,4 +452,4 @@ Together: trigger authors write `Trigger<T>` instances and register them under o
 
 - **Enables:** uniform handling of replacement, prevention, and priority via a single fold mechanism; type-safe trigger registration; clear pre/post semantic separation; consistent dispatch channel for reactions (no separate reaction queue); game-controlled availability via `FilterTriggers` (phase, mana, stack lock).
 - **Constrains:** trigger authors think in terms of fold contributions, not direct dispatch; cancel/replace flow through `scope.Cancel` / `scope.Replace`, not return values; `CommandPreHook` and `CommandReaction` types are retired (legacy doc 17 references folded into `actions/01-command-pipeline.md` provenance).
-- **Cascade:** the `TriggerFoldResult` shape is consumed by `actions/01-command-pipeline.md` (pipeline branches on `IsCancelled` / `IsReplaced`); the `GameRulesRuntime.FilterTriggers` and framework-FIFO routing contracts are owned by `engine/02-gamerules-contract.md` and shaped by [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).
+- **Cascade:** the `TriggerFoldResult` shape is consumed by `actions/01-command-pipeline.md` (pipeline branches on `IsCancelled` / `IsReplaced`); the `GameRulesRuntime.FilterTriggers` and framework-FIFO routing contracts are owned by `engine/03-game-rules-runtime.md` and shaped by [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).

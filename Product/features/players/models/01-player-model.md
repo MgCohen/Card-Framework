@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md, features/engine/models/05-game-factory.md, features/engine/models/07-game-definition.md, features/zones/models/01-zone-model.md, decisions/0005-objects-over-ids.md]
+references: [features/entities/models/01-definition.md, features/entities/models/02-instance.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/zones/models/01-zone-model.md, decisions/0005-objects-over-ids.md]
 tags: [#players, #actor, #entity, #player-definition, #model]
 ---
 
@@ -108,7 +108,7 @@ public abstract class PlayerDefinition : DefinitionWithSlices
 
 `PlayerDefinition` inherits the framework parent `DefinitionWithSlices : Scaffold.EntityDefinition, ISliceProvider` (per the open-seams pass — symmetric with `ZoneDefinition` and `CardDefinition`). Most per-player primary state is variables (in `EntityState` via the bridge); `GetInitialSlices()` is reserved for non-variable per-player state — a complex `ManaPool` record, a list of per-player abilities, custom per-player status enums.
 
-`PerPlayerZones` is the player's layout block. The factory walks it at `Build` and spawns one `Zone` per entry per player actor (so a Magic player with `[Hand, Library, Graveyard]` gets three zones spawned at `Build`). See [Game Definition § Build walk](features/engine/models/07-game-definition.md).
+`PerPlayerZones` is the player's layout block. The factory walks it at `Build` and spawns one `Zone` per entry per player actor (so a Magic player with `[Hand, Library, Graveyard]` gets three zones spawned at `Build`). See [Game Definition § Build walk](features/engine/models/06-game-definition.md).
 
 ### Per-player slice-shape convention
 
@@ -150,7 +150,7 @@ Authors can use either shape — neither is forbidden. The convention is a *reco
 
 Per-player state mutations follow the same patterns as other entity instances:
 
-- **Variables** — `player.Storage.SetBase(key, value)` / `player.Storage.AddModifier(...)` / etc. Routes through the entity-bridge payloads (`SetBaseValuePayload`, `AddModifierPayload`, …). See [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+- **Variables** — `player.Storage.SetBase(key, value)` / `player.Storage.AddModifier(...)` / etc. Routes through the entity-bridge payloads (`SetBaseValuePayload`, `AddModifierPayload`, …). See [`features/entities/models/02-instance.md`](features/entities/models/02-instance.md).
 - **Per-player slices** — game-defined payloads. The `PlayerDefinition`'s declared slice has at least one `Mutator` registered (game-side); `Build` validation warns if not.
 
 Player creation flows through `Player.Spawn` (the typed wrapper around `StoreEntities.Spawn<PlayerDefinition>`):
@@ -168,7 +168,7 @@ public class Player : InstanceWithSlices<PlayerDefinition>, IActor
 }
 ```
 
-The factory calls `Player.Spawn` once per player actor in `MatchSetup.Actors` during the `Build` walk (per [Game Definition § Build walk](features/engine/models/07-game-definition.md), step 2b). The `ActorId` from the actor entry in `MatchSetup` becomes the player's `Id`; `SelfRef` is freshly allocated.
+The factory calls `Player.Spawn` once per player actor in `MatchSetup.Actors` during the `Build` walk (per [Game Definition § Build walk](features/engine/models/06-game-definition.md), step 2b). The `ActorId` from the actor entry in `MatchSetup` becomes the player's `Id`; `SelfRef` is freshly allocated.
 
 Player destruction mid-match is not currently a framework primitive — most games run for the full match with a fixed actor catalog. Games that need it model it as game-side state (a "conceded" flag) rather than catalog removal.
 

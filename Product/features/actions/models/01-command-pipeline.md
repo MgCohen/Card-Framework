@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-effect-scope.md, features/engine/models/02-gamerules-contract.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #model, #pipeline]
 ---
 
@@ -176,4 +176,4 @@ Q1's `OnIncomingCommand`-is-flow keeps the rule shape-agnostic at intake; body i
 - **Enables:** simple, command-shape-agnostic flow check via the framework lifecycle gate (Q1, post-supersession); small stable command catalog (Q2).
 - **Constrains:** rule cannot reject by body at intake (Q1, Q2 push body checks to handlers); rules carry constraint logic that lives in the right place (Q2).
 - **Reverts/replaces:** `OnIncomingCommand` deleted per ADR-0006 (Q1).
-- **Cascade:** consumed by `engine/02-gamerules-contract.md` (`GameRulesRuntime` two-method contract: `FilterTriggers` + `Evaluate`); `effects/01-effect.md` (handlers don't dispatch `GameAction`s — sequencing belongs to effects).
+- **Cascade:** consumed by `engine/03-game-rules-runtime.md` (`GameRulesRuntime` two-method contract: `FilterTriggers` + `Evaluate`); `effects/01-effect.md` (handlers don't dispatch `GameAction`s — sequencing belongs to effects).

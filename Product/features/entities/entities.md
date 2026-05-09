@@ -53,14 +53,25 @@ The framework's foundational entity primitive. Every runtime "thing" — cards, 
 
 ## Architecture
 
-The feature has two Models. The conceptual model lives in `01-definition-instance-model.md` (definitions, instances, variables, modifiers, attachments, the bridge boundary, mutation-payload conventions); the runtime API surface lives in `02-runtime-surface.md` (`InstanceWithSlices<TDef>` handle, read API, subscriptions, mutation surface, `Modifiers` factory, lifecycle via `store.Catalog` + `StoreEntities.Spawn`). Three flows tie the Models together: **spawn → base → modifier** (handle constructed empty, definition defaults flow through fall-back, base overrides via `SetBase`, modifier layers fold), **identity preservation across zone moves** (`Ref<T>` stable; per-game opt-in for MTG-style replacement), and **snapshot / restore** (`EntityState` slices restore; handles re-created via `StoreEntities.Spawn` from definition lookup; subscribers must re-bind through the catalog).
+The feature has **five Models**, organized per concept axis along the entity bridge:
+
+- **[`01-definition.md`](features/entities/models/01-definition.md)** — the authored half: `IEntityDefinition`, `EntityDefinition`, `DefinitionWithSlices`, the canonical `ISliceProvider` interface declaration. Q1 / Q2 / Q5 provenance.
+- **[`02-instance.md`](features/entities/models/02-instance.md)** — the runtime half: `InstanceWithSlices<TDef>` handle, `Ref<T>` identity, zone-movement default, lifecycle via `store.Catalog` + `StoreEntities.Spawn`, slice-level subscriptions, read consistency. Q3 / Q4 provenance.
+- **[`03-variable.md`](features/entities/models/03-variable.md)** — the key-value layer: `Variable` + `VariableValue` authoring, `EntityState.BaseValues` slice, read/mutation API for variables, per-variable subscriptions, payload disciplines. Q2 reference.
+- **[`04-modifier.md`](features/entities/models/04-modifier.md)** — the layered-fold layer: `VariableModifier<T>`, `ActiveModifier`, `ModifierSource`, `IModifierFactory`, `EntityState.ModifierStacks` slice, modifier mutation API, effective-value semantics, composition handlers.
+- **[`05-attachment.md`](features/entities/models/05-attachment.md)** — the composition layer: attachments/equipment, tokens, transformation, ongoing effects as attachment entities, automatic cleanup. Q6 provenance. Worked examples (equip/unequip + apply-aura).
+
+Three flows tie the Models together: **spawn → base → modifier** (handle constructed empty, definition defaults flow through fall-back, base overrides via `SetBase`, modifier layers fold), **identity preservation across zone moves** (`Ref<T>` stable; per-game opt-in for MTG-style replacement), and **snapshot / restore** (`EntityState` slices restore; handles re-created via `StoreEntities.Spawn` from definition lookup; subscribers must re-bind through the catalog).
 
 ## Composition
 
 | Model | Role |
 |---|---|
-| [`01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) | Conceptual model: definitions, instances, variables, modifiers, attachments, composition; bridge boundary (Store + entities); mutation payload conventions |
-| [`02-runtime-surface.md`](features/entities/models/02-runtime-surface.md) | Concrete API: `InstanceWithSlices<TDef>` handle, `IEntityVariableStorage` read/mutation surface, subscriptions, `Modifiers` factory, lifecycle (`store.Catalog` + `StoreEntities.Spawn`), authoring reference, worked examples |
+| [`01-definition.md`](features/entities/models/01-definition.md) | Authored half: `IEntityDefinition` / `EntityDefinition` / `DefinitionWithSlices`; canonical home for `ISliceProvider`; definition-level conventions (stable IDs, declared variables, default values) |
+| [`02-instance.md`](features/entities/models/02-instance.md) | Runtime half: `InstanceWithSlices<TDef>` handle; `Ref<T>` identity; zone movement; `Definition` access discipline; lifecycle (spawn / resolve / destroy / snapshot); slice-level subscriptions; read consistency |
+| [`03-variable.md`](features/entities/models/03-variable.md) | Key-value layer: `Variable` + `VariableValue`; `EntityState.BaseValues` slice; read/mutation API for variables; per-variable subscriptions; `AddEntityVariablePayload` + `SetBaseValuePayload` disciplines |
+| [`04-modifier.md`](features/entities/models/04-modifier.md) | Layered-fold layer: `VariableModifier<T>` + `ActiveModifier`; `ModifierSource`; `IModifierFactory`; `EntityState.ModifierStacks` slice; modifier mutation API; effective-value semantics; composition handlers |
+| [`05-attachment.md`](features/entities/models/05-attachment.md) | Composition layer: attachments/equipment as separate instances; tokens; transformation; ongoing effects as attachment entities; cleanup machinery; worked examples (equip/unequip + apply-aura) |
 
 ## Invariants
 

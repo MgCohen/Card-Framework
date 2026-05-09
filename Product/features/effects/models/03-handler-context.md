@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/actions/models/03-command-handler.md, features/state/state.md, features/entities/models/02-runtime-surface.md]
+references: [features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/actions/models/03-command-handler.md, features/state/state.md, features/entities/models/02-instance.md]
 tags: [#effects, #model, #handler-context]
 ---
 
@@ -28,7 +28,7 @@ public interface IHandlerContext
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`; resolve handles via `ctx.Store.Catalog.Resolve(ref)`; spawn entities via `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension). Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
-- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for production semantics.
+- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for production semantics.
 - **`Resolver`** — `ICommandAwaiter`. Decision handlers call `ctx.Resolver.Wait<TCommand>()` to suspend until a matching command arrives (per [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)).
 - **`Modifiers`** — modifier factory. `Create(key, modifier, source)` returns a fully-populated `ActiveModifier` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in handler / framework code — it breaks replay and multiplayer determinism.
 
@@ -43,11 +43,11 @@ The `Store` / `Mutator<TState, TPayload>` mechanic (payload-keyed dispatch, fan-
 
 ### Entity-variable mutations
 
-For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-instance.md`](features/entities/models/02-instance.md).
 
 ### Spawn pathway
 
-`ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+`ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02-instance.md`](features/entities/models/02-instance.md).
 
 ## Invariants
 

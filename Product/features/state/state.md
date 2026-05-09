@@ -156,7 +156,7 @@ public void Dispose() {
 
 `SubscribeAllReferences<T>` and `SubscribeAny` follow the same pattern but currently lack symmetric `Unsubscribe` overloads — those listeners live for the lifetime of the store. Use them only for engine-level / tooling listeners that don't need teardown. (Open follow-up — see §Open.)
 
-For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`entities/02 §Subscriptions`](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view.
+For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`entities/02 §Subscriptions`](features/entities/models/02-instance.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view.
 
 ## Atomic batches
 
@@ -196,7 +196,7 @@ Authoring rules:
 - **No cross-slice mutation.** A mutator owns one slice's output. It may *read* sibling slices through the `IStateScope scope` parameter on `Change`, but it never writes them.
 - **Slices don't carry their own primary key.** Storage is keyed externally by the factory using the spawned instance's `SelfRef`. Reference-shaped fields inside slice values are *data*, not keys.
 
-Initial slice values come from `ISliceProvider.GetInitialSlices()` on the relevant Definition kind (per [`engine/07-game-definition.md`](features/engine/models/07-game-definition.md)). Mutators are registered in the game's VContainer installer; the engine's factory collection-resolves them at `Build`:
+Initial slice values come from `ISliceProvider.GetInitialSlices()` on the relevant Definition kind (per [`engine/06-game-definition.md`](features/engine/models/06-game-definition.md)). Mutators are registered in the game's VContainer installer; the engine's factory collection-resolves them at `Build`:
 
 ```csharp
 // Game installer (one-time, app-level):

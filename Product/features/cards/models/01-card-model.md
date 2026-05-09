@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md]
+references: [features/entities/models/01-definition.md, features/entities/models/02-instance.md, features/zones/models/01-zone-model.md]
 tags: [#cards, #model]
 ---
 

@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/engine/models/02-gamerules-contract.md, features/engine/models/01-game-engine.md]
+references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md]
 tags: [#engine, #evaluation-loop, #orchestrator]
 ---
 
@@ -9,7 +9,7 @@ tags: [#engine, #evaluation-loop, #orchestrator]
 
 ## What it is
 
-The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions), and a uniform lifecycle gate (`NotStarted` / `Started` / `Ended`) with public sugar (`StartMatch` / `FinishMatch`) that constructs and dispatches the framework-owned lifecycle commands. It does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command pipeline is **framework-owned** (no game customization on routing); effect-level orchestration is a separate forthcoming surface (`oq-effect-pipeline`). The lifecycle types — `EngineLifecycle` enum, `StartMatchCommand` / `EndMatchCommand`, `MatchStartedSignal` / `MatchEndedSignal`, `MatchOutcome` hierarchy — are defined below in §Lifecycle types.
+The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions), and a uniform lifecycle gate (`NotStarted` / `Started` / `Ended`) with public sugar (`StartMatch` / `FinishMatch`) that constructs and dispatches the framework-owned lifecycle commands. It does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the command pipeline is **framework-owned** (no game customization on routing); effect-level orchestration is a separate forthcoming surface (`oq-effect-pipeline`). The lifecycle types — `EngineLifecycle` enum, `StartMatchCommand` / `EndMatchCommand`, `MatchStartedSignal` / `MatchEndedSignal`, `MatchOutcome` hierarchy — are defined below in §Lifecycle types.
 
 ```csharp
 public sealed class GameEngine : IDisposable
@@ -48,7 +48,7 @@ public interface ICommandPipeline
 }
 ```
 
-**Rules layer** (`GameRulesDefinition` + `GameRulesRuntime<TDefinition>`) — the game's decision layer. Two cooperating types: pure data + stateful runtime brain. Called after each action resolves to read state and return follow-up actions. Full canonical contract in [`02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md).
+**Rules layer** (`GameRulesDefinition` + `GameRulesRuntime<TDefinition>`) — the game's decision layer. Two cooperating types: pure data + stateful runtime brain. Called after each action resolves to read state and return follow-up actions. Full canonical contract in [`03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md).
 
 **`GameEngine`** — the loop itself. Holds the queue, calls the pipeline, calls the runtime, manages the drain cycle.
 
@@ -308,7 +308,7 @@ There is no `OnQueueDrained` callback (deleted per ADR-0006). The runtime detect
 | MTG-like, stack empty, no priority granted  | Return `[GrantPriorityCommand(activePlayer)]`           |
 | Any game, all players have no legal actions | Return `[AdvancePhaseCommand]`                          |
 
-Snapshot publication is purely runtime-driven via the injected `IAvailableActions` service. The framework never auto-publishes; if the runtime never calls `Actions.Set`, the snapshot does not change. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
+Snapshot publication is purely runtime-driven via the injected `IAvailableActions` service. The framework never auto-publishes; if the runtime never calls `Actions.Set`, the snapshot does not change. See [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md).
 
 ### Relationship to the command pipeline
 
@@ -330,7 +330,7 @@ Some games tell the player which actions are currently legal before they attempt
 
 The framework supports both through an **optional** available-actions system. By default it is a no-op: all requests pass through the gateway unchecked. Games that need it opt in.
 
-`AvailableActionsSnapshot` is a read-only artifact the runtime publishes through the injected `IAvailableActions` service. It lives as the `AvailableActionsState` slice. See [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) for the typed-template shape and [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for the publication flow.
+`AvailableActionsSnapshot` is a read-only artifact the runtime publishes through the injected `IAvailableActions` service. It lives as the `AvailableActionsState` slice. See [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) for the typed-template shape and [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for the publication flow.
 
 The runtime publishes whenever it deems appropriate (typically when its own follow-ups are exhausted and the queue is about to empty, but the moment is purely runtime-driven):
 

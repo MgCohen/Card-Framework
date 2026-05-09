@@ -7,7 +7,7 @@ tags: [#adr, #general, #architecture, #engine, #effects, #triggers]
 # ADR-0006 — Two-pipeline architecture: framework command pipeline + game effect pipeline
 
 Date: 2026-05-07
-Context-doc: features/engine/models/02-gamerules-contract.md, features/engine/models/01-game-engine.md
+Context-doc: features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md
 Proposal: session triggers+dispatch design pass (2026-05-07)
 
 ## Context

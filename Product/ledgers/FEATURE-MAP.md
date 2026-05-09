@@ -22,13 +22,13 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | Feature | Status | Models | Purpose |
 |---|---|---|---|
 | [`state`](features/state/state.md) | settled | 0 | Scaffold.State integration — `Store`, `BaseState`, `IStateScope`, `Mutator<TState, TPayload>`, four subscription channels, `ExecuteBatch` atomic semantics, slice-authoring conventions. The framework's state primitive. Feature-root only. |
-| [`entities`](features/entities/entities.md) | settled | 1 | Definition / Instance / Identifier model. Foundation for every runtime object. |
+| [`entities`](features/entities/entities.md) | settled | 5 | Definition / Instance / Variable / Modifier / Attachment Models — the entity bridge primitive. Foundation for every runtime object. |
 | [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
 | [`cards`](features/cards/cards.md) | settled | 1 | `Card` handle on top of the entity bridge with privacy-rotating `CardRef`. |
 | [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
 | [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
-| [`engine`](features/engine/engine.md) | settled | 5 | `GameEngine` class (with lifecycle gate + types), `GameRulesDefinition`/`GameRulesRuntime<T>` contract, snapshot production, game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. |
+| [`engine`](features/engine/engine.md) | settled | 6 | `GameEngine` class (with lifecycle gate + types), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (runtime) split, available-actions service, game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
@@ -40,7 +40,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 - *Richer schedulers* (stack+priority, turn/phase machine, real-time tick) — `engine` currently runs immediate queue drain. Other modes are deferred extensions inside `engine`. See ARCHITECTURE §"Effect Resolution Direction."
 - *Visibility / Reveal* — cross-concern of `engine` (membership/detail visibility on zones) and `presentation` (rendering filter). Will land as Models inside those features when work begins.
 - *Determinism / RNG* — sub-concern of `engine`; folded into `networking` for the seeded/recorded random source.
-- *State-Based Checks* — handled inside `engine` evaluation loop. Game-specific extensions (e.g. MTG-strict ordering) are folded into `features/engine/models/02-gamerules-contract.md` provenance (Q3) per the §4.5 ADR migration recipe.
+- *State-Based Checks* — handled inside `engine` evaluation loop. Game-specific extensions (e.g. MTG-strict ordering) are folded into `features/engine/models/03-game-rules-runtime.md` provenance (Q3) per the §4.5 ADR migration recipe.
 
 ## Dependency graph
 
@@ -85,7 +85,7 @@ graph TD
   networking -.-> engine
 ```
 
-**Cycle observation:** `actions ↔ engine` is bidirectional because `actions/02-availability-snapshot` builds on `engine/03-snapshot-pipeline`, while `engine/03-snapshot-pipeline` builds on `actions/02-availability-snapshot`. This is by design — the availability snapshot is produced by the engine *and* consumed by the action pipeline as part of validation. Worth a future Model to document the contract that closes the loop, but not currently flagged as drift.
+**Cycle observation:** `actions ↔ engine` is bidirectional because `actions/05-available-actions-snapshot` (template shape) builds on `engine/04-available-actions` (production pipeline), while `engine/04-available-actions` builds on `actions/05-available-actions-snapshot`. This is by design — the snapshot's *shape* is owned by `actions/`, the *production* by `engine/`. Worth a future Model to document the contract that closes the loop, but not currently flagged as drift.
 
 Solid arrows = current `references` edges between settled features. Dashed arrows = expected dependency direction once the considered feature lands.
 
@@ -95,7 +95,13 @@ Solid arrows = current `references` edges between settled features. Dashed arrow
 No models. Feature-root only — `state.md` documents the Scaffold.State integration directly. A model would be added if a framework-specific extension to Scaffold.State emerges.
 
 ### `entities` (settled)
-- [`models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — settled, references: `root`
+- [`models/01-definition.md`](features/entities/models/01-definition.md) — *Definition* — settled, references: `entities/02`, `entities/03`, `entities/04`, `entities/05`, `engine/06`
+- [`models/02-instance.md`](features/entities/models/02-instance.md) — *Instance* — settled, references: `entities/01`, `entities/03`, `entities/04`, `entities/05`, `cards/01`, `zones/01`, `players/01`, `engine/06`
+- [`models/03-variable.md`](features/entities/models/03-variable.md) — *Variable* — settled, references: `entities/01`, `entities/02`, `entities/04`
+- [`models/04-modifier.md`](features/entities/models/04-modifier.md) — *Modifier* — settled, references: `entities/01`, `entities/02`, `entities/03`, `entities/05`
+- [`models/05-attachment.md`](features/entities/models/05-attachment.md) — *Attachment* — settled, references: `entities/01`, `entities/02`, `entities/03`, `entities/04`, `effects/03`
+
+*Reorg 2026-05-09:* `01-definition-instance-model.md` + `02-runtime-surface.md` split per concept axis (definition / instance / variable / modifier / attachment). `ISliceProvider` now declared in `01-definition.md` (canonical home; engine/06 references it).
 
 ### `zones` (settled)
 - [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, references: `root`
@@ -108,7 +114,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
 - [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
 - [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
-- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/03` ⚠️ (see cycle)
+- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/04` ⚠️ (see cycle)
 
 ### `triggers` (settled)
 - [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `engine/01`
@@ -120,19 +126,22 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`
 
 ### `engine` (settled)
-- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/02`, `actions/01`, `state`
-- [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`, `engine/05` *(pending split into 02-game-rules-definition + 03-game-rules-runtime)*
-- [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — *IAvailableActions* — settled, references: `engine/02`, `actions/02` ⚠️ *(pending rename to available-actions and renumber)*
-- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/02`, `engine/07`, `engine.md`
-- [`models/07-game-definition.md`](features/engine/models/07-game-definition.md) — settled, references: `engine/05`, `engine/02`, `zones/01`, `cards/01`, `players/01`, `entities/01` *(pending renumber to 06)*
+- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/03`, `actions/01`, `state`
+- [`models/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md) — *GameRulesDefinition* — settled, references: `engine/03`, `engine/05`, `engine/06`
+- [`models/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) — *GameRulesRuntime\<T\>* — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/05`, `engine/06`, `triggers/01`
+- [`models/04-available-actions.md`](features/engine/models/04-available-actions.md) — *IAvailableActions* — settled, references: `engine/03`, `actions/05`, `effects/04` ⚠️ (see cycle)
+- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/03`, `engine/06`, `engine.md`
+- [`models/06-game-definition.md`](features/engine/models/06-game-definition.md) — *GameDefinition* — settled, references: `engine/02`, `engine/05`, `state`, `zones/01`, `cards/01`, `players/01`, `entities/01`, `entities/02`
+
+*Reorg 2026-05-09:* `02-gamerules-contract.md` split into `02-game-rules-definition.md` (data half) + `03-game-rules-runtime.md` (runtime half). `03-snapshot-pipeline.md` renamed + renumbered to `04-available-actions.md`. `07-game-definition.md` renumbered to `06-game-definition.md`.
 
 *Dissolved 2026-05-09:* `04-gamestate-slices.md` (pattern; tier conventions folded into `state/state.md` §Slice tiers, framework-slice catalog folded into `engine.md` §Framework-owned slices). `06-match-lifecycle.md` (multi-type bundle; lifecycle types folded into `engine/01-game-engine.md` §Lifecycle types as supports of `GameEngine`).
 
 ### `players` (settled)
-- [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/07`, `zones/01`, `decisions/0005`
+- [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/06`, `zones/01`, `decisions/0005`
 
 ### `presentation` (settled)
-- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, references: `actions/02`, `engine/03`
+- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, references: `actions/05`, `engine/04`, `engine/03`, `effects/01`
 
 ### `authoring` (considered)
 No models yet. Promote when authoring tooling becomes the active thread (likely after first feature reaches `implemented`).

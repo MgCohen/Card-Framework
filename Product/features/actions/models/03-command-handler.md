@@ -143,4 +143,4 @@ Validation was previously distributed across the rule and the handler with no cl
 
 - **Enables:** one canonical legality answer; simple advisory-vs-authoritative split across the five layers.
 - **Constrains:** handler implementations carry the bulk of validation logic; the rule cannot reject by body at intake.
-- **Cascade:** consumed by `engine/02-gamerules-contract.md` (lifecycle gate is the flow-level layer); `presentation/01-presentation-loop.md` (`AffordanceMap` is the UI-side advisory layer).
+- **Cascade:** consumed by `engine/03-game-rules-runtime.md` (three-rejection-paths); `presentation/01-presentation-loop.md` (`AffordanceMap` is the UI-side advisory layer).
