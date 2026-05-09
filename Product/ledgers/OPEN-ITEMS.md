@@ -84,6 +84,17 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
   References: `Product/features/effects/models/04-command-awaiter.md` §3, §9; `Product/general/ARCHITECTURE.md` §Authoring.
 
+## Workflow
+
+- id: bl-spike-status-migration | kind: task | **Reclassify existing spikes to the new status vocabulary** — the spike state machine was tightened to `draft / active / graduated / concluded`. Four existing spikes carry retired statuses: `domain-model-proposal.md` (`superseded`), `entities-bridge-replacement.md` (`superseded`), `entities-state-unification.md` (`accepted`), `state-object-management.md` (`open`). Each needs a per-spike call: `graduated` (informed a Model/ADR that has since landed) or `concluded` (closed without producing one). `effect-pipeline.md` is `draft` but lives in `spikes/`; per the new convention it should either move to `_drafts/` or flip to `active`.
+  References: `Product/_workflow/PRODUCT-BUILDER.md` §Spike, `Product/_docs/spike.md`, `Product/spikes/`.
+
+- id: bl-feature-rulebook-rebuild | kind: task | **Rebuild `_docs/feature.md` to match the model.md treatment** — feature.md is silent on whether the 8-section H2 order is strict. In practice 7 features follow it exactly, 2 follow it with extras inserted between Composition and Invariants (engine, triggers), and 1 (state) diverges substantially. Rebuild the rulebook with explicit section-order rules (likely strict-anchored-with-extras-allowed, matching de-facto convention), required-vs-optional sections, and an audit obligation clause. Then conform every feature root.
+  References: `Product/_docs/feature.md`, `Product/_docs/model.md` (treatment to mirror), `Product/features/*/[a-z]*.md`.
+
+- id: bl-model-conformance-pass | kind: task | **Conform existing Models to the rebuilt model.md template** — the Model rulebook was rebuilt for AI-direct format. The 22 existing Models need a per-doc audit + adjustment for shape compliance (section order, required sections, identity-test gates). Do alongside or after `bl-feature-rulebook-rebuild` so the cascade is one pass.
+  References: `Product/_docs/model.md`, `Product/features/*/models/*.md`.
+
 ## Tooling
 
 - id: bl-feature-map-generator | kind: task | **FEATURE-MAP auto-generator** — replace hand-maintained `FEATURE-MAP.md` with a generator that reads feature roots, Models, and `references:` front matter to produce the index table, mermaid graph, and model breakdown. Land alongside the broader graph-rendering vision (see `PLANS/simplify-doc-workflow.md` future considerations).

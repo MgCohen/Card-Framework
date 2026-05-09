@@ -15,25 +15,36 @@ If you are an agent, **read this file first**. Then read the per-type rulebook y
 
 ## Folder layout
 
+This is the canonical layout. The README's operating manual points here; don't duplicate the tree elsewhere.
+
 ```
 Product/
-  _docs/             — per-type rulebooks + skeletons (model.md, feature.md, adr.md, ...)
-  _workflow/         — this file (PRODUCT-BUILDER.md)
-  _archive/          — historical retired files (read-only)
-  _drafts/           — in-flight content (drafts, per _docs/draft.md)
-  decisions/         — project-wide ADRs (per _docs/adr.md)
-  features/<feature>/
-    <feature>.md     — feature root (per _docs/feature.md)
-    models/          — feature models (per _docs/model.md)
-    archive/         — retired models within this feature (see §Archive)
-  ledgers/           — registries (FEATURE-MAP, OPEN-ITEMS, GLOSSARY) per _docs/ledger.md
-  research/          — captured external knowledge (per _docs/research.md)
-  sessions/          — opt-in checkpoint snapshots (per _docs/checkpoint.md)
-  spikes/            — time-boxed investigations (per _docs/spike.md)
-  support/samples/   — concrete reference instances (per _docs/sample.md)
-  general/           — vision, architecture, roadmap (free-form)
+  README.md             — operating manual (daily entry point)
   SESSION-CHECKPOINT.md — live operational spine (per _docs/checkpoint.md)
-  PLANS/             — implementation plans (project-shaped, no rulebook)
+  _docs/                — per-type rulebooks + skeletons (model.md, feature.md, adr.md, ...)
+  _workflow/            — this file (PRODUCT-BUILDER.md)
+  _archive/             — historical retired files (read-only)
+  _drafts/              — in-flight content (drafts, per _docs/draft.md)
+  decisions/            — project-wide ADRs (per _docs/adr.md)
+  features/<feature>/
+    <feature>.md        — feature root (per _docs/feature.md)
+    models/             — feature models (per _docs/model.md)
+    archive/            — retired models within this feature (see §Archive)
+  ledgers/              — registries (FEATURE-MAP, OPEN-ITEMS, GLOSSARY) per _docs/ledger.md
+  research/             — captured external knowledge (per _docs/research.md)
+  sessions/             — opt-in checkpoint snapshots (per _docs/checkpoint.md)
+  spikes/               — time-boxed investigations (per _docs/spike.md)
+  support/
+    samples/            — concrete reference instances (per _docs/sample.md)
+    prior-art/          — frozen external references
+  general/              — vision, architecture, roadmap (free-form)
+```
+
+**External** (siblings of `Product/` at the repo root):
+
+```
+PLANS/                  — implementation plans (project-shaped, no rulebook)
+Assets/                 — Unity code; the artifact that `implemented` Models point at
 ```
 
 **Numbering.** Models inside a feature use `01-`, `02-`, ... ADRs use a project-wide counter (`0001-`, `0002-`, ...). Other doc types use descriptive filenames.
@@ -183,6 +194,8 @@ Cascade is detected, not tracked. When you edit a Model whose contract surface c
 
 If a cascade target requires *design judgment* rather than a mechanical edit, open an entry in `ledgers/OPEN-ITEMS.md` so the thread isn't lost.
 
+**Spike graduation cascade.** When a Model flips to `settled` or an ADR flips to `accepted`, every spike whose `references:` points at it is a candidate for `active → graduated`. The flip is human-confirmed, not automatic — some referencing spikes are tangential rather than the source of the design. The linter surfaces candidates; the author decides per spike.
+
 ### When reopening a settled decision
 
 **ADR.** Don't edit the old ADR. Write a new ADR (`NNNN supersedes MMMM`); set the old ADR's status to `superseded by NNNN`; note the reason in `SESSION-CHECKPOINT.md` (and an OPEN-ITEMS entry if the supersession leaves loose ends).
@@ -213,9 +226,9 @@ The flip is a deliberate user action: *"yes, the code matches the contract."* Th
 
 **Feature ↔ Model status sync.** A Feature's status is bounded above by its qualifying Models (status `settled` or `implemented`). Drafts, abandoneds, supersededs don't count. Forward flips are deliberate user actions; backward reverts are automatic when a qualifying Model drops a tier.
 
-### When archiving (superseded or cancelled)
+### When archiving (superseded or abandoned)
 
-Superseded and cancelled docs move into a sibling `archive/` folder inside the feature directory — co-located with active docs but visually demoted out of the active reading path.
+Superseded and abandoned docs move into a sibling `archive/` folder inside the feature directory — co-located with active docs but visually demoted out of the active reading path.
 
 ```
 features/<feature>/
@@ -228,17 +241,19 @@ features/<feature>/
 
 | Trigger | Status |
 |---|---|
-| Successor exists; this doc's contract is replaced | `Superseded` |
-| Work was dropped with no successor | `Cancelled` |
+| Successor exists; this doc's contract is replaced | `superseded` |
+| Work was dropped with no successor | `abandoned` |
 
 **Archived-doc front matter** (mandatory):
 
 ```yaml
-status: Superseded | Cancelled
-superseded_by: <relative path to successor>   # required iff status=Superseded
+status: superseded | abandoned
+superseded_by: <relative path to successor>   # required iff status=superseded
 archived_on: YYYY-MM-DD
 reason: <one-line why>
 ```
+
+`reason:` is mandatory for both states. For `superseded` it points the reader at the *why* of the replacement (the successor's path is in `superseded_by:`, not its rationale). For `abandoned` it's the only record of why the work stopped — no successor exists to carry the story.
 
 No `supersedes:` field on the active doc — the back-reference is derived on demand by `/builder:lint`. Single source: the archived doc owns the pointer.
 
@@ -278,13 +293,17 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> active : spike opened
-    active --> concluded : findings, no follow-up
-    active --> graduated : informed Model/ADR
-    active --> archived : kept for reference
+    [*] --> draft : framing started (lives in _drafts/)
+    draft --> active : investigation begins (promoted to spikes/)
+    active --> graduated : downstream Model/ADR has landed
+    active --> concluded : closed without producing a Model or ADR
 ```
 
-Spikes are static once resolved. Downstream Model supersession doesn't propagate back.
+**Two terminals.** `graduated` (the spike informed a Model or ADR that has since landed; forward link to that doc is mandatory) and `concluded` (investigation wrapped without producing a separate doc; findings live in the spike body itself).
+
+**Static once resolved.** Downstream Model supersession doesn't propagate back. A graduated spike stays `graduated` even if the Model it informed is later superseded — the supersession chain on the Model carries the rest of the story.
+
+**Folder corresponds to status.** A spike at `status: draft` lives in `_drafts/`. Promotion to `spikes/` is the same commit that flips status to `active`. Terminal states stay in `spikes/`.
 
 ---
 

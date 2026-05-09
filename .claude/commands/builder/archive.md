@@ -1,6 +1,6 @@
 ---
 description: Retire a doc to archive/ — flips status, writes front-matter, git mv, runs lint, opens a PR.
-argument-hint: <feature>/<relative-doc-path> --status <Superseded|Cancelled> [--superseded-by <path>] [--reason <text>]
+argument-hint: <feature>/<relative-doc-path> --status <superseded|abandoned> [--superseded-by <path>] [--reason <text>]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -13,8 +13,8 @@ User input: `$ARGUMENTS`
 ### 1. Parse arguments
 
 Expected forms:
-- `<feature>/<relative-doc-path> --status Superseded --superseded-by <path-to-successor> [--reason <text>]`
-- `<feature>/<relative-doc-path> --status Cancelled [--reason <text>]`
+- `<feature>/<relative-doc-path> --status superseded --superseded-by <path-to-successor> [--reason <text>]`
+- `<feature>/<relative-doc-path> --status abandoned [--reason <text>]`
 
 The `<feature>/<relative-doc-path>` is relative to `Product/features/`. Examples:
 - `engine/models/01-evaluation-loop.md`
@@ -32,8 +32,8 @@ src="Product/features/<feature>/<relative-doc-path>"
 Check:
 - The file exists.
 - It is **not** already in an `archive/` directory (refuse: "already archived").
-- `--status Superseded` requires `--superseded-by` — if missing, ask.
-- `--status Superseded` requires `--superseded-by` to point at an existing, non-archived file. If that file is missing, print the path and stop.
+- `--status superseded` requires `--superseded-by` — if missing, ask.
+- `--status superseded` requires `--superseded-by` to point at an existing, non-archived file. If that file is missing, print the path and stop.
 - `--reason` is optional on the CLI; if not supplied, prompt the user for a one-line reason before proceeding.
 
 ### 3. Determine target path
@@ -55,8 +55,8 @@ Read the full file content. Extract:
 ### 5. Build the archived front matter
 
 Start from the existing front matter, then:
-- Set `status: Superseded` or `status: Cancelled` (from argument).
-- Add `superseded_by: <path>` (iff Superseded; relative path from the `archive/` doc to the successor, e.g. `../models/02-new-model.md`).
+- Set `status: superseded` or `status: abandoned` (from argument).
+- Add `superseded_by: <path>` (iff superseded; relative path from the `archive/` doc to the successor, e.g. `../models/02-new-model.md`).
 - Add `archived_on: <today's ISO date>`.
 - Add `reason: <one-line reason>`.
 - Keep all other original front-matter fields unchanged (`type`, `references`, `tags`, etc.).
@@ -66,7 +66,7 @@ Start from the existing front matter, then:
 Prepend an archive header directly after the front matter:
 
 ```markdown
-> **Archived <YYYY-MM-DD>.** Status: <Superseded by [successor title](relative-path) | Cancelled — reason>.
+> **Archived <YYYY-MM-DD>.** Status: <Superseded by [successor title](relative-path) | Abandoned — reason>.
 > Original content preserved below for historical record.
 
 ---
@@ -82,8 +82,8 @@ git mv Product/features/<feature>/<relative-doc-path>
      → Product/features/<feature>/archive/<filename>
 
 Front-matter changes:
-  status: <old> → <Superseded|Cancelled>
-  + superseded_by: <path>   (if Superseded)
+  status: <old> → <superseded|abandoned>
+  + superseded_by: <path>   (if superseded)
   + archived_on: <date>
   + reason: <text>
 ```
@@ -121,7 +121,7 @@ Most common finding after a fresh archive: rule A2 (stale inbound links from non
 ### 10. Single commit
 
 ```bash
-git commit -m "Archive <feature>/<filename> — <Superseded|Cancelled>
+git commit -m "Archive <feature>/<filename> — <superseded|abandoned>
 
 <reason>
 
@@ -139,7 +139,7 @@ git push -u origin claude/archive-<feature>-<slug>-YYYY-MM-DD
 ```
 
 Open a PR with:
-- **Title:** `Archive <feature>/<filename> — <Superseded|Cancelled>`
+- **Title:** `Archive <feature>/<filename> — <superseded|abandoned>`
 - **Body:**
 
 ```markdown
@@ -147,8 +147,8 @@ Open a PR with:
 Moves `<source path>` into `<feature>/archive/` per the §5.14 archive convention.
 
 ## Change
-- **Status:** <old status> → <Superseded|Cancelled>
-- **Superseded by:** `<successor path>` (if Superseded)
+- **Status:** <old status> → <superseded|abandoned>
+- **Superseded by:** `<successor path>` (if superseded)
 - **Reason:** <reason>
 
 ## Lint
@@ -164,7 +164,7 @@ Print the PR URL on completion.
 ## Safety rails
 
 - **Never move a doc without user confirmation** (step 7).
-- **Never move a doc with `--status` other than `Superseded` or `Cancelled`.**
+- **Never move a doc with `--status` other than `superseded` or `abandoned`.**
 - **Never overwrite an existing file in `archive/`** — stop if target exists.
 - **Never edit the body content** of the archived doc — header only, body verbatim.
 - **Never use `git push --force`, `--amend`, or `--no-verify`.**

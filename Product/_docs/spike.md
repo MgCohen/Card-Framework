@@ -24,22 +24,24 @@ Pre-settled exploration with a planned outcome. A time-boxed investigation — p
 
 1. **Has a planned outcome?** No → research. Yes → spike.
 2. **Drifted spike** (started as spike, no longer has resolution path) → reclassify to research.
-3. **End-of-life:** status `concluded` / `accepted` / `graduated` / `superseded` → content folded; file disposition (archive / delete / leave) project-specific.
+3. **End-of-life:** status `graduated` (informed a Model/ADR that has since landed) or `concluded` (closed without producing a separate doc; findings live in the spike body).
 
 ## Conventions (once classified as a spike)
 
-- Lives under `Product/spikes/` with a descriptive filename (no numbered prefix).
-- Frontmatter: `type: spike`, `status:` (`draft` / `open` / `concluded` / `accepted` / `superseded`), `tags:`.
+- Lives under `Product/spikes/` with a descriptive filename (no numbered prefix). A spike at `status: draft` lives in `_drafts/` until investigation begins.
+- Frontmatter: `type: spike`, `status:` (`draft` / `active` / `graduated` / `concluded`), `tags:`.
 - Carries either a `forward-link:` field or a "When this lands" section pointing at the target.
 - Vocabulary: spikes open with `## Premise` rather than `## Problem` because the framing is open — we're testing a hypothesis, not yet responding to a defined problem.
 - Cross-references use `Product/`-rooted absolute paths.
 
 ## Status transitions
 
-- **`graduated`** — informed subsequent work (a model or ADR); add a forward link. Spike doc stays put — preserves the trail.
-- **`concluded`** — findings recorded with no immediate follow-up.
-- **`archived`** — didn't go anywhere; kept for future reference.
-- **History doesn't update.** A spike's status reflects only its own resolution. If the model it graduated into is later superseded, the spike stays `graduated` — the supersession chain on the destination tells the rest of the story. Spikes are static once resolved.
+- **`draft`** — framing is being written; the investigation hasn't started yet. Lives in `_drafts/`.
+- **`active`** — investigation in progress. Lives in `spikes/` (promoted from `_drafts/` in the same commit that flips status).
+- **`graduated`** — the spike informed a Model or ADR that has since landed (Model `settled` or ADR `accepted`). Forward link to that doc is mandatory.
+- **`concluded`** — investigation closed without producing a separate Model or ADR. Findings live in the spike body itself.
+- **History doesn't update.** A spike's status reflects only its own resolution. If the Model it graduated into is later superseded, the spike stays `graduated` — the supersession chain on the destination tells the rest of the story. Spikes are static once resolved.
+- **Graduation cascade.** When a downstream Model flips to `settled` or an ADR flips to `accepted`, the spikes that reference it are candidates for `active → graduated`. Confirmed per spike, not automatic — see `_workflow/PRODUCT-BUILDER.md` §Cascade.
 
 ## Heuristics
 

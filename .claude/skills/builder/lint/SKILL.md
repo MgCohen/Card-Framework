@@ -77,7 +77,7 @@ These four rules exist because archived docs create a directed graph of superses
 
 ### A1 — Forward-pointer integrity
 
-Every archived doc with `status: Superseded` must have a `superseded_by:` pointing at an active (non-archived) file.
+Every archived doc with `status: superseded` must have a `superseded_by:` pointing at an active (non-archived) file.
 
 ```bash
 grep -rn '^superseded_by:' Product/features/*/archive/
@@ -108,7 +108,7 @@ Files should live where their status says they live.
 **A3a.** Active files (not in `archive/`) with a retired status:
 
 ```bash
-grep -rn 'status: Superseded\|status: Cancelled' Product/ \
+grep -rn 'status: superseded\|status: abandoned' Product/ \
   --include='*.md' \
   | grep -v '/archive/'
 ```
@@ -119,7 +119,7 @@ grep -rn 'status: Superseded\|status: Cancelled' Product/ \
 
 ```bash
 find Product/features -path '*/archive/*.md' \
-  | xargs grep -L 'status: Superseded\|status: Cancelled' 2>/dev/null
+  | xargs grep -L 'status: superseded\|status: abandoned' 2>/dev/null
 ```
 
 **Finding:** `archive integrity A3b — doc in archive/ lacks retired status`
