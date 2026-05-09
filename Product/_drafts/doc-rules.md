@@ -30,7 +30,7 @@ The unit of canonical design. One model = one central element explained in depth
 ## Identity (decision criteria)
 
 - 🟢 **Has exactly one central element.** Fails if: title is a concept (lifecycle, validation, loop, pipeline, system) without a concrete thing behind it, or multiple peer elements tied only by a theme (= feature, not model).
-- 🟢 **Central element is concrete** — a class, interface, service, contract, or structured type. Fails if: subject is purely a concept, relationship, or convention.
+- 🟢 **Central element is a named C# type** — a class, interface, record, struct, payload, service, or other concrete declared type. **Point-at-the-type test:** name the type. If you cannot, it is not a model. Fails if: subject is a pattern, mechanism, process, sub-step of a larger flow, phase of a lifecycle, behavior, relationship, convention, or usage recipe of an existing type. Examples that are *not* models even if load-bearing: "before-fold" (a step inside `ITriggerPipeline.RunBefore`), "decision-routing" (a behavior of `ICommandAwaiter`), "attachment-entity" (a usage pattern of `EntityDefinition`), "async dispatch" (a property of `IEffectScope.Dispatch`). Each belongs as content inside the type that owns it.
 - 🟢 **Central element is load-bearing** — has its own behavior (methods, logic, runtime semantics) **OR** substantial design space (authoring contract, evolution rules, integration story, multi-consumer needs, validation/serialization concerns). Fails if: bare enum, fieldless signal, simple payload that's just shape, single-purpose value type with no design weight. Place those as support inside the model that defines or uses them.
 - 🟢 **Body shape is model work** — focused on one central element with its supports. Fails if: body reads as feature-root work (synthesis / architecture / vocabulary across multiple peer elements) **OR** contains ADR-shaped content (options A/B/C considered + rationale + consequences for a cross-feature decision). Those are other doc types masquerading as a model — split synthesis to feature root, decision to ADR.
 - 🟢 **The model is the central element's canonical home.** Fails if: defines rules / behaviors / extensions of an element defined elsewhere (→ that element's home), recipe composing existing surfaces (→ feature root), method extension to a class defined elsewhere (→ class's home).
@@ -38,22 +38,25 @@ The unit of canonical design. One model = one central element explained in depth
 ## Decision flow
 
 1. **Identify the candidate central element.** No single concrete element → **NOT A MODEL.** Escalate to feature, or fold into existing model.
-2. **Check load-bearing.** Behavior present OR design space present → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
-3. **Check body shape.** Body focused on the central element + its supports → continue. Body is synthesis-across-peers + ADR design pass → **NOT A MODEL.** Split into feature root + ADR.
-4. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
+2. **Point-at-the-type test.** Can you name the C# class / interface / record / struct / payload / service? Yes → continue. No (it's a pattern, mechanism, sub-step, behavior, or convention) → **NOT A MODEL.** Fold the content into the type that owns it, or into feature root for cross-element synthesis.
+3. **Check load-bearing.** Behavior present OR design space present → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
+4. **Check body shape.** Body focused on the central element + its supports → continue. Body is synthesis-across-peers + ADR design pass → **NOT A MODEL.** Split into feature root + ADR.
+5. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
 
 ## Conventions (once decided)
 
 - 🟢 Lives at `Product/features/<feature>/models/<NN>-<slug>.md`.
 - 🟢 Filename uses a numbered prefix (`01`, `02`, ...) within the feature.
 - 🟢 Frontmatter: `type: model`, `status:`, `references:`, `tags:`.
-- 🟢 Title names the central element (`# <Element Name> — model`).
+- 🟢 Title names the central element (`# <Element Name> — model`). The element name is the C# type name. Filename slug derives from the type — drop the `I` prefix on interfaces (`ICommandHandler` → `command-handler.md`), keep records and classes verbatim (`HistoryEnvelope` → `history-envelope.md`).
+- 🟢 Topic-shaped or process-shaped titles ("decision-routing", "before-fold", "async-dispatch", "lifecycle", "pipeline-mechanics") are misclassifications. If the title is not a type name, the file is either misclassified (not a model) or correctly a model but mistitled. Re-run the point-at-the-type test before renaming.
 - 🟢 Body sections (per the model template): What it is, Contracts, Invariants, Decisions, Examples, Open follow-ups, Options considered, Rationale, Consequences.
 - 🟢 Cross-references use shorthand (`features/engine/models/01` or `engine/01`).
 
 ## Heuristics
 
 - 🟡 **Default = support.** Promotion to model needs a reason: substantial depth, independent consumption, supports forming around the element.
+- 🟡 **Piece-of-a-thing trap.** If the candidate is a step inside a larger flow, a phase of a lifecycle, a behavior of a service, or a usage pattern of an existing type, it is a *piece of a thing* — not a thing. Pieces fold into the thing that owns them. Tell: candidate name reads as a verb, gerund, or adjective-noun describing what happens during a larger element's execution.
 - 🟡 **Title-content mismatch — fix the title first.** When body has a clear central element but title is process-shaped or concept-shaped, rename the title to name the element. Reclassification is the harder fallback, used only when the body has no central element to name.
 - 🟡 **Test for design space:** would the doc body be substantively more than `definition + field list`? If no, no design space → support.
 - 🟡 **Test for independence:** do consumers reach for the element directly, or always via a parent? Direct → promote candidate. Always via parent → support.
