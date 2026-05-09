@@ -55,7 +55,7 @@ Effects get `IStateScope` (read-only) on `scope.State`. Anything that needs to m
 
 ### Replace semantics
 
-`Replace` is meaningful only when an `IEffectScope` is participating in a before-fold trigger (per [`triggers/01-trigger-fold.md` §Before-fold outcomes](features/triggers/models/01-trigger-fold.md)):
+`Replace` is meaningful only when an `IEffectScope` is participating in a before-fold trigger (per [`triggers/02-trigger-pipeline.md` §Three before-fold outcomes](features/triggers/models/02-trigger-pipeline.md)):
 
 - The intercepted command's envelope closes with `CommandResult.Replaced`.
 - `next` dispatches as a fresh command via `engine.Dispatch` — its own full fold from scratch.
@@ -113,3 +113,19 @@ The deterministic `ModifierId` is allocated when `Create` is called (engine-owne
 ## Open follow-ups
 
 - **`IEffectScope` extension surface** — whether games can add custom services to `scope` for ergonomics (e.g. game-specific helpers) is undesigned. Workaround today is constructor-injecting services into `Effect` subclasses.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (its shape follows directly from the Models referenced in `## Contracts` above and the project-wide ADRs they cite); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

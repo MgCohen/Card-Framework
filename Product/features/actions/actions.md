@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/entities/models/02-instance.md, features/zones/models/01-zone-model.md, features/triggers/models/01-trigger-fold.md, features/engine/models/03-game-rules-runtime.md]
+references: [features/entities/models/02-instance.md, features/zones/models/01-zone-model.md, features/triggers/models/01-trigger.md, features/engine/models/03-game-rules-runtime.md]
 tags: [#actions]
 ---
 

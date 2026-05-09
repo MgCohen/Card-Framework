@@ -90,4 +90,16 @@ Three game-mode variants — Standard, Commander, etc. — share one runtime cla
 
 ---
 
-*Below: provenance — n/a. Q1 lives in [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md).*
+*Below: provenance — n/a. The two-type split's options-weighing is documented in [`engine/03-game-rules-runtime.md` §Options considered](features/engine/models/03-game-rules-runtime.md) (Q1). This Model is the data-side half of that decision and carries no independent provenance.*
+
+## Options considered
+
+*n/a — Q1 (rules-layer shape) lives in [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md).*
+
+## Rationale
+
+*n/a — see `## Contracts` above. The data-half of the rules layer is `[Serializable]` config; rationale for the two-type split lives in [`engine/03 §Q1 Rationale`](features/engine/models/03-game-rules-runtime.md).*
+
+## Consequences
+
+*n/a — see `## Contracts` above. Combined consequences of the two-type split live in [`engine/03 §Consequences`](features/engine/models/03-game-rules-runtime.md).*

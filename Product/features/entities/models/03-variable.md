@@ -204,3 +204,19 @@ For worked equip/unequip and apply-aura examples exercising variables alongside 
 
 - **Typed variable wrappers.** A future authoring layer may expose typed helper APIs (`card.Energy` instead of `card.Storage.GetVariable<int>(Vars.Energy)`). Tracked under `bl-authoring-feature`.
 - **Variable migration / versioning.** Save-load compatibility when a definition's variable catalog changes between versions. Authoring-layer concern.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (its shape follows directly from the Models referenced in `## Contracts` above and the project-wide ADRs they cite); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

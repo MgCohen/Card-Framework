@@ -24,7 +24,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-move-validation-execution-drift | kind: question | **Move validation-vs-execution state drift** — when a `MoveCardMutation` (or any mutation with state preconditions) is validated and queued, then another mutation moves the card before the original executes, the original's source precondition fails at execute-time. Current behavior (per Q14 lock, session-20260501-1602): throw at execution. Other strategies to evaluate when this becomes painful: re-resolve source from current state, silent no-op, or deeper interlocking via the trigger-fold / replacement-effects pipeline. Affects all mutations with state preconditions, not just MoveCard.
   References: `Product/features/cards/models/01-card-model.md`, `Product/features/zones/models/01-zone-model.md`.
 
-- id: oq-effect-pipeline | kind: question | **Effect-pipeline shape** — per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime needs an effect-level orchestration surface that decides *when each effect starts* (immediate, batched, stacked). Working sketch in [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) — `IEffectPipeline` injected service, `EffectDefinition` + `EffectInstance` split, chain scope per effect-run, two execution verbs. Iterating; not yet promoted to canonical Models. Resolution path lives in the spike's "When this lands" section.
+- id: oq-effect-pipeline | kind: question | **Effect-pipeline shape** — per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime needs an effect-level orchestration surface that decides *when each effect starts* (immediate, batched, stacked). Working sketch in [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) — `IEffectPipeline` injected service, `EffectDefinition` + `EffectInstance` split, chain scope per effect-run, two execution verbs. Iterating; not yet promoted to canonical Models. Resolution path lives in the spike's "When this lands" section.
   References: `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`, `Product/features/engine/models/03-game-rules-runtime.md`.
 
 - id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `EffectDefinition.Execute` is currently a delegate (`Func<EffectInstance, IEffectScope, Task>`); the *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Surfaces concretely once the effect-pipeline sketch promotes to Models.
@@ -36,7 +36,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: oq-session-state-machine | kind: defer | **Session-level state machine** — current `EngineLifecycle` is 3 states (`NotStarted` / `Started` / `Ended`). Real applications need richer states: `Connecting`, `Reconnecting`, `ShowingResults`, `SettingUp`, etc. The runtime is well-positioned to host a richer state machine alongside `Evaluate`. Pin when the first networked or session-aware game forces it.
   Trigger: first networked game, or first game that needs post-match flow (results screen, rematch lobby, etc.).
-  References: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/01-game-engine.md`.
+  References: `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
   References: `Product/features/engine/models/03-game-rules-runtime.md` §Composition.
@@ -57,7 +57,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.
 
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
-  References: `Product/features/triggers/models/01-trigger-fold.md` §5.
+  References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.
 
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.

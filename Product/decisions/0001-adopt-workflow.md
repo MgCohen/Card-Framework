@@ -1,14 +1,15 @@
 ---
 type: adr
 status: accepted
+references: [_workflow/PRODUCT-BUILDER.md]
 tags: [#adr, #general, #workflow, #adoption]
 ---
 
 # ADR-0001 — Adopt the Product Builder workflow
 
 Date: 2026-04-29
-Context-doc: _workflow/PRODUCT-BUILDER.md
-Proposal: _workflow/PRODUCT-BUILDER.md
+Context-doc: Product/_workflow/PRODUCT-BUILDER.md
+Proposal: Product/_workflow/PRODUCT-BUILDER.md
 
 ## Context
 After 11 sessions of flat `RESEARCH/` work the project's design content had outgrown a single chronological list. Decisions were folded into mega-docs, cross-references were brittle (`doc 28 §6`), exploration mixed with feature design, and there was no canonical place for ADRs, ledgers, or session notes. Session 11 produced a workflow proposal; session 12 ran the migration. This ADR records the adoption decision.

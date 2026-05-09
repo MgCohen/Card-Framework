@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/04-available-actions.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/triggers/models/01-trigger-fold.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/04-available-actions.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/triggers/models/01-trigger.md]
 tags: [#engine, #gamerules, #runtime]
 ---
 
@@ -168,7 +168,7 @@ Called by the pipeline once per command, twice per execution (one before-fold, o
 public enum TriggerPhase { Before, After }
 ```
 
-The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`triggers/01 §Execution`](features/triggers/models/01-trigger-fold.md) for the `ITriggerPipeline` contract and [`effects/02 §ITriggerPipeline`](features/triggers/models/01-trigger-fold.md) for its role in the before-fold. `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
+The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`triggers/02-trigger-pipeline.md` §`ITriggerPipeline` interface](features/triggers/models/02-trigger-pipeline.md) for the contract and [`triggers/02-trigger-pipeline.md` §The fold mechanic](features/triggers/models/02-trigger-pipeline.md) for its role in the before-fold. `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
 
 **Why the phase parameter.** Some games want different availability rules before vs. after:
 

@@ -1,13 +1,14 @@
 ---
 type: adr
 status: accepted
+references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md]
 tags: [#adr, #general, #architecture, #engine, #effects, #triggers]
 ---
 
 # ADR-0006 — Two-pipeline architecture: framework command pipeline + game effect pipeline
 
 Date: 2026-05-07
-Context-doc: features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md
+Context-doc: Product/features/engine/models/03-game-rules-runtime.md, Product/features/engine/models/01-game-engine.md
 Proposal: session triggers+dispatch design pass (2026-05-07)
 
 ## Context

@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/entities/models/02-instance.md]
+references: [features/triggers/models/01-trigger.md, features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/entities/models/02-instance.md]
 tags: [#effects]
 ---
 
@@ -58,7 +58,7 @@ The feature has four Models. Each is the canonical home for one load-bearing C# 
 3. **`IHandlerContext`** ([`03-handler-context.md`](features/effects/models/03-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
 4. **`ICommandAwaiter`** ([`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
 
-The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler executes via its `IHandlerContext` (3), awaiting player input through `ICommandAwaiter` (4) for decisions. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-instance.md` §Attachment-entity usage](features/entities/models/02-instance.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
+The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger.md`](features/triggers/models/01-trigger.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler executes via its `IHandlerContext` (3), awaiting player input through `ICommandAwaiter` (4) for decisions. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-instance.md` §Attachment-entity usage](features/entities/models/02-instance.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
 
 ### Three layers, capabilities
 
@@ -99,7 +99,7 @@ The framework invariant: **cancellation of one `GameAction` never automatically 
 | [`03-handler-context.md`](features/effects/models/03-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
 | [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |
 
-Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md); ongoing-effect attachment-entity pattern lives in [`entities/02-instance.md`](features/entities/models/02-instance.md).
+Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md); ongoing-effect attachment-entity pattern lives in [`entities/02-instance.md`](features/entities/models/02-instance.md).
 
 ## Invariants
 

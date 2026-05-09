@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/state/state.md, features/engine/models/01-game-engine.md, features/engine/models/06-game-definition.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/state/state.md, features/engine/models/06-game-definition.md]
 tags: [#engine, #factory, #bootstrap]
 ---
 
@@ -70,7 +70,6 @@ The framework `EngineInstaller` registers every framework service the engine nee
 | `Store` | Singleton (per match scope) | Canonical state container; owns slices and the catalog |
 | `IStateScope` | Resolves through `Store` | Read-only state surface |
 | `IAvailableActions` | Singleton | Snapshot service consumed by `GameRulesRuntime` |
-| `IIntakeQueue` | Singleton | Pending command queue (shape per `oq-intake-queue`) |
 | `ICommandPipeline` | Singleton | Dispatch + before/after fold orchestration |
 | `IGameFactory` | Singleton | The factory itself |
 | Framework mutators for `EntityState`, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`, `EngineState`, `HistoryState`, `AvailableActionsState`, `LastMoveState` | Singleton, `AsImplementedInterfaces` | Bridge primitives + framework-owned slices |

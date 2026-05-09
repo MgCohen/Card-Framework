@@ -100,3 +100,19 @@ public Task<ApplyAuraResult> Handle(ApplyAuraAction cmd, IHandlerContext ctx)
 ## Open follow-ups
 
 - **`IHandlerContext` vs constructor-injected services on handlers.** Aggregating `Store`, `Actions`, `Resolver` into a context type is one option; constructor-injecting them per handler (and dropping the context entirely) is another. The latter declares each handler's needs explicitly and is friendlier to DI, but multiplies wiring cost as services grow. Decision is undesigned — revisit when a second game stresses the surface or when handler count crosses a threshold that makes the cost visible.
+
+---
+
+*Below: provenance — n/a. This Model is purely descriptive (its shape follows directly from the Models referenced in `## Contracts` above and the project-wide ADRs they cite); no separate options-weighing at this Model's scope.*
+
+## Options considered
+
+*n/a — descriptive Model.*
+
+## Rationale
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*
+
+## Consequences
+
+*n/a — see `## Contracts` above and the feature root's `## Invariants`.*

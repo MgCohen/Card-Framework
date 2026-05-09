@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/04-history-envelope.md, features/state/state.md, features/state/state.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/04-history-envelope.md, features/state/state.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #model, #handler]
 ---
 

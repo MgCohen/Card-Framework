@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/engine/models/01-game-engine.md]
+references: [features/triggers/models/01-trigger.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/engine/models/01-game-engine.md]
 tags: [#effects, #model]
 ---
 

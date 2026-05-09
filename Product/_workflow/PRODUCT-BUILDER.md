@@ -112,7 +112,7 @@ references: [_workflow/PRODUCT-BUILDER.md]
 See [game engine §3](features/engine/models/01-game-engine.md#section-3) for the drain logic.
 
 # Bare path mentions in prose — same absolute form, no link wrapper, must resolve
-The trigger fold is defined in features/triggers/models/01-trigger-fold.md §2.
+The trigger fold is defined in features/triggers/models/01-trigger.md §2.
 
 # Illustrative or example paths — wrap in inline backticks, linter exempt
 A new model would live at `features/<feature>/models/<NN>-<slug>.md`.

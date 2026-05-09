@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/05-available-actions-snapshot.md, features/triggers/models/01-trigger-fold.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/05-available-actions-snapshot.md, features/triggers/models/01-trigger.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #model, #intent]
 ---
 
@@ -96,6 +96,10 @@ public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template
 ## Decisions
 
 Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) — `IIntentMapper.Map` is one of the five layers.
+
+## Examples
+
+For an end-to-end worked mapper (typed templates, switch on template type, `IStateScope` for state-driven mapping like locating the card's source pile), see the `PileCounterIntentMapper` in [`engine/04-available-actions.md` §IntentMapper becomes typed](features/engine/models/04-available-actions.md). The mapper there exercises both the typed-template switch and the decision-unaware property — it never queries "is a decision open?", just maps templates to commands.
 
 ## Open follow-ups
 
