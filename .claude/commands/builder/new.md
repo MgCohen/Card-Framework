@@ -4,7 +4,7 @@ argument-hint: <type> [feature] <title>
 allowed-tools: Read, Write, Bash, Glob
 ---
 
-You are scaffolding a new doc in the Product Builder workflow. Templates live in `Product/_workflow/_templates/`. Workflow rules live in `Product/_workflow/PRODUCT-BUILDER.md`.
+You are scaffolding a new doc in the Product Builder workflow. Per-type rulebooks (rules + skeleton) live in `Product/_docs/<type>.md`. Top-level workflow lives in `Product/_workflow/PRODUCT-BUILDER.md`.
 
 User input: `$ARGUMENTS`
 
@@ -40,7 +40,7 @@ User input: `$ARGUMENTS`
 
 6. **Refuse to overwrite.** If the target already exists, print the path and stop. Don't clobber.
 
-7. **Read the template** from `Product/_workflow/_templates/<type>.md` (no template for plan — emit a minimal H1 + status line).
+7. **Read the template** from `Product/_docs/<type>.md` (skeleton at the bottom) (no template for plan — emit a minimal H1 + status line).
 
 8. **Pre-fill front matter.** As of the templates sweep (2026-05-03), Spike / Feature / Model / Sample / ADR / Archive / Checkpoint templates already contain real YAML front matter — fill in the placeholders rather than constructing the block from scratch:
    - `type:` matches the doc type.

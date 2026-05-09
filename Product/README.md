@@ -88,7 +88,7 @@ Watch for these conditions and act when they fire. Tell the human what you're do
 
 ## Doc types
 
-Six canonical types. Templates in `_workflow/_templates/`.
+Nine canonical types. Each has its own rulebook + skeleton in `_docs/<type>.md` — see `_workflow/PRODUCT-BUILDER.md` for the classification decision tree.
 
 - **Spike** (`spikes/`) — time-boxed investigation; pre-design exploration. Status: `active` / `concluded` / `graduated` / `archived`. Not a decision.
 - **Feature** (`features/<f>/<f>.md`) — root description of a feature folder. The canonical contract once `settled`. Status: `draft` / `settled` / `implemented` / `superseded` / `abandoned`.
@@ -177,12 +177,11 @@ Product/
   SESSION-CHECKPOINT.md      # live spine — updated continuously
   sessions/                  # sparse milestone archive (snapshots only)
   _archive/                  # retired ledgers, legacy session notes, etc.
+  _docs/                     # per-type rulebooks + skeletons (model, feature, adr, ...)
   _workflow/
-    PRODUCT-BUILDER.md       # the formal spec — workflow rules + rationale
-    REFERENCE-CONVENTIONS.md
+    PRODUCT-BUILDER.md       # routing hub + workflow triggers
     EMOJI-LEGEND.md
     retired-tokens.json
-    _templates/              # 6 doc-type templates
   ledgers/
     OPEN-ITEMS.md            # durable loose ends
     GLOSSARY.md              # canonical vocabulary + changelog
@@ -227,7 +226,7 @@ The point is that step 3 is *visible*. Surfacing the dependents on demand replac
 ## When you need more depth
 
 - **The full spec with rationale:** [`_workflow/PRODUCT-BUILDER.md`](_workflow/PRODUCT-BUILDER.md). Open this only when the workflow itself is in question — not for daily operation.
-- **Templates:** [`_workflow/_templates/`](_workflow/_templates/) — 6 doc types.
+- **Per-type rulebooks + skeletons:** [`_docs/`](_docs/) — 9 doc types, each with its own rulebook.
 - **Why a particular thing was decided (feature-internal):** the relevant Model's provenance section (below the `---` divider).
 - **Why a cross-cutting decision was made:** the relevant ADR in `decisions/`.
 - **Bird's-eye view of features and dependencies:** [`ledgers/FEATURE-MAP.md`](ledgers/FEATURE-MAP.md).
