@@ -1,7 +1,7 @@
 ---
 type: sample
 status: locked
-references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/05-game-factory.md, features/engine/models/01-game-engine.md, features/engine/models/06-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-runtime-surface.md]
+references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/05-game-factory.md, features/engine/models/01-game-engine.md, features/engine/models/06-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-instance.md]
 tags: [#sample, #pile-counter]
 ---
 

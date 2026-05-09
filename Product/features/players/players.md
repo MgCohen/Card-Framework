@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md]
+references: [features/entities/models/02-instance.md, features/zones/models/01-zone-model.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md]
 tags: [#players]
 ---
 

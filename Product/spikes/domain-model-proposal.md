@@ -275,5 +275,5 @@ Either:
 - [`Product/features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — current factory + `MatchSetup`; Q1 lock reshapes this.
 - [`Product/features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — `ZoneDefinition` and per-zone-type runtime slices.
 - [`Product/features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `CardDefinition`, `CardMapState`, current entity-bridge wiring.
-- [`Product/features/entities/models/01-definition-instance-model.md`](features/entities/models/01-definition-instance-model.md) — definitions as authored base data; entity bridge mutation conventions.
+- [`Product/features/entities/models/01-definition.md`](features/entities/models/01-definition.md) — definitions as authored base data; entity bridge mutation conventions.
 - [`Product/ledgers/GLOSSARY.md`](ledgers/GLOSSARY.md) — `Player`, `Actor`, `Zone`, `Card`, related vocabulary.

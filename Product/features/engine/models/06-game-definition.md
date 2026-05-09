@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/05-game-factory.md, features/state/state.md, features/engine/models/02-game-rules-definition.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md]
+references: [features/engine/models/05-game-factory.md, features/state/state.md, features/engine/models/02-game-rules-definition.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition.md, features/entities/models/02-instance.md]
 tags: [#engine, #game-definition, #slices, #factory]
 ---
 
@@ -227,7 +227,7 @@ The framework distinguishes **structural ownership** (declarative, set at `Build
 
 ## Decisions
 
-*n/a — no elevated ADR.* (The bundle shape and Build-walk ordering are descriptive — they sit on top of [`engine/05`](features/engine/models/05-game-factory.md) (factory two-layer split), [`state/state.md`](features/state/state.md) (slice tier model), and the entity-bridge `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes from [`entities/01`](features/entities/models/01-definition-instance-model.md). No new options were considered for this Model itself.)
+*n/a — no elevated ADR.* (The bundle shape and Build-walk ordering are descriptive — they sit on top of [`engine/05`](features/engine/models/05-game-factory.md) (factory two-layer split), [`state/state.md`](features/state/state.md) (slice tier model), and the entity-bridge `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes from [`entities/01`](features/entities/models/01-definition.md). No new options were considered for this Model itself.)
 
 ## Examples
 

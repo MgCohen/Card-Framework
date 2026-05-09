@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/zones/models/01-zone-model.md, decisions/0005-objects-over-ids.md]
+references: [features/entities/models/01-definition.md, features/entities/models/02-instance.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/zones/models/01-zone-model.md, decisions/0005-objects-over-ids.md]
 tags: [#players, #actor, #entity, #player-definition, #model]
 ---
 
@@ -150,7 +150,7 @@ Authors can use either shape — neither is forbidden. The convention is a *reco
 
 Per-player state mutations follow the same patterns as other entity instances:
 
-- **Variables** — `player.Storage.SetBase(key, value)` / `player.Storage.AddModifier(...)` / etc. Routes through the entity-bridge payloads (`SetBaseValuePayload`, `AddModifierPayload`, …). See [`features/entities/models/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
+- **Variables** — `player.Storage.SetBase(key, value)` / `player.Storage.AddModifier(...)` / etc. Routes through the entity-bridge payloads (`SetBaseValuePayload`, `AddModifierPayload`, …). See [`features/entities/models/02-instance.md`](features/entities/models/02-instance.md).
 - **Per-player slices** — game-defined payloads. The `PlayerDefinition`'s declared slice has at least one `Mutator` registered (game-side); `Build` validation warns if not.
 
 Player creation flows through `Player.Spawn` (the typed wrapper around `StoreEntities.Spawn<PlayerDefinition>`):

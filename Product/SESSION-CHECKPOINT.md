@@ -20,7 +20,15 @@ tags: [#checkpoint]
 
 Cascade: 17 files updated for cross-refs (FEATURE-MAP model breakdown + dependency graph cycle observation; GLOSSARY GameRulesDefinition/Runtime entries; OPEN-ITEMS three engine references; engine.md feature root architecture section + execution arc + framework-slice catalog row; engine/01, engine/05, actions/01, actions/03, actions/04, actions/05, effects/effects.md, effects/03, presentation/01, players/01, triggers/triggers.md, triggers/01, pile-counter sample, ADRs 0006/0007 context-doc fields).
 
-**Phase B pending** (next): split `entities/01-definition-instance-model.md` and `entities/02-runtime-surface.md` per concept axis (definition / instance / variable / modifier / attachment).
+**Phase B landed (2026-05-09).** Split `entities/01-definition-instance-model.md` (327 lines) + `entities/02-runtime-surface.md` (723 lines) into five concept Models:
+
+- **`01-definition.md`** (184 lines) — `IEntityDefinition` / `EntityDefinition` / `DefinitionWithSlices`; **canonical home for `ISliceProvider`** (resolves item 4 of the original audit list); Q1, Q2, Q5 provenance.
+- **`02-instance.md`** (250 lines) — `InstanceWithSlices<TDef>` handle; `Ref<T>` identity; zone-movement default; lifecycle (spawn / resolve / destroy / snapshot); slice-level subscriptions; Q3, Q4 provenance.
+- **`03-variable.md`** (206 lines) — `Variable` / `VariableValue` authoring; `EntityState.BaseValues`; per-variable read/mutation API; `AddEntityVariablePayload` + `SetBaseValuePayload` disciplines.
+- **`04-modifier.md`** (209 lines) — `VariableModifier<T>` / `ActiveModifier`; `ModifierSource`; `IModifierFactory` (deterministic ids); `EntityState.ModifierStacks`; modifier mutation API.
+- **`05-attachment.md`** (295 lines) — attachments/equipment/tokens/transformation; ongoing effects as attachment entities; cleanup machinery; worked equip/unequip + apply-aura examples; Q6 provenance.
+
+Cascade: front-matter `references:` arrays updated across cards, zones, players, effects, actions, engine; entities feature root rewritten (architecture + composition table now five rows); FEATURE-MAP entities row (1 → 5 Models) + model breakdown rewritten; OPEN-ITEMS section anchors refreshed.
 
 **Earlier this same week (2026-05-08).** Effect-pipeline spike re-grounded around graphflow — 10 decisions locked via design pass. Walked Q1–Q10 in design-pass mode. **Spike re-write pending** — locked decisions not yet applied to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md); models stay frozen until the spike re-write lands.
 
@@ -43,8 +51,8 @@ Two parallel cascades landed earlier (2026-05-06) via [PR #102](https://github.c
 
 **Open-seams design pass + patch cascade.** 10 structural decisions surfaced when drawing the domain model out and propagated into the canonical Models:
 
-- `entities/01-definition-instance-model.md` — §"Definitions" reframed around the `DefinitionWithSlices` parent class; §"Store And Entities Relationship" Card/Zone bullets updated to `InstanceWithSlices` + unsealed.
-- `entities/02-runtime-surface.md` — §1 reshaped: `InstanceWithSlices<TDef> : Scaffold.EntityInstance<TDef>, ISliceProvider` parent class, `Definition` is `protected`, subclass-re-export discipline documented.
+- `entities/01-definition.md` — §"Definitions" reframed around the `DefinitionWithSlices` parent class; §"Store And Entities Relationship" Card/Zone bullets updated to `InstanceWithSlices` + unsealed.
+- `entities/02-instance.md` — §1 reshaped: `InstanceWithSlices<TDef> : Scaffold.EntityInstance<TDef>, ISliceProvider` parent class, `Definition` is `protected`, subclass-re-export discipline documented.
 - `cards/01-card-model.md` — `Card` unsealed; `CardRegistry` removed; new "Resolution surfaces" section pinning the two-hop path.
 - `zones/01-zone-model.md` — `Zone` unsealed; visibility policy replaced with the sealed-record `ZoneVisibilityPolicy` hierarchy; Read API split between `GetCardRefs(state)` and `GetCards(store)`.
 - `players/01-player-model.md` + `players/players.md` — `Player` unsealed; `PlayerDefinition` re-parented onto `DefinitionWithSlices`.
@@ -63,21 +71,13 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Phase B of the workflow audit: split `entities/01-definition-instance-model.md` and `entities/02-runtime-surface.md` per concept axis** (definition / instance / variable / modifier / attachment). Each Model gets carved into its concept-aligned successors; cross-refs cascade across cards/zones/players/engine.
+**Six-item workflow audit complete.** Phase A (engine reorg: split + rename + renumber) and Phase B (entities split per concept axis, including the deferred `ISliceProvider` audit) both landed. Models in `engine/` and `entities/` are now structurally aligned with the post-simplification template. PR #119 carries Phase A; Phase B follows on the same branch.
 
-Concrete sub-steps (mirrors Phase A's pattern):
+Three viable next threads:
 
-- Read both entities Models end-to-end; map content to the five concept Models.
-- Decide canonical home for `ISliceProvider` interface declaration (entities-side vs engine/06; surfaced as item 4 from the original audit list).
-- Decide canonical home for `DefinitionWithSlices` + `InstanceWithSlices<TDef>` parents (likely the new `definition` and `instance` Models respectively).
-- Author the new Models; delete originals; cascade cross-refs.
-- Update FEATURE-MAP entities row + model breakdown; update GLOSSARY entries that reference entities Model paths.
-
-Alternative threads if Phase B pauses:
-
-- **Effect-pipeline spike re-write** — apply the locked Q1–Q10 verdicts from 2026-05-08 to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until this lands.
-- **Resolve top open items.** `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`.
-- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract.
+- **Effect-pipeline spike re-write** — apply the locked Q1–Q10 verdicts from 2026-05-08 to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until this lands. The substantive open design work.
+- **Resolve top open items.** `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async-effect cancellation), `oq-attachment-storage` (where attachments live).
+- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract — exercises every Model end-to-end and surfaces concrete drift.
 
 ---
 

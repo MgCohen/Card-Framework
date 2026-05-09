@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/triggers/models/01-trigger-fold.md, features/effects/models/01-effect.md, features/entities/models/02-runtime-surface.md]
+references: [features/actions/models/01-command-pipeline.md, features/triggers/models/01-trigger-fold.md, features/effects/models/01-effect.md, features/entities/models/02-instance.md]
 tags: [#engine]
 ---
 

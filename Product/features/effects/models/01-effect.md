@@ -151,7 +151,7 @@ Each envelope is independent. The triggered ability dispatches through the norma
 ## Open follow-ups
 
 - **Effect authoring & registration.** The "recipe" a definition holds for instantiating an `Effect` (data, code, graph, or hybrid) is deliberately undesigned. Tracked as a future authoring-feature Model.
-- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice. Left to ongoing-effects/authoring follow-up. [`entities/02-runtime-surface.md` §Attachment-entity usage](features/entities/models/02-runtime-surface.md) settles the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
+- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice. Left to ongoing-effects/authoring follow-up. [`entities/02-instance.md` §Attachment-entity usage](features/entities/models/02-instance.md) settles the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
 - **Mulligan lifecycle** — pipeline action vs separate session setup phase. Tied to game lifecycle.
 
 ---

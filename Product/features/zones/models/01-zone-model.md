@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/cards/models/01-card-model.md, decisions/0008-zone-visibility-model.md]
+references: [features/entities/models/02-instance.md, features/cards/models/01-card-model.md, decisions/0008-zone-visibility-model.md]
 tags: [#zones, #model]
 ---
 

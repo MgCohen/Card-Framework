@@ -156,7 +156,7 @@ public void Dispose() {
 
 `SubscribeAllReferences<T>` and `SubscribeAny` follow the same pattern but currently lack symmetric `Unsubscribe` overloads — those listeners live for the lifetime of the store. Use them only for engine-level / tooling listeners that don't need teardown. (Open follow-up — see §Open.)
 
-For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`entities/02 §Subscriptions`](features/entities/models/02-runtime-surface.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view.
+For per-entity variable subscriptions specifically (handle-level `Subscribe(key, …)`), use the storage adapter on the `InstanceWithSlices<TDef>` handle — see [`entities/02 §Subscriptions`](features/entities/models/02-instance.md). The slice-level `Subscribe<EntityState>(entityRef, …)` is the lowest-level view.
 
 ## Atomic batches
 
