@@ -55,7 +55,7 @@ Effects get `IStateScope` (read-only) on `scope.State`. Anything that needs to m
 
 ### Replace semantics
 
-`Replace` is meaningful only when an `IEffectScope` is participating in a before-fold trigger (per [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md)):
+`Replace` is meaningful only when an `IEffectScope` is participating in a before-fold trigger (per [`02-before-fold.md`](features/effects/models/02-before-fold.md)):
 
 - The intercepted command's envelope closes with `CommandResult.Replaced`.
 - `next` dispatches as a fresh command via `engine.Dispatch` — its own full fold from scratch.

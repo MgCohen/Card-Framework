@@ -1,11 +1,11 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-effect.md, features/entities/models/01-definition-instance-model.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-replacement-prevention.md]
+references: [features/effects/models/01-effect.md, features/entities/models/01-definition-instance-model.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-before-fold.md]
 tags: [#effects, #continuous, #ongoing]
 ---
 
-# Ongoing Effects — model
+# Attachment Entity — model
 
 ## What it is
 
@@ -154,7 +154,7 @@ Attachment with `OnBefore<DamageAction>` subscription that:
 2. If `Remaining > 0`, dispatches a `Replace` with `cmd with { Amount = max(0, cmd.Amount - Remaining) }` and decrements `Remaining` to zero.
 3. If `Remaining == 0`, dispatches `DestroyEntityAction { Target = self }`.
 
-Single-instance shape per [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) §"Prevention as modification" — the attachment is the place that owns the counter.
+Single-instance shape per [`02-before-fold.md`](features/effects/models/02-before-fold.md) §"Prevention as modification" — the attachment is the place that owns the counter.
 
 ## Open follow-ups
 

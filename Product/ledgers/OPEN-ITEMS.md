@@ -16,10 +16,10 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 ## Engine + runtime
 
 - id: oq-entity-destruction | kind: question | **Entity destruction / Cleanup lifecycle** — what "destroyed" means for the Store, when the framework Cleanup hook fires relative to the destruction command envelope, and what happens to in-flight dispatches referencing the destroyed entity. Load-bearing for ongoing effects that self-destruct.
-  References: `Product/features/effects/models/03-ongoing-effects.md` §5.
+  References: `Product/features/effects/models/03-attachment-entity.md` §5.
 
 - id: oq-attachment-storage | kind: question | **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model.
-  References: `Product/features/effects/models/03-ongoing-effects.md` §6.
+  References: `Product/features/effects/models/03-attachment-entity.md` §6.
 
 - id: oq-move-validation-execution-drift | kind: question | **Move validation-vs-execution state drift** — when a `MoveCardMutation` (or any mutation with state preconditions) is validated and queued, then another mutation moves the card before the original executes, the original's source precondition fails at execute-time. Current behavior (per Q14 lock, session-20260501-1602): throw at execution. Other strategies to evaluate when this becomes painful: re-resolve source from current state, silent no-op, or deeper interlocking via the trigger-fold / replacement-effects pipeline. Affects all mutations with state preconditions, not just MoveCard.
   References: `Product/features/cards/models/01-card-model.md`, `Product/features/zones/models/01-zone-model.md`.

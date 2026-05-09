@@ -5,7 +5,7 @@ references: [features/effects/models/01-effect.md, features/triggers/models/01-t
 tags: [#effects, #replacement, #prevention]
 ---
 
-# Replacement And Prevention — model
+# Before-Fold — model
 
 ## What it is
 
@@ -157,7 +157,7 @@ triggers.OnBefore<DamageAction>(
     owner: self);
 ```
 
-**Stateful prevention** ("prevent the next N damage") is an ongoing effect that manages its own state — it reduces the payload and decrements an internal counter, deleting itself when exhausted. Ongoing effects are covered in [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md); stateful prevention is one instance of them.
+**Stateful prevention** ("prevent the next N damage") is an ongoing effect that manages its own state — it reduces the payload and decrements an internal counter, deleting itself when exhausted. Ongoing effects are covered in [`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md); stateful prevention is one instance of them.
 
 ### History when an action is replaced
 

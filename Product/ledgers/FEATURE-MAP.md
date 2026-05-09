@@ -115,8 +115,8 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 
 ### `effects` (settled)
 - [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `root`, `effects/04`, `effects/06`
-- [`models/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) — settled, references: `effects/01`, `triggers/01`
-- [`models/03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) — settled, references: `effects/01`
+- [`models/02-before-fold.md`](features/effects/models/02-before-fold.md) — settled, references: `effects/01`, `triggers/01`
+- [`models/03-attachment-entity.md`](features/effects/models/03-attachment-entity.md) — settled, references: `effects/01`
 - [`models/04-effect-scope.md`](features/effects/models/04-effect-scope.md) — settled, references: `effects/01`, `effects/05`, `state`
 - [`models/05-handler-context.md`](features/effects/models/05-handler-context.md) — settled, references: `effects/04`, `effects/06`, `actions/03`, `state`, `entities/02`
 - [`models/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md) — settled, references: `effects/01`, `effects/05`, `actions/02`, `actions/03`, `engine/01`

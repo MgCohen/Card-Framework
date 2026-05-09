@@ -145,7 +145,7 @@ public sealed record TriggerMatch(
     Func<GameCommand, IEffectScope, Task>  Execute);
 ```
 
-The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`. The replacement-prevention semantics consumed by the fold (three before-fold outcomes, replace-of-replacement) are owned by [`effects/02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md).
+The `available` list is passed in — the pipeline does not query the trigger registry directly. The registry is queried upstream and filtered by `GameRulesRuntime.FilterTriggers` before the pipeline receives it. Both methods are `async Task`; the default `FifoPipeline` completes synchronously via `Task.FromResult`. The replacement-prevention semantics consumed by the fold (three before-fold outcomes, replace-of-replacement) are owned by [`effects/02-before-fold.md`](features/effects/models/02-before-fold.md).
 
 ### The fold mechanic
 

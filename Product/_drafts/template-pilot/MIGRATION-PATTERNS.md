@@ -19,7 +19,7 @@ When a Model's ADR situation is final, the below-divider sections take one of fo
 
 | ADR situation | Below-divider shape | Observed in |
 |---|---|---|
-| **No ADR, no historical provenance** | Empty stubs (`*n/a — purely descriptive Model.*` for each section). | `effects/03-ongoing-effects` (no design alternatives weighed at this Model's scope) |
+| **No ADR, no historical provenance** | Empty stubs (`*n/a — purely descriptive Model.*` for each section). | `effects/03-attachment-entity` (no design alternatives weighed at this Model's scope) |
 | **No ADR, historical provenance present** | Brief Q1–QN restructure of the existing inline provenance into `## Options considered`. | `entities/01` (Q1–Q6 from "Core Model Decisions" mega-section), `entities/02` (Q1–Q5 runtime-surface design decisions), `engine/05-game-factory` (Q1 + Q1a–Q1g sub-decisions), `engine/06-match-lifecycle` (Q1–Q6) |
 | **Folded ADR(s) only** | Full Q1–QN content folded into `## Options considered`; provenance fully in the Model. **No `## Decisions` section above the divider.** | `cards/01` (Q1–Q4 from cards/0001), `triggers/01` (Q1–Q2), `effects/01-04` (Q1 each fold), `engine/01-04` (Q1 each fold), `actions/01` (Q1–Q5 from 5 ADRs), `actions/02` (Q1–Q2 from 2 ADRs) |
 | **Folded ADR(s) + elevated ADR** | Folded ADRs go below divider as Q1–QN; elevated ADR gets a one-line pointer in `## Decisions` above the divider; below-divider includes a sub-Q with brief framing pointing at the elevated ADR for full options. | `zones/01` (Q1–Q8 mix: Q1–Q6 from original Zone Model decisions; Q7 folded from zones/0001; Q8 folded from zones/0003; Q4 visibility points at elevated `decisions/0006`) |

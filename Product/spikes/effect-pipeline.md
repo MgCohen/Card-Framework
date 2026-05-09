@@ -928,7 +928,7 @@ Out of scope for this iteration:
 - How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
 - Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
 - Multi-actor decision interleaving inside effects (e.g., MTG split-second).
-- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `effects/02-replacement-prevention.md`); this sketch doesn't add new constraints there.
+- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `effects/02-before-fold.md`); this sketch doesn't add new constraints there.
 
 ## When this lands
 

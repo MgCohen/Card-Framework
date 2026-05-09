@@ -54,8 +54,8 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 The feature has six Models. Each is the canonical home for one load-bearing element of the effects layer:
 
 1. **`Effect`** ([`01-effect.md`](features/effects/models/01-effect.md)) — the orchestrator type; layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths (`engine.Dispatch` vs `scope.Dispatch`).
-2. **Replacement / prevention** ([`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md)) — three before-fold outcomes; `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold.
-3. **Ongoing effects** ([`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md)) — attachment-entity pattern; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup.
+2. **Before-fold** ([`02-before-fold.md`](features/effects/models/02-before-fold.md)) — three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold.
+3. **Attachment entity** ([`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md)) — ongoing effect modeled as an entity; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup.
 4. **`IEffectScope`** ([`04-effect-scope.md`](features/effects/models/04-effect-scope.md)) — the effect's runtime surface: read-only `State`, catalog `Store`, `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel.
 5. **`IHandlerContext`** ([`05-handler-context.md`](features/effects/models/05-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
 6. **`ICommandAwaiter`** ([`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
@@ -97,8 +97,8 @@ The framework invariant: **cancellation of one `GameAction` never automatically 
 | Model | Role |
 |---|---|
 | [`01-effect.md`](features/effects/models/01-effect.md) | `Effect` type + layer hierarchy + two dispatch paths |
-| [`02-replacement-prevention.md`](features/effects/models/02-replacement-prevention.md) | Three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
-| [`03-ongoing-effects.md`](features/effects/models/03-ongoing-effects.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
+| [`02-before-fold.md`](features/effects/models/02-before-fold.md) | Three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
+| [`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
 | [`04-effect-scope.md`](features/effects/models/04-effect-scope.md) | `IEffectScope` (effect's runtime surface) |
 | [`05-handler-context.md`](features/effects/models/05-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
 | [`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |

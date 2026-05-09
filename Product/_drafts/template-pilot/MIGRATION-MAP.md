@@ -73,7 +73,7 @@ Built from 8 parallel audits (one per feature) against the spec at commit `2f9c4
 | `actions/decisions/0008` | Intent vocabulary rename | `actions/models/01-command-pipeline.md` | fold |
 | `cards/decisions/0001` | Card shape | `cards/models/01-card-model.md` | elevate (re-triaged) — **already done in cards migration** |
 | `effects/decisions/0001` | Async layer hierarchy | `effects/models/01-async-dispatch.md` | fold |
-| `effects/decisions/0003` | Replacement priority | `effects/models/02-replacement-prevention.md` | elevate (re-triaged) |
+| `effects/decisions/0003` | Replacement priority | `effects/models/02-before-fold.md` | elevate (re-triaged) |
 | `engine/decisions/0001` | GameRules as class with services | `engine/models/02-gamerules-contract.md` | fold |
 | `engine/decisions/0002` | GameRules zero state | `engine/models/02-gamerules-contract.md` | fold |
 | `engine/decisions/0003` | Snapshot in GameState | `engine/models/04-gamestate-slices.md` | elevate (re-triaged) |
@@ -114,7 +114,7 @@ Sized as per-feature deltas. Mechanical = template rename only. Synthesis = new 
 ### `effects/`
 
 - **Feature root.** Full reshape. Add Vocabulary (Effect / GameAction / CompositeAction / Dispatch x2 / Fold x3 outcomes / Attachment / Decision / Mutator / Envelope — agent listed). Add Architecture (the 6-phase effect lifecycle arc the agent identified). Add Invariants (consolidate the 9 in Model 04 §10 + 6 more visible across Models 01–03).
-- **Models (4).** `01-async-dispatch.md`, `02-replacement-prevention.md`, `03-ongoing-effects.md` are well-shaped — mostly section renames. `04-effect-flow.md` is exceptionally dense (~450 lines, 11 numbered sections including "9 pinned invariants") — **flag for possible split** during migration; not in scope here.
+- **Models (4).** `01-async-dispatch.md`, `02-before-fold.md`, `03-attachment-entity.md` are well-shaped — mostly section renames. `04-effect-flow.md` is exceptionally dense (~450 lines, 11 numbered sections including "9 pinned invariants") — **flag for possible split** during migration; not in scope here.
 - **ADRs.** 2 fold (0001, 0003) + 1 supersede-then-fold (0002).
 
 ### `engine/` (largest by Models)

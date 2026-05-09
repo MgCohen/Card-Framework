@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/effects/models/05-handler-context.md, features/effects/models/03-ongoing-effects.md]
+references: [features/entities/models/01-definition-instance-model.md, features/effects/models/05-handler-context.md, features/effects/models/03-attachment-entity.md]
 tags: [#entities, #runtime, #api, #model]
 ---
 
@@ -373,7 +373,7 @@ Destroying an entity:
 3. Unregister the catalog entry (`store.Catalog.Unregister(ref)`).
 4. Drop any per-kind registry entry.
 
-The framework Cleanup hook (per [`effects/03 §5`](features/effects/models/03-ongoing-effects.md)) handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` or via the bulk `store.RemoveModifiersFromSource(source)` extension.
+The framework Cleanup hook (per [`effects/03 §5`](features/effects/models/03-attachment-entity.md)) handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` or via the bulk `store.RemoveModifiersFromSource(source)` extension.
 
 #### Snapshot / restore
 
@@ -564,7 +564,7 @@ public sealed class UnequipSwordHandler : ICommandHandler<UnequipSwordCommand, U
 }
 ```
 
-For attachment models where the sword *itself* is the attached entity (per [`effects/03 §2`](features/effects/models/03-ongoing-effects.md)), the framework Cleanup hook performs the source-sweep automatically on destroy via `store.RemoveModifiersFromSource(source)` — the explicit `RemoveModifiersFromSource` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
+For attachment models where the sword *itself* is the attached entity (per [`effects/03 §2`](features/effects/models/03-attachment-entity.md)), the framework Cleanup hook performs the source-sweep automatically on destroy via `store.RemoveModifiersFromSource(source)` — the explicit `RemoveModifiersFromSource` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
 
 ### Apply-aura — modifier built in effect, installed in handler
 
