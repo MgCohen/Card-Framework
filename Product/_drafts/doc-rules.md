@@ -17,9 +17,14 @@ Each doc type below follows the same shape:
 - **Identity** — substantive criteria for the decision "is this a [type]?". Each rule states the positive form + its failure mode inline. Drives classification, not formatting.
 - **Decision flow** — stepwise walk for applying the criteria.
 - **Conventions** — formatting / placement / structure that applies *once* a doc is classified as this type. Doesn't bear weight on the decision.
+- **Anti-patterns** *(Model only, currently)* — concrete failure shapes to recognise and reject before they ship.
 - **Heuristics** — judgement calls / soft rules; default behavior stated.
 
 **Per-rule status (inline emoji):** 🟢 locked · 🟡 draft · 🔴 open.
+
+## Audit obligation
+
+These rules apply at creation **and** retroactively. When an Identity rule changes, every doc of that type is re-checked against the new wording. Rules that exist only at creation time drift; rules that gate ongoing existence stay current. Audits are the cheapest moment to catch drift; promotion of a rule from draft → locked triggers a mandatory audit pass over existing docs of that type.
 
 ---
 
@@ -29,19 +34,32 @@ The unit of canonical design. One model = one central element explained in depth
 
 ## Identity (decision criteria)
 
-- 🟢 **Has exactly one central element.** Fails if: title is a concept (lifecycle, validation, loop, pipeline, system) without a concrete thing behind it, or multiple peer elements tied only by a theme (= feature, not model).
-- 🟢 **Central element is a named C# type** — a class, interface, record, struct, payload, service, or other concrete declared type. **Point-at-the-type test:** name the type. If you cannot, it is not a model. Fails if: subject is a pattern, mechanism, process, sub-step of a larger flow, phase of a lifecycle, behavior, relationship, convention, or usage recipe of an existing type. Examples that are *not* models even if load-bearing: "before-fold" (a step inside `ITriggerPipeline.RunBefore`), "decision-routing" (a behavior of `ICommandAwaiter`), "attachment-entity" (a usage pattern of `EntityDefinition`), "async dispatch" (a property of `IEffectScope.Dispatch`). Each belongs as content inside the type that owns it.
+- 🟢 **Has exactly one central element.** Exactly one. **The "and" test:** if the element description uses "X and Y" as peers (e.g. "GameRulesDefinition and GameRulesRuntime", "Entity, Definition, And Instance"), that is two (or more) models, not one. Fails if: title is a concept (lifecycle, validation, loop, pipeline, system, surface, contract) without a concrete thing behind it; multiple peer elements tied only by a theme (= feature, not model); a blob of related types presented together because they share a folder.
+- 🟢 **Central element is a named C# type** — a class, interface, record, struct, payload, service, or other concrete declared type. **Point-at-the-type test:** name the type. If you cannot, it is not a model. Fails if: subject is a pattern, mechanism, process, sub-step of a larger flow, phase of a lifecycle, behavior, relationship, convention, or usage recipe of an existing type. Examples that are *not* models even if load-bearing: "before-fold" (a step inside `ITriggerPipeline.RunBefore`), "decision-routing" (a behavior of `ICommandAwaiter`), "attachment-entity" (a usage pattern of `EntityDefinition`), "async dispatch" (a property of `IEffectScope.Dispatch`), "evaluation loop" (a process the `GameEngine` runs), "snapshot pipeline" (a process producing `AvailableActionsSnapshot`), "framework slice tier" (a convention over `Store`), "runtime surface" (a collection of types). Each belongs as content inside the type that owns it.
 - 🟢 **Central element is load-bearing** — has its own behavior (methods, logic, runtime semantics) **OR** substantial design space (authoring contract, evolution rules, integration story, multi-consumer needs, validation/serialization concerns). Fails if: bare enum, fieldless signal, simple payload that's just shape, single-purpose value type with no design weight. Place those as support inside the model that defines or uses them.
 - 🟢 **Body shape is model work** — focused on one central element with its supports. Fails if: body reads as feature-root work (synthesis / architecture / vocabulary across multiple peer elements) **OR** contains ADR-shaped content (options A/B/C considered + rationale + consequences for a cross-feature decision). Those are other doc types masquerading as a model — split synthesis to feature root, decision to ADR.
 - 🟢 **The model is the central element's canonical home.** Fails if: defines rules / behaviors / extensions of an element defined elsewhere (→ that element's home), recipe composing existing surfaces (→ feature root), method extension to a class defined elsewhere (→ class's home).
+- 🟢 **Title and filename agree, both name the type.** The H1 title and the filename slug must both resolve to the same C# type name. **Title-filename equality test:** does the title's element name (with conventions — drop `I`, hyphenate camelcase) equal the filename slug? If no, the doc is misclassified or mistitled — re-run the point-at-the-type test before renaming.
 
 ## Decision flow
 
-1. **Identify the candidate central element.** No single concrete element → **NOT A MODEL.** Escalate to feature, or fold into existing model.
+1. **Identify the candidate central element.** Exactly one. If the description uses "X and Y" as peers, stop — that is two models, not one.
 2. **Point-at-the-type test.** Can you name the C# class / interface / record / struct / payload / service? Yes → continue. No (it's a pattern, mechanism, sub-step, behavior, or convention) → **NOT A MODEL.** Fold the content into the type that owns it, or into feature root for cross-element synthesis.
-3. **Check load-bearing.** Behavior present OR design space present → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
-4. **Check body shape.** Body focused on the central element + its supports → continue. Body is synthesis-across-peers + ADR design pass → **NOT A MODEL.** Split into feature root + ADR.
-5. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
+3. **Title-filename equality test.** Does the title's element name (drop `I`, hyphenate camelcase) equal the filename slug? Yes → continue. No → mistitled or misclassified — go back to step 1.
+4. **Check load-bearing.** Behavior present OR design space present → continue. Pure data with no design space → **NOT A MODEL.** Place as support.
+5. **Check body shape.** Body focused on the central element + its supports → continue. Body is synthesis-across-peers + ADR design pass → **NOT A MODEL.** Split into feature root + ADR.
+6. **Independence check (soft rule; default = support).** Always reached via parent + small + no design depth → **SUPPORT.** Substantial design depth OR independent consumers OR own supports → **MODEL.**
+
+## Anti-patterns (recognise and reject)
+
+| Smell | What it looks like | Why it fails | Where the content goes |
+|---|---|---|---|
+| **Process / pipeline / loop / surface / contract title** | "Evaluation Loop", "Snapshot Pipeline", "Runtime Surface", "GameRules Contract" | Title names a process or topic, not a type. Fails point-at-the-type test. | Rename to the type, or dissolve if it's a piece of another type's behavior. |
+| **Multi-type bundle** | "GameRulesDefinition and GameRulesRuntime", "Entity, Definition, And Instance Model", title with `&` / `+` / `,` between concepts | Two or more peers presented as one. Fails the "and" test. | Split — one model per type. |
+| **Pattern / convention as model** | "Framework Slice Tier", "Cleanup conventions", "Modifier source convention" | Body describes rules/conventions over types defined elsewhere. Fails canonical-home rule. | Feature root (cross-cutting conventions) or the owning type's model. |
+| **Bare enum or single value type** | A model whose central element is just an `enum` or a fieldless signal | Fails load-bearing — no design weight, no behavior. | Support inside the model that emits or consumes it. |
+| **Title-filename mismatch** | Title says `Game Engine`, filename says `evaluation-loop` | Naming is inconsistent — one of the two is wrong, both should match the type. | Fix the wrong side. If the title is the type and filename is the topic, rename the file. |
+| **Recipe composing existing surfaces** | A model that doesn't define a new type but tells you how to use existing ones in combination | Fails canonical-home rule — content belongs at the level that owns the composition. | Feature root, or examples inside the relevant type's model. |
 
 ## Conventions (once decided)
 
@@ -57,6 +75,7 @@ The unit of canonical design. One model = one central element explained in depth
 
 - 🟡 **Default = support.** Promotion to model needs a reason: substantial depth, independent consumption, supports forming around the element.
 - 🟡 **Piece-of-a-thing trap.** If the candidate is a step inside a larger flow, a phase of a lifecycle, a behavior of a service, or a usage pattern of an existing type, it is a *piece of a thing* — not a thing. Pieces fold into the thing that owns them. Tell: candidate name reads as a verb, gerund, or adjective-noun describing what happens during a larger element's execution.
+- 🟡 **Bundle-of-things trap.** If the candidate covers two or more peer types presented together (Definition + Runtime, Entity + Definition + Instance), it is a bundle — split into one model per type. Tell: the description uses "and" / "+" / "/" between concepts, or the title contains a comma.
 - 🟡 **Title-content mismatch — fix the title first.** When body has a clear central element but title is process-shaped or concept-shaped, rename the title to name the element. Reclassification is the harder fallback, used only when the body has no central element to name.
 - 🟡 **Test for design space:** would the doc body be substantively more than `definition + field list`? If no, no design space → support.
 - 🟡 **Test for independence:** do consumers reach for the element directly, or always via a parent? Direct → promote candidate. Always via parent → support.
