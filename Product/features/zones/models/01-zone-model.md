@@ -63,7 +63,7 @@ Zone runtime state lives across:
 3. **`OwnershipState`** (framework-owned, generic across all catalog-registered handles; defined in `cards/`). `Dictionary<Reference, IActor>`. Both Cards and Zones read ownership through this slice.
 4. **Per-zone-type runtime slices** (game-authored). Carry typed values for that zone type — e.g., `PileState`, `RecipeStackState`. Independent slices; no shared shape across zone types.
 
-`Zone` is held in `store.Catalog`. Zones are spawned during `Build` from layout blocks declared on `GameDefinition.SharedZones` (game-shared zones — stack, battlefield, market) and `PlayerDefinition.PerPlayerZones` (per-player zones — hand, deck, discard, instantiated once per player actor). Per-match deviations from the standard layout flow through the optional `MatchSetup.ZoneOverlay` escape hatch. See [Game Definition](features/engine/models/07-game-definition.md) for the zone-layout contract and the factory's spawn-walk.
+`Zone` is held in `store.Catalog`. Zones are spawned during `Build` from layout blocks declared on `GameDefinition.SharedZones` (game-shared zones — stack, battlefield, market) and `PlayerDefinition.PerPlayerZones` (per-player zones — hand, deck, discard, instantiated once per player actor). Per-match deviations from the standard layout flow through the optional `MatchSetup.ZoneOverlay` escape hatch. See [Game Definition](features/engine/models/06-game-definition.md) for the zone-layout contract and the factory's spawn-walk.
 
 ### Core responsibilities
 

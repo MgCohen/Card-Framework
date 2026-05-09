@@ -940,7 +940,7 @@ When iteration settles, propagate to canonical Models:
 - `Product/features/effects/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
 - `Product/features/effects/models/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
 - `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
-- `Product/features/engine/models/02-gamerules-contract.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
+- `Product/features/engine/models/03-game-rules-runtime.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
 - `Product/features/engine/models/01-game-engine.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
 - `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
 - `Product/features/actions/models/05-available-actions-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.

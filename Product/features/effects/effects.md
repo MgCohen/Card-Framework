@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/engine/models/02-gamerules-contract.md, features/entities/models/02-runtime-surface.md]
+references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/entities/models/02-runtime-surface.md]
 tags: [#effects]
 ---
 

@@ -25,21 +25,21 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/cards/models/01-card-model.md`, `Product/features/zones/models/01-zone-model.md`.
 
 - id: oq-effect-pipeline | kind: question | **Effect-pipeline shape** — per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime needs an effect-level orchestration surface that decides *when each effect starts* (immediate, batched, stacked). Working sketch in [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) — `IEffectPipeline` injected service, `EffectDefinition` + `EffectInstance` split, chain scope per effect-run, two execution verbs. Iterating; not yet promoted to canonical Models. Resolution path lives in the spike's "When this lands" section.
-  References: `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`, `Product/features/engine/models/02-gamerules-contract.md`.
+  References: `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`, `Product/features/engine/models/03-game-rules-runtime.md`.
 
 - id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `EffectDefinition.Execute` is currently a delegate (`Func<EffectInstance, IEffectScope, Task>`); the *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Surfaces concretely once the effect-pipeline sketch promotes to Models.
   References: `Product/spikes/effect-pipeline.md`, `Product/features/effects/models/04-command-awaiter.md`.
 
 - id: oq-runtime-as-state-evaluator | kind: defer | **Runtime collapses toward pure state evaluator** — the runtime contract has progressively shrunk (`Route`/`OnIncomingCommand`/`OnQueueDrained`/`IIntakeQueue` deleted; today: `FilterTriggers + Evaluate`). Long-term direction surfaced during the effect-pipeline sketch: `FilterTriggers` is the next candidate to revisit, and the runtime might collapse to pure state evaluation + state-machine transitions. Not actionable now; revisit after effect-pipeline lands and at least one game stresses the surface.
   Trigger: post-effect-pipeline cascade + first composed-rules game.
-  References: `Product/spikes/effect-pipeline.md`, `Product/features/engine/models/02-gamerules-contract.md`, `Product/decisions/0006-two-pipeline-architecture.md`.
+  References: `Product/spikes/effect-pipeline.md`, `Product/features/engine/models/03-game-rules-runtime.md`, `Product/decisions/0006-two-pipeline-architecture.md`.
 
 - id: oq-session-state-machine | kind: defer | **Session-level state machine** — current `EngineLifecycle` is 3 states (`NotStarted` / `Started` / `Ended`). Real applications need richer states: `Connecting`, `Reconnecting`, `ShowingResults`, `SettingUp`, etc. The runtime is well-positioned to host a richer state machine alongside `Evaluate`. Pin when the first networked or session-aware game forces it.
   Trigger: first networked game, or first game that needs post-match flow (results screen, rematch lobby, etc.).
   References: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
-  References: `Product/features/engine/models/02-gamerules-contract.md` §9.
+  References: `Product/features/engine/models/03-game-rules-runtime.md` §Composition.
 
 - id: oq-fsm-game-state | kind: question | **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were deleted (S15 Q6); snapshot carries templates only. Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives.
   References: `Product/features/effects/models/04-command-awaiter.md` §9.
@@ -48,7 +48,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: bl-actor-ownership-reverse-index | kind: defer | **Reverse-direction lookup on `OwnershipState`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse queries ("what does this player own?") are O(N) filters or game-side aggregates. When a consumer surfaces (e.g., a presentation view that renders all of a player's cards, a rule that needs O(1) reverse lookup at scale), extend `OwnershipState` with a parallel reverse index (`IActor → ImmutableSet<Reference>`) — same two-way pattern as `CardMapState`. Surfaced by Q5 of the domain modeling design pass (2026-05-06).
   Trigger: first reverse-lookup consumer surfaces.
-  References: `Product/features/engine/models/07-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
+  References: `Product/features/engine/models/06-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
 
 - id: oq-effect-cancellation-on-match-end | kind: question | **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await` (target picker, choose-one prompt, chained dispatch), the awaiting effect is still alive. Engine needs a story for cancellation: thread a `CancellationToken` through `IHandlerContext` / `IEffectScope`, hard-cancel via `IDisposable`, or accept that orphaned awaiters resolve into a closed match. Surfaced from the engine match-lifecycle design pass; deferred from that pass because it touches the effect contract, not lifecycle.
   References: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/01-game-engine.md`.
@@ -72,7 +72,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: bl-pile-refs-index | kind: question | **Engine-side index slice for spawned per-game zone references** — `PileCounterGameDefinition.PileRefsAt(state)` (and its analog for any game with a fixed set of game-shared zones) needs an engine-side index slice (`PileIndexState` or similar generic shape — `Dict<TGameKey, Ref<Zone>>` or `IReadOnlyList<Ref<Zone>>`) populated during the factory's Build walk so the runtime and intent mapper can enumerate spawned zone refs without scanning `OwnershipState` or filtering by definition type. Open question: framework-provided generic index, game-side helper, or some intermediate. Surfaced by the PileCounter sample refresh (2026-05-06).
   Trigger: first vertical-slice implementation needs concrete enumeration of game-shared zones spawned at Build.
-  References: `Product/support/samples/pile-counter.md` §9.6 + §11 Q19; `Product/features/engine/models/07-game-definition.md` § Build walk.
+  References: `Product/support/samples/pile-counter.md` §9.6 + §11 Q19; `Product/features/engine/models/06-game-definition.md` § Build walk.
 
 ## Features yet to scaffold
 
@@ -105,8 +105,8 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/general/ARCHITECTURE.md` §Tooling.
 
 - id: bl-replay-viewer | kind: defer | **Replay Viewer** — step through history and inspect state transitions.
-  Trigger: history pipeline (`engine/03-snapshot-pipeline`) reaches `implemented`.
-  References: `Product/features/engine/models/03-snapshot-pipeline.md`; `Product/general/ARCHITECTURE.md` §Tooling.
+  Trigger: history pipeline (`engine/04-available-actions`) reaches `implemented`.
+  References: `Product/features/engine/models/04-available-actions.md`; `Product/general/ARCHITECTURE.md` §Tooling.
 
 - id: bl-rule-trace | kind: defer | **Rule Trace** — explain why an action was legal/illegal and which effects modified it.
   Trigger: first feature reaches `implemented`.

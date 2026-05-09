@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/01-command-pipeline.md, features/engine/models/03-snapshot-pipeline.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/01-command-pipeline.md, features/engine/models/04-available-actions.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #snapshot, #templates, #model]
 ---
 
@@ -9,7 +9,7 @@ tags: [#actions, #snapshot, #templates, #model]
 
 ## What it is
 
-The shape of `AvailableActionsSnapshot` — the typed `ActionTemplate` records the rule publishes through `IAvailableActions` and the presentation layer consumes to render UI affordances. Each command type has a paired `ActionTemplate` subtype carrying the per-action shape (targets, modes, parameters); a shared abstract base lets snapshot machinery store templates uniformly. This Model owns the snapshot's *shape*; the *production pipeline* (who writes when, validation posture) lives in [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md).
+The shape of `AvailableActionsSnapshot` — the typed `ActionTemplate` records the rule publishes through `IAvailableActions` and the presentation layer consumes to render UI affordances. Each command type has a paired `ActionTemplate` subtype carrying the per-action shape (targets, modes, parameters); a shared abstract base lets snapshot machinery store templates uniformly. This Model owns the snapshot's *shape*; the *production pipeline* (who writes when, validation posture) lives in [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md).
 
 The snapshot is the rule's **best-effort approximation** of what's currently legal. Per-binding `handler.Validate` runs at dispatch (authoritative); the snapshot may be stale. UI gates (`AffordanceMap`) project from the snapshot; dispatch catches stale bindings.
 

@@ -28,7 +28,7 @@ public interface IHandlerContext
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`; resolve handles via `ctx.Store.Catalog.Resolve(ref)`; spawn entities via `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension). Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
-- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for production semantics.
+- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for production semantics.
 - **`Resolver`** — `ICommandAwaiter`. Decision handlers call `ctx.Resolver.Wait<TCommand>()` to suspend until a matching command arrives (per [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)).
 - **`Modifiers`** — modifier factory. `Create(key, modifier, source)` returns a fully-populated `ActiveModifier` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in handler / framework code — it breaks replay and multiplayer determinism.
 

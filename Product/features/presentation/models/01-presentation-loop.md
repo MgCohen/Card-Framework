@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-snapshot-pipeline.md, features/engine/models/02-gamerules-contract.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/04-available-actions.md, features/engine/models/03-game-rules-runtime.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md]
 tags: [#presentation, #loop, #available-actions, #model]
 ---
 
@@ -64,7 +64,7 @@ public sealed record AvailableActionsState(
     AvailableActionsSnapshot Snapshot) : BaseState;
 ```
 
-`AvailableActionsSnapshot` carries a typed `ActionTemplate` list (no scope discriminator — see [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) for the shape, [`engine/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) for production).
+`AvailableActionsSnapshot` carries a typed `ActionTemplate` list (no scope discriminator — see [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) for the shape, [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for production).
 
 Treating the snapshot as state — not as a side-channel — has three consequences:
 
@@ -197,7 +197,7 @@ Validation runs at multiple layers; each has a different purpose. The full proje
 
 The relationship between `AffordanceMap` and `handler.Validate`:
 
-- The snapshot is the runtime's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the runtime wants exhaustive coverage, but it's not the default ([`engine/03 §Validation posture`](features/engine/models/03-snapshot-pipeline.md)).
+- The snapshot is the runtime's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the runtime wants exhaustive coverage, but it's not the default ([`engine/04 §Validation posture`](features/engine/models/04-available-actions.md)).
 - `AffordanceMap` is **prophylactic** — projects the snapshot to prevent obviously bad intents.
 - `handler.Validate` at dispatch is **authoritative** — single source of truth, catches stale bindings (state changed between snapshot publication and intent dispatch) and any bindings the runtime didn't pre-validate.
 
@@ -218,7 +218,7 @@ public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult _
 }
 ```
 
-The snapshot write is a service call — see [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
+The snapshot write is a service call — see [`engine/04 §The service-driven model`](features/engine/models/04-available-actions.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
 
 ## Invariants
 
@@ -242,7 +242,7 @@ Model-local invariants. (See `presentation.md ## Invariants` for feature-level r
 
 - **Snapshot lives in state.** `AvailableActionsState.Snapshot` (typed templates only — no scope discriminator). Source: `state/state.md` (folded ADR — snapshot-in-state).
 - **Snapshot element type is typed `ActionTemplate` per command type.** Each command has a paired template carrying source + slots/modes/parameters. Source: `actions/05-available-actions-snapshot.md` (Q1, formerly ADR-0001 — folded).
-- **Snapshot is written via `IAvailableActions`.** By the runtime (default from inside `Evaluate`) or by effects mid-execution. Engine never auto-publishes. Source: `engine/03-snapshot-pipeline.md` (folded ADR — snapshot-writer-iavailableactions) + ADR-0006.
+- **Snapshot is written via `IAvailableActions`.** By the runtime (default from inside `Evaluate`) or by effects mid-execution. Engine never auto-publishes. Source: `engine/04-available-actions.md` (folded ADR — snapshot-writer-iavailableactions) + ADR-0006.
 - **`AffordanceMap` is game-specific.** Lives in the gateway/UI layer; recomputed on every snapshot change; pattern-matches typed templates. Source: this Model's design pass (no source ADR).
 - **View consumes `AffordanceMap`, not snapshot directly.** Templates are wire-form; affordances are UI-form. Source: this Model.
 - **Intents are emitted at drag-end.** Drag highlights come from `AffordanceMap`; the intent is built only on commit. Source: this Model.
@@ -284,7 +284,7 @@ A player makes a move:
 
 ---
 
-*Below: provenance — this Model has no folded or elevated ADR. The presentation-loop design emerged from sketching Pile Counter against the `GameRulesRuntime` contract; the decisions captured (snapshot in state, typed templates, AffordanceMap as projection, View consumes AffordanceMap, intent at drop, layered validation) are documented in `## Decisions` above. Each contributing decision lives in its source feature's provenance — typed templates and on-demand validation in `actions/05-available-actions-snapshot.md`; service-driven snapshot publication in `engine/03-snapshot-pipeline.md`; five validation layers as elevated [ADR-0007](Product/decisions/0007-five-validation-layers.md); two-pipeline architecture as project-wide [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).*
+*Below: provenance — this Model has no folded or elevated ADR. The presentation-loop design emerged from sketching Pile Counter against the `GameRulesRuntime` contract; the decisions captured (snapshot in state, typed templates, AffordanceMap as projection, View consumes AffordanceMap, intent at drop, layered validation) are documented in `## Decisions` above. Each contributing decision lives in its source feature's provenance — typed templates and on-demand validation in `actions/05-available-actions-snapshot.md`; service-driven snapshot publication in `engine/04-available-actions.md`; five validation layers as elevated [ADR-0007](Product/decisions/0007-five-validation-layers.md); two-pipeline architecture as project-wide [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).*
 
 ## Options considered
 

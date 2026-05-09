@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/engine/models/07-game-definition.md]
+references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/engine/models/06-game-definition.md]
 tags: [#entities, #definition, #instance, #model]
 ---
 
@@ -34,7 +34,7 @@ Definition IDs must be stable — needed for save/load, replay, debugging, and f
 
 Examples: card definitions, token definitions, zone definitions, villager definitions, equipment definitions, relic definitions, card pack definitions, system helper definitions.
 
-**Definitions implement `ISliceProvider` via the framework parent `DefinitionWithSlices`.** `Scaffold.EntityDefinition` is external; we don't modify it in place. The framework introduces a parent class — `DefinitionWithSlices : Scaffold.EntityDefinition, ISliceProvider` — that consolidates the contract on the Definition side. The framework definition kinds (`CardDefinition`, `ZoneDefinition`, `PlayerDefinition`) inherit from `DefinitionWithSlices` and pick up a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Concrete subclasses override to declare per-instance slices (a `PileDefinition` declares `PileState`; a `MagicPlayerDefinition` declares `ManaPoolState`). `GameDefinition` is independent of `Scaffold.EntityDefinition` and implements `ISliceProvider` directly. The factory walks definitions/instances at `Build` and installs returned slices, keying them at the instance's `SelfRef`. See [Game Definition](features/engine/models/07-game-definition.md) for the spawn-walk pseudocode.
+**Definitions implement `ISliceProvider` via the framework parent `DefinitionWithSlices`.** `Scaffold.EntityDefinition` is external; we don't modify it in place. The framework introduces a parent class — `DefinitionWithSlices : Scaffold.EntityDefinition, ISliceProvider` — that consolidates the contract on the Definition side. The framework definition kinds (`CardDefinition`, `ZoneDefinition`, `PlayerDefinition`) inherit from `DefinitionWithSlices` and pick up a default empty `GetInitialSlices() => Array.Empty<BaseState>()`. Concrete subclasses override to declare per-instance slices (a `PileDefinition` declares `PileState`; a `MagicPlayerDefinition` declares `ManaPoolState`). `GameDefinition` is independent of `Scaffold.EntityDefinition` and implements `ISliceProvider` directly. The factory walks definitions/instances at `Build` and installs returned slices, keying them at the instance's `SelfRef`. See [Game Definition](features/engine/models/06-game-definition.md) for the spawn-walk pseudocode.
 
 ### Instances
 

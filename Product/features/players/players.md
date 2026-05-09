@@ -1,7 +1,7 @@
 ---
 type: feature
 status: settled
-references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/engine/models/05-game-factory.md, features/engine/models/07-game-definition.md]
+references: [features/entities/models/02-runtime-surface.md, features/zones/models/01-zone-model.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md]
 tags: [#players]
 ---
 
@@ -67,7 +67,7 @@ Cross-Model rules that hold across the Model and shape how other features must r
 **Does not own:**
 - Entity bridge — `InstanceWithSlices<TDef>`, `DefinitionWithSlices`, `IEntityVariableStorage` → `entities/`
 - Zone semantics, `ZoneDefinition` → `zones/`
-- Match-construction wiring — `MatchSetup.Actors`, the `Build` walk that calls `Player.Spawn` → `engine/05-game-factory.md` + `engine/07-game-definition.md`
+- Match-construction wiring — `MatchSetup.Actors`, the `Build` walk that calls `Player.Spawn` → `engine/05-game-factory.md` + `engine/06-game-definition.md`
 - Card-ownership runtime semantics — `OwnershipState` keyed `Reference → IActor`; mutation lives in → `cards/` and `effects/`
 - Command attribution — `GameAction.Actor` carries `ActorId`; pipeline wiring → `actions/`
 - Per-actor visibility filtering at the transport boundary → `presentation/`

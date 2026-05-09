@@ -11,7 +11,18 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-**Effect-pipeline spike re-grounded around graphflow — 10 decisions locked via design pass (2026-05-08).** The user surfaced `com.scaffold.graphflow` (an existing Unity package they built — source-generator-driven graph runner with `IGraphEntry`, `GraphRunner`, `Flow`, `OnTrigger<TEvent>`) as the reference shape that ties together several of the spike's loose ends. Walked Q1–Q10 in design-pass mode. **Spike re-write pending** — locked decisions not yet applied to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md); models stay frozen until the spike re-write lands.
+**Engine reorg Phase A landed (2026-05-09).** Six-item audit list opened; first four (engine-side) cascaded as one move:
+
+- **Split `engine/02-gamerules-contract.md`** into `02-game-rules-definition.md` (data half — trimmed to ~110 lines per user feedback that the Definition class is too thin for a fat doc) + `03-game-rules-runtime.md` (runtime brain, ~444 lines, lifts most of the original).
+- **Renamed + renumbered `engine/03-snapshot-pipeline.md` → `04-available-actions.md`** (H1 changed from "Snapshot Production" to "Available Actions"; framing now around the `IAvailableActions` surface).
+- **Renumbered `engine/07-game-definition.md` → `06-game-definition.md`** (clean engine sequence: 01–06).
+- **`ISliceProvider` audit deferred to Phase B** — the entities split (next) is the natural moment to decide whether `ISliceProvider` lives in entities or stays inline in `06-game-definition`.
+
+Cascade: 17 files updated for cross-refs (FEATURE-MAP model breakdown + dependency graph cycle observation; GLOSSARY GameRulesDefinition/Runtime entries; OPEN-ITEMS three engine references; engine.md feature root architecture section + execution arc + framework-slice catalog row; engine/01, engine/05, actions/01, actions/03, actions/04, actions/05, effects/effects.md, effects/03, presentation/01, players/01, triggers/triggers.md, triggers/01, pile-counter sample, ADRs 0006/0007 context-doc fields).
+
+**Phase B pending** (next): split `entities/01-definition-instance-model.md` and `entities/02-runtime-surface.md` per concept axis (definition / instance / variable / modifier / attachment).
+
+**Earlier this same week (2026-05-08).** Effect-pipeline spike re-grounded around graphflow — 10 decisions locked via design pass. Walked Q1–Q10 in design-pass mode. **Spike re-write pending** — locked decisions not yet applied to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md); models stay frozen until the spike re-write lands.
 
 Locked shape (from the design pass — not yet patched into the spike):
 
@@ -39,33 +50,34 @@ Two parallel cascades landed earlier (2026-05-06) via [PR #102](https://github.c
 - `players/01-player-model.md` + `players/players.md` — `Player` unsealed; `PlayerDefinition` re-parented onto `DefinitionWithSlices`.
 - `engine/05-game-factory.md` — added "Registration contract" section.
 - `engine/01-game-engine.md` — added §4.4 "Match setup".
-- `engine/07-game-definition.md` — `ISliceProvider` reach-points reframed.
+- `engine/06-game-definition.md` — `ISliceProvider` reach-points reframed.
 - ADRs: `cards/decisions/0001` and `zones/decisions/0001` — open-seams amendments at the top + sample code updated.
 - `ledgers/GLOSSARY.md` — `CardRegistry` retired; `DefinitionWithSlices`, `InstanceWithSlices<TDef>`, `ZoneVisibilityPolicy` added; `Card`/`Zone`/`Player` entries updated.
 - `ledgers/OPEN-ITEMS.md` — `bl-zone-visibility-custom-policy-serialization` (Q7), `bl-card-resolution-helper-shape` (Q6), `bl-pile-refs-index` (PileCounter follow-up) added.
 
 **PileCounter sample refresh + cascade tail cleanup.** `support/samples/pile-counter.md §9` fully rewritten — refs throughout, per-zone `PileState`, framework `MoveCardMutation` for the zone move with game-side payloads (`AdjustPileCounterPayload`, `SetLastMovePayload`) for counter cache + last-move memory, `PileCounterGameDefinition` bundle, runtime-driven setup commands. The four Models that referenced its outdated patterns (`engine/03`, `actions/02`, `presentation/01`, `engine/04`) refreshed to match. `effects/04` mutator example updated.
 
-Earlier in the broader project: domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into canonical Models (`engine/07-game-definition`, `players/01-player-model`, `engine/05-game-factory` MatchSetup reshape, `ISliceProvider` adoption across cards/zones/entities, ADR-0005 + glossary + FEATURE-MAP updates, domain-model spike superseded). Plan A/B/C doc cascade landed earlier ([PR #100](https://github.com/MgCohen/Card-Framework/pull/100)).
+Earlier in the broader project: domain modeling design pass + patch cascade **both landed** (2026-05-06). 13 decisions propagated into canonical Models (`engine/06-game-definition`, `players/01-player-model`, `engine/05-game-factory` MatchSetup reshape, `ISliceProvider` adoption across cards/zones/entities, ADR-0005 + glossary + FEATURE-MAP updates, domain-model spike superseded). Plan A/B/C doc cascade landed earlier ([PR #100](https://github.com/MgCohen/Card-Framework/pull/100)).
 
 ---
 
 ## 🎯 Active focus
 
-**Patch [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) to apply the Q1–Q10 verdicts.** Spike re-write: reframe TL;DR around graphflow lens; replace `EffectBindings` with typed `Payload`; add `EffectSubscriptionRegistry` + `IEffectDefinitionCatalog` sections; drop `Trigger<T>` from the type hierarchy; drop `IEffectScope.Decide`; rewrite trigger samples as pure `EffectDefinition`; update Stacklands/MTG/Hearthstone runtime examples; add Q10 note in "Open follow-ups" pointing decision-action prompt-emission at `oq-fsm-game-state`. Models stay frozen until this re-write lands.
+**Phase B of the workflow audit: split `entities/01-definition-instance-model.md` and `entities/02-runtime-surface.md` per concept axis** (definition / instance / variable / modifier / attachment). Each Model gets carved into its concept-aligned successors; cross-refs cascade across cards/zones/players/engine.
 
-Open follow-ups surfaced by the design pass (not blocking, listed for later promotion):
+Concrete sub-steps (mirrors Phase A's pattern):
 
-- `oq-effect-authoring` — recipe shape inside `EffectDefinition.Execute` (data, code, graph, hybrid). Authoring feature scope. Now also absorbs Q7 (match-build integrity) and Q8 (`Trigger<T>` syntax sugar).
-- `oq-fsm-game-state` — decision-action prompt emission joins this thread (per Q10).
-- `oq-runtime-as-state-evaluator` — long-term direction; `FilterTriggers` is the next candidate to revisit.
-- `oq-session-state-machine` — richer engine lifecycle (Connecting / Started / Running / Reconnecting / Ended / ShowingResults) on top of the current 3-state `EngineLifecycle`.
+- Read both entities Models end-to-end; map content to the five concept Models.
+- Decide canonical home for `ISliceProvider` interface declaration (entities-side vs engine/06; surfaced as item 4 from the original audit list).
+- Decide canonical home for `DefinitionWithSlices` + `InstanceWithSlices<TDef>` parents (likely the new `definition` and `instance` Models respectively).
+- Author the new Models; delete originals; cascade cross-refs.
+- Update FEATURE-MAP entities row + model breakdown; update GLOSSARY entries that reference entities Model paths.
 
-Alternative threads if the spike re-write pauses:
+Alternative threads if Phase B pauses:
 
+- **Effect-pipeline spike re-write** — apply the locked Q1–Q10 verdicts from 2026-05-08 to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until this lands.
 - **Resolve top open items.** `oq-entity-destruction`, `oq-effect-cancellation-on-match-end`, `oq-attachment-storage`.
 - **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract.
-- **Promote a `considered` feature** (`authoring`, `interaction`, `networking`).
 
 ---
 

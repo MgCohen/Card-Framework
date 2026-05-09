@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/05-game-factory.md, features/state/state.md, features/engine/models/02-gamerules-contract.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md]
+references: [features/engine/models/05-game-factory.md, features/state/state.md, features/engine/models/02-game-rules-definition.md, features/zones/models/01-zone-model.md, features/cards/models/01-card-model.md, features/players/models/01-player-model.md, features/entities/models/01-definition-instance-model.md, features/entities/models/02-runtime-surface.md]
 tags: [#engine, #game-definition, #slices, #factory]
 ---
 
@@ -58,7 +58,7 @@ public abstract class GameDefinition : ISliceProvider
 
 Concrete game-mode definitions subclass `GameDefinition` and provide:
 
-- **`Rules`** — the `GameRulesDefinition` that pairs (via container open-generic resolution) with the `GameRulesRuntime<TDefinition>` for this mode. See [`engine/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md).
+- **`Rules`** — the `GameRulesDefinition` that pairs (via container open-generic resolution) with the `GameRulesRuntime<TDefinition>` for this mode. See [`engine/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md) and [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md).
 - **`CardCatalog`** — the cards available in this mode (the format/banlist). Per-match deck composition is separate; setup commands or specific game flows decide which cards land in which zones. The catalog is reference data.
 - **`SharedZones`** — game-level zone definitions. The factory spawns one `Zone` per definition at `Build`. Examples: stack, battlefield, market, shared discard.
 - **`DefaultPlayerDefinition`** — the `PlayerDefinition` applied to every player actor in `MatchSetup.Actors`. Asymmetric games override per-actor via `MatchSetup.PlayerDefinitionOverlay`.
@@ -227,7 +227,7 @@ The framework distinguishes **structural ownership** (declarative, set at `Build
 
 ## Decisions
 
-*n/a — no elevated ADR.* (The bundle shape and Build-walk ordering are descriptive — they sit on top of [`engine/05`](features/engine/models/05-game-factory.md) (factory two-layer split), [`engine/04`](features/state/state.md) (slice tier model), and the entity-bridge `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes from [`entities/01`](features/entities/models/01-definition-instance-model.md). No new options were considered for this Model itself.)
+*n/a — no elevated ADR.* (The bundle shape and Build-walk ordering are descriptive — they sit on top of [`engine/05`](features/engine/models/05-game-factory.md) (factory two-layer split), [`state/state.md`](features/state/state.md) (slice tier model), and the entity-bridge `InstanceWithSlices<TDef>` / `DefinitionWithSlices` parent classes from [`entities/01`](features/entities/models/01-definition-instance-model.md). No new options were considered for this Model itself.)
 
 ## Examples
 
@@ -334,7 +334,7 @@ The overlay replaces `Game.DefaultPlayerDefinition` for the specified actors. Ea
 
 ## Options considered
 
-*n/a — descriptive Model. The bundle shape, `ISliceProvider` interface, and the canonical Build walk are the natural composition of three earlier decisions: (1) [ADR-0001 (`gamerules-as-class-with-services`)](features/engine/models/02-gamerules-contract.md) — `GameRulesDefinition` is the data half of the runtime split, carried on `GameDefinition.Rules`; (2) the factory's two-layer split ([`engine/05`](features/engine/models/05-game-factory.md)) — per-match data flows through the factory, not through DI; (3) the slice tier model ([`engine/04`](features/state/state.md)) — framework-owned vs game-authored. No new options-weighing was needed for this Model.*
+*n/a — descriptive Model. The bundle shape, `ISliceProvider` interface, and the canonical Build walk are the natural composition of three earlier decisions: (1) [`engine/03 §Q1 (rules-layer shape)`](features/engine/models/03-game-rules-runtime.md) — `GameRulesDefinition` is the data half of the runtime split, carried on `GameDefinition.Rules`; (2) the factory's two-layer split ([`engine/05`](features/engine/models/05-game-factory.md)) — per-match data flows through the factory, not through DI; (3) the slice tier model ([`state/state.md`](features/state/state.md)) — framework-owned vs game-authored. No new options-weighing was needed for this Model.*
 
 ## Rationale
 
