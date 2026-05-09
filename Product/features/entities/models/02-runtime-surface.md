@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition-instance-model.md, features/effects/models/05-handler-context.md, features/effects/models/03-attachment-entity.md]
+references: [features/entities/models/01-definition-instance-model.md, features/effects/models/03-handler-context.md, features/entities/models/02-runtime-surface.md]
 tags: [#entities, #runtime, #api, #model]
 ---
 
@@ -373,7 +373,7 @@ Destroying an entity:
 3. Unregister the catalog entry (`store.Catalog.Unregister(ref)`).
 4. Drop any per-kind registry entry.
 
-The framework Cleanup hook (per [`effects/03 §5`](features/effects/models/03-attachment-entity.md)) handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` or via the bulk `store.RemoveModifiersFromSource(source)` extension.
+The framework Cleanup hook handles ongoing-effect attachments automatically — when an attachment entity is destroyed, every modifier sourced to it is swept from every target via `RemoveModifiersBySourcePayload(target, new ModifierSource(attachment.SelfRef, 0))` or via the bulk `store.RemoveModifiersFromSource(source)` extension. See "Attachment-entity usage" below for how ongoing effects are realized as attachment entities.
 
 #### Snapshot / restore
 
@@ -384,6 +384,81 @@ Snapshots contain canonical `EntityState` slices, never handles. The catalog is 
 3. The mapping `Ref<T> → definition` is engine-managed (typically a sibling slice that records "what was spawned" so the restore knows which `TDef` to instantiate).
 
 Snapshot rollback to a state where an entity still existed re-creates its row and re-issues the handle. Subscribers attached to old handles are gone — projections that need to bind on rollback must re-subscribe through the catalog.
+
+### Attachment-entity usage
+
+Ongoing effects (auras, stateful prevention, status effects, equipment buffs) are realized as **attachment entities**: an entity instance that is created, associated with a host, subscribes to triggers, ticks or reacts over time, and dispatches `DestroyEntityAction` on itself when done. No separate ongoing-effect machinery — the attachment uses `EntityDefinition` + `Ref<T>` + variables + subscriptions like any other entity.
+
+```
+Create attachment entity (CreateAndAttachAction)
+  → Spawn via store.Spawn<TDef>; register handle in catalog
+  → Associate with host (relationship slice or attachment registry)
+  → definition.Register(triggers, self, ctx) — subscribe to relevant signals
+  → React each time trigger fires (apply effect, update internal state)
+  → When done condition met: scope.Dispatch(DestroyEntityAction { Target = self })
+  → Cleanup hook unregisters every subscription owned by self
+```
+
+```csharp
+public sealed class HealOverTimeDefinition : EntityDefinition
+{
+    public int HealAmount { get; init; }
+    public int TurnCount  { get; init; }
+
+    // ADR-0005: `self` is a stable subscription key — entities use their typed Ref<T>
+    // as the trigger owner so subscriptions survive CardRef rotations.
+    public override void Register(ITriggerSystem triggers, Ref<HealOverTime> self, Context ctx)
+    {
+        triggers.OnAfter<TurnStartSignal>(
+            condition: (_, _) => true,
+            react: (_, scope) =>
+            {
+                var attachment = scope.Store.Catalog.Resolve(self);
+                var remaining  = attachment.Storage.GetVariable<int>(Vars.TurnsRemaining);
+
+                scope.Dispatch(new HealActorAction { Target = scope.GetHost(self), Amount = HealAmount });
+                scope.Dispatch(new DecrementTurnsRemainingAction { Target = self });
+                if (remaining - 1 <= 0)
+                    scope.Dispatch(new DestroyEntityAction { Target = self });
+            },
+            owner: self);
+    }
+}
+```
+
+#### Common patterns
+
+- **Duration-based (N turns).** Subscribe to `TurnStartSignal`. Decrement a counter variable each tick. Dispatch `DestroyEntityAction` when counter reaches zero.
+- **Condition-based (until end of turn).** Subscribe to `TurnEndSignal`. Dispatch `DestroyEntityAction` on self unconditionally when the signal fires.
+- **Source-linked / aura (while source is in play).** The source entity creates the attachment on the target. When the source is destroyed or leaves the relevant zone, it dispatches `DestroyEntityAction` on the attachment. The attachment does not poll — it is driven by the source's own lifecycle.
+- **Global effect (affects all entities this turn).** The attachment is created and associated with a global game entity (match state or active player) rather than a specific card.
+- **Stateful prevention ("prevent the next N damage").** Attachment with `OnBefore<DealDamageAction>` subscription that reads a `Remaining` variable, calls `scope.Replace` with a reduced-amount copy, decrements the counter, and dispatches `DestroyEntityAction` when exhausted.
+
+#### Creating and attaching
+
+`CreateAndAttachAction` is a normal `GameAction`:
+
+```csharp
+new CreateAndAttachAction
+{
+    Definition = new HealOverTimeDefinition { HealAmount = 1, TurnCount = 3 },
+    Host       = targetCreature
+}
+```
+
+Its handler:
+
+1. Spawns the entity via `ctx.Store.Spawn<TDef>` (allocates `Ref<T>`, registers `EntityState`, registers handle in catalog — see "Lifecycle" above).
+2. Associates it with the host (relationship slice on the host, or a dedicated attachment registry).
+3. Calls `definition.Register(triggers, newInstance, ctx)` to activate subscriptions.
+
+Attachment storage shape (sub-zone on host, global registry, or dedicated zone) is tied to the zone model and not locked here.
+
+#### Cleanup is automatic
+
+The framework Cleanup hook (per "Destroy" above) unregisters every subscription owned by the destroyed attachment via `RemoveAll(self)`. Modifiers contributed by the attachment use `ModifierSource = attachment.SelfRef`, so cleanup is uniform via `RemoveModifiersBySourcePayload` (per-target) or `store.RemoveModifiersFromSource(source)` (bulk) — same machinery used by equipment, auras, and any other entity that contributes modifiers.
+
+The exact lifecycle (what "destroyed" means, when Cleanup fires relative to the destruction envelope, what happens to in-flight dispatches that reference the destroyed entity) is a deferred topic (`oq-entity-destruction`).
 
 ### Read consistency
 
@@ -564,7 +639,7 @@ public sealed class UnequipSwordHandler : ICommandHandler<UnequipSwordCommand, U
 }
 ```
 
-For attachment models where the sword *itself* is the attached entity (per [`effects/03 §2`](features/effects/models/03-attachment-entity.md)), the framework Cleanup hook performs the source-sweep automatically on destroy via `store.RemoveModifiersFromSource(source)` — the explicit `RemoveModifiersFromSource` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
+For attachment models where the sword *itself* is the attached entity (per [`effects/03 §2`](features/entities/models/02-runtime-surface.md)), the framework Cleanup hook performs the source-sweep automatically on destroy via `store.RemoveModifiersFromSource(source)` — the explicit `RemoveModifiersFromSource` shown here is the long form, useful when the unequip semantics differ (e.g. sword survives but stops contributing).
 
 ### Apply-aura — modifier built in effect, installed in handler
 

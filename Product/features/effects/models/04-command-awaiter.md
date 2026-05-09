@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-effect.md, features/effects/models/05-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-evaluation-loop.md]
+references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-evaluation-loop.md]
 tags: [#effects, #model, #awaiter, #decisions]
 ---
 
@@ -43,7 +43,7 @@ public interface ICommandAwaiter
 - **`Wait<TCommand>(ct)`** — registers a closure-captured `cmd is TCommand` predicate backed by a `TaskCompletionSource<TCommand>`. Returns the `Task`. Used by decision handlers to pause until a matching command arrives. Single-open per type-hierarchy is a runtime assert.
 - **`TryResolve(cmd)`** — pattern-matches `cmd` against every registered predicate. On a match, completes the associated TCS with the concrete command; returns `true`. Returns `false` if no predicate matches (the engine falls through to the normal pipeline). Called by the engine's pre-pipeline check on every `Dispatch`.
 
-The awaiter is exposed on `IHandlerContext` (per [`05-handler-context.md`](features/effects/models/05-handler-context.md)). Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
+The awaiter is exposed on `IHandlerContext` (per [`03-handler-context.md`](features/effects/models/03-handler-context.md)). Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
 
 ### Decision routing — type-only
 

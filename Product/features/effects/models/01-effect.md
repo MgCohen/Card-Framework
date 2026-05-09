@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-scope.md, features/effects/models/06-command-awaiter.md, features/engine/models/01-evaluation-loop.md]
+references: [features/triggers/models/01-trigger-fold.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/engine/models/01-evaluation-loop.md]
 tags: [#effects, #model]
 ---
 
@@ -57,7 +57,7 @@ There are two ways a `GameAction` can be executed, and they are not interchangea
 | **`engine.Dispatch(action)`** | Queued, processed after current drain step | Later | Own envelope, independent | `GameRules.Evaluate`, trigger reactions, player input |
 | **`scope.Dispatch(action)`** | Executed **immediately**, inline | Right now | Own envelope, published before next line runs | Effects |
 
-`scope.Dispatch` is not deferred. The call executes the action's full lifecycle (before-fold → handler → after-fold → envelope published) synchronously in the calling task. The effect `await`s it and cannot advance to the next line until the action finishes — including if that action is waiting for player input (per [`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)).
+`scope.Dispatch` is not deferred. The call executes the action's full lifecycle (before-fold → handler → after-fold → envelope published) synchronously in the calling task. The effect `await`s it and cannot advance to the next line until the action finishes — including if that action is waiting for player input (per [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)).
 
 ```csharp
 // Effect — each line executes and completes before the next begins
@@ -75,7 +75,7 @@ The engine is effectively paused on `await pipeline.Execute(ExecuteCardAction)` 
 
 ### `IEffectScope`
 
-The effect interacts with the pipeline through an `IEffectScope`. The full interface is defined in [`04-effect-scope.md`](features/effects/models/04-effect-scope.md). Effect authoring uses three of its members:
+The effect interacts with the pipeline through an `IEffectScope`. The full interface is defined in [`02-effect-scope.md`](features/effects/models/02-effect-scope.md). Effect authoring uses three of its members:
 
 - `scope.State` — read slices to choose what to dispatch next.
 - `scope.Dispatch(action)` — execute an action immediately and inline; awaits its `CommandResult`.
@@ -109,7 +109,7 @@ Effect: PlayFireballEffect
             → envelope: fireball moved to discard
 ```
 
-Three envelopes. All clean. No command suspends. The effect awaits each one in sequence. Decision mechanic (how `RequestTargetAction.Handle` awaits the player) lives in [`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md).
+Three envelopes. All clean. No command suspends. The effect awaits each one in sequence. Decision mechanic (how `RequestTargetAction.Handle` awaits the player) lives in [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md).
 
 ### Choose one (Discover)
 
@@ -151,7 +151,7 @@ Each envelope is independent. The triggered ability dispatches through the norma
 ## Open follow-ups
 
 - **Effect authoring & registration.** The "recipe" a definition holds for instantiating an `Effect` (data, code, graph, or hybrid) is deliberately undesigned. Tracked as a future authoring-feature Model.
-- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice. Left to ongoing-effects/authoring follow-up. [`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md) settles the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
+- **Effect per-instance state.** Where ongoing-effect counters live — on the `Effect` object, on the entity's `EntityState`, or on a dedicated slice. Left to ongoing-effects/authoring follow-up. [`entities/02-runtime-surface.md` §Attachment-entity usage](features/entities/models/02-runtime-surface.md) settles the attachment-entity shape; this Model only reaffirms that effects do not get a hidden mutation channel.
 - **Mulligan lifecycle** — pipeline action vs separate session setup phase. Tied to game lifecycle.
 
 ---
@@ -170,7 +170,7 @@ Async behavior in a card game spans several distinct kinds: animation handoff (p
 
 ## Rationale
 
-Layered async means each kind of pause has its own surface: presentation owns animation handoff, decisions are `GameAction`s with their own envelope (per [`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)), the engine yields between drain steps. Effects compose across these layers via `IEffectScope`, never by collapsing them into a single returned `Task`. This keeps testability per layer and makes the dispatch contract uniform regardless of which layer is currently waiting.
+Layered async means each kind of pause has its own surface: presentation owns animation handoff, decisions are `GameAction`s with their own envelope (per [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)), the engine yields between drain steps. Effects compose across these layers via `IEffectScope`, never by collapsing them into a single returned `Task`. This keeps testability per layer and makes the dispatch contract uniform regardless of which layer is currently waiting.
 
 ## Consequences
 

@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/02-gamerules-contract.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/06-command-awaiter.md]
+references: [features/engine/models/02-gamerules-contract.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-command-awaiter.md]
 tags: [#engine, #snapshot, #available-actions]
 ---
 
@@ -168,13 +168,13 @@ public sealed record AvailableActionsSnapshot(
     IReadOnlyList<ActionTemplate> Templates);
 ```
 
-There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted). "Is an await open?" is answered by `ICommandAwaiter` ([`effects/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)), not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
+There is no `Scope` discriminator (`FreeInput` / `DecisionPrompt` are deleted). "Is an await open?" is answered by `ICommandAwaiter` ([`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)), not the snapshot. The template set itself conveys context: during a targeting decision the snapshot contains only the legal-target templates; during free input it contains the full main-phase template set. The UI renders what the template set implies; it does not need a separate scope signal.
 
 The FSM-shaped game-state model (`PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor to type-only routing. See "Open follow-ups."
 
 ### Effect-side symmetry
 
-Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. `IHandlerContext` shape lives in [`effects/05-handler-context.md`](features/effects/models/05-handler-context.md); type-only decision routing and await semantics live in [`effects/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate` surface, no decision-id field — type-only routing answers "is a decision open?"); decision handlers `await ctx.Resolver.Wait<TCommand>()`.
+Effects mid-execution write the snapshot through the same `IAvailableActions` service the rule uses, exposed on `IHandlerContext`. `IHandlerContext` shape lives in [`effects/03-handler-context.md`](features/effects/models/03-handler-context.md); type-only decision routing and await semantics live in [`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md). Headlines: `IHandlerContext` carries `Store`, `Actions`, `Resolver` (no `Mutate` surface, no decision-id field — type-only routing answers "is a decision open?"); decision handlers `await ctx.Resolver.Wait<TCommand>()`.
 
 A target-picker decision handler under that model:
 
@@ -291,7 +291,7 @@ The reasoning, in three points:
 ## Open follow-ups
 
 - **`GameState` slice catalog.** The Scaffold State binding makes "what slices exist" a concrete question (turn, phase, piles, available-actions, decisions, last-move, etc.). Tracked in [`engine/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md).
-- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/06-command-awaiter.md` §Open follow-ups](features/effects/models/06-command-awaiter.md).
+- **FSM-shaped game state.** `FreeInput` / `DecisionPrompt` were dropped. Type-only routing in `ICommandAwaiter` is the current mechanism. The richer FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives. See [`effects/04-command-awaiter.md` §Open follow-ups](features/effects/models/04-command-awaiter.md).
 - **Composition.** `Append` / `Clear` are on the service surface for future use. Module composition (`IActionProvider` / `IActionPolicy` / ordering / enable-disable) is deliberately undesigned — pin when first composed-rules game forces it.
 - **`Source` nullability.** Sourceless `EndTurn` keeps `Source` nullable on the base. Aesthetic; defer ([`actions/02 §Open`](features/actions/models/05-available-actions-snapshot.md)).
 - **`PlayerChoice` shape under typed templates.** With typed templates, `IntentMapper` switches on template type and unpacks named slots itself; `PlayerChoice` may collapse to positional `IReadOnlyList<Reference>` + `IReadOnlyDictionary<string, object>` parameters. Pin when `IntentMapper` is implemented.

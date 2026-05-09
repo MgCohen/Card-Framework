@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-evaluation-loop.md, features/engine/models/05-game-factory.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-before-fold.md]
+references: [features/engine/models/01-evaluation-loop.md, features/engine/models/05-game-factory.md, features/triggers/models/01-trigger-fold.md, features/triggers/models/01-trigger-fold.md]
 tags: [#engine, #gamerules, #contract]
 ---
 
@@ -158,7 +158,7 @@ public sealed class MagicRulesRuntime : GameRulesRuntime<MagicRulesDefinition>
 | Service | Purpose |
 |---|---|
 | `TDefinition Definition` | The serializable data object selected for this match (`GameDefinition.Rules`). Read config knobs through it. Immutable for the runtime's lifetime. |
-| `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/04-effect-scope.md`](features/effects/models/04-effect-scope.md). |
+| `IStateScope State` | Scaffold read-only state surface. Read sliced state via `State.Get<TState>()`. Read fresh per access. See [`effects/02-effect-scope.md`](features/effects/models/02-effect-scope.md). |
 | `IAvailableActions Actions` | Snapshot writer — `Set` / `Append` / `Clear`. The runtime (and effects) call this to publish; the engine never auto-publishes. See [`engine/03 §The service-driven model`](features/engine/models/03-snapshot-pipeline.md). |
 | Game-specific subsystems | Concrete runtimes inject whatever else they need (`IStackSystem`, `IDeckSystem`, …) via their own constructor. Registered in the game's installer. The framework knows nothing about them. |
 
@@ -185,7 +185,7 @@ Called by the pipeline once per command, twice per execution (one before-fold, o
 public enum TriggerPhase { Before, After }
 ```
 
-The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`triggers/01 §Execution`](features/triggers/models/01-trigger-fold.md) for the `ITriggerPipeline` contract and [`effects/02 §ITriggerPipeline`](features/effects/models/02-before-fold.md) for its role in the before-fold. `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
+The split between availability (the runtime) and ordering (`ITriggerPipeline`) is deliberate — see [`triggers/01 §Execution`](features/triggers/models/01-trigger-fold.md) for the `ITriggerPipeline` contract and [`effects/02 §ITriggerPipeline`](features/triggers/models/01-trigger-fold.md) for its role in the before-fold. `GameRulesRuntime` says *which* triggers fire; `ITriggerPipeline` says *in what order*.
 
 **Why the phase parameter.** Some games want different availability rules before vs. after:
 

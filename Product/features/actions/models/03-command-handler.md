@@ -37,7 +37,7 @@ public interface ICommandHandler<TCommand, TResult>
 public abstract class CommandHandler<TCommand, TResult> : ICommandHandler { ... }
 ```
 
-Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)).
+Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`; only decision handlers genuinely await (per [`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)).
 
 `handler.Validate` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — and the **authoritative** one.
 
@@ -65,7 +65,7 @@ Cancellation shape (flag on the base record vs. typed `CancelledResult` subtype)
 
 ### `IHandlerContext`
 
-The handler's runtime surface — `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`. Defined in [`effects/05-handler-context.md`](features/effects/models/05-handler-context.md).
+The handler's runtime surface — `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`. Defined in [`effects/03-handler-context.md`](features/effects/models/03-handler-context.md).
 
 ## Invariants
 

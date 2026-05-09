@@ -1,7 +1,7 @@
 ---
 type: sample
 status: locked
-references: [features/engine/models/02-gamerules-contract.md, features/engine/models/05-game-factory.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/04-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-runtime-surface.md]
+references: [features/engine/models/02-gamerules-contract.md, features/engine/models/05-game-factory.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-runtime-surface.md]
 tags: [#sample, #pile-counter]
 ---
 
@@ -138,7 +138,7 @@ This is the working sketch of Pile Counter against the framework as of this writ
 
 ### 9.1 State shape
 
-State lives as Scaffold `BaseState` slices, each owning one concern. There is no single-record `GameState`; reads go through `IStateScope.Get<TState>()`. See [`effects/04-effect-scope.md`](features/effects/models/04-effect-scope.md) for the binding.
+State lives as Scaffold `BaseState` slices, each owning one concern. There is no single-record `GameState`; reads go through `IStateScope.Get<TState>()`. See [`effects/02-effect-scope.md`](features/effects/models/02-effect-scope.md) for the binding.
 
 ```csharp
 // Per-pile slice — Counter is the cached sum of card Numbers in the pile;
@@ -241,7 +241,7 @@ The mapper switches on the typed template (no string-keyed slot lookup) and reso
 
 ### 9.4 Handler (validate + handle)
 
-Handlers own command-specific legality and dispatch the mutations / payloads that drive state change. `Validate` reads slices through `IStateScope`; `Handle` returns `Task<TResult>`. See [`actions/03-command-handler.md`](features/effects/models/04-effect-scope.md) for the handler signature, §4.4 for `IHandlerContext`.
+Handlers own command-specific legality and dispatch the mutations / payloads that drive state change. `Validate` reads slices through `IStateScope`; `Handle` returns `Task<TResult>`. See [`actions/03-command-handler.md`](features/effects/models/02-effect-scope.md) for the handler signature, §4.4 for `IHandlerContext`.
 
 ```csharp
 public class MoveCardHandler : CommandHandler<MoveCardCommand, MoveCardResult>
@@ -290,7 +290,7 @@ public class MoveCardHandler : CommandHandler<MoveCardCommand, MoveCardResult>
 }
 ```
 
-The handler issues one `ExecuteBatch` call. Scaffold's payload-keyed registry runs every mutator registered for each payload in the batch and commits them atomically. Slice subscribers fire once per affected slice with the post-batch state. See [`effects/05-handler-context.md`](features/effects/models/04-effect-scope.md) for `IHandlerContext`'s shape.
+The handler issues one `ExecuteBatch` call. Scaffold's payload-keyed registry runs every mutator registered for each payload in the batch and commits them atomically. Slice subscribers fire once per affected slice with the post-batch state. See [`effects/03-handler-context.md`](features/effects/models/02-effect-scope.md) for `IHandlerContext`'s shape.
 
 ### 9.5 State mutators
 
@@ -596,12 +596,12 @@ Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve
 
 - ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [`engine/03 §5`](features/engine/models/03-snapshot-pipeline.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>(...)`.
 - ~~**Q3 — `EndGameCommand` semantics.**~~ Resolved by the `oq-engine-match-lifecycle` design pass. Pile Counter dispatches the framework-owned `EndMatchCommand(MatchOutcome.Win(player))`; the framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. Engine rejects subsequent dispatches via the lifecycle gate. See [`engine/06-match-lifecycle.md`](features/engine/models/06-match-lifecycle.md).
-- ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [`effects/05-handler-context.md`](features/effects/models/04-effect-scope.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)` or `ctx.Store.ExecuteBatch(...)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
+- ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [`effects/03-handler-context.md`](features/effects/models/02-effect-scope.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)` or `ctx.Store.ExecuteBatch(...)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
 - ~~**Q9 — `IHandlerRegistry` shape.**~~ Resolved session-20260501-1132 Q1: registry is resolver-only (`ICommandHandler Resolve(GameCommand)`); validate/execute live on `ICommandPipeline`; game authors extend `CommandHandler<TCommand, TResult>`.
 - ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext`, `Pending`, and `IIntakeQueue` all deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Command queue is engine-private FIFO with no runtime service.
 - ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRulesRuntime<TDefinition>` ships a virtual identity default ([`engine/02 §2 + §4`](features/engine/models/02-gamerules-contract.md)); games with no eligibility logic don't override it.
-- ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [`effects/04-effect-scope.md` and `effects/05-handler-context.md`](features/effects/models/04-effect-scope.md). No invented provider type.
-- ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [`effects/04`](features/effects/models/04-effect-scope.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
+- ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [`effects/02-effect-scope.md` and `effects/03-handler-context.md`](features/effects/models/02-effect-scope.md). No invented provider type.
+- ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [`effects/04`](features/effects/models/02-effect-scope.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
 - ~~**Q19 — `PileRefsAt` index source.**~~ Open-seams pass surfaced this implicitly: needs an engine-side index slice (`PileIndexState` or similar) populated during the factory's Build walk. Captured in `bl-pile-refs-index` (TBD).
 
 ### Deferred (need decisions, not blocked)

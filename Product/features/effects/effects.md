@@ -51,16 +51,14 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 
 ## Architecture
 
-The feature has six Models. Each is the canonical home for one load-bearing element of the effects layer:
+The feature has four Models. Each is the canonical home for one load-bearing C# type of the effects layer:
 
 1. **`Effect`** ([`01-effect.md`](features/effects/models/01-effect.md)) — the orchestrator type; layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths (`engine.Dispatch` vs `scope.Dispatch`).
-2. **Before-fold** ([`02-before-fold.md`](features/effects/models/02-before-fold.md)) — three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold.
-3. **Attachment entity** ([`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md)) — ongoing effect modeled as an entity; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup.
-4. **`IEffectScope`** ([`04-effect-scope.md`](features/effects/models/04-effect-scope.md)) — the effect's runtime surface: read-only `State`, catalog `Store`, `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel.
-5. **`IHandlerContext`** ([`05-handler-context.md`](features/effects/models/05-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
-6. **`ICommandAwaiter`** ([`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
+2. **`IEffectScope`** ([`02-effect-scope.md`](features/effects/models/02-effect-scope.md)) — the effect's runtime surface: read-only `State`, catalog `Store`, `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel.
+3. **`IHandlerContext`** ([`03-handler-context.md`](features/effects/models/03-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
+4. **`ICommandAwaiter`** ([`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
 
-The execution arc spans the six: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (4); the action's handler runs through the trigger fold for replacement / prevention (2); the handler executes via its `IHandlerContext` (5), awaiting player input through `ICommandAwaiter` (6) for decisions; ongoing effects (3) subscribe over time. Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
+The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler executes via its `IHandlerContext` (3), awaiting player input through `ICommandAwaiter` (4) for decisions. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-runtime-surface.md` §Attachment-entity usage](features/entities/models/02-runtime-surface.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
 
 ### Three layers, capabilities
 
@@ -97,11 +95,11 @@ The framework invariant: **cancellation of one `GameAction` never automatically 
 | Model | Role |
 |---|---|
 | [`01-effect.md`](features/effects/models/01-effect.md) | `Effect` type + layer hierarchy + two dispatch paths |
-| [`02-before-fold.md`](features/effects/models/02-before-fold.md) | Three before-fold outcomes (modify / cancel / replace); `GameRulesRuntime.FilterTriggers` availability; replacement-of-replacement via fold |
-| [`03-attachment-entity.md`](features/effects/models/03-attachment-entity.md) | Attachment-entity model; common patterns (duration, condition, source-linked, global); turn hooks; Cleanup |
-| [`04-effect-scope.md`](features/effects/models/04-effect-scope.md) | `IEffectScope` (effect's runtime surface) |
-| [`05-handler-context.md`](features/effects/models/05-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
-| [`06-command-awaiter.md`](features/effects/models/06-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |
+| [`02-effect-scope.md`](features/effects/models/02-effect-scope.md) | `IEffectScope` (effect's runtime surface) |
+| [`03-handler-context.md`](features/effects/models/03-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
+| [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |
+
+Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md); ongoing-effect attachment-entity pattern lives in [`entities/02-runtime-surface.md`](features/entities/models/02-runtime-surface.md).
 
 ## Invariants
 
@@ -119,11 +117,12 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 
 ## Boundaries
 
-**Owns:** the layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; decisions-as-commands shape; `IEffectScope`, `IHandlerContext`, `ICommandAwaiter` interfaces; ongoing-effect attachment-entity pattern + Cleanup hook contract; before-fold three-outcomes (modify / cancel / replace); replacement-of-replacement via fold; `Effect.Validate` pre-execution gate.
+**Owns:** the `Effect` abstract type; layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; decisions-as-commands shape; `IEffectScope`, `IHandlerContext`, `ICommandAwaiter` interfaces; `Effect.Validate` pre-execution gate; mutation discipline (effects-can't-mutate); cancellation discipline (cancel never auto-cancels orchestrating effect).
 
 **Does not own:**
 - `GameCommand` type hierarchy (the type system) → `triggers/`
-- Trigger registration, fold execution mechanics → `triggers/`
+- Trigger registration, fold execution mechanics, before-fold outcomes, replacement priority → `triggers/`
+- Attachment-entity usage pattern (ongoing effects realized as entities) → `entities/`
 - `GameRulesRuntime.FilterTriggers` (availability policy) → `engine/`
 - Engine framework FIFO routing, drain → `engine/`
 - `IAvailableActions`, snapshot shape → `engine/`
