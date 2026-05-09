@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-evaluation-loop.md]
+references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-game-engine.md]
 tags: [#effects, #model, #awaiter, #decisions]
 ---
 
@@ -78,7 +78,7 @@ No snapshot scope inspection. The mapper produces `SelectTargetCommand` whether 
 
 ### Engine-level pre-pipeline awaiter check
 
-On every `engine.Dispatch`, the engine runs the awaiter check **before** the normal pipeline (per [`engine/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md)):
+On every `engine.Dispatch`, the engine runs the awaiter check **before** the normal pipeline (per [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md)):
 
 ```csharp
 // Engine.Dispatch (simplified)

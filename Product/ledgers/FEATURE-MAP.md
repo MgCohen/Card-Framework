@@ -120,7 +120,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`
 
 ### `engine` (settled)
-- [`models/01-evaluation-loop.md`](features/engine/models/01-evaluation-loop.md) — *Game Engine* — settled, references: `engine/02`, `engine/06`, `actions/01`, `state`
+- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *Game Engine* — settled, references: `engine/02`, `engine/06`, `actions/01`, `state`
 - [`models/02-gamerules-contract.md`](features/engine/models/02-gamerules-contract.md) — settled, references: `engine/01`, `engine/05`
 - [`models/03-snapshot-pipeline.md`](features/engine/models/03-snapshot-pipeline.md) — *Snapshot Production* — settled, references: `engine/02`, `actions/02` ⚠️ (see cycle), `state`
 - [`models/04-gamestate-slices.md`](features/engine/models/04-gamestate-slices.md) — *Framework Slice Tier* — settled, references: `state`, `engine/05`, `engine/07`

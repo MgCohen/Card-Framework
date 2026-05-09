@@ -77,7 +77,7 @@ Every Feature root and Model opens with prose + a canonical artifact (code snipp
 |---|---|---|
 | Feature root | ASCII flow diagram or sequence sketch | `cards.md`, `engine.md`, `effects.md` |
 | Class-shaped Model | C# class signature snippet | `cards/01-card-model`, `entities/02-runtime-surface` |
-| Algorithm-shaped Model | Pseudocode block | `engine/01-evaluation-loop`, `triggers/01-trigger-fold` |
+| Algorithm-shaped Model | Pseudocode block | `engine/01-game-engine`, `triggers/01-trigger-fold` |
 | Conceptual Model | Mermaid graph or working-model quote | `entities/01-definition-instance-model` (mermaid) |
 | Pipeline-shaped Model | Sequence diagram | `actions/01-command-pipeline`, `presentation/01-presentation-loop` |
 

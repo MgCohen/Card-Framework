@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-evaluation-loop.md, features/engine/models/02-gamerules-contract.md, features/engine/models/04-gamestate-slices.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-gamerules-contract.md, features/engine/models/04-gamestate-slices.md, features/engine/models/06-match-lifecycle.md, features/engine/models/07-game-definition.md]
 tags: [#engine, #factory, #bootstrap]
 ---
 

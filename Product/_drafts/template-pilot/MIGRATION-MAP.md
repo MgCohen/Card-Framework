@@ -79,7 +79,7 @@ Built from 8 parallel audits (one per feature) against the spec at commit `2f9c4
 | `engine/decisions/0003` | Snapshot in GameState | `engine/models/04-gamestate-slices.md` | elevate (re-triaged) |
 | `engine/decisions/0004` | Snapshot writer is `IAvailableActions` | `engine/models/03-snapshot-pipeline.md` | elevate (re-triaged) |
 | `engine/decisions/0005` | State pattern (immutable, redux-like) | `engine/models/04-gamestate-slices.md` | fold |
-| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-evaluation-loop.md` | fold |
+| `engine/decisions/0006` | MTG-strict SBA known difference | `engine/models/01-game-engine.md` | fold |
 | `triggers/decisions/0001` | Trigger fold semantics | `triggers/models/01-trigger-fold.md` | fold |
 | `triggers/decisions/0002` | OnBefore<T> / OnAfter<T> replace CommandPreHook | `triggers/models/01-trigger-fold.md` | elevate (re-triaged) |
 | `zones/decisions/0001` | Zone shape | `zones/models/01-zone-model.md` | fold |
@@ -120,7 +120,7 @@ Sized as per-feature deltas. Mechanical = template rename only. Synthesis = new 
 ### `engine/` (largest by Models)
 
 - **Feature root.** Full reshape. Add Vocabulary (8 terms from agent: OriginCommandId, Drain, IntakeResult/DrainResult, EngineLifecycle, MatchOutcome, Snapshot, GameRulesDefinition vs Runtime, MatchSetup). Add Architecture (the Factory → Lifecycle → Loop → GameRules-hooks → Snapshot → State flow that the agent diagrammed). Add Invariants (8 cross-Model rules: lifecycle gate, zero-rule-state, service injection, snapshot-in-state, framework-vs-game slices, lifecycle mirror, signals-in-envelopes, ADR-0005 immutability).
-- **Models (6).** `01-evaluation-loop.md` through `06-match-lifecycle.md` are all well-structured. Mostly section renames + provenance backfill.
+- **Models (6).** `01-game-engine.md` through `06-match-lifecycle.md` are all well-structured. Mostly section renames + provenance backfill.
 - **ADRs.** 6 fold (0001, 0002, 0003, 0004, 0005, 0006) — all folded into Models in the same feature; no elevations.
 
 ### `entities/`

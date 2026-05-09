@@ -36,7 +36,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: oq-session-state-machine | kind: defer | **Session-level state machine** — current `EngineLifecycle` is 3 states (`NotStarted` / `Started` / `Ended`). Real applications need richer states: `Connecting`, `Reconnecting`, `ShowingResults`, `SettingUp`, etc. The runtime is well-positioned to host a richer state machine alongside `Evaluate`. Pin when the first networked or session-aware game forces it.
   Trigger: first networked game, or first game that needs post-match flow (results screen, rematch lobby, etc.).
-  References: `Product/features/engine/models/06-match-lifecycle.md`, `Product/features/engine/models/01-evaluation-loop.md`.
+  References: `Product/features/engine/models/06-match-lifecycle.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
   References: `Product/features/engine/models/02-gamerules-contract.md` §9.

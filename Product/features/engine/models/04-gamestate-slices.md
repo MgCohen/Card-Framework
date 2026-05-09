@@ -29,7 +29,7 @@ The framework auto-seeds three slices at `Build()`. Each slice's schema lives wi
 | Slice | Produced by | Schema canonical home |
 |---|---|---|
 | `AvailableActionsState` | `IAvailableActions` service | [`engine/03 §The AvailableActionsState slice`](features/engine/models/03-snapshot-pipeline.md) |
-| `EngineState` | Engine internals (drain start/stop, lifecycle handlers) | [`engine/01 §The EngineState slice`](features/engine/models/01-evaluation-loop.md) |
+| `EngineState` | Engine internals (drain start/stop, lifecycle handlers) | [`engine/01 §The EngineState slice`](features/engine/models/01-game-engine.md) |
 | `HistoryState` | Engine history mutator (post-`pipeline.Execute`) | [`actions/04-history-envelope.md` §The HistoryState slice](features/actions/models/04-history-envelope.md) |
 
 New framework-owned slices land at their producing system's canonical home and are added as a row above.
