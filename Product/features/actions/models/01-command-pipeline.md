@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger-fold.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #model, #pipeline]
 ---
 
@@ -30,7 +30,7 @@ The pipeline owns the *flow*; the surrounding load-bearing types live in their o
 
 ### `GameCommand` — type hierarchy
 
-Defined in [`triggers/01-trigger-fold.md` §The type hierarchy](features/triggers/models/01-trigger-fold.md):
+Defined inline below:
 
 ```csharp
 abstract record GameCommand;                     // base — all pipeline-dispatchable types
@@ -68,7 +68,7 @@ Per `engine.Dispatch(command)`:
 3. **Enqueue** (framework). Command goes onto the framework FIFO queue.
 4. **Drain** (framework, when queue is non-empty and no drain is in progress):
    1. Dequeue.
-   2. **Before-fold** — `ITriggerPipeline.RunBefore` runs `OnBefore<T>` triggers in priority order (per [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md)). Triggers may modify, cancel (`scope.Cancel`), or replace (`scope.Replace`). On replace: original envelope closes with `Replaced`; replacement dispatches as a fresh command through the channel.
+   2. **Before-fold** — `ITriggerPipeline.RunBefore` runs `OnBefore<T>` triggers in priority order (per [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md)). Triggers may modify, cancel (`scope.Cancel`), or replace (`scope.Replace`). On replace: original envelope closes with `Replaced`; replacement dispatches as a fresh command through the channel.
    3. **`handler.Handle(command, ctx)`** (game). Reads state, decides outcome, calls `ctx.Store.Execute(payload)` to fan out to registered mutators, returns `Task<TResult>`.
    4. **After-fold** — `ITriggerPipeline.RunAfter` runs `OnAfter<T>` triggers. Reactions dispatched via `engine.Dispatch` (separate envelopes; framework FIFO).
    5. **Envelope publishes** with `CommandResult` (per [`04-history-envelope.md`](features/actions/models/04-history-envelope.md)).
@@ -77,7 +77,7 @@ Per `engine.Dispatch(command)`:
 
 ### Relationship to triggers
 
-Per [`triggers/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md):
+Per [`triggers/01-trigger.md`](features/triggers/models/01-trigger.md):
 
 - `OnBefore<T>` triggers run before the handler. They may modify the command, cancel it (`scope.Cancel`), or replace it (`scope.Replace`).
 - `OnAfter<T>` triggers run after the handler. They may dispatch reactions through the channel (`engine.Dispatch`).

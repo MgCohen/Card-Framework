@@ -186,7 +186,7 @@ public sealed class TurnTimerService
 
 // Trigger reactions — fired from inside an effect via IEffectScope.Dispatch.
 // That surface internally calls engine.Dispatch; reactions go through the same path
-// as any other entry. See features/triggers/models/01-trigger-fold.md.
+// as any other entry. See features/triggers/models/02-trigger-pipeline.md.
 ```
 
 ### Lifecycle gate enforcement

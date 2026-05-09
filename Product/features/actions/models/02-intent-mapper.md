@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/05-available-actions-snapshot.md, features/triggers/models/01-trigger-fold.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/05-available-actions-snapshot.md, features/triggers/models/01-trigger.md, decisions/0007-five-validation-layers.md]
 tags: [#actions, #model, #intent]
 ---
 

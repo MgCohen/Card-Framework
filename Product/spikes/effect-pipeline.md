@@ -928,7 +928,7 @@ Out of scope for this iteration:
 - How `IEffectScope.Dispatch` interacts with cancellation propagation through the chain.
 - Effect persistence across saves (snapshot-mid-stack) — relies on `EffectInstance` being serializable, which the record shape implies but hasn't been stress-tested.
 - Multi-actor decision interleaving inside effects (e.g., MTG split-second).
-- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `triggers/01-trigger-fold.md`); this sketch doesn't add new constraints there.
+- Replacement effects involving multiple competing replacers — handled by the existing trigger-fold ordering (per `triggers/01-trigger.md`); this sketch doesn't add new constraints there.
 
 ## When this lands
 
@@ -939,7 +939,7 @@ When iteration settles, propagate to canonical Models:
 - **New ADR:** `Product/decisions/0007-effect-pipeline-shape.md` — locks the architecture.
 - `Product/features/effects/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
 - `Product/features/effects/models/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
-- `Product/features/triggers/models/01-trigger-fold.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
+- `Product/features/triggers/models/01-trigger.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
 - `Product/features/engine/models/03-game-rules-runtime.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
 - `Product/features/engine/models/01-game-engine.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
 - `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.

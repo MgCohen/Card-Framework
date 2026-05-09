@@ -26,7 +26,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
 | [`cards`](features/cards/cards.md) | settled | 1 | `Card` handle on top of the entity bridge with privacy-rotating `CardRef`. |
 | [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
-| [`triggers`](features/triggers/triggers.md) | settled | 1 | `OnBefore<T>` / `OnAfter<T>` reaction fold around command handlers. |
+| [`triggers`](features/triggers/triggers.md) | settled | 2 | `Trigger<T>` reaction class + `ITriggerPipeline` fold orchestrator. `OnBefore<T>` / `OnAfter<T>` registration around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
 | [`engine`](features/engine/engine.md) | settled | 6 | `GameEngine` class (with lifecycle gate + types), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (runtime) split, available-actions service, game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
@@ -117,7 +117,10 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/04` ⚠️ (see cycle)
 
 ### `triggers` (settled)
-- [`models/01-trigger-fold.md`](features/triggers/models/01-trigger-fold.md) — settled, references: `actions/01`, `engine/01`, `engine/03`, `effects/02`, `decisions/0006`
+- [`models/01-trigger.md`](features/triggers/models/01-trigger.md) — *Trigger\<T\>* — settled, references: `triggers/02`, `actions/01`, `effects/02`, `engine/03`, `decisions/0006`
+- [`models/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md) — *ITriggerPipeline* — settled, references: `triggers/01`, `actions/01`, `effects/02`, `engine/03`, `decisions/0006`
+
+*Reorg 2026-05-09:* `01-trigger-fold.md` split per type axis (`Trigger<T>` reaction class + `ITriggerSystem` registration in `01-trigger`; `ITriggerPipeline` orchestrator + fold mechanic + ordering in `02-trigger-pipeline`); cross-Model synthesis (game-style scheduling table, history-when-replaced, dispatch-channel narrative) absorbed into `triggers.md` feature root. Filename now matches central type per `_docs/model.md` gate 3 (title-filename equality).
 
 ### `effects` (settled)
 - [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `triggers/01`, `actions/01`, `effects/02`, `effects/04`, `engine/01`

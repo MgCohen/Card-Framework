@@ -57,7 +57,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.
 
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
-  References: `Product/features/triggers/models/01-trigger-fold.md` §5.
+  References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.
 
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.
