@@ -6,6 +6,8 @@ tags: [#spike, #effects, #effect-pipeline, #runtime, #scope]
 
 # Effect Pipeline — Design Sketch
 
+> **⚠️ Partially superseded (2026-05-10).** Several design points here are overridden by [`fsm-architecture.md`](fsm-architecture.md) D13–D17 — most notably: cast handlers and the trigger fold no longer call `IEffectPipeline.RunEffect` directly (D13 layering rule); effects fire only via the engine draining `PendingEffectsSlice` (D15); effects are async coroutines with one `IEffect.Run(scope)` method (D16); `Dispatch` is a single async surface routing five `GameCommand` siblings including `Request<TResponse>` / `Response` (D14, D17); `ICommandAwaiter` is dead (replaced by request/response). This spike is pending a full rewrite to inherit those locks — tracked as `oq-effect-pipeline` in `OPEN-ITEMS.md`. Read for the locked Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler); the Q1 unification verdict (cast handlers + trigger fold both call `RunEffect`) is rolled back.
+
 > **Status: draft / iterating.** Working sketch for the effect-pipeline shape. Captures the decisions from the effect-pipeline design pass (2026-05-07 session). **Self-contained** — readable standalone. **Not yet propagated to canonical Models** by design — Models stay frozen until this sketch settles. When iteration finishes, the resolution path is to create ADR-0007 and patch `effects/04`, `effects/01`, `triggers/01`, `engine/01`, `engine/02`, plus ledgers.
 
 ## TL;DR
