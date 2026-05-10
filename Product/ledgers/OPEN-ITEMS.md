@@ -21,40 +21,19 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-attachment-storage | kind: question | **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model.
   References: `Product/features/entities/models/05-attachment.md` §Creating and attaching.
 
-- id: oq-move-validation-execution-drift | kind: question | **Move validation-vs-execution state drift** — when a `MoveCardMutation` (or any mutation with state preconditions) is validated and queued, then another mutation moves the card before the original executes, the original's source precondition fails at execute-time. Current behavior (per Q14 lock, session-20260501-1602): throw at execution. Other strategies to evaluate when this becomes painful: re-resolve source from current state, silent no-op, or deeper interlocking via the trigger-fold / replacement-effects pipeline. Affects all mutations with state preconditions, not just MoveCard.
-  References: `Product/features/cards/models/01-card-model.md`, `Product/features/zones/models/01-zone-model.md`.
+- id: oq-effect-pipeline | kind: task | **Effect-pipeline spike rewrite** — the design seam is settled by `Product/spikes/fsm-architecture.md` (D13–D17): engine-only firing, `PendingEffectsSlice` queue, async-coroutine effects via `IEffect.Run`, unified `Dispatch` surface, `Request<TResponse>` / `Response` routing. Remaining work: rewrite `Product/spikes/effect-pipeline.md` to inherit these locks and fold in the still-locked Q1–Q10 verdicts from the 2026-05-08 design pass (with Q1 cast-handler-fires-effect now rolled back per FSM-arch D13). Authoring vocabulary lives in `oq-effect-authoring`.
+  References: `Product/spikes/fsm-architecture.md` D13–D17, `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`.
 
-- id: oq-effect-pipeline | kind: question | **Effect-pipeline shape** — per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime needs an effect-level orchestration surface that decides *when each effect starts* (immediate, batched, stacked). Working sketch in [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md) — `IEffectPipeline` injected service, `EffectDefinition` + `EffectInstance` split, chain scope per effect-run, two execution verbs. Iterating; not yet promoted to canonical Models. Resolution path lives in the spike's "When this lands" section.
-  References: `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`, `Product/features/engine/models/03-game-rules-runtime.md`.
+- id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `IEffect.Run(scope) : Task` is the locked runtime contract (per `Product/spikes/fsm-architecture.md` D16). The *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Vertical-slice ships with free-form C# `Run` bodies; vocabulary work surfaces with the authoring feature.
+  References: `Product/spikes/fsm-architecture.md` D16, `Product/features/effects/models/04-command-awaiter.md`.
 
-- id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `EffectDefinition.Execute` is currently a delegate (`Func<EffectInstance, IEffectScope, Task>`); the *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Surfaces concretely once the effect-pipeline sketch promotes to Models.
-  References: `Product/spikes/effect-pipeline.md`, `Product/features/effects/models/04-command-awaiter.md`.
-
-- id: oq-runtime-as-state-evaluator | kind: defer | **Runtime collapses toward pure state evaluator** — the runtime contract has progressively shrunk (`Route`/`OnIncomingCommand`/`OnQueueDrained`/`IIntakeQueue` deleted; today: `FilterTriggers + Evaluate`). Long-term direction surfaced during the effect-pipeline sketch: `FilterTriggers` is the next candidate to revisit, and the runtime might collapse to pure state evaluation + state-machine transitions. Not actionable now; revisit after effect-pipeline lands and at least one game stresses the surface.
-  Trigger: post-effect-pipeline cascade + first composed-rules game.
-  References: `Product/spikes/effect-pipeline.md`, `Product/features/engine/models/03-game-rules-runtime.md`, `Product/decisions/0006-two-pipeline-architecture.md`.
-
-- id: oq-session-state-machine | kind: defer | **Session-level state machine** — current `EngineLifecycle` is 3 states (`NotStarted` / `Started` / `Ended`). Real applications need richer states: `Connecting`, `Reconnecting`, `ShowingResults`, `SettingUp`, etc. The runtime is well-positioned to host a richer state machine alongside `Evaluate`. Pin when the first networked or session-aware game forces it.
-  Trigger: first networked game, or first game that needs post-match flow (results screen, rematch lobby, etc.).
-  References: `Product/features/engine/models/01-game-engine.md`.
-
-- id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set`/`Append`/`Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
+- id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set` / `Append` / `Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
   References: `Product/features/engine/models/03-game-rules-runtime.md` §Composition.
-
-- id: oq-fsm-game-state | kind: question | **FSM-shaped game state** — `FreeInput`/`DecisionPrompt` were deleted (S15 Q6); snapshot carries templates only. Type-only routing in `ICommandAwaiter` is the current mechanism for recognizing in-progress decision commands. The FSM-shaped state model (typed `PickATargetState`, `MainPhaseState`, etc., each owning their own snapshot-generation surface) is the eventual successor. Revisit when the first async-decision-heavy game arrives.
-  References: `Product/features/effects/models/04-command-awaiter.md` §9.
 
 - id: oq-trigger-ordering | kind: question | **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else.
 
-- id: bl-actor-ownership-reverse-index | kind: defer | **Reverse-direction lookup on `OwnershipState`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse queries ("what does this player own?") are O(N) filters or game-side aggregates. When a consumer surfaces (e.g., a presentation view that renders all of a player's cards, a rule that needs O(1) reverse lookup at scale), extend `OwnershipState` with a parallel reverse index (`IActor → ImmutableSet<Reference>`) — same two-way pattern as `CardMapState`. Surfaced by Q5 of the domain modeling design pass (2026-05-06).
-  Trigger: first reverse-lookup consumer surfaces.
-  References: `Product/features/engine/models/06-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
-
-- id: oq-effect-cancellation-on-match-end | kind: question | **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await` (target picker, choose-one prompt, chained dispatch), the awaiting effect is still alive. Engine needs a story for cancellation: thread a `CancellationToken` through `IHandlerContext` / `IEffectScope`, hard-cancel via `IDisposable`, or accept that orphaned awaiters resolve into a closed match. Surfaced from the engine match-lifecycle design pass; deferred from that pass because it touches the effect contract, not lifecycle.
-  References: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/01-game-engine.md`.
-
-- id: oq-intent-template-lookup | kind: question | **Intent → template lookup** — `IIntentMapper.Map(ActionTemplate, PlayerChoice)` requires a pre-resolved template, but how the gateway/store picks the matching `ActionTemplate` from the snapshot for a raw `PlayerIntent` is undocumented. The "(or builds one from the intent)" clause in presentation/01 §10 step 6 is unexplained.
-  References: `Product/features/presentation/models/01-presentation-loop.md` §8, §10.
+- id: oq-effect-cancellation-on-match-end | kind: task | **Async-effect cancellation on match end** — when match ends mid-`await` (request response pending, sub-command pending), the effect's `Task` is still alive. Shape pinned by `Product/spikes/fsm-architecture.md` D16: thread a `CancellationToken` through `IEffectScope.Dispatch`; engine cancels on match-end transition and GCs `RequestsSlice` / `AnswersSlice`. Implementation task; no open design.
+  References: `Product/spikes/fsm-architecture.md` D16, `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
   References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.
@@ -62,9 +41,28 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.
 
-- id: bl-zone-visibility-custom-policy-serialization | kind: defer | **`ZoneVisibilityPolicy.Custom` serialization** — the named `ZoneVisibilityPolicy` cases (`AllPublic`, `AllHidden`, `OwnerSees`, `OwnerSeesOthersCount`, `OwnerCountOthersNothing`) round-trip cleanly through replay/save/network. The `Custom(Func<IActor, IActor?, VisibilityResult>)` escape hatch carries an arbitrary delegate that breaks serialization. Story: either (a) replace `Custom` with a registered-by-id resolver (game registers an `IZoneVisibilityResolver` keyed by id; `Custom(string ResolverId)` records the id), (b) drop `Custom` and force games to add a slice-based override mechanism, or (c) accept that `Custom` games can't replay/network. Surfaced by Q7 of the open-seams design pass (2026-05-06).
+- id: oq-targeting-pre-play | kind: defer | **Pre-play targeting** — a card's play-condition that requires a chosen target *before* the play-card command fires (target is a parameter of the play, not a request inside the resolution). Likely folds into a richer `PlayCardCommand(card, target)` whose cast-validator accepts the target. Differs from mid-effect target requests (which live in the request system per `Product/spikes/fsm-architecture.md` D17).
+  Trigger: first vertical-slice game with pre-play targeting requirements (Magic-style auras, choose-cast-mode cards).
+  References: `Product/spikes/fsm-architecture.md` § Deferred.
+
+- id: oq-validator-defaults | kind: question | **Framework-default validator set** — which validators ship as framework defaults: `MatchStateActionGate` (reject commands not in `current.Actions`) is canonical; a `SessionGate` analogue (reject dispatches outside an in-match session) is the other candidate. Plus registration-order convention crispness (framework defaults register first; document as convention or enforce). Q5d deferred from the 2026-05-10 open-questions walk.
+  References: `Product/spikes/fsm-architecture.md` D10, D12.
+
+- id: oq-effect-save-load | kind: defer | **Mid-effect save/load** — effects are async coroutines (per `Product/spikes/fsm-architecture.md` D16); a C# `Task` continuation isn't serializable. Save/load can happen at quiescent points (no effect's `Run` currently in flight). If a game later forces mid-effect save/load, would force state-machine effects — a separate spike.
+  Trigger: first save/load consumer that needs mid-effect serialization.
+  References: `Product/spikes/fsm-architecture.md` D16.
+
+- id: oq-drain-policy-composition | kind: task | **Drain-policy composition Model** — the engine's drain decision composes multiple state-linked services: `MatchState.AllowsDrain` (game-state hook), `RequestsSlice` empty, `PendingEffectsSlice` non-empty, plus game overrides. Documented in `Product/spikes/fsm-architecture.md` D15; needs a canonical Model when the ADR-0009 cascade lands (likely `engine/0X-pending-effects.md`).
+  Trigger: ADR-0009 cascade lands.
+  References: `Product/spikes/fsm-architecture.md` D15.
+
+- id: bl-actor-ownership-reverse-index | kind: defer | **Reverse-direction lookup on `OwnershipState`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse queries ("what does this player own?") are O(N) filters or game-side aggregates. When a consumer surfaces (e.g., a presentation view that renders all of a player's cards, a rule that needs O(1) reverse lookup at scale), extend `OwnershipState` with a parallel reverse index (`IActor → ImmutableSet<Reference>`) — same two-way pattern as `CardMapState`. Surfaced by Q5 of the domain modeling design pass (2026-05-06).
+  Trigger: first reverse-lookup consumer surfaces.
+  References: `Product/features/engine/models/06-game-definition.md` § Ownership and zone assignment; `Product/decisions/0005-objects-over-ids.md`.
+
+- id: bl-zone-visibility-custom-policy-serialization | kind: defer | **`ZoneVisibilityPolicy.Custom` serialization** — the named `ZoneVisibilityPolicy` cases (`AllPublic`, `AllHidden`, `OwnerSees`, `OwnerSeesOthersCount`, `OwnerCountOthersNothing`) round-trip cleanly through replay/save/network. The `Custom(Func<IActor, IActor?, VisibilityResult>)` escape hatch carries an arbitrary delegate that breaks serialization. Same problem class as request predicates (resolved in `Product/spikes/fsm-architecture.md` D17 by carrying IDs/data instead of `Func` fields). Story: either (a) replace `Custom` with a registered-by-id resolver (game registers an `IZoneVisibilityResolver` keyed by id; `Custom(string ResolverId)` records the id), (b) drop `Custom` and force games to add a slice-based override mechanism, or (c) accept that `Custom` games can't replay/network. Surfaced by Q7 of the open-seams design pass (2026-05-06).
   Trigger: first game uses `Custom`, OR networking/replay design forces serialization rules.
-  References: `Product/features/zones/models/01-zone-model.md` § Zone visibility policy.
+  References: `Product/features/zones/models/01-zone-model.md` § Zone visibility policy; `Product/spikes/fsm-architecture.md` D17.
 
 - id: bl-card-resolution-helper-shape | kind: defer | **CardRef → Card resolution helper location** — the two-hop resolution (`CardRef → CardMapState → Ref<Card> → Catalog → Card`) needs a single helper to avoid call-site verbosity. Candidate shapes: extension method on `Store` (`store.ResolveCard(cardRef)`), instance method on `CardRef` (`cardRef.Resolve(store)`), shared utility class. All work; choice is ergonomic. Surfaced by Q6 of the open-seams design pass (2026-05-06); deferred to code time.
   Trigger: first concrete implementation requires picking a shape.
@@ -76,13 +74,13 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 ## Features yet to scaffold
 
-- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. The presentation loop assumes this layer converts drag/drop/click gestures to `PlayerIntent`, but no model, no folder, and no ADR exists. All intent vocabulary defined in `features/actions/models/01-command-pipeline.md` (Q5 — formerly `actions/decisions/0008-intent-vocabulary.md`, folded 2026-05-08) depends on this layer to emit the intents.
-  Trigger: next presentation or engine-wiring session; or whenever intent → template lookup is designed.
-  References: `Product/general/ARCHITECTURE.md`, `Product/features/actions/models/01-command-pipeline.md` §Q5 (provenance), `Product/features/presentation/models/01-presentation-loop.md` §8.
+- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. Translates input gestures (drag/drop/click/target) to `PlayerIntent`. The consumer of `PlayerIntent` is now per-VM `Map(intent)` (per `Product/spikes/fsm-architecture.md` D8) — VMs convert intents to `GameCommand` (incl. `Response` when in request-mode); the global `IIntentMapper` is dropped.
+  Trigger: next presentation or engine-wiring session.
+  References: `Product/general/ARCHITECTURE.md`, `Product/spikes/fsm-architecture.md` D8, D17.
 
-- id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. `effects/04-command-awaiter.md (effect recipe still open)` defers how a card definition holds a per-instance `Effect` recipe to "a future authoring Model." No model, no folder, no ADR, no spike exists.
-  Trigger: after slice catalog and game lifecycle land; before any vertical-slice implementation.
-  References: `Product/features/effects/models/04-command-awaiter.md` §3, §9; `Product/general/ARCHITECTURE.md` §Authoring.
+- id: bl-authoring-feature | kind: task | **`authoring` feature — effect recipe and card catalog models** — `features/authoring/` folder and at least one Model doc needed. Effect shape now constrained: `IEffect.Run(scope) : Task` (per `Product/spikes/fsm-architecture.md` D16). Authoring vocabulary still open — how a card definition holds a per-instance effect recipe is for `oq-effect-authoring`.
+  Trigger: after vertical slice exercises the runtime contract end-to-end.
+  References: `Product/spikes/fsm-architecture.md` D16, `Product/features/effects/models/04-command-awaiter.md`, `Product/general/ARCHITECTURE.md` §Authoring.
 
 ## Tooling
 

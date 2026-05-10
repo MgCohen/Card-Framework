@@ -11,6 +11,8 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**FSM-architecture open-questions walk complete (2026-05-10).** Q-by-Q resolution of the deferred items in [`spikes/fsm-architecture.md`](spikes/fsm-architecture.md). Six structural locks landed (D12–D17 in the spike): session lifecycle as engine field (typed `SessionState`, not Store slice) with B+C hybrid (host orchestrates, engine hooks) flagged; validator pipeline policy (short-circuit / registration order / independent / state via DI; uniform across all `GameCommand` kinds); engine-only effect firing (rolls back 2026-05-08 Q1 cast-handler dispatch); `PendingEffectsSlice` as the universal effect queue (D-universal); effects as async coroutines (`IEffect.Run(scope) : Task`; no state-machine steps; save/load mid-effect not supported); `Request<TResponse>` / `Response` as state-linked service (`RequestsSlice` + `AnswersSlice` + `IRequestService`); single `Dispatch` surface on `IEffectScope` routing all five `GameCommand` siblings. Spike rewritten end-to-end. OPEN-ITEMS audit cascaded (5 closed, 4 added, 5 updated, 1 demoted to task — net -1 entry). GLOSSARY updated (21 additions; 9 retirements). **The big structural questions in `Engine + runtime` are settled** — remaining entries are deferred-with-trigger, small follow-ups, tasks, or authoring concerns. **Vertical-slice-ready.**
+
 **Engine reorg Phase A landed (2026-05-09).** Six-item audit list opened; first four (engine-side) cascaded as one move:
 
 - **Split `engine/02-gamerules-contract.md`** into `02-game-rules-definition.md` (data half — trimmed to ~110 lines per user feedback that the Definition class is too thin for a fat doc) + `03-game-rules-runtime.md` (runtime brain, ~444 lines, lifts most of the original).
@@ -73,25 +75,27 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Six-item workflow audit complete.** Phase A (engine reorg: split + rename + renumber) and Phase B (entities split per concept axis, including the deferred `ISliceProvider` audit) both landed. Models in `engine/` and `entities/` are now structurally aligned with the post-simplification template. PR #119 carries Phase A; Phase B follows on the same branch.
+**Vertical-slice-ready.** The structural design is settled across FSM, dispatch, effects, requests, lifecycle layering, and validators. The remaining work splits cleanly:
 
-Three viable next threads:
+- **ADR-0009 cascade** — promote [`spikes/fsm-architecture.md`](spikes/fsm-architecture.md) decisions to a project-wide ADR (`0009-engine-as-fsm-and-dispatch-unification.md`) and patch the canonical Models listed in the spike's "When this lands" section (engine/01, engine/03, engine/04, actions/01–05, effects/01–04, presentation/01, plus new Models for match-state, transition-pipeline, session-state, pending-effects, request-system, validator-handler-split, view-model-registry).
+- **Effect-pipeline spike rewrite** — inherit today's locks (D13–D17); resolve the residual Q1–Q10 verdicts from 2026-05-08 (Q1 cast-handler-fires-effect now rolled back per FSM-arch D13). Tracked as task-shaped `oq-effect-pipeline` in OPEN-ITEMS.
+- **First vertical-slice prototype** — build `PileCounterGameDefinition` against the settled domain model. Exercises every contract end-to-end; surfaces concrete drift before the canonical-Model cascade lands.
 
-- **Effect-pipeline spike re-write** — apply the locked Q1–Q10 verdicts from 2026-05-08 to [`spikes/effect-pipeline.md`](spikes/effect-pipeline.md). Models stay frozen until this lands. The substantive open design work.
-- **Resolve top open items.** `oq-entity-destruction` (cleanup lifecycle), `oq-effect-cancellation-on-match-end` (async-effect cancellation), `oq-attachment-storage` (where attachments live).
-- **First vertical-slice prototype.** Build the actual `PileCounterGameDefinition` against the settled domain model + runtime contract — exercises every Model end-to-end and surfaces concrete drift.
+Order is open. The ADR cascade is mechanical and removes drift between spike and Models. The vertical slice tests the locks under real game pressure. Either is the natural next thread; both can run in parallel.
 
 ---
 
 ## ❓ Open items snapshot
 
-See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. The three highest-leverage durable items right now:
+See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. After the 2026-05-10 cascade: **no remaining big-structural opens** in `Engine + runtime`. What's left is deferred-with-trigger, small follow-ups, tasks, or authoring-feature work. The three highest-leverage remaining (all task-shaped):
 
-- `oq-entity-destruction` — Cleanup lifecycle for destroyed entities. Load-bearing for ongoing effects that self-destruct.
-- `oq-effect-cancellation-on-match-end` — async-effect cancellation when the match ends mid-await. Surfaced from the lifecycle pass.
-- `oq-attachment-storage` — where attachments (equipment, auras, buffs) live: sub-zone, global registry, or dedicated zone.
+- `oq-effect-pipeline` (now task) — rewrite the effect-pipeline spike to inherit FSM-arch locks.
+- `bl-interaction-feature` / `bl-authoring-feature` — scaffold the two missing features. Authoring is the larger lift.
+- `oq-effect-cancellation-on-match-end` (now task) — thread `CancellationToken` through `IEffectScope.Dispatch`; engine GCs request/answer slices on match-end.
 
-New today (open-seams + PileCounter follow-ups, deferred to triggers): `bl-zone-visibility-custom-policy-serialization`, `bl-card-resolution-helper-shape`, `bl-pile-refs-index`.
+New today (2026-05-10): `oq-targeting-pre-play`, `oq-validator-defaults`, `oq-effect-save-load`, `oq-drain-policy-composition` — all defer-tier or small.
+
+Closed today: `oq-runtime-as-state-evaluator`, `oq-fsm-game-state`, `oq-session-state-machine`, `oq-intent-template-lookup`, `oq-move-validation-execution-drift`.
 
 ---
 
