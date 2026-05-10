@@ -108,6 +108,8 @@ public override MatchState Evaluate(GameAction action, CommandResult result) {
 
 The default body is mechanical, but `Evaluate` stays on the runtime. The runtime is the orchestrator with a reason to exist — it owns *when* things happen (e.g., when stack effects resolve in a Magic-shaped game; see "Open questions" for the stack-pattern note). Games override `Evaluate` only when they need custom orchestration; the default body uses `Flow + SBAs + ShouldExit`. Simpler games may put more logic in `Evaluate` than complex games (which distribute logic across states + handlers + Flow).
 
+An earlier draft of this spike folded the orchestration into the engine and exposed only `Flow + StateBasedActions` on the runtime. Reversed when the Magic stack pattern surfaced as the killer use case for runtime-side orchestration — `Evaluate` decides *when* effects resolve, which isn't expressible as a transition table.
+
 ```csharp
 public abstract class GameRulesRuntime<TDefinition> {
     protected abstract ITurnFlow           Flow              { get; }
@@ -356,6 +358,13 @@ Generic exit commands (`Pass`, `CommitDeclaration`) have empty handlers. The wor
 
 Transient states (`ResolveCombatState`) follow a canonical shape: `Actions = []`, `EnterCommands = [oneCommand]`, `ShouldExit` returns true on that command. Same shape for "beginning of combat" / "end of combat" / "upkeep" — anywhere the engine needs a phase tick with no player input.
 
+## Out of scope (untouched by this pass)
+
+- **Triggers.** The trigger pipeline continues to fire on commands (before/after fold) as today. `FilterTriggers` stays on the runtime. Signal-driven triggers ("when a creature deals damage") were briefly considered and rejected when the signal bus was killed — semantic-event emission, if it lands later, will be owned by the effect pipeline, not by handlers. Any future trigger redesign happens in a separate trigger-pipeline pass.
+- **Effect pipeline internals.** Whether handlers compose effects vs. call inline, what authoring vocabulary effects use, how trigger reactions compile into effect instances — all live in `oq-effect-pipeline` and its existing spike.
+- **`HistoryEnvelope` typed shape.** Today's pseudocode-only definition stays as-is; reshape is point 7, deferred.
+- **Targeting / request routing.** Whether `RequestTargetCommand` and similar request shapes get a dedicated routing path; whether `Actions` becomes a richer typed descriptor with parameter constraints. All point 8, deferred.
+
 ## Deferred (explicitly)
 
 - **Point 7 — `HistoryEnvelope` reshape.** Wait until effects pipeline lands and there are real envelope consumers to design against. Note: `TransitionStateCommand` is now in the pipeline, so transitions are auto-captured in envelopes. Whether transition envelopes need a special shape (no actor, synthetic result) is a TBD detail.
@@ -394,6 +403,32 @@ Resolution path on promotion:
 - **Polymorphic `Current` cast in handlers / mutators.** Every handler that reads phase data does a one-line cast (`(BattlePhaseState)slice.Current`). Acceptable; could collapse with an extension method (`scope.GetMatchState<T>()`) if it gets noisy. Defer.
 - **Wrapper vs sibling slices for phase-specific data.** Default is wrapper-with-polymorphic-field (`MatchStateSlice.Current.Attackers`); per-phase sibling slices (`BattlePhaseDataSlice`) are an alternative if subscriber fan-out becomes a concern. Defer until proven.
 - **Session vs match lifecycle layering.** Two-tier shape: an engine-owned session FSM (`NotStarted` / `Connecting` / `Ready` / `InMatch` / `Ended`) gates whether the match-level FSM is active. Match-side setup (shuffle, deal, place starting stuff) is the first MatchState's `EnterCommands`. Session-side setup (allocate match, connect players, agree on decks) is engine-level and runs before the match FSM starts. The `EngineLifecycle` enum is the seed for the session tier; it grows per `oq-session-state-machine`. Don't conflate the two tiers.
+
+  Implementation wiring (implications, not yet pinned):
+  - `engine.StartMatch()` seeds `MatchStateSlice.Current` with the initial match state; engine drains; first state's `EnterCommands` fire.
+  - `engine.FinishMatch(outcome)` force-transitions the FSM to `GameOverState(outcome)` regardless of current state — same path the `GameOverSBA` would take.
+  - `engine.Dispose()` checks current state; if not `GameOverState`, force-transitions with `MatchOutcome.Aborted`.
+  - `EngineLifecycle` enum becomes derivable from `MatchStateSlice`: `NotStarted` = no slice; `Started` = slice exists and `Current is not GameOverState`; `Ended` = `Current is GameOverState`. Worth retiring as a separate enum or repointing it at the FSM as the source of truth.
+  - External listeners (UI, telemetry, network) subscribe to `MatchStateSlice` and pattern-match for entry/exit states (`MatchSetupState`, `GameOverState`); no separate lifecycle event channel.
 - **Effect execution via `Evaluate` (Magic stack pattern).** In Magic-shaped games, the runtime decides *when* effects fire — `Evaluate` reads state ("stack has a top + all players passed") and returns a `ResolveTopState`, whose `EnterCommands` runs the effect (or kicks the effect pipeline). Effects don't run from `Evaluate` directly; they run from the state's `EnterCommands` or via the effect pipeline's surface. This pattern feeds into `oq-effect-pipeline`: runtime decides *when*, pipeline decides *how* (immediate / batched / stacked).
+
+  Sketch of the flow (no full handler code; pattern only):
+  ```
+  Player A casts Lightning Bolt
+    → CastSpellHandler:
+        Store.Execute(SpendManaPayload(...))
+        Store.Execute(MoveCardToStackPayload(LightningBolt))
+    → Evaluate sees: stack non-empty; priority still A's after cast → stay in PriorityState
+  Player A passes priority
+    → PassPriorityHandler: marks A passed
+    → Evaluate sees: stack non-empty, all players passed since last cast → return ResolveTopState(stackTop)
+    → engine queues TransitionStateCommand
+  ResolveTopState.EnterCommands: [LightningBolt's effect commands]
+    → effect commands run: damage, etc.
+    → handler removes top from stack zone
+    → Evaluate sees: stack non-empty? → back to PriorityState (active player gets priority again).
+                     stack empty?     → back to original phase state.
+  ```
+  Key insight: handlers do mutations; `Evaluate` reads post-mutation state to decide whether the moment is right for resolution. The runtime is the only place that has the *cross-cutting view* needed for that timing decision.
 - **Multi-layer validator pipeline (default validator set).** The validator/handler split (D10) supports N validators per command. To settle: which validators ship as framework defaults (`MatchStateActionGate` for sure; what else?), what's the ordering convention (registration order? priority weight?), can validators access the result of prior validators (e.g., short-circuit semantics, accumulated reason).
 - **Scratchpad / scoped writes for handlers.** Handlers today write to the live store via `Store.Execute`. A future scratchpad / transactional / replay flavor (read-your-writes-then-commit-or-rollback) would benefit from interface-segregating the handler-facing surface (`IScope` extending `IStateScope` with `Execute`). Deferred — concrete trigger hasn't surfaced; current shape is `[Inject] Store` directly on the base class.
