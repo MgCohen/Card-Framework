@@ -156,85 +156,126 @@ Instantiate this for a new feature. Fill in placeholders; preserve section order
 
 ## Worked example
 
-A trimmed instance of the skeleton above. Frozen — does not track [`features/cards/cards.md`](features/cards/cards.md) if that drifts.
+A trimmed instance of the skeleton above. Frozen — does not track [`features/triggers/triggers.md`](features/triggers/triggers.md) if that drifts. Chosen as the worked example because it has multiple models *and* real cross-model story to fit into `## Synthesis`; single-model features (e.g. `cards`) stub Synthesis / Supporting elements with `*n/a — ...*` instead.
 
     ---
     type: feature
     status: settled
-    references: [features/entities/models/02-instance.md, features/zones/models/01-zone-model.md]
-    tags: ["#cards"]
+    references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/effects/models/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
+    tags: ["#triggers"]
     ---
 
-    # cards — feature
+    # triggers — feature
 
     ## Concept
 
-    The framework's card primitive. A **`Card`** is a thin handle extending the entity bridge (`InstanceWithSlices<CardDefinition>`) with a typed `Ref<Card> SelfRef`, fronted by a privacy-rotating **`CardRef`** for client-visible state. All mutable card data — variables, modifiers, current public ref, owner, visibility — lives in Store slices. Per-card-type variants (Fireball, Goblin, ...) are different `CardDefinition` instances, not different C# classes; the framework provides one `Card` class.
+    The framework's reactive fan-out. When a `GameCommand` flows through the action pipeline, **`OnBefore<T>`** triggers run first (they may modify, cancel, or replace the command), then the handler executes (`GameAction` only), then **`OnAfter<T>`** triggers run (they may dispatch reactions). Triggers are typed by the command shape they observe.
 
-    Two state slices are owned here: **`CardMapState`** (the privacy-rotation indirection that maps `CardRef ↔ Ref<Card>`) and **`CardVisibilityState`** (the per-card override on top of the zone default). **`OwnershipState`** is defined here but generic across catalog handles, shared with `zones/` and `players/`.
+    A **`Trigger<T>`** is the reaction class (a `Validate(cmd, scope)` condition + an `Execute(cmd, scope)` body); game authors register them through **`ITriggerSystem`** (the subscription surface called from `AbilityDefinition.Register`). The action pipeline drives them through **`ITriggerPipeline`** (the execution surface — `RunBefore` / `RunAfter`). One `TriggerSystem` class implements both interfaces; subscription and execution are split surfaces so abilities never see fold internals. The fold runs registered triggers in sequence — the framework, not the trigger author, handles aggregation, ordering, and replacement uniformly.
 
     ## Architecture
 
-        Card handle (class)
-               │
-        InstanceWithSlices<CardDefinition>   ← entity bridge (entities/)
-               │
-         ┌─────────────┼──────────────┬──────────────────┐
-         │             │              │                  │
-        CardMapState  store.Catalog  OwnershipState   CardVisibilityState
-        (CardRef ↔     (Ref<Card> →   (Reference →    (Ref<Card> →
-         Ref<Card>)    live Card)     IActor)          override)
-               │
-        Mutations (CompositeAction)
-        Create / Move / SetCardVisibility / Destroy
+                  GameCommand enters pipeline
+                             │
+                             ▼
+          ┌────────────────────────────────────────┐
+          │ Registry query → GameRulesRuntime.     │
+          │ FilterTriggers → available triggers    │
+          └────────────────────────────────────────┘
+                             │
+                             ▼
+                OnBefore<T> fold        ← may modify / cancel / replace
+                             │
+                             ▼
+                  handler.Execute       ← GameAction only
+                             │
+                             ▼
+                OnAfter<T> fold         ← may dispatch reactions
+                             │
+                             ▼
+                        HistoryEnvelope
 
     ## Composition
 
     | Model | Role |
     |---|---|
-    | [`models/01-card-model.md`](features/cards/models/01-card-model.md) | Card handle, four state slices, four mutations, resolution surfaces, read API |
+    | [`models/01-trigger.md`](features/triggers/models/01-trigger.md) | `Trigger<T>` (the reaction class); `ITriggerSystem` subscription surface; `AbilityDefinition.Register/Unregister` per-instance lifecycle; closure-capture for per-instance data |
+    | [`models/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md) | `ITriggerPipeline` (the fold orchestrator); `TriggerFoldResult`, `TriggerMatch`, `TriggerPhase` supports; three before-fold outcomes; replacement-of-replacements; priority + ordering; `FifoPipeline` default |
 
     ## Synthesis
 
-    *n/a — single-model feature; the cross-model story lives at the entities / zones boundary, called out in Boundaries and Dependencies.*
+    ### Reactions and the dispatch channel
+
+    Reaction commands dispatched from inside a trigger go through the same channel as everything else — `engine.Dispatch`. There is no separate reaction queue.
+
+        // "Whenever another card is healed, draw a card"
+        triggers.OnAfter<HealActorAction>(
+            new Trigger<HealActorAction>(
+                validate: (cmd, scope) => cmd.Target != self,
+                execute: async (cmd, scope) =>
+                {
+                    await scope.Dispatch(new DrawCardAction { Actor = myActor });
+                }),
+            owner: self);
+
+    The channel validates the dispatched action through `pipeline.Validate` and enqueues it on the engine's strict-FIFO queue. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md) the runtime does **not** gate intake or route commands. Game-style differentiation lives at the *effect* level, not at command-queue routing — what differs across games is *when* triggered effects start, not how the queue runs:
+
+    | Style | How triggered effects are scheduled |
+    |---|---|
+    | Slay the Spire | Reactions enter framework FIFO; with the queue empty at trigger-fire time, they run as the next command — "on the spot" semantics. |
+    | Hearthstone | Same FIFO. Reactions queue normally and run after the current command's pipeline completes. |
+    | MTG | The stack is a game-state zone, not the engine queue. Triggered abilities push themselves into the stack via state mutation; `runtime.Evaluate` watches the stack and dispatches `ResolveTopOfStack`-style follow-ups. |
+
+    ### History when replaced
+
+    When command A is replaced by B in the before-fold: A's envelope is closed and published with `CommandResult.Replaced` — appears in history as a command that was dispatched but did not execute. B is dispatched fresh via `engine.Dispatch`, gets its own full fold from scratch, and produces a sibling envelope. The causal link between them is preserved via `OriginCommandId` threading if A and B share the originating intent. See [`actions/04-history-envelope.md`](features/actions/models/04-history-envelope.md) for envelope shape.
+
+    ### Emitting `GameSignal`s and `CompositeAction`s from a handler
+
+    Handlers emit `GameSignal`s and execute `CompositeAction`s through the scope. Both pass through their own trigger folds before/after — the same `ITriggerPipeline` runs them, with no handler step between the folds for these types:
+
+        scope.Emit(new ArmorBrokenSignal(target));          // GameSignal — before/after fire; no handler
+        scope.Execute(new MoveCardComposite(source, zone)); // CompositeAction — before/after fire; executes inline
+
+    A handler should never dispatch another `GameAction` directly — that's an `Effect`'s responsibility. `CompositeAction` and `GameSignal` use a lighter path: trigger folds only, no handler, no envelope of their own; their entries fold into the parent command's envelope.
+
+    ### Pipeline integration
+
+    The full `pipeline.Execute(action)` shape (envelope open → filter → before-fold → handler → after-fold → envelope close) is owned by [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md). Trigger-side notes: the action pipeline holds `ITriggerPipeline`; card abilities hold `ITriggerSystem`; one class implements both. Before/after folds run only the filtered `available` list — the upstream filter is `GameRulesRuntime.FilterTriggers` ([`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md)). Replacement-of-replacement is fold-natural: each step's condition checks the *current* command, so substituting `DealDamageAction → HealAction` automatically routes through `HealAction`-watching triggers and skips `DealDamageAction`-watching ones.
 
     ## Supporting elements
 
-    *n/a — all card-related types live in `models/01-card-model.md`.*
+    *n/a — all trigger types have model homes (`Trigger<T>`, `ITriggerSystem`, `AbilityDefinition` in `01-trigger.md`; `ITriggerPipeline`, `TriggerFoldResult`, `TriggerMatch`, `TriggerPhase` in `02-trigger-pipeline.md`).*
 
     ## Invariants
 
-    - **Two-ID model** → `Ref<Card>` is stable for the card's lifetime; `CardRef` rotates on every move and visibility transition. The two are not interchangeable.
-    - **Server-internal vs client-visible split** → server-internal references (triggers, ongoing effects, attachments, history identifying the card itself) use `Card` or `Ref<Card>`. Client-visible references and projections (zones, indices, history naming a current location) use `CardRef`.
-    - **All mutable card state in slices** → variables, modifiers, current public ref, owner, visibility — all in Store slices. The handle holds no mutable data beyond `SelfRef`, protected `Definition`, and `Storage`.
-    - **`CardRef` rotation is the privacy mechanism** → observers see refs change but never receive data they aren't allowed to see; the same rotation runs locally and across networks.
-    - **One live `Card` per `Ref<Card>`** → held in `store.Catalog`; equality is `SelfRef`-based.
+    - **Phase order is strict** → Before → Execute → After. No phases overlap, no re-entry within a single command.
+    - **Replacement creates a fresh fold** → when a before-fold trigger calls `scope.Replace(next)`, the original command does not execute; `next` dispatches as a fresh command through the channel and runs through its own full trigger fold from scratch.
+    - **After-phase `scope.Cancel` / `scope.Replace` are no-ops** → the command already executed.
+    - **Handlers never dispatch `GameAction` directly** → sequencing multiple `GameAction`s is an `Effect`'s responsibility. Triggers may dispatch reactions; effects may sequence; handlers may not.
+    - **Registry is filtered upstream by `GameRulesRuntime.FilterTriggers`** → the pipeline never queries the trigger registry itself.
+    - **`ITriggerSystem` and `ITriggerPipeline` are split surfaces** → subscription (game code) vs. execution (pipeline internals). One `TriggerSystem` class implements both.
+    - **Command-queue routing is framework-owned** → [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md). The runtime does not customize the queue; effect-level orchestration is a separate forthcoming surface.
 
     ## Boundaries
 
-    **Owns:** the `Card` class and `CardRef` type; `CardMapState`, `CardVisibilityState`; the four card-lifecycle `CompositeAction` mutations; the `card.GetRef`, `card.GetOwner`, `card.IsVisibleTo` accessors.
+    **Owns:** `Trigger<T>` base class; `ITriggerSystem` and `ITriggerPipeline` interfaces; `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` types; the trigger fold mechanic (sequential fold, cancel/replace via scope, fresh-fold-on-replace); priority + ordering policy; `AbilityDefinition.Register` / `Unregister` contract.
 
     **Does not own:**
-    - Entity bridge and variable/modifier storage → `entities/`.
-    - Zone containment, insertion, capacity → `zones/`.
-    - Visibility *policy* (the per-zone default) → `zones/` (`ZoneDefinition`).
-    - `OwnershipState` slice mechanism — defined here, generic across catalog-registered handles → shared with `zones/`, `players/`.
-    - Action pipeline, command handlers → `actions/`.
-    - Trigger fold semantics around card mutations → `triggers/`.
-    - Effect orchestration of card lifecycle → `effects/`.
-    - `store.Catalog` registry mechanism → `engine/`.
+    - The `GameCommand` / `GameAction` / `CompositeAction` / `GameSignal` type hierarchy → `actions/`.
+    - Command pipeline (envelope, handler dispatch, history) → `actions/`.
+    - Engine evaluation loop, framework FIFO routing, `GameRulesRuntime` → `engine/`.
+    - Effect orchestration, async dispatch, `IEffectScope` → `effects/`.
+    - Per-game richer trigger ordering (controller-choice, named tiers) → owners of custom `ITriggerPipeline` implementations.
 
     ## Dependencies
 
     *Mirrors the front-matter `references:` array in human-readable form.*
 
-    - **Upstream:** `entities/` (the entity bridge `InstanceWithSlices<TDef>`, storage adapter `IEntityVariableStorage`, runtime spawn surface), `zones/` (containment + visibility policy + insertion API; cards are placed into zones).
-    - **Downstream:** `actions/` (consumes mutations as `CompositeAction`), `effects/` (subscribes to card lifecycle), `engine/` (state slice infrastructure; `store.Catalog`), `presentation/` (consumes card-keyed state via `CardRef`).
+    - **Upstream:** `actions/` (pipeline that hosts the trigger fold; `HistoryEnvelope`; `CommandResult`; `GameCommand` hierarchy), `engine/` (evaluation loop, framework-FIFO routing per ADR-0006, `GameRulesRuntime.FilterTriggers` + `Evaluate`), `effects/` (`IEffectScope` — the shared execution surface).
+    - **Downstream:** `effects/` (subscribes via the same `IEffectScope` surface triggers use; replacement-prevention layer in `effects/02` builds on the fold), game-side rules code (registers abilities via `AbilityDefinition`).
 
     ## Open
 
-    See `ledgers/OPEN-ITEMS.md`:
-
-    - `oq-move-validation-execution-drift` — concurrency between move-validate and move-execute when state drifts between the two.
-    - `oq-entity-destruction` — `Cleanup` hook for destroyed cards (per-card slice cleanup on `DestroyCardMutation`).
-    - `bl-card-resolution-helper-shape` — final form for the `CardRef → Card` two-hop resolution helper.
+    - `oq-trigger-subscription-entry` — when `Register`/`Unregister` is called; relationship to zone transitions and game lifecycle.
+    - `oq-trigger-ordering` — what determines sequence within the fold beyond the `Priority` int.
