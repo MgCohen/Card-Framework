@@ -145,7 +145,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: bl-presets-package | kind: defer | **Presets package** — preset rule templates (TCG, deckbuilder, spatial sim) as compositions of framework primitives.
   Trigger: post-v1, after at least 2 features reach `implemented` and the framework primitive surface is stable.
-  References: `Product/general/ARCHITECTURE.md` §Preset Direction; `Product/general/RECOMMENDATIONS.md` §Recommendation 7.
+  References: `Product/general/ARCHITECTURE.md` §Preset Direction; `Product/general/archive/RECOMMENDATIONS.md` §Recommendation 7 (archived).
 
 ## Tier-3 area questions (not promoted to specific entries yet)
 
