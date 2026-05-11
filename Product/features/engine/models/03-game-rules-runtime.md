@@ -73,7 +73,7 @@ Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime
 | Trigger reaction logic | Per-ability | `AbilityDefinition.Register` |
 | **Game-wide FSM decisions** | **Game** | **`GameRulesRuntime<T>`** (this Model; with [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) carrying authored config, [`ITurnFlow`](features/engine/models/08-turn-flow.md) carrying turn structure, and [`ISBA`](features/engine/models/09-state-based-actions.md)s carrying cross-cutting overrides) |
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
-| Per-state intent mapping | Game (presentation) | `MatchStateViewModel<TState>.Map` — [ADR-0012 — *forthcoming*] |
+| Per-state intent mapping | Game (presentation) | `MatchStateViewModel<TState>.Map` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gates + session lifecycle types) |
 | Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`; [ADR-0011 — *forthcoming*]) |
 | Broader session lifecycle (lobby, matchmaking, reconnect) | Host (per ADR-0009 D12 hybrid future) | External controller wrapping `GameEngine`; framework provides `Session` + `SessionChanged` hooks |
@@ -271,7 +271,7 @@ This table is the canonical reference for command rejection across the framework
 
 | Need | Path | Where | Sees | Owner |
 |---|---|---|---|---|
-| "Don't let the player attempt this in UI" | **Per-state ViewModel** | Presentation, before any dispatch | `MatchStateSlice.Current` + game-projected affordances | Game UI / `MatchStateViewModel<TState>` — [ADR-0012 — *forthcoming*] |
+| "Don't let the player attempt this in UI" | **Per-state ViewModel** | Presentation, before any dispatch | `MatchStateSlice.Current` + game-projected affordances | Game UI / `MatchStateViewModel<TState>` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | "Reject because the engine isn't accepting commands" | **`SessionGate` validator** | Validator chain (framework default, registers first) | `engine.Session` via `IEngineSession` capability | Framework — see [`actions/06`](features/actions/models/06-command-validator.md) |
 | "Reject because this command type isn't valid in the current match state" | **`MatchStateActionGate` validator** | Validator chain (framework default, registers after `SessionGate`) | `MatchStateSlice.Current.Actions` | Framework + game-authored `MatchState` — see [`actions/06`](features/actions/models/06-command-validator.md) |
 | "Reject because this specific command is illegal" | **Game-shipped `ICommandValidator<TCommand>`** | Validator chain (game-shipped, registers after framework defaults) | The typed `TCommand` + `Store` via DI | `ICommandValidator<TCommand>` ([`actions/06`](features/actions/models/06-command-validator.md)) — typically the handler authored as `ValidatedCommandHandler<TCommand, TResult>` or as a reusable `CommandValidator<TCommand>` |
@@ -305,8 +305,8 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRulesRuntime`
 | Async / awaits / player-input prompts | Effects (orchestrators) and per-state ViewModels (presentation) |
 | Game session lifecycle (start, end, pause, concede, disconnect) | `GameEngine.Session` field + host orchestration (per ADR-0009 D12 hybrid future) |
 | Trigger ordering | `ITriggerPipeline` |
-| Player input → command resolution | Per-state `MatchStateViewModel<TState>.Map` — [ADR-0012 — *forthcoming*] |
-| UI affordances | Per-state ViewModel projection — [ADR-0012 — *forthcoming*] |
+| Player input → command resolution | Per-state `MatchStateViewModel<TState>.Map` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
+| UI affordances | Per-state ViewModel projection — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | Match-state structure (phase shape, transitions) | `ITurnFlow` ([`08-turn-flow.md`](features/engine/models/08-turn-flow.md)) + concrete `MatchState` subclasses ([`07-match-state.md`](features/engine/models/07-match-state.md)) |
 | Cross-cutting state-driven overrides (game-over, legend rule) | `ISBA` ([`09-state-based-actions.md`](features/engine/models/09-state-based-actions.md)) |
 
@@ -489,4 +489,4 @@ The single-phase DI construction (no `Initialize` hook) falls out naturally from
 ## Consequences
 
 - **Enables** `FilterTriggers` virtual-identity defaults and clean per-game overrides; composite rules later without redesigning the contract; deterministic replay, snapshot/restore, and trivial per-player view derivation; engine-internal plumbing (queue, flags) lives wherever the engine implementation prefers without violating zero-gameplay-state; a simpler default loop for the floor sample and Stacklands-class games; the FSM shape from ADR-0009 with a default `Evaluate` body that's mostly correct out of the box.
-- **Constrains** the framework to own service lifetime (the rule must not cache or mutate them in ways that break re-entry); any *gameplay* memo the rule wants to remember must round-trip through state; porting MTG-class rules requires a manual SBA pass (re-open trigger: first game forcing it); the runtime no longer has an `IAvailableActions` to write to — presentation reads valid command types from `MatchState.Actions` directly, and per-state ViewModels project the affordance form (per [ADR-0012 — *forthcoming*]).
+- **Constrains** the framework to own service lifetime (the rule must not cache or mutate them in ways that break re-entry); any *gameplay* memo the rule wants to remember must round-trip through state; porting MTG-class rules requires a manual SBA pass (re-open trigger: first game forcing it); the runtime no longer has an `IAvailableActions` to write to — presentation reads valid command types from `MatchState.Actions` directly, and per-state ViewModels project the affordance form (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)).

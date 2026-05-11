@@ -1,11 +1,14 @@
 ---
 type: model
-status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/01-command-pipeline.md, features/presentation/models/01-presentation-loop.md, decisions/0007-five-validation-layers.md]
-tags: [#actions, #snapshot, #templates, #model]
+status: superseded
+superseded_by: [decisions/0012-presentation-per-state-view-models.md, decisions/0009-engine-as-fsm.md, features/engine/models/07-match-state.md, features/presentation/models/01-match-state-view-model.md]
+archived_on: 2026-05-11
+reason: "`AvailableActionsSnapshot` + `ActionTemplate` wire form retired across two cascade steps. ADR-0009 retired the `IAvailableActions` service and the `AvailableActionsState` slice, moving valid command types to `MatchState.Actions: IReadOnlyList<Type>`. ADR-0012 finishes the retirement of the *richer* descriptor (typed `ActionTemplate` per command, `TargetSlot`, `ModeOption`, `ParameterSpec`, `PlayerChoice`) — these are absorbed into per-state ViewModel observables. No central wire-form snapshot survives. The richer cross-process wire form (replay viewer, network thin client) is deferred until a real consumer surfaces."
+references: [features/engine/models/07-match-state.md, features/presentation/models/01-match-state-view-model.md, features/presentation/presentation.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
+tags: [#actions, #snapshot, #templates, #model, #archived]
 ---
 
-> **Rework pending.** Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the `IAvailableActions` service + `AvailableActionsState` slice are retired in favor of `MatchState.Actions: IReadOnlyList<Type>` (see [`engine/07-match-state.md`](features/engine/models/07-match-state.md)). The wire-form `ActionTemplate` described below moves to per-state ViewModel projection under [ADR-0012 — *forthcoming*]. The content of this Model is preserved as-is until ADR-0012's cascade rewrites the snapshot / template / mapper triad as per-state polymorphic ViewModels.
+> **Archived 2026-05-11.** Superseded by [ADR-0009](Product/decisions/0009-engine-as-fsm.md) (moved valid command types to `MatchState.Actions`) and [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) (finished retiring the typed-descriptor wire form in favor of per-state VM observables). Canonical homes: [`features/engine/models/07-match-state.md`](Product/features/engine/models/07-match-state.md) for command-type intake gating; [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md) for per-action UI projection. Content below is preserved as historical record; treat `AvailableActionsSnapshot`, `ActionTemplate`, `TargetSlot`, `ModeOption`, `ParameterSpec`, `PlayerChoice` as obsolete.
 
 # Available Actions Snapshot — model
 

@@ -1,11 +1,19 @@
 ---
 type: model
-status: settled
-references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md]
-tags: [#presentation, #loop, #available-actions, #model]
+status: superseded
+superseded_by: [decisions/0012-presentation-per-state-view-models.md, features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md]
+archived_on: 2026-05-11
+reason: "Process-shaped title fails the model-template gates (per `_docs/model.md`). Content wholly superseded by ADR-0012: the four-layer loop (Store / IntentMapper / AffordanceMap / View) reshapes into Store / ViewModelRegistry / per-state MatchStateViewModel / View. `AffordanceMap` retires (VM observables replace it); global `IIntentMapper` retires (per-VM `Map(intent)` replaces it); `AvailableActionsSnapshot` / `ActionTemplate` wire form retires (`MatchState.Actions` + VM bindings replace it). The post-cascade loop synthesis lives on the rewritten `presentation/presentation.md` feature root; the canonical type homes are the two new Models cited above."
+references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/engine/models/07-match-state.md, features/effects/models/01-effect.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
+tags: [#presentation, #loop, #available-actions, #model, #archived]
 ---
 
-> **Rework pending.** Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the `IAvailableActions` service + `AvailableActionsState` slice are retired; valid command types live on `MatchState.Actions`. The `AffordanceMap` projection + global `IIntentMapper` described below are reworked as per-state polymorphic ViewModels (`MatchStateViewModel<TState>.Bind` + `Map`) under [ADR-0012 — *forthcoming*]. The content of this Model is preserved as-is until ADR-0012's cascade lands the per-state VM shape.
+> **Archived 2026-05-11.** Superseded by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md). The canonical homes for everything in this Model are:
+> - **Per-state polymorphic ViewModel** — [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md)
+> - **`ViewModelRegistry`** — [`features/presentation/models/02-view-model-registry.md`](Product/features/presentation/models/02-view-model-registry.md)
+> - **Loop synthesis (Store → registry → per-state VM → View)** — [`features/presentation/presentation.md`](Product/features/presentation/presentation.md) feature root
+>
+> Pre-cascade vocabulary that retires: `AffordanceMap`, global `IIntentMapper`, `AvailableActionsSnapshot`, `ActionTemplate` (wire form), `PlayerChoice`. `PlayerIntent` survives as game-defined typed intent records consumed by the active VM's `Map`. The "process-shaped title" anti-pattern flagged by `_docs/model.md` is resolved by the rename: `presentation/01-presentation-loop` → `presentation/01-match-state-view-model` (filename = type name). Content below is preserved as historical record; treat code samples and references to retired types as obsolete.
 
 # Presentation Loop — model
 

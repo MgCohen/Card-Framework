@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/actions/models/06-command-validator.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
+references: [features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/actions/models/06-command-validator.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/presentation/models/01-match-state-view-model.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#actions, #model, #pipeline]
 ---
 
@@ -26,7 +26,7 @@ engine.Dispatch(command)
   → GameRulesRuntime.Evaluate (state-based follow-ups; returns next MatchState)
 ```
 
-The pipeline owns the *flow*; the surrounding load-bearing types live in their own models — `IIntentMapper` ([`02`](features/actions/models/02-intent-mapper.md)), `ICommandHandler` ([`03`](features/actions/models/03-command-handler.md)), `HistoryEnvelope` ([`04`](features/actions/models/04-history-envelope.md)), `AvailableActionsSnapshot` ([`05`](features/actions/models/05-available-actions-snapshot.md)) (rework pending under [ADR-0012 — *forthcoming*]), `ICommandValidator` ([`06`](features/actions/models/06-command-validator.md)).
+The pipeline owns the *flow*; the surrounding load-bearing types live in their own models — `ICommandHandler` ([`03`](features/actions/models/03-command-handler.md)), `HistoryEnvelope` ([`04`](features/actions/models/04-history-envelope.md)), `ICommandValidator` ([`06`](features/actions/models/06-command-validator.md)). Per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md), gesture-to-command mapping moves from the retired `IIntentMapper` to per-state `MatchStateViewModel<TState>.Map` (see [`features/presentation/models/01-match-state-view-model.md`](features/presentation/models/01-match-state-view-model.md)); the typed-descriptor wire form (`ActionTemplate`, `AvailableActionsSnapshot`) retires — intake legality lives on `MatchState.Actions` (see [`features/engine/models/07-match-state.md`](features/engine/models/07-match-state.md)) and rich UI projection lives on per-state VM observables.
 
 ## Contracts
 

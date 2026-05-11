@@ -70,7 +70,7 @@ What it's for: a **prophylactic intake gate** — the framework registers `Match
 
 **Authoritative legality lives in the per-command validator chain** (per ADR-0010). `Actions` is a cheap first cut at the framework-default layer; game-shipped `ICommandValidator<TCommand>` validators own "does this specific command pass against current state?"
 
-Type-only — no `ActionTemplate` wire-form, no targets / modes / parameters. Richer presentation-side projection lives in per-state ViewModels per [ADR-0012 — *forthcoming*].
+Type-only — no `ActionTemplate` wire-form, no targets / modes / parameters. Richer presentation-side projection lives in per-state ViewModels per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md).
 
 #### `EnterCommands` — commands the engine enqueues on entry
 
@@ -225,7 +225,7 @@ store.Subscribe<MatchStateSlice>((reference, slice, ev) => {
 });
 ```
 
-Per-state polymorphic ViewModels ([ADR-0012 — *forthcoming*]) make this clean — the registry maps state-type to factory; the presenter binds the right VM on each transition.
+Per-state polymorphic ViewModels ([ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) make this clean — the registry maps state-type to factory; the presenter binds the right VM on each transition.
 
 ## Invariants
 
