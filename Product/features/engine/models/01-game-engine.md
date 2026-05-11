@@ -332,7 +332,7 @@ There is no `OnQueueDrained` callback (deleted per ADR-0006). The runtime's `Eva
 - **`ISBA.Check` returning a different state** — preempts Flow when a cross-cutting condition is met.
 - **`MatchState.ShouldExit` + `ITurnFlow.NextAfter`** — the runtime's default `Evaluate` body composes these.
 
-Custom orchestration (e.g., MTG-style stack resolution timing) lives in `Evaluate` overrides — see [`engine/03`](features/engine/models/03-game-rules-runtime.md) and [`07-match-state.md`](features/engine/models/07-match-state.md). The framework no longer carries an `IAvailableActions` service or an `AvailableActionsState` slice — `MatchState.Actions: IReadOnlyList<Type>` replaces both. The wire-form `ActionTemplate` and presentation-side projection are reworked in [ADR-0012 — *forthcoming*].
+Custom orchestration (e.g., MTG-style stack resolution timing) lives in `Evaluate` overrides — see [`engine/03`](features/engine/models/03-game-rules-runtime.md) and [`07-match-state.md`](features/engine/models/07-match-state.md). The framework no longer carries an `IAvailableActions` service or an `AvailableActionsState` slice — `MatchState.Actions: IReadOnlyList<Type>` replaces both. The wire-form `ActionTemplate` and presentation-side projection are reworked in [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md).
 
 ### Relationship to the command pipeline
 

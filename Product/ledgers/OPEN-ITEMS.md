@@ -38,6 +38,9 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
   References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.
 
+- id: oq-view-model-host-shape | kind: question | **Framework `ViewModel` base class shape** — `MatchStateViewModel<TState>` extends a `ViewModel` base whose shape (animation hooks, observable wiring, disposal, lifecycle) is host-MVVM-toolkit-dependent. Pin when the host toolkit is chosen (Unity scene VM library, .NET MAUI, web MVVM lib). Today this Model only pins the `Bind` + `Map` contract.
+  References: `Product/decisions/0012-presentation-per-state-view-models.md`, `Product/features/presentation/models/01-match-state-view-model.md`.
+
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.
 
@@ -74,7 +77,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 ## Features yet to scaffold
 
-- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. Translates input gestures (drag/drop/click/target) to `PlayerIntent`. The consumer of `PlayerIntent` is now per-VM `Map(intent)` (per `Product/spikes/fsm-architecture.md` D8) — VMs convert intents to `GameCommand` (incl. `Response` when in request-mode); the global `IIntentMapper` is dropped.
+- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. Translates raw input gestures (drag/drop/click/target) to typed `PlayerIntent` records. The consumer of `PlayerIntent` is per-state `MatchStateViewModel<TState>.Map(intent)` (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) and [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md)) — VMs convert intents to `GameCommand` (incl. `Response` when in request-mode). `PlayerIntent` ownership now lives in `presentation/` feature-root vocabulary.
   Trigger: next presentation or engine-wiring session.
   References: `Product/general/ARCHITECTURE.md`, `Product/spikes/fsm-architecture.md` D8, D17.
 

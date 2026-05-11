@@ -25,12 +25,12 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`entities`](features/entities/entities.md) | settled | 5 | Definition / Instance / Variable / Modifier / Attachment Models — the entity bridge primitive. Foundation for every runtime object. |
 | [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
 | [`cards`](features/cards/cards.md) | settled | 1 | `Card` handle on top of the entity bridge with privacy-rotating `CardRef`. |
-| [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
+| [`actions`](features/actions/actions.md) | settled | 3 | Command pipeline + command handler + history envelope. Per [ADR-0012](decisions/0012-presentation-per-state-view-models.md), `02-intent-mapper` and `05-available-actions-snapshot` archive — gesture-to-command mapping moves to per-state `MatchStateViewModel<TState>.Map` in `presentation/`; intake legality lives on `MatchState.Actions` in `engine/`. |
 | [`triggers`](features/triggers/triggers.md) | settled | 2 | `Trigger<T>` reaction class + `ITriggerPipeline` fold orchestrator. `OnBefore<T>` / `OnAfter<T>` registration around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
 | [`engine`](features/engine/engine.md) | settled | 8 | `GameEngine` class (with two-layer intake gate + session lifecycle), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (FSM evaluator) split, FSM machinery (`MatchState` + `ITurnFlow` + `ISBA`), game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. Per [ADR-0009](decisions/0009-engine-as-fsm.md) the engine IS the FSM. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
-| [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
+| [`presentation`](features/presentation/presentation.md) | settled | 2 | Per-state polymorphic `MatchStateViewModel<TState>` + `ViewModelRegistry`. Presenter subscribes to `MatchStateSlice`; rebinds active VM on type change; per-VM `Map(intent) → GameCommand` replaces global `IIntentMapper`. Per [ADR-0012](decisions/0012-presentation-per-state-view-models.md). |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
 | `interaction` | **considered** | — | Input gesture → `PlayerIntent` translation. Drag/drop/click/target. The interaction layer per ARCHITECTURE. |
 | `networking` | **considered** | — | Command/history transport, visibility filter, deterministic RNG, versioned definitions, snapshots for join/reconnect. The networking layer per ARCHITECTURE; post-v1. |
@@ -110,11 +110,11 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/01-card-model.md`](features/cards/models/01-card-model.md) — settled, references: `entities/01`, `entities/02`, `zones/01`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `actions/02`, `actions/03`, `actions/04`, `triggers/01`, `effects/02`, `engine/03`, `decisions/0006`, `decisions/0007`
-- [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `actions/03`, `actions/04`, `triggers/01`, `effects/02`, `engine/03`, `engine/07`, `presentation/01`, `decisions/0006`, `decisions/0007`, `decisions/0012`
 - [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
 - [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
-- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled (**rework pending under ADR-0012**), references: `actions/02`, `actions/01`
+- ~~[`models/02-intent-mapper.md`]~~ — **archived 2026-05-11** ([`archive/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md)) — global `IIntentMapper` retired per ADR-0012; replaced by per-state `MatchStateViewModel<TState>.Map` in `presentation/`
+- ~~[`models/05-available-actions-snapshot.md`]~~ — **archived 2026-05-11** ([`archive/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md)) — `AvailableActionsSnapshot` / `ActionTemplate` typed-descriptor wire form retired per ADR-0009 + ADR-0012; replaced by `MatchState.Actions` (intake gate) + per-state VM observables (rich projection)
 
 ### `triggers` (settled)
 - [`models/01-trigger.md`](features/triggers/models/01-trigger.md) — *Trigger\<T\>* — settled, references: `triggers/02`, `actions/01`, `effects/02`, `engine/03`, `decisions/0006`
@@ -149,7 +149,11 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/06`, `zones/01`, `decisions/0005`
 
 ### `presentation` (settled)
-- [`models/01-presentation-loop.md`](features/presentation/models/01-presentation-loop.md) — settled, references: `actions/05`, `engine/04`, `engine/03`, `effects/01`
+- [`models/01-match-state-view-model.md`](features/presentation/models/01-match-state-view-model.md) — *MatchStateViewModel\<TState\>* — settled, references: `presentation/02`, `engine/07`, `actions/01`, `effects/06`, `state`, `decisions/0012`, `decisions/0009`, `decisions/0007`
+- [`models/02-view-model-registry.md`](features/presentation/models/02-view-model-registry.md) — *ViewModelRegistry* — settled, references: `presentation/01`, `engine/07`, `state`, `decisions/0012`, `decisions/0009`
+- ~~[`models/01-presentation-loop.md`]~~ — **archived 2026-05-11** ([`archive/01-presentation-loop.md`](features/presentation/archive/01-presentation-loop.md)) — process-shaped title retired per `_docs/model.md`; content wholly superseded by ADR-0012
+
+*Reorg 2026-05-11 (ADR-0012 cascade):* `presentation/01-presentation-loop.md` archived (process-shaped title; content superseded). New Models `01-match-state-view-model` (per-state polymorphic VM) + `02-view-model-registry` (type → factory lookup). Feature root rewritten — composition table 1→2 Models; loop synthesis (Store → ViewModelRegistry → per-state VM → View) lives on the root. `actions/02-intent-mapper` archived (global `IIntentMapper` retired); `actions/05-available-actions-snapshot` archived (typed-descriptor wire form retired). `PlayerIntent` + `IntentGateway` ownership moves from `actions/` to `presentation/`. Engine Models 01 + 03 + 07 references to `[ADR-0012 — *forthcoming*]` re-pointed to landed ADR.
 
 ### `authoring` (considered)
 No models yet. Promote when authoring tooling becomes the active thread (likely after first feature reaches `implemented`).

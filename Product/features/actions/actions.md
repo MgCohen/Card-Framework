@@ -9,12 +9,12 @@ tags: [#actions]
 
 ## What it is
 
-The framework's command pipeline. A **`PlayerIntent`** (UI input or system attempt) is mapped through `IIntentMapper` into a typed **`GameCommand`** that flows through the pipeline (engine lifecycle gate → `handler.Validate` → framework FIFO → drain → before-fold → handler → after-fold → envelope) and emits a **`HistoryEnvelope`** capturing cause and effects. The feature also owns the **`AvailableActionsSnapshot`** shape (typed `ActionTemplate` per command type) that tells presentation what's currently legal.
+The framework's command pipeline. Per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md), a **`PlayerIntent`** (UI gesture) is mapped by the **active per-state ViewModel** (lives in `presentation/`, looked up via `ViewModelRegistry` keyed on `MatchStateSlice.Current.GetType()`) into a typed **`GameCommand`** that flows through the pipeline (engine lifecycle gate → `handler.Validate` → framework FIFO → drain → before-fold → handler → after-fold → envelope) and emits a **`HistoryEnvelope`** capturing cause and effects. The pre-cascade global `IIntentMapper` and `AvailableActionsSnapshot` / `ActionTemplate` wire form are retired by ADR-0012; valid command types live on `MatchState.Actions: IReadOnlyList<Type>` (per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)) and per-state UI projections live on the active VM's observables.
 
 ```
-                PlayerIntent (UI input / system attempt)
+                PlayerIntent (UI gesture; game-defined typed record)
                          │
-                IntentMapper.Map(template, choice)
+                ActiveViewModel.Map(intent)    ← in presentation/; per-state polymorphic
                          │
                          ▼
                    GameCommand
@@ -42,13 +42,10 @@ Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline
 
 ## Vocabulary
 
-**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `IAvailableActions`, `EngineLifecycle`, `EngineState` (defined in `engine/`); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `MatchState`, `MatchStateSlice`, `EngineLifecycle`, `EngineState` (defined in `engine/`); `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` (defined in `presentation/` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
-| `PlayerIntent` | A structured intent submitted to the engine from outside the rules layer (drag-drop, AI choice, network message, scripted bot, replay playback). Carries what the actor attempted, not the final state mutation. |
-| `IIntentMapper` | Game-supplied service: `Map(ActionTemplate template, PlayerChoice choice) → GameCommand`. Switches on typed template subtype to produce a well-formed command. Decision-unaware. |
-| `PlayerChoice` | The data the player committed to: target list, parameter values, mode selections. Bound by `IIntentMapper` against a template to produce a `GameCommand`. |
 | `GameCommand` | Base type for everything that flows through the pipeline (defined in `triggers/`); subtypes are `GameAction` (executable, queued), `CompositeAction` (inline, no queue), `GameSignal` (no execution). |
 | `ICommandHandler<TCommand, TResult>` | Per-command resolver. One per `GameCommand` type. `Validate(cmd, state) → bool` (authoritative legality check) + `Handle(cmd, ctx) → Task<TResult>` (apply state via mutators, return result). Game-supplied. |
 | `ICommandPipeline` | Framework executor: `Validate(cmd, state)` (resolves handler, delegates) + `Execute(action) → CommandResult` (full lifecycle for one action). |
@@ -56,44 +53,50 @@ Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline
 | `HistoryEnvelope` | The grouping unit observers consume — one per `GameAction`, with cause metadata (`OriginCommandId`, `OriginIntent` (first only), `Actor`, `SourceInstance`, `Result`, `Entries[]`). |
 | `OriginCommandId` | ID of the first command in a chain. Threaded by the engine onto every evaluator follow-up so all chain members share identity. |
 | `OriginIntent` | The originating `PlayerIntent` recorded on the first envelope of a chain only. |
-| `ActionTemplate` | Snapshot wire-form. Abstract base (`CommandType`, `Source?`); typed subtypes per command (`MoveCardTemplate`, `CastSpellTemplate`, etc.) carrying per-action shape (targets, modes, parameters). |
-| `AvailableActionsSnapshot` | `IReadOnlyList<ActionTemplate>` published by `GameRulesRuntime.Evaluate` (and effects mid-execution) via `IAvailableActions.Set`. |
-| `TargetSlot` / `ModeOption` / `ParameterSpec` | Building blocks for `ActionTemplate` subtypes that need them; not all templates carry all three. |
-| `IntentGateway` | Thin entry layer translating `PlayerIntent` → dispatched `GameCommand` (typically reads the snapshot, runs `IntentMapper`, calls `engine.Dispatch`). Game-supplied. |
+
+**Retired terms** (live in `Product/ledgers/GLOSSARY.md` §Retired terms; canonical homes archived):
+
+- `IIntentMapper` (global service) — retired by ADR-0012; replaced by per-state `MatchStateViewModel<TState>.Map(intent)` in `presentation/`. Canonical Model archived at [`archive/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md).
+- `PlayerChoice` — retired by ADR-0012; the choice is encoded in the typed `PlayerIntent` record.
+- `ActionTemplate` (wire form), `AvailableActionsSnapshot`, `TargetSlot` / `ModeOption` / `ParameterSpec` — retired across ADR-0009 (`IAvailableActions` service + slice) and ADR-0012 (typed-descriptor wire form). Replaced by `MatchState.Actions: IReadOnlyList<Type>` for the intake-gate surface (in `engine/`) and per-state VM observables for the rich UI projection (in `presentation/`). Canonical Model archived at [`archive/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md).
+- `PlayerIntent`, `IntentGateway` ownership — moved from `actions/` to `presentation/` per ADR-0012. The types survive; they just live in presentation now.
 
 ## Architecture
 
-The feature has five Models. Each is the canonical home for one load-bearing element of the action pipeline:
+The feature has three Models post-ADR-0012. Each is the canonical home for one load-bearing element of the action pipeline:
 
 1. **`ICommandPipeline`** ([`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md)) — the dispatch flow: lifecycle gate → validate → enqueue → drain (before-fold → handler → after-fold → envelope) → evaluate. Type hierarchy reference. Framework-FIFO routing per ADR-0006.
-2. **`IIntentMapper`** ([`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md)) — the boundary that turns `PlayerIntent` (UI/AI/network/etc) into a typed `GameCommand`. Owns `PlayerIntent` and `IntentGateway` as its tied surfaces.
-3. **`ICommandHandler<TCommand, TResult>`** ([`03-command-handler.md`](features/actions/models/03-command-handler.md)) — the per-command resolver. `Validate` (authoritative) + `Handle` (writes via mutators, returns typed `CommandResult`).
-4. **`HistoryEnvelope`** ([`04-history-envelope.md`](features/actions/models/04-history-envelope.md)) — the grouping unit observers consume. One per `GameAction`. `HistoryState` slice holds the ordered envelope log.
-5. **`AvailableActionsSnapshot`** ([`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md)) — typed `ActionTemplate` per command type; `PlayerChoice` shape; eligibility framing.
+2. **`ICommandHandler<TCommand, TResult>`** ([`03-command-handler.md`](features/actions/models/03-command-handler.md)) — the per-command resolver. `Validate` (authoritative) + `Handle` (writes via mutators, returns typed `CommandResult`).
+3. **`HistoryEnvelope`** ([`04-history-envelope.md`](features/actions/models/04-history-envelope.md)) — the grouping unit observers consume. One per `GameAction`. `HistoryState` slice holds the ordered envelope log.
 
-The six shapes that flow through the pipeline (`PlayerIntent` → `ActionTemplate` → `GameCommand` → `StateMutation` → `CommandResult` → `HistoryEnvelope`) are owned across these models plus `triggers/` (`GameCommand` type hierarchy) and `state/` (`StateMutation`).
+**Archived 2026-05-11 (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)):**
 
-### The five validation layers
+- ~~`02-intent-mapper.md`~~ → [`archive/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md). Global `IIntentMapper` retired in favor of per-state `MatchStateViewModel<TState>.Map` (now in `presentation/`).
+- ~~`05-available-actions-snapshot.md`~~ → [`archive/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md). Typed-descriptor wire form retired (ADR-0009 retired the service+slice; ADR-0012 finished the wire-form retirement). Replaced by `MatchState.Actions` (intake gate) + per-state VM observables (rich projection).
+
+The shapes that flow through the pipeline post-cascade (`PlayerIntent` → `GameCommand` → `StateMutation` → `CommandResult` → `HistoryEnvelope`) are owned across these models plus `triggers/` (`GameCommand` type hierarchy), `state/` (`StateMutation`), and `presentation/` (`PlayerIntent` + per-state `MatchStateViewModel.Map`).
+
+### The five validation layers (post-ADR-0012)
 
 Validation is layered explicitly. **`handler.Validate` is authoritative at dispatch**; the others narrow the search space, gate UI, ensure well-formedness, or enforce engine-level flow. Full breakdown lives in [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) (project-wide ADR — spans engine + actions + presentation).
 
 | Layer | Owner feature | Concern | When |
 |---|---|---|---|
-| Per-template eligibility | `engine/` (runtime's `Evaluate`) | Which templates are even relevant | Snapshot construction |
-| `AffordanceMap` | `presentation/` | UI affordance projection | UI render |
-| `IIntentMapper.Map` | `actions/` | Well-formedness | Intent → command translation |
-| `handler.Validate` | `actions/` | Authoritative legality | Engine intake (every dispatch) |
+| Per-state VM affordance projection | `presentation/` (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) | UI shouldn't surface affordances that would be illegal | VM `Bind` / observable update |
+| Per-state VM `Map(intent)` well-formedness | `presentation/` | Translate gesture to a valid command shape (throws / no-ops for unhandled intents in current mode) | UI gesture commit |
 | Engine lifecycle gate | `engine/` (framework) | Match-lifecycle gate (paused/ended) | Engine intake (every dispatch) |
+| `MatchState.Actions` intake gate | `engine/` (framework) | Reject commands whose type isn't in `current.Actions` | Engine intake (every dispatch) |
+| `handler.Validate` | `actions/` | Authoritative legality | Engine intake (every dispatch) |
 
 ## Composition
 
 | Model | Role |
 |---|---|
 | [`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) | `ICommandPipeline`; dispatch flow; type-hierarchy reference; framework-FIFO routing |
-| [`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) | `IIntentMapper` + `PlayerIntent` + `IntentGateway` (input boundary) |
 | [`03-command-handler.md`](features/actions/models/03-command-handler.md) | `ICommandHandler<TCommand, TResult>` + `CommandResult` (per-command resolver) |
 | [`04-history-envelope.md`](features/actions/models/04-history-envelope.md) | `HistoryEnvelope` + `HistoryState` slice (envelope log) |
-| [`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) | `AvailableActionsSnapshot`, typed `ActionTemplate`, `PlayerChoice`, eligibility |
+| ~~[`02-intent-mapper.md`]~~ | **Archived 2026-05-11** (ADR-0012). See [`archive/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md). Replacement: per-state `MatchStateViewModel<TState>.Map` in `presentation/`. |
+| ~~[`05-available-actions-snapshot.md`]~~ | **Archived 2026-05-11** (ADR-0009 + ADR-0012). See [`archive/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md). Replacement: `MatchState.Actions` + per-state VM observables. |
 
 ## Invariants
 
@@ -109,23 +112,24 @@ Cross-Model rules that hold across both Models and shape how downstream features
 - **`OriginIntent` is recorded once, on the first envelope.** Subsequent envelopes in the chain share `OriginCommandId` but carry no `OriginIntent`.
 - **UI creates intents, not state changes.** `PlayerIntent` is the boundary; everything beyond is framework / game logic.
 - **Snapshot is approximate; dispatch is authoritative.** Per-binding `Validate` runs at dispatch (always) and may run during snapshot enumeration (on-demand by the rule). UI gates may show stale bindings; dispatch catches them.
-- **`ActionTemplate` is the snapshot wire-form.** `Ref<T>` and `Reference` fields on templates are boundary-correct (per [ADR-0005](Product/decisions/0005-objects-over-ids.md)) — they're transported to presentation and consumed by `IntentMapper`.
+- **`MatchState.Actions` is the canonical "what's legal here?" surface.** Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md) and [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md), the typed-descriptor wire form (`ActionTemplate`) retires; intake gating uses `IReadOnlyList<Type>` directly; rich UI projection lives on per-state VM observables.
 - **Command-queue routing is framework-FIFO.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does not gate intake or route commands; game-style differences in how reactions are scheduled live at the effect-level orchestration layer.
 
 ## Boundaries
 
-**Owns:** `PlayerIntent` and `IntentGateway` contracts; `IIntentMapper` interface; `GameCommand` pipeline mechanics (validate / before-fold integration / handler / after-fold integration / envelope close); `ICommandHandler<TCommand, TResult>` and `CommandHandler<TCommand, TResult>` typed base; `CommandResult` and its variant convention; `HistoryEnvelope` shape and `OriginCommandId` / `OriginIntent` threading; `AvailableActionsSnapshot`; `ActionTemplate` (abstract base + typed subtypes per command); `PlayerChoice`; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks.
+**Owns:** `GameCommand` pipeline mechanics (validate / before-fold integration / handler / after-fold integration / envelope close); `ICommandHandler<TCommand, TResult>` and `CommandHandler<TCommand, TResult>` typed base; `CommandResult` and its variant convention; `HistoryEnvelope` shape and `OriginCommandId` / `OriginIntent` threading.
 
 **Does not own:**
 - `GameCommand` type hierarchy (`GameAction`, `CompositeAction`, `GameSignal`) → `triggers/`
 - Trigger fold mechanics (before-fold / after-fold execution) → `triggers/`
 - `Effect` orchestration, `IEffectScope` → `effects/`
-- `IAvailableActions` service (writer) — the snapshot is published by → `engine/`
-- `GameRulesRuntime` four-method contract — `FilterTriggers` and `Evaluate` are owned by → `engine/`
+- `MatchState.Actions` intake-gate surface and `MatchStateSlice` → `engine/`
+- `GameRulesRuntime` contract — `FilterTriggers` and `Evaluate` are owned by → `engine/`
 - `Mutator<TState, TPayload>` and `Store.Execute(payload)` mechanics → `engine/` (`state/state`)
 - Engine lifecycle gate, framework FIFO, drain loop → `engine/`
 - Card-specific shape, zone-specific shape → `cards/`, `zones/`
-- UI presentation, `AffordanceMap` implementation → `presentation/`
+- `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` — moved to `presentation/` by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)
+- UI presentation and per-state UI projection → `presentation/`
 
 ## Dependencies
 
