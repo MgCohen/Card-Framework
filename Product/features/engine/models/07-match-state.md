@@ -66,11 +66,11 @@ Each concrete `MatchState` overrides what it cares about; the base defaults are 
 public virtual IReadOnlyList<Type> Actions => [];
 ```
 
-What it's for: a **prophylactic intake gate** (the framework registers a validator — `MatchStateActionGate` per [ADR-0010 — *forthcoming*]) that rejects commands whose `GetType()` is not in `current.Actions`. Until ADR-0010 lands, `engine.Dispatch` consults this list inline before delegating to `pipeline.Validate`. Also used by tooling ("what commands are legal right now?") and by network legality (clients check before submitting).
+What it's for: a **prophylactic intake gate** — the framework registers `MatchStateActionGate` per [ADR-0010](Product/decisions/0010-validator-handler-split.md) (see [`actions/06-command-validator.md`](features/actions/models/06-command-validator.md)) that rejects commands whose `GetType()` is not in `current.Actions`. Also used by tooling ("what commands are legal right now?") and by network legality (clients check before submitting).
 
-**Authoritative legality remains with `handler.Validate`.** `Actions` is a cheap first cut; the per-command validator owns "does this specific command pass against current state?"
+**Authoritative legality lives in the per-command validator chain** (per ADR-0010). `Actions` is a cheap first cut at the framework-default layer; game-shipped `ICommandValidator<TCommand>` validators own "does this specific command pass against current state?"
 
-Type-only — no `ActionTemplate` wire-form, no targets / modes / parameters. Richer presentation-side projection lives in per-state ViewModels per [ADR-0012 — *forthcoming*].
+Type-only — no `ActionTemplate` wire-form, no targets / modes / parameters. Richer presentation-side projection lives in per-state ViewModels per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md).
 
 #### `EnterCommands` — commands the engine enqueues on entry
 
@@ -118,17 +118,20 @@ if (current is DeclareAttackersState attack && attack.SelectedAttackers.Count > 
 `TransitionStateCommand` is **framework-internal** — dispatched by the engine drain after `Evaluate` detects a type-change, not authored by games. The handler is also framework-internal:
 
 ```csharp
-public sealed class TransitionStateHandler : ICommandHandler<TransitionStateCommand, TransitionResult> {
-    private readonly Store store;
+public sealed class TransitionStateHandler
+    : GameCommandHandler<TransitionStateCommand, TransitionResult>
+{
     private readonly IEngineQueue engine;
 
-    public TransitionStateHandler(Store store, IEngineQueue engine) {
-        this.store  = store;
+    public TransitionStateHandler(IEngineQueue engine)
+    {
         this.engine = engine;
     }
 
-    public Task<TransitionResult> Handle(TransitionStateCommand cmd, IHandlerContext ctx) {
-        ctx.Store.Execute(new SetMatchStatePayload(cmd.NewState));
+    // Store comes from the GameCommandHandler<,> base via [Inject] (per ADR-0010).
+    public override Task<TransitionResult> Handle(TransitionStateCommand cmd)
+    {
+        Store.Execute(new SetMatchStatePayload(cmd.NewState));
         foreach (var enter in cmd.NewState.EnterCommands)
             engine.Enqueue(enter);
         return Task.FromResult(new TransitionResult());
@@ -136,7 +139,7 @@ public sealed class TransitionStateHandler : ICommandHandler<TransitionStateComm
 }
 ```
 
-*Note on shape:* this Model shows the pre-ADR-0010 handler shape (`IHandlerContext` parameter, constructor-injected services). [ADR-0010 — *forthcoming*] refactors handlers to a `GameCommandHandler<TCommand, TResult>` base with property-injected `Store` + per-handler constructor injection for everything else. The transition handler's *behavior* is unchanged; only the registration shape moves.
+Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), this handler extends `GameCommandHandler<TransitionStateCommand, TransitionResult>` (property-injected `Store`) and constructor-injects `IEngineQueue` for the follow-up enqueue. No validator is registered against `TransitionStateCommand` — it's framework-internal and bypasses the validator chain on enqueue.
 
 ### `SetMatchStatePayload` and the mutator
 
@@ -222,7 +225,7 @@ store.Subscribe<MatchStateSlice>((reference, slice, ev) => {
 });
 ```
 
-Per-state polymorphic ViewModels ([ADR-0012 — *forthcoming*]) make this clean — the registry maps state-type to factory; the presenter binds the right VM on each transition.
+Per-state polymorphic ViewModels ([ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) make this clean — the registry maps state-type to factory; the presenter binds the right VM on each transition.
 
 ## Invariants
 

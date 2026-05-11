@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, features/triggers/models/01-trigger.md, decisions/0009-engine-as-fsm.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/triggers/models/01-trigger.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
 tags: [#engine, #gamerules, #runtime, #fsm]
 ---
 
@@ -29,10 +29,18 @@ public abstract class GameRulesRuntime<TDefinition>
         GameAction    justExecuted,
         CommandResult result)
     {
+        // SBAs preempt — cross-cutting overrides (game-over, legend rule, lethal damage).
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
         var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011:
+        //   • Pause on open requests (RequestsSlice non-empty).
+        //   • Stay stationary while pending effects exist; the engine will drain them.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;
@@ -51,7 +59,7 @@ The rules layer is the **game's decision layer**. The framework engine drives th
 
 It is **not** a place for command-specific legality, action handlers, ability logic, state mutation, or async work. See "Anti-scope" below for the explicit list.
 
-Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does **not** own command-queue routing — that's framework FIFO. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the FSM evaluator shape replaces the previous `Evaluate → IReadOnlyList<GameAction>` contract. Effect-level orchestration (when each effect starts, whether effects nest / batch / stack) is a forthcoming surface; tracked as `oq-effect-pipeline`, designed in [ADR-0011 — *forthcoming*].
+Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does **not** own command-queue routing — that's framework FIFO. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the FSM evaluator shape replaces the previous `Evaluate → IReadOnlyList<GameAction>` contract. Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md), effect-level orchestration runs through `PendingEffectsSlice` (the engine drains; cast handlers and triggers push) — the default `Evaluate` body composes SBAs preempt → request pause → pending-effect pause → `ShouldExit` + Flow. Games override `Evaluate` for custom drain timing (MTG-style stack resolution gating drain on priority pass).
 
 ### Position in the system
 
@@ -60,11 +68,12 @@ Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime
 | Engine loop, queue, drain | Framework | `GameEngine` (engine-private FIFO) |
 | Pipeline (handler lookup → validate → before-fold → handle → after-fold → envelope) | Framework | `ICommandPipeline` |
 | Trigger ordering + fold execution | Framework (swappable) | `ITriggerPipeline` |
-| **Command-specific legality** + state mutation | **Per-action** | **`ICommandHandler.Validate` / `Handle`** |
+| **Command-specific legality** | **Per-command** | **`ICommandValidator<TCommand>`** ([`actions/06`](features/actions/models/06-command-validator.md)) — registered chain, short-circuit, framework defaults (`SessionGate`, `MatchStateActionGate`) run first |
+| **State mutation reacting to a command** | **Per-action** | **`ICommandHandler.Handle`** ([`actions/03`](features/actions/models/03-command-handler.md)) — `GameCommandHandler<,>` base with `[Inject] Store` |
 | Trigger reaction logic | Per-ability | `AbilityDefinition.Register` |
 | **Game-wide FSM decisions** | **Game** | **`GameRulesRuntime<T>`** (this Model; with [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) carrying authored config, [`ITurnFlow`](features/engine/models/08-turn-flow.md) carrying turn structure, and [`ISBA`](features/engine/models/09-state-based-actions.md)s carrying cross-cutting overrides) |
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
-| Per-state intent mapping | Game (presentation) | `MatchStateViewModel<TState>.Map` — [ADR-0012 — *forthcoming*] |
+| Per-state intent mapping | Game (presentation) | `MatchStateViewModel<TState>.Map` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gates + session lifecycle types) |
 | Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`; [ADR-0011 — *forthcoming*]) |
 | Broader session lifecycle (lobby, matchmaking, reconnect) | Host (per ADR-0009 D12 hybrid future) | External controller wrapping `GameEngine`; framework provides `Session` + `SessionChanged` hooks |
@@ -107,16 +116,22 @@ public abstract class GameRulesRuntime<TDefinition>
         GameAction    justExecuted,
         CommandResult result)
     {
+        // SBAs preempt — cross-cutting overrides (game-over, legend rule, lethal damage).
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
         var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011:
+        //   • Pause on open requests (RequestsSlice non-empty).
+        //   • Stay stationary while pending effects exist; the engine will drain them.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;
     }
-
-    // Effect-pipeline orchestration surface — separate design pass; tracked as oq-effect-pipeline.
 }
 ```
 
@@ -177,7 +192,7 @@ public sealed class StandardMagicRulesRuntime : GameRulesRuntime<StandardMagicRu
 - **The runtime never mutates state slices directly.** Per ADR-0009, the only "state write" the runtime triggers is by returning a different-typed `MatchState` from `Evaluate`, which the engine routes through `TransitionStateCommand` → `SetMatchStatePayload` → framework-internal mutator. All other writes flow from handlers.
 - **The runtime holds zero gameplay state.** Service handles, lookup tables, cached evaluators that are deterministic functions of inputs are fine — *gameplay memory* (last-move, phase, stash buffers) lives as a state slice in the Scaffold `Store`. Game-specific subsystems injected into the runtime (e.g. `IStackSystem`) follow the same rule: they are *behavior*, not gameplay memory.
 - **The definition is immutable for the runtime's lifetime.** It is constructor-injected once and never reassigned. Mutable per-match knobs belong in slices.
-- **Command-specific legality is not the runtime's concern.** Each `ICommandHandler<TCommand,TResult>.Validate` owns the legality of its own command. The runtime is generic across game logic. The runtime's "what commands are valid" answer goes on `MatchState.Actions` — a list of types, not a per-command predicate.
+- **Command-specific legality is not the runtime's concern.** Each `ICommandValidator<TCommand>` (per [`actions/06`](features/actions/models/06-command-validator.md)) owns the legality of its own command — typically authored on the combined `ValidatedCommandHandler<TCommand, TResult>` base. The runtime is generic across game logic. The runtime's "what commands are valid" answer goes on `MatchState.Actions` — a list of types, not a per-command predicate.
 - **No method holds onto its arguments.** `TriggerMatch` lists and `command` / `result` parameters are valid only for the call. (Injected services and the definition *are* held — that's their purpose.)
 - **Per-match lifecycle.** The runtime is constructed at `factory.Build()` and lives as long as its engine. The engine owns disposal of everything under its lifecycle.
 - **The runtime does not own command-queue routing.** Per ADR-0006, the engine queue is framework-private FIFO.
@@ -246,33 +261,33 @@ Earlier drafts of this contract included an `OnIncomingCommand` (a.k.a. `Route`)
 - **Command-queue routing isn't what games actually customize.** Walking through Stacklands, Hearthstone, and MTG concretely showed that the framework FIFO is sufficient for command-level scheduling. What differs across game styles is *effect-level* orchestration (when an effect starts, whether effects nest / batch / stack).
 - **Per-command primitives are framework-level.** Modify, cancel, replace, dispatch — these operate on the in-flight command via `IEffectScope` during the trigger fold. They don't need a runtime hook.
 - **Match-state and session gating moved to the framework intake gate.** Framework checks `engine.Session` and `MatchStateSlice.Current.Actions` at `engine.Dispatch` and rejects ineligible dispatches uniformly. See [`engine/01 §Intake gates`](features/engine/models/01-game-engine.md).
-- **Game-flow legality lives in `pipeline.Validate`.** Handler-side validation (`handler.Validate`) catches command-specific legality.
+- **Game-flow legality lives in `pipeline.Validate`.** Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), the registered validator chain (game-shipped `ICommandValidator<TCommand>` after the framework defaults) catches command-specific legality.
 
 The forthcoming effect-pipeline surface (ADR-0011) is where game-level scheduling decisions live. Until it lands, MTG-style stack semantics is expressible via game-state zones (the stack is a `ZoneContentsState`) plus `Evaluate` overrides watching that zone and returning custom `MatchState`s.
 
-### Three rejection paths
+### Five rejection paths
 
-This table is the canonical reference for command rejection across the framework.
+This table is the canonical reference for command rejection across the framework. Per [ADR-0010](Product/decisions/0010-validator-handler-split.md) the four pre-execution paths are all expressed through registered `ICommandValidator<TCommand>` chains and the per-state ViewModel; the mid-execution path lives in the before-fold.
 
 | Need | Path | Where | Sees | Owner |
 |---|---|---|---|---|
-| "Don't let the player attempt this in UI" | **Per-state ViewModel** | Presentation, before any dispatch | `MatchStateSlice.Current` + game-projected affordances | Game UI / `MatchStateViewModel<TState>` — [ADR-0012 — *forthcoming*] |
-| "Reject because the engine isn't accepting commands" | **Session gate** | Engine `Dispatch` (framework, Layer 1) | `engine.Session` | Framework |
-| "Reject because this command type isn't valid in the current match state" | **MatchState actions gate** | Engine `Dispatch` (framework, Layer 2) | `MatchStateSlice.Current.Actions` | Framework + game-authored `MatchState` |
-| "Reject because this specific command is illegal" | **`Handler.Validate` Reject** | Engine intake (handler) | The typed `TCommand` + `IStateScope` | `ICommandHandler<TCommand,_>` |
-| "Cancel this mid-execution based on a card effect" | **Before-fold `Cancel`** | Inside the pipeline | The constructed `GameAction`, ability `Context` | `OnBefore<T>` trigger |
+| "Don't let the player attempt this in UI" | **Per-state ViewModel** | Presentation, before any dispatch | `MatchStateSlice.Current` + game-projected affordances | Game UI / `MatchStateViewModel<TState>` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
+| "Reject because the engine isn't accepting commands" | **`SessionGate` validator** | Validator chain (framework default, registers first) | `engine.Session` via `IEngineSession` capability | Framework — see [`actions/06`](features/actions/models/06-command-validator.md) |
+| "Reject because this command type isn't valid in the current match state" | **`MatchStateActionGate` validator** | Validator chain (framework default, registers after `SessionGate`) | `MatchStateSlice.Current.Actions` | Framework + game-authored `MatchState` — see [`actions/06`](features/actions/models/06-command-validator.md) |
+| "Reject because this specific command is illegal" | **Game-shipped `ICommandValidator<TCommand>`** | Validator chain (game-shipped, registers after framework defaults) | The typed `TCommand` + `Store` via DI | `ICommandValidator<TCommand>` ([`actions/06`](features/actions/models/06-command-validator.md)) — typically the handler authored as `ValidatedCommandHandler<TCommand, TResult>` or as a reusable `CommandValidator<TCommand>` |
+| "Cancel this mid-execution based on a card effect" | **Before-fold `Cancel`** | Inside the pipeline (after validators pass; during handler invocation) | The constructed `GameAction`, ability `Context` | `OnBefore<T>` trigger |
 
-The engine's `Dispatch` runs the two-layer gate first (cheap, framework-only), then `pipeline.Validate` (resolves handler, delegates to `handler.Validate`). Any layer can reject; the engine surfaces a single `bool + reason` to the caller via the try-get pattern (`bool Dispatch(GameAction action, out string? reason)`).
+The engine's `Dispatch` delegates to `pipeline.Validate`, which runs the registered validator chain in DI order (framework defaults first; game-shipped after). Short-circuit on first reject; one reason returned. Any layer can reject; the engine surfaces a single `bool + reason` to the caller via the try-get pattern (`bool Dispatch(GameAction action, out string? reason)`).
 
 **Rule of thumb: the earliest path with enough information wins.** Pushing a check upstream means fewer wasted dispatches, less duplicated logic, and clearer UI:
 
-- If the UI can know it's illegal before submitting → the per-state VM doesn't surface the affordance, and `Validate` doesn't even need to run.
-- If the engine isn't ready (`NotStartedSession` / `EndedSession`) → the session gate rejects.
-- If the command type isn't valid in the current state → the match-state actions gate rejects.
-- If the command is malformed against current state → `Validate` rejects.
+- If the UI can know it's illegal before submitting → the per-state VM doesn't surface the affordance, and validation doesn't even need to run.
+- If the engine isn't ready (`NotStartedSession` / `EndedSession`) → `SessionGate` rejects.
+- If the command type isn't valid in the current state → `MatchStateActionGate` rejects.
+- If the command is malformed against current state → a game-shipped validator rejects.
 - If a card effect must cancel mid-resolution → before-fold cancel.
 
-`Handler.Validate` is the *authoritative* legality check, run at dispatch. The match-state actions list is a cheap prophylactic gate — coarse, type-only, no state read. The per-state ViewModel projection is the UI's best-effort affordance map. If the affordance is stale, dispatch catches it and surfaces the rejection (toast).
+The validator chain is *authoritative*: framework defaults handle session / match-state gating; game-shipped validators handle command-specific legality (cost, ownership, line-of-sight, etc.). The match-state actions list is a cheap prophylactic gate — coarse, type-only, no rich state read. The per-state ViewModel projection is the UI's best-effort affordance map. If the affordance is stale, dispatch catches it and surfaces the rejection (toast).
 
 ### Anti-scope — what does NOT belong on the runtime
 
@@ -280,18 +295,18 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRulesRuntime`
 
 | Don't put here | Put it in |
 |---|---|
-| **Command-specific legality** ("can this `MoveCard` run right now?") | `ICommandHandler<TCommand,_>.Validate` |
+| **Command-specific legality** ("can this `MoveCard` run right now?") | `ICommandValidator<TCommand>` ([`actions/06`](features/actions/models/06-command-validator.md)) — typically authored as a `ValidatedCommandHandler<TCommand, TResult>` or a reusable `CommandValidator<TCommand>` |
 | **Gameplay state** (last-move memory, stash buffers, phase counters) | Scaffold state slices in the `Store` (per "zero gameplay state" — see Q2 below) |
 | **Authored configuration** (starting life, hand size, format knobs) | `GameRulesDefinition` `[SerializeField]` fields ([`engine/02`](features/engine/models/02-game-rules-definition.md)), read through `Definition.X` |
 | **Command-queue routing** (where this command goes in the queue) | Framework (engine FIFO; per ADR-0006). For effect-level batching/stacking, use a game-state zone plus `Evaluate` watching it. |
-| Action handler logic ("how does damage actually resolve") | `ICommandHandler<TCommand,_>.Handle` |
+| Action handler logic ("how does damage actually resolve") | `ICommandHandler<TCommand, TResult>.Handle` ([`actions/03`](features/actions/models/03-command-handler.md)) — extend `GameCommandHandler<,>` |
 | State mutation reacting to a command | Scaffold `Mutator<TState, TPayload>` registered against the payload the handler dispatches via `ctx.Store.Execute(payload)` |
 | Trigger reaction logic ("when this card is damaged, draw") | `AbilityDefinition.Register` on the card |
 | Async / awaits / player-input prompts | Effects (orchestrators) and per-state ViewModels (presentation) |
 | Game session lifecycle (start, end, pause, concede, disconnect) | `GameEngine.Session` field + host orchestration (per ADR-0009 D12 hybrid future) |
 | Trigger ordering | `ITriggerPipeline` |
-| Player input → command resolution | Per-state `MatchStateViewModel<TState>.Map` — [ADR-0012 — *forthcoming*] |
-| UI affordances | Per-state ViewModel projection — [ADR-0012 — *forthcoming*] |
+| Player input → command resolution | Per-state `MatchStateViewModel<TState>.Map` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
+| UI affordances | Per-state ViewModel projection — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | Match-state structure (phase shape, transitions) | `ITurnFlow` ([`08-turn-flow.md`](features/engine/models/08-turn-flow.md)) + concrete `MatchState` subclasses ([`07-match-state.md`](features/engine/models/07-match-state.md)) |
 | Cross-cutting state-driven overrides (game-over, legend rule) | `ISBA` ([`09-state-based-actions.md`](features/engine/models/09-state-based-actions.md)) |
 
@@ -320,11 +335,11 @@ The composition *contract* for multi-module rules (provider/policy ordering, ena
 7. **No method holds onto its arguments.** Per-call data (candidates, command, result) is valid only for the call.
 8. **Single-phase construction.** No `Initialize` hook; the constructor's return is when every dependency is bound.
 9. **`Evaluate` returns a `MatchState`, not a list.** Per ADR-0009. Multi-action follow-ups now flow through `MatchState.EnterCommands` (enqueued by `TransitionStateHandler`) or through commands dispatched by handlers / effects.
-10. **Five rejection paths** are the canonical legality model: Per-state VM (UI), Session gate (framework), MatchState actions gate (framework), `handler.Validate` (per-command), before-fold `Cancel` (mid-execution). The earliest path with enough information wins.
+10. **Five rejection paths** are the canonical legality model: Per-state VM (UI), `SessionGate` (framework validator), `MatchStateActionGate` (framework validator), game-shipped `ICommandValidator<TCommand>` (per-command legality), before-fold `Cancel` (mid-execution). The earliest path with enough information wins. Per [ADR-0010](Product/decisions/0010-validator-handler-split.md).
 
 ## Decisions
 
-*Provenance: [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — D1 (Evaluate → MatchState), D2 (MatchStateSlice + abstract MatchState), D4 (ITurnFlow on the runtime), D5 (SBAs on the runtime). Other invariants below (Q1–Q3) are single-feature scope, refreshed for ADR-0009.*
+*Provenance: [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — D1 (Evaluate → MatchState), D2 (MatchStateSlice + abstract MatchState), D4 (ITurnFlow on the runtime), D5 (SBAs on the runtime). [ADR-0010](Product/decisions/0010-validator-handler-split.md) — D10–D11 (rejection paths refresh: command-specific legality moves from `handler.Validate` to `ICommandValidator<TCommand>`; framework intake gates become registered validators). Other invariants below (Q1–Q3) are single-feature scope, refreshed for ADR-0009.*
 
 ## Examples
 
@@ -380,14 +395,19 @@ public sealed class StandardMagicRulesRuntime : GameRulesRuntime<StandardMagicRu
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
-        // Stack-resolution: if a card is on the stack and priority has been passed,
-        // resolve the top before advancing the FSM. The "stack" is a game-state zone
-        // plus a state slice tracking priority passes.
+        var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011 — same guards the default body uses.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
+        // MTG-style stack-resolution timing: if priority has been passed twice
+        // and the stack has a resolvable instance, transition to ResolveStackTopState.
+        // (The "stack" is a game-state zone; priority tracking is a game-state slice.)
         if (_stack.HasResolvable(State))
             return new ResolveStackTopState(_stack.Top(State));
 
-        // Default: current.ShouldExit + Flow.NextAfter.
-        var current = State.Get<MatchStateSlice>().Current;
+        // Default tail: current.ShouldExit + Flow.NextAfter.
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;
@@ -469,4 +489,4 @@ The single-phase DI construction (no `Initialize` hook) falls out naturally from
 ## Consequences
 
 - **Enables** `FilterTriggers` virtual-identity defaults and clean per-game overrides; composite rules later without redesigning the contract; deterministic replay, snapshot/restore, and trivial per-player view derivation; engine-internal plumbing (queue, flags) lives wherever the engine implementation prefers without violating zero-gameplay-state; a simpler default loop for the floor sample and Stacklands-class games; the FSM shape from ADR-0009 with a default `Evaluate` body that's mostly correct out of the box.
-- **Constrains** the framework to own service lifetime (the rule must not cache or mutate them in ways that break re-entry); any *gameplay* memo the rule wants to remember must round-trip through state; porting MTG-class rules requires a manual SBA pass (re-open trigger: first game forcing it); the runtime no longer has an `IAvailableActions` to write to — presentation reads valid command types from `MatchState.Actions` directly, and per-state ViewModels project the affordance form (per [ADR-0012 — *forthcoming*]).
+- **Constrains** the framework to own service lifetime (the rule must not cache or mutate them in ways that break re-entry); any *gameplay* memo the rule wants to remember must round-trip through state; porting MTG-class rules requires a manual SBA pass (re-open trigger: first game forcing it); the runtime no longer has an `IAvailableActions` to write to — presentation reads valid command types from `MatchState.Actions` directly, and per-state ViewModels project the affordance form (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)).

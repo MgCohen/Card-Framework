@@ -1,9 +1,14 @@
 ---
 type: model
-status: settled
-references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-game-engine.md]
-tags: [#effects, #model, #awaiter, #decisions]
+status: superseded
+superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/models/06-request-system.md, features/effects/models/02-effect-scope.md]
+archived_on: 2026-05-11
+reason: "`ICommandAwaiter` retired by ADR-0011. The mechanism (type-only routing for player-decision awaits inside handler bodies) is wholly replaced by the state-linked request system (`Request<TResponse>` / `Response` / `RequestsSlice` / `AnswersSlice` / `IRequestService`); decision routing moves from handler `await` to effect `await scope.Dispatch(request)`. Handler bodies become atomic from the player-input POV per ADR-0010, and player decisions ride the request system through the single `IEffectScope.Dispatch` surface."
+references: [features/effects/models/01-effect.md, features/effects/models/06-request-system.md, features/effects/models/02-effect-scope.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md]
+tags: [#effects, #model, #awaiter, #decisions, #archived]
 ---
+
+> **Archived 2026-05-11.** Superseded by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md). `ICommandAwaiter` is gone; the type-only routing pattern documented here is replaced by the state-linked request system. Decision routing moves from handler-side `await ctx.Resolver.Wait<TCommand>()` to effect-side `await scope.Dispatch(request)`; the canonical home for the new shape is [`features/effects/models/06-request-system.md`](features/effects/models/06-request-system.md) (request mechanism) and [`features/effects/models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) (the unified `Dispatch` surface). The `IHandlerContext` references throughout this Model are also stale — per [ADR-0010](Product/decisions/0010-validator-handler-split.md) the aggregator is gone (archived at `Product/features/effects/archive/03-handler-context.md`). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
 
 # Command Awaiter — model
 

@@ -21,40 +21,49 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 - id: oq-attachment-storage | kind: question | **Attachment storage location** — whether attachments (equipment, auras, buffs) live in a sub-zone on the host, a global attachment registry, or a dedicated zone. Load-bearing for the ongoing-effects attachment model.
   References: `Product/features/entities/models/05-attachment.md` §Creating and attaching.
 
-- id: oq-effect-pipeline | kind: task | **Effect-pipeline spike rewrite** — the design seam is settled by `Product/spikes/fsm-architecture.md` (D13–D17): engine-only firing, `PendingEffectsSlice` queue, async-coroutine effects via `IEffect.Run`, unified `Dispatch` surface, `Request<TResponse>` / `Response` routing. Remaining work: rewrite `Product/spikes/effect-pipeline.md` to inherit these locks and fold in the still-locked Q1–Q10 verdicts from the 2026-05-08 design pass (with Q1 cast-handler-fires-effect now rolled back per FSM-arch D13). Authoring vocabulary lives in `oq-effect-authoring`.
-  References: `Product/spikes/fsm-architecture.md` D13–D17, `Product/spikes/effect-pipeline.md`, `Product/decisions/0006-two-pipeline-architecture.md`.
+<!-- oq-effect-pipeline — closed 2026-05-11 by ADR-0011 cascade.
+     The design seam is now canonical: ADR-0011 + the new Models
+     features/effects/models/01-effect.md (async-coroutine IEffect.Run),
+     features/effects/models/02-effect-scope.md (single async Dispatch surface),
+     features/effects/models/05-pending-effects.md (universal queue + drain policy),
+     features/effects/models/06-request-system.md (state-linked request system).
+     The 2026-05-08 effect-pipeline spike is archived at
+     Product/spikes/archive/effect-pipeline.md. No remaining design surface here. -->
 
-- id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `IEffect.Run(scope) : Task` is the locked runtime contract (per `Product/spikes/fsm-architecture.md` D16). The *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. Tied to the broader `bl-authoring-feature` task. Vertical-slice ships with free-form C# `Run` bodies; vocabulary work surfaces with the authoring feature.
-  References: `Product/spikes/fsm-architecture.md` D16, `Product/features/effects/models/04-command-awaiter.md`.
+
+- id: oq-effect-authoring | kind: question | **Effect authoring vocabulary** — `IEffect.Run(scope) : Task` is the locked runtime contract (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D16 and [`features/effects/models/01-effect.md`](Product/features/effects/models/01-effect.md)). The *authoring vocabulary* — closed-set primitives ("deal damage / draw N / apply modifier") composed into effects, free-form code, graph-shaped, hybrid — is unsettled. How a `CardDefinition` holds the recipe that constructs an `IEffect` from `(Source, EffectId, Payload)` at fire time is open. Tied to the broader `bl-authoring-feature` task. Vertical-slice ships with free-form C# `Run` bodies; vocabulary work surfaces with the authoring feature.
+  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md`, `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/05-pending-effects.md`.
 
 - id: oq-gamerules-composition | kind: question | **`GameRulesRuntime` composition** — a single `GameRulesRuntime<TDefinition>` implementation is shown; in practice it may be composed of smaller rule modules. `IAvailableActions` service surface (`Set` / `Append` / `Clear`) supports module composition mechanically. Modular rules likely double-generic on `(TDefinition, TModuleConfig)` and compose alongside the central runtime. The composition contract (provider/policy ordering, enable/disable, sub-module DI surface) is deliberately undesigned for now.
   References: `Product/features/engine/models/03-game-rules-runtime.md` §Composition.
 
 - id: oq-trigger-ordering | kind: question | **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else.
 
-- id: oq-effect-cancellation-on-match-end | kind: task | **Async-effect cancellation on match end** — when match ends mid-`await` (request response pending, sub-command pending), the effect's `Task` is still alive. Shape pinned by `Product/spikes/fsm-architecture.md` D16: thread a `CancellationToken` through `IEffectScope.Dispatch`; engine cancels on match-end transition and GCs `RequestsSlice` / `AnswersSlice`. Implementation task; no open design.
-  References: `Product/spikes/fsm-architecture.md` D16, `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/04-command-awaiter.md`, `Product/features/engine/models/01-game-engine.md`.
+- id: oq-effect-cancellation-on-match-end | kind: task | **Async-effect cancellation on match end** — when match ends mid-`await` (request response pending, sub-command pending), the effect's `Task` is still alive. Shape pinned by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md): thread a `CancellationToken` through `IEffectScope.Dispatch`; engine cancels on match-end transition and GCs `RequestsSlice` / `AnswersSlice`. Implementation task; no open design.
+  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md`, `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, `Product/features/effects/models/06-request-system.md`, `Product/features/engine/models/01-game-engine.md`.
 
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
   References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.
 
+- id: oq-view-model-host-shape | kind: question | **Framework `ViewModel` base class shape** — `MatchStateViewModel<TState>` extends a `ViewModel` base whose shape (animation hooks, observable wiring, disposal, lifecycle) is host-MVVM-toolkit-dependent. Pin when the host toolkit is chosen (Unity scene VM library, .NET MAUI, web MVVM lib). Today this Model only pins the `Bind` + `Map` contract.
+  References: `Product/decisions/0012-presentation-per-state-view-models.md`, `Product/features/presentation/models/01-match-state-view-model.md`.
+
 - id: oq-history-envelope | kind: question | **`HistoryEnvelope` typed definition** — currently pseudocode with named fields (`envelopeId`, `originCommandId`, `actor`, `entries[]`); no typed C# record exists. `EnvelopeCause` is glossary-named but undefined. Load-bearing for replay, multiplayer transport, and the presentation history loop.
   References: `Product/features/actions/models/01-command-pipeline.md` §History Envelope.
 
-- id: oq-targeting-pre-play | kind: defer | **Pre-play targeting** — a card's play-condition that requires a chosen target *before* the play-card command fires (target is a parameter of the play, not a request inside the resolution). Likely folds into a richer `PlayCardCommand(card, target)` whose cast-validator accepts the target. Differs from mid-effect target requests (which live in the request system per `Product/spikes/fsm-architecture.md` D17).
+- id: oq-targeting-pre-play | kind: defer | **Pre-play targeting** — a card's play-condition that requires a chosen target *before* the play-card command fires (target is a parameter of the play, not a request inside the resolution). Likely folds into a richer `PlayCardCommand(card, target)` whose cast-validator accepts the target. Differs from mid-effect target requests (which live in the request system per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D17 and [`features/effects/models/06-request-system.md`](Product/features/effects/models/06-request-system.md)).
   Trigger: first vertical-slice game with pre-play targeting requirements (Magic-style auras, choose-cast-mode cards).
-  References: `Product/spikes/fsm-architecture.md` § Deferred.
+  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md` § Defers.
 
-- id: oq-validator-defaults | kind: question | **Framework-default validator set** — which validators ship as framework defaults: `MatchStateActionGate` (reject commands not in `current.Actions`) is canonical; a `SessionGate` analogue (reject dispatches outside an in-match session) is the other candidate. Plus registration-order convention crispness (framework defaults register first; document as convention or enforce). Q5d deferred from the 2026-05-10 open-questions walk.
-  References: `Product/spikes/fsm-architecture.md` D10, D12.
+- id: oq-validator-defaults | kind: question | **Framework-default validator set — registration-order crispness and additional defaults.** [ADR-0010](Product/decisions/0010-validator-handler-split.md) lands two framework defaults: `SessionGate` (rejects when `engine.Session` is not accepting commands) and `MatchStateActionGate` (rejects commands whose type isn't in `MatchStateSlice.Current.Actions`). Both register first by convention; games append. Still open: (a) whether the framework enforces ordering (e.g. via a `[ValidatorOrder]` attribute or `services.AddValidatorBefore<...>` extension) or leaves it as documented convention, and (b) whether a third framework-default validator joins them (candidates: a disposal guard, a re-entrancy guard).
+  References: `Product/decisions/0010-validator-handler-split.md`, `Product/features/actions/models/06-command-validator.md`, `Product/spikes/fsm-architecture.md` D10.
 
-- id: oq-effect-save-load | kind: defer | **Mid-effect save/load** — effects are async coroutines (per `Product/spikes/fsm-architecture.md` D16); a C# `Task` continuation isn't serializable. Save/load can happen at quiescent points (no effect's `Run` currently in flight). If a game later forces mid-effect save/load, would force state-machine effects — a separate spike.
+- id: oq-effect-save-load | kind: defer | **Mid-effect save/load** — effects are async coroutines (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D16 and [`features/effects/models/01-effect.md`](Product/features/effects/models/01-effect.md)); a C# `Task` continuation isn't serializable. Save/load can happen at quiescent points (no effect's `Run` currently in flight). If a game later forces mid-effect save/load, would force state-machine effects — a separate spike.
   Trigger: first save/load consumer that needs mid-effect serialization.
-  References: `Product/spikes/fsm-architecture.md` D16.
+  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md`, `Product/features/effects/models/01-effect.md`.
 
-- id: oq-drain-policy-composition | kind: task | **Drain-policy composition Model** — the engine's drain decision composes multiple state-linked services: `MatchState.AllowsDrain` (game-state hook), `RequestsSlice` empty, `PendingEffectsSlice` non-empty, plus game overrides. Documented in `Product/spikes/fsm-architecture.md` D15; needs a canonical Model when the ADR-0009 cascade lands (likely `engine/0X-pending-effects.md`).
-  Trigger: ADR-0009 cascade lands.
-  References: `Product/spikes/fsm-architecture.md` D15.
+- id: oq-drain-policy-composition | kind: question | **Drain-policy composition Model** — the engine's drain decision composes multiple state-linked services: `MatchState.AllowsDrain` (game-state hook), `RequestsSlice` empty, `PendingEffectsSlice` non-empty, plus game overrides. Documented in [`features/effects/models/05-pending-effects.md`](Product/features/effects/models/05-pending-effects.md) §Drain policy and in [`features/engine/models/03-game-rules-runtime.md`](Product/features/engine/models/03-game-rules-runtime.md) (default `Evaluate` body). Open: whether the composition rule grows into its own Model (`engine/10-drain-policy.md`) or stays folded across the two existing homes. Decide when game-side overrides start composing in non-trivial ways.
+  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md`, `Product/features/effects/models/05-pending-effects.md`, `Product/features/engine/models/03-game-rules-runtime.md`.
 
 - id: bl-actor-ownership-reverse-index | kind: defer | **Reverse-direction lookup on `OwnershipState`** — `OwnershipState` is one-way today (`Reference → IActor`). Reverse queries ("what does this player own?") are O(N) filters or game-side aggregates. When a consumer surfaces (e.g., a presentation view that renders all of a player's cards, a rule that needs O(1) reverse lookup at scale), extend `OwnershipState` with a parallel reverse index (`IActor → ImmutableSet<Reference>`) — same two-way pattern as `CardMapState`. Surfaced by Q5 of the domain modeling design pass (2026-05-06).
   Trigger: first reverse-lookup consumer surfaces.
@@ -74,7 +83,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 ## Features yet to scaffold
 
-- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. Translates input gestures (drag/drop/click/target) to `PlayerIntent`. The consumer of `PlayerIntent` is now per-VM `Map(intent)` (per `Product/spikes/fsm-architecture.md` D8) — VMs convert intents to `GameCommand` (incl. `Response` when in request-mode); the global `IIntentMapper` is dropped.
+- id: bl-interaction-feature | kind: task | **`interaction` feature — gesture-to-intent layer** — `features/interaction/` folder and at least one Model doc needed. Translates raw input gestures (drag/drop/click/target) to typed `PlayerIntent` records. The consumer of `PlayerIntent` is per-state `MatchStateViewModel<TState>.Map(intent)` (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) and [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md)) — VMs convert intents to `GameCommand` (incl. `Response` when in request-mode). `PlayerIntent` ownership now lives in `presentation/` feature-root vocabulary.
   Trigger: next presentation or engine-wiring session.
   References: `Product/general/ARCHITECTURE.md`, `Product/spikes/fsm-architecture.md` D8, D17.
 
