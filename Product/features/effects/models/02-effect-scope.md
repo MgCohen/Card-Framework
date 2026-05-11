@@ -118,7 +118,7 @@ The engine cancels on match-end transition and GCs `RequestsSlice` / `AnswersSli
 
 ## Decisions
 
-Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — single async `Dispatch<TResult>(GameCommand)` surface (D14); engine-only firing (D13); routing-by-kind table. Spike provenance: `Product/spikes/fsm-architecture.md` D14.
+Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — single async `Dispatch<TResult>(GameCommand)` surface (D14); engine-only firing (D13); routing-by-kind table. Spike provenance: `Product/spikes/archive/fsm-architecture.md` D14.
 
 ## Examples
 

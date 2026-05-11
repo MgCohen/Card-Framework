@@ -237,7 +237,7 @@ The handler for `PushBeginningOfCombatEffectsCommand` enumerates the relevant ef
 
 ## Decisions
 
-Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — universal `PendingEffectsSlice` queue (D15); engine-only effect firing (D13); strict-serial drain policy (D16). Spike provenance: `Product/spikes/fsm-architecture.md` D13 + D15.
+Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — universal `PendingEffectsSlice` queue (D15); engine-only effect firing (D13); strict-serial drain policy (D16). Spike provenance: `Product/spikes/archive/fsm-architecture.md` D13 + D15.
 
 Linked: [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — the default `Evaluate` body composes SBAs preempt → request pause → pending-effects pause → `ShouldExit` + Flow. This Model owns the second and third guards.
 

@@ -176,7 +176,7 @@ A `Diagnose(command) → IReadOnlyList<string>` capability that runs *all* valid
 
 ## Decisions
 
-Linked: [ADR-0010](Product/decisions/0010-validator-handler-split.md) — validator / handler split; `IHandlerContext` retired; framework intake validators. Spike provenance: `Product/spikes/fsm-architecture.md` D10 + D11.
+Linked: [ADR-0010](Product/decisions/0010-validator-handler-split.md) — validator / handler split; `IHandlerContext` retired; framework intake validators. Spike provenance: `Product/spikes/archive/fsm-architecture.md` D10 + D11.
 
 Linked: [ADR-0007](Product/decisions/0007-five-validation-layers.md) — five validation layers principle. Refined by ADR-0010: the "authoritative" layer is the registered validator chain (not a single `handler.Validate`); the engine-flow-gate and match-state-action-gate layers are now framework validators in the chain.
 
