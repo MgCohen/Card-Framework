@@ -28,7 +28,7 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
 | [`triggers`](features/triggers/triggers.md) | settled | 2 | `Trigger<T>` reaction class + `ITriggerPipeline` fold orchestrator. `OnBefore<T>` / `OnAfter<T>` registration around command handlers. |
 | [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
-| [`engine`](features/engine/engine.md) | settled | 6 | `GameEngine` class (with lifecycle gate + types), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (runtime) split, available-actions service, game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. |
+| [`engine`](features/engine/engine.md) | settled | 8 | `GameEngine` class (with two-layer intake gate + session lifecycle), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (FSM evaluator) split, FSM machinery (`MatchState` + `ITurnFlow` + `ISBA`), game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. Per [ADR-0009](decisions/0009-engine-as-fsm.md) the engine IS the FSM. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
 | `authoring` | **considered** | — | Card catalog, card schema, keyword system, effect definitions, interaction definitions. The authoring layer per ARCHITECTURE. |
@@ -85,7 +85,7 @@ graph TD
   networking -.-> engine
 ```
 
-**Cycle observation:** `actions ↔ engine` is bidirectional because `actions/05-available-actions-snapshot` (template shape) builds on `engine/04-available-actions` (production pipeline), while `engine/04-available-actions` builds on `actions/05-available-actions-snapshot`. This is by design — the snapshot's *shape* is owned by `actions/`, the *production* by `engine/`. Worth a future Model to document the contract that closes the loop, but not currently flagged as drift.
+**Cycle observation:** `actions ↔ engine` was bidirectional via the pre-ADR-0009 `engine/04-available-actions` / `actions/05-available-actions-snapshot` pair. With `engine/04` archived (ADR-0009 retired `IAvailableActions` + `AvailableActionsState`) and `actions/05`'s wire-form `ActionTemplate` flagged for rework under [ADR-0012 — *forthcoming*], the cycle is dissolving. Final shape lands when ADR-0012's presentation cascade replaces `ActionTemplate` with per-state ViewModels.
 
 Solid arrows = current `references` edges between settled features. Dashed arrows = expected dependency direction once the considered feature lands.
 
@@ -114,7 +114,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
 - [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
 - [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
-- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled, references: `actions/02`, `actions/01`, `engine/04` ⚠️ (see cycle)
+- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled (**rework pending under ADR-0012**), references: `actions/02`, `actions/01`
 
 ### `triggers` (settled)
 - [`models/01-trigger.md`](features/triggers/models/01-trigger.md) — *Trigger\<T\>* — settled, references: `triggers/02`, `actions/01`, `effects/02`, `engine/03`, `decisions/0006`
@@ -129,16 +129,21 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`
 
 ### `engine` (settled)
-- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/03`, `actions/01`, `state`
+- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/03`, `engine/07`, `engine/08`, `actions/01`, `state`, `decisions/0009`
 - [`models/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md) — *GameRulesDefinition* — settled, references: `engine/03`, `engine/05`, `engine/06`
-- [`models/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) — *GameRulesRuntime\<T\>* — settled, references: `engine/01`, `engine/02`, `engine/04`, `engine/05`, `engine/06`, `triggers/01`
-- [`models/04-available-actions.md`](features/engine/models/04-available-actions.md) — *IAvailableActions* — settled, references: `engine/03`, `actions/05`, `effects/04` ⚠️ (see cycle)
+- [`models/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) — *GameRulesRuntime\<T\>* — settled, references: `engine/01`, `engine/02`, `engine/05`, `engine/06`, `engine/07`, `engine/08`, `engine/09`, `triggers/01`, `decisions/0009`
 - [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/03`, `engine/06`, `engine.md`
 - [`models/06-game-definition.md`](features/engine/models/06-game-definition.md) — *GameDefinition* — settled, references: `engine/02`, `engine/05`, `state`, `zones/01`, `cards/01`, `players/01`, `entities/01`, `entities/02`
+- [`models/07-match-state.md`](features/engine/models/07-match-state.md) — *MatchState* — settled, references: `engine/01`, `engine/03`, `engine/08`, `engine/09`, `state`, `actions/01`, `decisions/0009`
+- [`models/08-turn-flow.md`](features/engine/models/08-turn-flow.md) — *ITurnFlow* — settled, references: `engine/03`, `engine/07`, `engine/09`, `decisions/0009`
+- [`models/09-state-based-actions.md`](features/engine/models/09-state-based-actions.md) — *ISBA* — settled, references: `engine/03`, `engine/07`, `engine/08`, `decisions/0009`
+- ~~[`models/04-available-actions.md`]~~ — **archived 2026-05-10** ([`archive/04-available-actions.md`](features/engine/archive/04-available-actions.md)) — `IAvailableActions` service + `AvailableActionsState` slice retired per ADR-0009; `MatchState.Actions: IReadOnlyList<Type>` replaces
 
-*Reorg 2026-05-09:* `02-gamerules-contract.md` split into `02-game-rules-definition.md` (data half) + `03-game-rules-runtime.md` (runtime half). `03-snapshot-pipeline.md` renamed + renumbered to `04-available-actions.md`. `07-game-definition.md` renumbered to `06-game-definition.md`.
+*Reorg 2026-05-10 (ADR-0009 cascade):* `04-available-actions.md` archived — `IAvailableActions` service + `AvailableActionsState` slice retired; valid command types now live on `MatchState.Actions`. New Models `07-match-state` (MatchState + MatchStateSlice + TransitionStateCommand), `08-turn-flow` (ITurnFlow.NextAfter), `09-state-based-actions` (ISBA cross-cutting overrides) land. `engine/01` swaps `EngineLifecycle` enum for typed `SessionState` hierarchy on `engine.Session` field; intake gate becomes two-layer (Session + MatchState.Actions). `engine/03`'s `Evaluate` returns `MatchState` (was `IReadOnlyList<GameAction>`); default body composes SBAs + ShouldExit + Flow.
 
-*Dissolved 2026-05-09:* `04-gamestate-slices.md` (pattern; tier conventions folded into `state/state.md` §Slice tiers, framework-slice catalog folded into `engine.md` §Framework-owned slices). `06-match-lifecycle.md` (multi-type bundle; lifecycle types folded into `engine/01-game-engine.md` §Lifecycle types as supports of `GameEngine`).
+*Reorg 2026-05-09:* `02-gamerules-contract.md` split into `02-game-rules-definition.md` (data half) + `03-game-rules-runtime.md` (runtime half). `03-snapshot-pipeline.md` renamed + renumbered to `04-available-actions.md` (since archived). `07-game-definition.md` renumbered to `06-game-definition.md`.
+
+*Dissolved 2026-05-09:* `04-gamestate-slices.md` (pattern; tier conventions folded into `state/state.md` §Slice tiers, framework-slice catalog folded into `engine.md` §Framework-owned slices). `06-match-lifecycle.md` (multi-type bundle; lifecycle types folded into `engine/01-game-engine.md` §Session lifecycle as supports of `GameEngine`).
 
 ### `players` (settled)
 - [`models/01-player-model.md`](features/players/models/01-player-model.md) — settled, references: `entities/01`, `entities/02`, `engine/05`, `engine/06`, `zones/01`, `decisions/0005`
