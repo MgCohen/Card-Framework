@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0011-effect-orchestration-dispatch-requests.md]
 tags: [#actions, #model, #pipeline]
 ---
 
@@ -28,24 +28,44 @@ The pipeline owns the *flow*; the surrounding load-bearing types live in their o
 
 ## Contracts
 
-### `GameCommand` — type hierarchy
+### `GameCommand` — type hierarchy (five siblings)
 
-Defined inline below:
+Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D14, the family expands to five siblings — adding `Request<TResponse>` and `Response` for the state-linked request system (player-decision routing per [`effects/06-request-system.md`](features/effects/models/06-request-system.md)).
 
 ```csharp
-abstract record GameCommand;                     // base — all pipeline-dispatchable types
-abstract record GameAction      : GameCommand;   // executable, modifiable, queued through engine
-abstract record CompositeAction : GameCommand;   // reusable StateMutation group, runs inline within a handler
-abstract record GameSignal      : GameCommand;   // not executable — trigger surface only
+abstract record GameCommand;                          // base — all pipeline-dispatchable types
+abstract record GameAction         : GameCommand;     // executable, modifiable, queued through engine
+abstract record CompositeAction    : GameCommand;     // reusable StateMutation group, runs inline within a handler
+abstract record GameSignal         : GameCommand;     // emit-only — trigger surface, no handler
+
+abstract record Request            : GameCommand      // opens a player-decision request; mutates RequestsSlice
+{
+    public RequestId    Id    { get; init; }
+    public IActor       Asker { get; init; }
+    public abstract Type ResponseType { get; }
+}
+
+abstract record Request<TResponse> : Request          // generic specialization; Dispatch returns Task<TResponse>
+    where TResponse : Response
+{
+    public override Type ResponseType => typeof(TResponse);
+}
+
+abstract record Response           : GameCommand      // answers a Request by Id; mutates AnswersSlice + clears RequestsSlice
+{
+    public RequestId Id { get; init; }
+}
 ```
 
 | Type | Executed by | Modifiable in before-fold | Goes through engine queue |
 |---|---|---|---|
 | `GameAction` | Handler, via engine queue | Yes | Yes |
 | `CompositeAction` | Inline, within parent handler | No | No |
-| `GameSignal` | Nothing — no execution step | No | No |
+| `GameSignal` | Nothing — written to history | No | No |
+| `Request<TResponse>` | `IRequestService.Open` via the `Dispatch` router | No | No (state-linked; not a queueable action) |
+| `Response` | `IRequestService.RecordAnswer` via the `Dispatch` router | No | No |
 
-A handler should never dispatch another `GameAction` directly — that's an `Effect`'s responsibility (per [`effects/01-effect.md`](features/effects/models/01-effect.md)).
+A handler should never dispatch another `GameAction` directly — that's an `IEffect`'s responsibility (per [`effects/01-effect.md`](features/effects/models/01-effect.md)). Handlers also do not open requests; player-decision routing is an effect-author concern via `await scope.Dispatch(request)`.
 
 ### `ICommandPipeline`
 
@@ -65,15 +85,25 @@ Per `engine.Dispatch(command)`:
 
 1. **Engine lifecycle gate** (framework). Reject pre-`Started` (except `StartMatchCommand` / `EndMatchCommand`) and post-`Ended`. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), this is the framework-owned flow-level gate; the runtime no longer participates in intake routing.
 2. **`pipeline.Validate`** (framework). Resolves the handler from the registry and delegates to `handler.Validate(command, state, out reason)`. **Authoritative legality check** (per [ADR-0007](Product/decisions/0007-five-validation-layers.md)).
-3. **Enqueue** (framework). Command goes onto the framework FIFO queue.
-4. **Drain** (framework, when queue is non-empty and no drain is in progress):
+3. **Route by kind** (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D14). The router pattern-matches on the command's runtime type:
+
+   | Kind | Routing |
+   |---|---|
+   | `GameAction` | Enqueue onto framework FIFO; drain (see §Drain below). |
+   | `CompositeAction` | Inline expansion in parent handler's scope; no enqueue, no own envelope. |
+   | `GameSignal` | Write to history (validators run; no handler). |
+   | `Request<TResponse>` | `IRequestService.Open(request)` → mutate `RequestsSlice` → return pending `Task<TResponse>`. Drain pauses on non-empty `RequestsSlice` (per [`effects/05-pending-effects.md`](features/effects/models/05-pending-effects.md)). |
+   | `Response` | `IRequestService.RecordAnswer(id, response)` → mutate `AnswersSlice` + clear `RequestsSlice[id]` → resolve the awaited `Task<TResponse>`. |
+
+4. **Drain** (framework, when the `GameAction` queue is non-empty and no drain is in progress):
    1. Dequeue.
    2. **Before-fold** — `ITriggerPipeline.RunBefore` runs `OnBefore<T>` triggers in priority order (per [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md)). Triggers may modify, cancel (`scope.Cancel`), or replace (`scope.Replace`). On replace: original envelope closes with `Replaced`; replacement dispatches as a fresh command through the channel.
-   3. **`handler.Handle(command, ctx)`** (game). Reads state, decides outcome, calls `ctx.Store.Execute(payload)` to fan out to registered mutators, returns `Task<TResult>`.
+   3. **`handler.Handle(command, ctx)`** (game). Reads state, decides outcome, calls `ctx.Store.Execute(payload)` to fan out to registered mutators, returns `Task<TResult>`. Per [ADR-0010](Product/decisions/0010-validator-handler-split.md) (forthcoming-in-cascade — independent of this ADR), handler bodies are atomic from the player-input POV; player decisions ride the request system, not handler `await`s.
    4. **After-fold** — `ITriggerPipeline.RunAfter` runs `OnAfter<T>` triggers. Reactions dispatched via `engine.Dispatch` (separate envelopes; framework FIFO).
    5. **Envelope publishes** with `CommandResult` (per [`04-history-envelope.md`](features/actions/models/04-history-envelope.md)).
-5. **`GameRulesRuntime.Evaluate`** (game). Returns 0..N follow-up commands for the engine to enqueue (with threaded `OriginCommandId`). Snapshot publication (`Actions.Set`) folds into `Evaluate` per ADR-0006 — there is no separate `OnQueueDrained` callback.
-6. Repeat until queue empties.
+5. **Engine drains `PendingEffectsSlice`** (per [ADR-0011 lock 1](Product/decisions/0011-effect-orchestration-dispatch-requests.md)). After the command queue empties and the drain-policy composition allows (no SBA preempts; `RequestsSlice` empty; `MatchState.AllowsDrain`), the engine pops the top `EffectInstance` and invokes `IEffectPipeline.Run(instance, scope)`. Effects run start-to-finish as async coroutines; `await scope.Dispatch(...)` calls re-enter the pipeline via this same flow for sub-commands. See [`effects/05-pending-effects.md`](features/effects/models/05-pending-effects.md).
+6. **`GameRulesRuntime.Evaluate`** (game). Returns the next `MatchState` (per ADR-0009; default body composes SBAs preempt → request pause → pending-effect pause → `ShouldExit` + `Flow.NextAfter`). The engine compares the returned type to `MatchStateSlice.Current.GetType()` and synthesizes `TransitionStateCommand` on a type change.
+7. Repeat until the command queue, the pending-effects queue, and the open-requests slice all reach steady state.
 
 ### Relationship to triggers
 
