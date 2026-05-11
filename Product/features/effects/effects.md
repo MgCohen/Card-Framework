@@ -19,17 +19,14 @@ The framework's lifetime layer. **Effects** orchestrate sequences of `GameAction
               │       (may cancel/replace)            │
               │                                       │
               ▼                                       ▼
-       Decision-as-command:                    Reactions queued via
-       handler awaits                          engine.Dispatch (separate
-       Resolver.Wait<TCmd>()                   envelope; framework FIFO)
-              │
-              ▼
-       Player intent → IntentMapper →
-       SelectTargetCommand → engine.Dispatch
-       → awaiter.TryResolve matches → handler resumes
+       Player decisions route through              Reactions queued via
+       the request system (Request<T>/Response;    engine.Dispatch (separate
+       see ADR-0011 — *forthcoming*).              envelope; framework FIFO)
+       Handlers stay atomic from the
+       player-input POV per ADR-0010.
 ```
 
-Effects are not authored as `Task<Result>` returned from a handler — that would conflate animation, decision, and simulation pauses. Each layer (presentation animation, decision player input, engine resolver yield) owns its own continuation; effects compose across layers via `IEffectScope`.
+Effects are not authored as `Task<Result>` returned from a handler — that would conflate animation, decision, and simulation pauses. Each layer (presentation animation, decision player input, engine effect drain) owns its own continuation; effects compose across layers via `IEffectScope`.
 
 ## Vocabulary
 
@@ -39,8 +36,7 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 |---|---|
 | `Effect` | First-class abstract type. Per-instance orchestrator. `Validate(scope) → bool` + `Execute(scope) → Task`. Internals opaque to the framework. |
 | `IEffectScope` | Effect's runtime surface: `State` (read-only), `Store` (catalog reads), `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel. |
-| `IHandlerContext` | Handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`. |
-| `ICommandAwaiter` | Decision-handler's await/resume mechanic. `Wait<TCommand>(ct)` registers a `cmd is TCommand` predicate; `TryResolve(cmd)` matches on every dispatch. |
+| `ICommandAwaiter` | *Retired by [ADR-0011 — *forthcoming*].* Decision-handler's await/resume mechanic from the pre-cascade shape. The request system (`Request<TResponse>` / `Response` routed through `await scope.Dispatch(...)`) is the new home for player-decision routing. See `04-command-awaiter.md` for the legacy contract; rework-pending banner there. |
 | Layer hierarchy | Effect → GameAction → CompositeAction. Only Effect can sequence; only handlers invoke mutators; effects never mutate. |
 | Two dispatch paths | `engine.Dispatch(action)` (deferred, framework-FIFO, own envelope) vs `scope.Dispatch(action)` (immediate, inline, effect awaits). Not interchangeable. |
 | Decision-as-command | A decision (target, choice, etc.) is a `GameAction` that opens UI, awaits player response, returns chosen value in `CommandResult`. Type-only routing — no `DecisionId`. |
@@ -51,21 +47,22 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 
 ## Architecture
 
-The feature has four Models. Each is the canonical home for one load-bearing C# type of the effects layer:
+The feature has three Models. Each is the canonical home for one load-bearing C# type of the effects layer:
 
 1. **`Effect`** ([`01-effect.md`](features/effects/models/01-effect.md)) — the orchestrator type; layer hierarchy (Effect / GameAction / CompositeAction); two dispatch paths (`engine.Dispatch` vs `scope.Dispatch`).
 2. **`IEffectScope`** ([`02-effect-scope.md`](features/effects/models/02-effect-scope.md)) — the effect's runtime surface: read-only `State`, catalog `Store`, `Modifiers`, `Dispatch`, `Cancel`, `Replace`. No mutation channel.
-3. **`IHandlerContext`** ([`03-handler-context.md`](features/effects/models/03-handler-context.md)) — the handler's runtime surface: `Store` (read + execute mutators + catalog), `Actions` (snapshot writes), `Resolver` (decision awaits), `Modifiers`.
-4. **`ICommandAwaiter`** ([`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) — the suspension/resume mechanic for decisions; type-only routing; the uniform boundary; engine pre-pipeline awaiter check.
+3. **`ICommandAwaiter`** ([`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) — *rework pending under [ADR-0011 — *forthcoming*].* The pre-cascade suspension/resume mechanic for decisions. Retiring in favor of the request system.
 
-The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger.md`](features/triggers/models/01-trigger.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler executes via its `IHandlerContext` (3), awaiting player input through `ICommandAwaiter` (4) for decisions. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-instance.md` §Attachment-entity usage](features/entities/models/02-instance.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
+The handler surface (`IHandlerContext`) was retired by [ADR-0010](Product/decisions/0010-validator-handler-split.md) — handlers now extend `GameCommandHandler<TCommand, TResult>` (property-injected `Store`) and constructor-inject any additional services. See [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md) for the new shape; the archived Model lives at [`archive/03-handler-context.md`](features/effects/archive/03-handler-context.md).
+
+The execution arc: an `Effect` (1) calls `scope.Dispatch(action)` on its `IEffectScope` (2); the dispatched action's handler runs through the trigger fold (per [`triggers/01-trigger.md`](features/triggers/models/01-trigger.md)) — replacement / prevention semantics live there as the three before-fold outcomes. The handler — a `GameCommandHandler<TCommand, TResult>` subclass per [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md) — reads state through the property-injected `Store`. Player decisions route through the request system (per ADR-0011, *forthcoming*) — handlers stay atomic from the player-input POV. Ongoing effects (auras, stateful prevention, durations) are realized as **attachment entities** — see [`entities/02-instance.md` §Attachment-entity usage](features/entities/models/02-instance.md). Pipeline shape lives in [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md).
 
 ### Three layers, capabilities
 
 | Layer | Read state | Mutate state | Dispatch action | Await player |
 |---|---|---|---|---|
-| **`Effect`** | Yes (via `scope.State`) | **No** | Yes (`scope.Dispatch`) | No (only by dispatching a decision action) |
-| **`ICommandHandler`** | Yes (via `ctx.Store`) | Yes — by invoking mutators | No | Yes (decision handlers only) |
+| **`Effect`** | Yes (via `scope.State`) | **No** | Yes (`scope.Dispatch`) | Yes (via `await scope.Dispatch(request)` once ADR-0011 lands) |
+| **`ICommandHandler`** | Yes (via property-injected `Store`) | Yes — by invoking mutators | No | **No** (atomic from the player-input POV per ADR-0010) |
 | **`Mutator<TState, TPayload>`** | Yes (current state in; sibling slices via `IStateScope`) | **Yes — only producer of new state** | No | No |
 
 Three principles fall out of this table:
@@ -96,10 +93,10 @@ The framework invariant: **cancellation of one `GameAction` never automatically 
 |---|---|
 | [`01-effect.md`](features/effects/models/01-effect.md) | `Effect` type + layer hierarchy + two dispatch paths |
 | [`02-effect-scope.md`](features/effects/models/02-effect-scope.md) | `IEffectScope` (effect's runtime surface) |
-| [`03-handler-context.md`](features/effects/models/03-handler-context.md) | `IHandlerContext` (handler's runtime surface) |
-| [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing + uniform boundary |
+| [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) | `ICommandAwaiter` + type-only decision routing — *rework pending under ADR-0011* |
+| ~~[`03-handler-context.md`]~~ | **Archived 2026-05-11** — `IHandlerContext` retired by [ADR-0010](Product/decisions/0010-validator-handler-split.md). See [`archive/03-handler-context.md`](features/effects/archive/03-handler-context.md). Replacement: `GameCommandHandler<TCommand, TResult>` base in [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md). |
 
-Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md); ongoing-effect attachment-entity pattern lives in [`entities/02-instance.md`](features/entities/models/02-instance.md).
+Cross-feature content this feature consumes but does not own: before-fold outcomes (modify / cancel / replace) and replacement-of-replacement live in [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md); ongoing-effect attachment-entity pattern lives in [`entities/02-instance.md`](features/entities/models/02-instance.md); the handler shape — `GameCommandHandler<TCommand, TResult>` base, validator/handler split — lives in [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md) and [`actions/06-command-validator.md`](features/actions/models/06-command-validator.md).
 
 ## Invariants
 
@@ -117,7 +114,7 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 
 ## Boundaries
 
-**Owns:** the `Effect` abstract type; layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; decisions-as-commands shape; `IEffectScope`, `IHandlerContext`, `ICommandAwaiter` interfaces; `Effect.Validate` pre-execution gate; mutation discipline (effects-can't-mutate); cancellation discipline (cancel never auto-cancels orchestrating effect).
+**Owns:** the `Effect` abstract type; layer hierarchy contract (Effect / GameAction / CompositeAction); two-dispatch-paths semantics; `IEffectScope` interface; `ICommandAwaiter` interface (retired under ADR-0011 — *forthcoming*); `Effect.Validate` pre-execution gate; mutation discipline (effects-can't-mutate); cancellation discipline (cancel never auto-cancels orchestrating effect). Handler-side surface (`GameCommandHandler<,>` and the validator/handler split) lives in `actions/` per [ADR-0010](Product/decisions/0010-validator-handler-split.md).
 
 **Does not own:**
 - `GameCommand` type hierarchy (the type system) → `triggers/`
@@ -125,8 +122,10 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 - Attachment-entity usage pattern (ongoing effects realized as entities) → `entities/`
 - `GameRulesRuntime.FilterTriggers` (availability policy) → `engine/`
 - Engine framework FIFO routing, drain → `engine/`
-- `IAvailableActions`, snapshot shape → `engine/`
+- `MatchState.Actions` and the framework's match-state-action gate → `engine/` (+ `actions/06-command-validator.md`)
 - Pipeline envelope, history entries → `actions/`
+- `ICommandHandler<TCommand, TResult>` and the `GameCommandHandler<,>` base → `actions/03-command-handler.md`
+- `ICommandValidator<TCommand>` and the validator chain → `actions/06-command-validator.md`
 - `IIntentMapper.Map` implementation → `actions/`
 - `IModifierFactory` implementation → `entities/`
 - `store.Catalog` mechanism → `engine/`
@@ -146,7 +145,7 @@ See `ledgers/OPEN-ITEMS.md`:
 - **Effect authoring & registration** — the "recipe" a definition holds for instantiating an `Effect` (data, code, graph, or hybrid). Tracked as a future authoring-feature Model.
 - **Effect per-instance state** — where ongoing-effect counters live (Effect object, `EntityState`, dedicated slice). Left to ongoing-effects/authoring follow-up.
 - **`CommandResult` cancellation shape** — flag on base record vs typed `CancelledResult` subtype. Cosmetic; pin during command-pipeline cleanup.
-- **`IHandlerContext` vs constructor-injected services** — context aggregation vs explicit per-handler service declaration. Revisit when a second game stresses the surface.
+- ~~**`IHandlerContext` vs constructor-injected services**~~ — *Resolved 2026-05-11 per [ADR-0010](Product/decisions/0010-validator-handler-split.md).* Constructor injection on handlers (via the `GameCommandHandler<,>` base for `Store`, constructor for additional services) is the chosen shape; the aggregator is gone.
 - **`ICommandAwaiter` shape — full review** — TCS-backed type-predicate not stress-tested against error/timeout, multi-actor decisions, suspension across engine ticks. Needs focused review.
 - **FSM-shaped game state** — type-only routing's eventual successor; richer self-describing game-state phases (`PickATargetState`, `MainPhaseState`, etc.).
 - **Suspension across engine ticks (save/load)** — what state must persist if a game saves mid-decision. Depends on game-lifecycle design.

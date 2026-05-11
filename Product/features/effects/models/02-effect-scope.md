@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/state/state.md]
+references: [features/effects/models/01-effect.md, features/actions/models/03-command-handler.md, features/state/state.md]
 tags: [#effects, #model, #scope]
 ---
 
@@ -32,7 +32,7 @@ public interface IEffectScope
 
 - **`State`** — Scaffold `IStateScope`. Effects read slices to choose what to dispatch next. Read-only by design.
 - **`Store`** — exposed for catalog reads (`scope.Store.Catalog.Resolve(ref)`) only. Effects do not call `Execute` / `ExecuteBatch`; mutation goes through `Dispatch`-ed actions whose handlers do the writes. Use `scope.Store.Catalog.Resolve(cardRef)` or a typed registry to obtain handles for variable reads (`card.Storage.GetVariable<int>(Vars.Attack)`).
-- **`Modifiers`** — modifier-entry factory, same surface as on `IHandlerContext` (per [`03-handler-context.md`](features/effects/models/03-handler-context.md)). Effects that need to construct a modifier entry to pass into a `GameAction`'s payload (e.g. `ApplyAuraAction { Buff = scope.Modifiers.Create(...) }`) use it here so the deterministic id is allocated by the effect even though the install happens in the action's handler.
+- **`Modifiers`** — modifier-entry factory. Same factory shape that handlers construct via constructor injection on `GameCommandHandler<,>` subclasses (per [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md)) — effects see it on the scope so that constructed entries can pass into a `GameAction`'s payload (e.g. `ApplyAuraAction { Buff = scope.Modifiers.Create(...) }`); the deterministic id is allocated by the effect even though the install happens in the action's handler.
 - **`Dispatch`** — runs the action immediately and inline (before-fold → handler → after-fold → envelope published) per [`01-effect.md` §Two dispatch paths](features/effects/models/01-effect.md). The effect awaits each result before continuing.
 - **`Cancel`** — explicit early-out for the effect itself (the effect has decided it cannot continue, e.g. a precondition no longer holds after a prior dispatch). In the trigger context (before-fold), cancels the intercepted command. Distinct from the before-fold cancelling an individual `GameAction` via result.
 - **`Replace`** — before-fold only: signals the pipeline to discard the intercepted command and dispatch `next` as a fresh command through its own fold. Calling `Replace` in an after-fold trigger is a no-op (the command already executed); the pipeline implementation asserts or warns.

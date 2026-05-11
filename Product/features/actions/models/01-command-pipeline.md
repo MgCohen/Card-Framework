@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md]
+references: [features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/04-history-envelope.md, features/actions/models/06-command-validator.md, features/triggers/models/01-trigger.md, features/effects/models/02-effect-scope.md, features/engine/models/03-game-rules-runtime.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0010-validator-handler-split.md]
 tags: [#actions, #model, #pipeline]
 ---
 
@@ -9,22 +9,24 @@ tags: [#actions, #model, #pipeline]
 
 ## What it is
 
-The dispatch mechanic: how a `GameCommand` flows through `engine.Dispatch` — lifecycle gate, validate, enqueue, drain (before-fold → handler → after-fold → envelope) — and how the queue is drained framework-FIFO per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).
+The dispatch mechanic: how a `GameCommand` flows through `engine.Dispatch` — registered validator chain (per [ADR-0010](Product/decisions/0010-validator-handler-split.md)), enqueue, drain (before-fold → handler → after-fold → envelope) — and how the queue is drained framework-FIFO per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).
 
 ```text
 engine.Dispatch(command)
-  → engine lifecycle gate (framework)
-  → pipeline.Validate (handler.Validate — authoritative)
+  → pipeline.Validate (registered ICommandValidator<TCommand> chain — see actions/06)
+      • SessionGate            (framework default, Layer 1)
+      • MatchStateActionGate   (framework default, Layer 2)
+      • game-shipped validators (registration-order; short-circuit on reject)
   → enqueue (framework FIFO)
   → drain:
       → before-fold (OnBefore<T>: modify / cancel / replace)
-      → handler.Handle (read state, invoke mutators, return CommandResult)
+      → handler.Handle (read state via Store, invoke mutators, return CommandResult)
       → after-fold (OnAfter<T>: dispatch reactions)
       → envelope publishes
-  → GameRulesRuntime.Evaluate (state-based follow-ups + snapshot publication)
+  → GameRulesRuntime.Evaluate (state-based follow-ups; returns next MatchState)
 ```
 
-The pipeline owns the *flow*; the surrounding load-bearing types live in their own models — `IIntentMapper` ([`02`](features/actions/models/02-intent-mapper.md)), `ICommandHandler` ([`03`](features/actions/models/03-command-handler.md)), `HistoryEnvelope` ([`04`](features/actions/models/04-history-envelope.md)), `AvailableActionsSnapshot` ([`05`](features/actions/models/05-available-actions-snapshot.md)).
+The pipeline owns the *flow*; the surrounding load-bearing types live in their own models — `IIntentMapper` ([`02`](features/actions/models/02-intent-mapper.md)), `ICommandHandler` ([`03`](features/actions/models/03-command-handler.md)), `HistoryEnvelope` ([`04`](features/actions/models/04-history-envelope.md)), `AvailableActionsSnapshot` ([`05`](features/actions/models/05-available-actions-snapshot.md)) (rework pending under [ADR-0012 — *forthcoming*]), `ICommandValidator` ([`06`](features/actions/models/06-command-validator.md)).
 
 ## Contracts
 
@@ -52,28 +54,31 @@ A handler should never dispatch another `GameAction` directly — that's an `Eff
 ```csharp
 public interface ICommandPipeline
 {
-    bool Validate(GameCommand cmd, IStateScope state, out string? reason);
+    // Resolves every ICommandValidator<TCommand> for the runtime type and runs them
+    // in DI registration order; short-circuits on first reject. See actions/06-command-validator.md.
+    bool Validate(GameCommand cmd, out string? reason);
+
+    // Runs the full pipeline for one action: before-fold → handler → after-fold → envelope.
     Task<CommandResult> Execute(GameAction action);
 }
 ```
 
-Framework executor: resolves the registered `ICommandHandler` for the command type, runs validation, drives the drain steps. Game authors do not implement this; they register handlers (per [`03-command-handler.md`](features/actions/models/03-command-handler.md)).
+Framework executor: drives the validator chain at intake; resolves the registered `ICommandHandler` for the command type at drain; drives the trigger fold and envelope. Game authors do not implement this; they register handlers (per [`03-command-handler.md`](features/actions/models/03-command-handler.md)) and validators (per [`06-command-validator.md`](features/actions/models/06-command-validator.md)).
 
 ### Pipeline mechanics
 
 Per `engine.Dispatch(command)`:
 
-1. **Engine lifecycle gate** (framework). Reject pre-`Started` (except `StartMatchCommand` / `EndMatchCommand`) and post-`Ended`. Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), this is the framework-owned flow-level gate; the runtime no longer participates in intake routing.
-2. **`pipeline.Validate`** (framework). Resolves the handler from the registry and delegates to `handler.Validate(command, state, out reason)`. **Authoritative legality check** (per [ADR-0007](Product/decisions/0007-five-validation-layers.md)).
-3. **Enqueue** (framework). Command goes onto the framework FIFO queue.
-4. **Drain** (framework, when queue is non-empty and no drain is in progress):
+1. **`pipeline.Validate`** (framework). Resolves every `ICommandValidator<TCommand>` registered for the command's runtime type and runs them in DI registration order — short-circuit on first reject. Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), framework defaults (`SessionGate`, `MatchStateActionGate`) register first; game-shipped validators register after. **The validator chain is authoritative** (per [ADR-0007](Product/decisions/0007-five-validation-layers.md), refined by ADR-0010); the runtime no longer participates in intake routing (per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md)).
+2. **Enqueue** (framework). Command goes onto the framework FIFO queue.
+3. **Drain** (framework, when queue is non-empty and no drain is in progress):
    1. Dequeue.
    2. **Before-fold** — `ITriggerPipeline.RunBefore` runs `OnBefore<T>` triggers in priority order (per [`triggers/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md)). Triggers may modify, cancel (`scope.Cancel`), or replace (`scope.Replace`). On replace: original envelope closes with `Replaced`; replacement dispatches as a fresh command through the channel.
-   3. **`handler.Handle(command, ctx)`** (game). Reads state, decides outcome, calls `ctx.Store.Execute(payload)` to fan out to registered mutators, returns `Task<TResult>`.
+   3. **`handler.Handle(command)`** (game). Reads state through the property-injected `Store` (per [`03-command-handler.md`](features/actions/models/03-command-handler.md)), decides outcome, calls `Store.Execute(payload)` to fan out to registered mutators, returns `Task<TResult>`.
    4. **After-fold** — `ITriggerPipeline.RunAfter` runs `OnAfter<T>` triggers. Reactions dispatched via `engine.Dispatch` (separate envelopes; framework FIFO).
    5. **Envelope publishes** with `CommandResult` (per [`04-history-envelope.md`](features/actions/models/04-history-envelope.md)).
-5. **`GameRulesRuntime.Evaluate`** (game). Returns 0..N follow-up commands for the engine to enqueue (with threaded `OriginCommandId`). Snapshot publication (`Actions.Set`) folds into `Evaluate` per ADR-0006 — there is no separate `OnQueueDrained` callback.
-6. Repeat until queue empties.
+4. **`GameRulesRuntime.Evaluate`** (game). Returns the next `MatchState` (per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)). The engine compares the returned type to `MatchStateSlice.Current.GetType()` and synthesizes `TransitionStateCommand` on a type change.
+5. Repeat until queue empties.
 
 ### Relationship to triggers
 
@@ -101,7 +106,9 @@ Per [`effects/01-effect.md`](features/effects/models/01-effect.md):
 
 Linked: [`Product/decisions/0006-two-pipeline-architecture.md`](Product/decisions/0006-two-pipeline-architecture.md) — framework command pipeline + game effect pipeline split. Per ADR-0006, command-queue routing is framework-FIFO; the runtime does not gate intake or route commands; effect-level orchestration is the customizable layer where game styles diverge.
 
-Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) — five validation layers; `handler.Validate` authoritative (per [`03-command-handler.md`](features/actions/models/03-command-handler.md)).
+Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) — five validation layers (refined by ADR-0010: the registered validator chain is authoritative; framework defaults `SessionGate` + `MatchStateActionGate` ride the same chain).
+
+Linked: [`Product/decisions/0010-validator-handler-split.md`](Product/decisions/0010-validator-handler-split.md) — `Validate` splits from `Handle`; `GameCommandHandler<,>` + `CommandValidator<>` bases land; `IHandlerContext` retired; framework intake validators replace the inline gate.
 
 ## Examples
 

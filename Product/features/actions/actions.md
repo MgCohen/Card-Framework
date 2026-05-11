@@ -9,7 +9,7 @@ tags: [#actions]
 
 ## What it is
 
-The framework's command pipeline. A **`PlayerIntent`** (UI input or system attempt) is mapped through `IIntentMapper` into a typed **`GameCommand`** that flows through the pipeline (engine lifecycle gate → `handler.Validate` → framework FIFO → drain → before-fold → handler → after-fold → envelope) and emits a **`HistoryEnvelope`** capturing cause and effects. The feature also owns the **`AvailableActionsSnapshot`** shape (typed `ActionTemplate` per command type) that tells presentation what's currently legal.
+The framework's command pipeline. A **`PlayerIntent`** (UI input or system attempt) is mapped through `IIntentMapper` into a typed **`GameCommand`** that flows through the pipeline (registered `ICommandValidator<TCommand>` chain → framework FIFO → drain → before-fold → handler → after-fold → envelope) and emits a **`HistoryEnvelope`** capturing cause and effects. The feature also owns the **`AvailableActionsSnapshot`** shape (typed `ActionTemplate` per command type — *rework pending under [ADR-0012 — *forthcoming*]*) that tells presentation what's currently legal.
 
 ```
                 PlayerIntent (UI input / system attempt)
@@ -21,16 +21,18 @@ The framework's command pipeline. A **`PlayerIntent`** (UI input or system attem
                          │
                 engine.Dispatch
                          │
-        ┌────────────────┴─────────────────┐
-        │ Engine lifecycle gate (framework)│
-        │ → handler.Validate               │ ← authoritative legality
-        │ → enqueue (framework FIFO)       │
-        │ → Drain:                         │
-        │   ├─ before-fold (replace/cancel)│
-        │   ├─ handler.Handle              │ ← invokes mutators via ctx.Store.Execute
-        │   ├─ after-fold (reactions)      │
-        │   └─ envelope publishes          │
-        └──────────────────────────────────┘
+        ┌────────────────┴─────────────────────────┐
+        │ pipeline.Validate                         │
+        │   • SessionGate          (framework def.) │
+        │   • MatchStateActionGate (framework def.) │
+        │   • game-shipped validators (DI order)    │ ← authoritative chain
+        │ → enqueue (framework FIFO)                │
+        │ → Drain:                                  │
+        │   ├─ before-fold (replace/cancel)         │
+        │   ├─ handler.Handle                       │ ← invokes mutators via Store.Execute
+        │   ├─ after-fold (reactions)               │
+        │   └─ envelope publishes                   │
+        └───────────────────────────────────────────┘
                          │
                          ▼
                    HistoryEnvelope
@@ -38,20 +40,26 @@ The framework's command pipeline. A **`PlayerIntent`** (UI input or system attem
                   Observers / Networking
 ```
 
-Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline-architecture.md), command-queue routing is framework-FIFO (the runtime does not gate intake or route commands); effect-level orchestration is the customizable layer where game styles diverge.
+Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline-architecture.md), command-queue routing is framework-FIFO (the runtime does not gate intake or route commands); effect-level orchestration is the customizable layer where game styles diverge. Per [ADR-0010 — validator / handler split](Product/decisions/0010-validator-handler-split.md), validation lives in a separate `ICommandValidator<TCommand>` interface; framework defaults register first; game-shipped validators register after.
 
 ## Vocabulary
 
-**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `IAvailableActions`, `EngineLifecycle`, `EngineState` (defined in `engine/`); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `MatchState`, `MatchStateSlice`, `SessionState`, `EngineState` (defined in `engine/`); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate. Retired terms (`IHandlerContext`, `IAvailableActions`, `EngineLifecycle`) live in `GLOSSARY.md` §Retired terms.
 
 | Term | Meaning |
 |---|---|
 | `PlayerIntent` | A structured intent submitted to the engine from outside the rules layer (drag-drop, AI choice, network message, scripted bot, replay playback). Carries what the actor attempted, not the final state mutation. |
-| `IIntentMapper` | Game-supplied service: `Map(ActionTemplate template, PlayerChoice choice) → GameCommand`. Switches on typed template subtype to produce a well-formed command. Decision-unaware. |
+| `IIntentMapper` | Game-supplied service: `Map(ActionTemplate template, PlayerChoice choice) → GameCommand`. Switches on typed template subtype to produce a well-formed command. Decision-unaware. *(Rework pending under [ADR-0012 — *forthcoming*]; replaced by per-state `MatchStateViewModel<TState>.Map`.)* |
 | `PlayerChoice` | The data the player committed to: target list, parameter values, mode selections. Bound by `IIntentMapper` against a template to produce a `GameCommand`. |
 | `GameCommand` | Base type for everything that flows through the pipeline (defined in `triggers/`); subtypes are `GameAction` (executable, queued), `CompositeAction` (inline, no queue), `GameSignal` (no execution). |
-| `ICommandHandler<TCommand, TResult>` | Per-command resolver. One per `GameCommand` type. `Validate(cmd, state) → bool` (authoritative legality check) + `Handle(cmd, ctx) → Task<TResult>` (apply state via mutators, return result). Game-supplied. |
-| `ICommandPipeline` | Framework executor: `Validate(cmd, state)` (resolves handler, delegates) + `Execute(action) → CommandResult` (full lifecycle for one action). |
+| `ICommandHandler<TCommand, TResult>` | Per-command resolver. One per `GameCommand` type. `Handle(cmd) → Task<TResult>` (apply state via mutators, return result). Game-supplied. Typically extends the `GameCommandHandler<TCommand, TResult>` abstract base with `[Inject] Store`. |
+| `ICommandValidator<TCommand>` | Per-command legality interface. `Validate(cmd, out reason) → bool`. Validators run before the handler, in DI registration order, short-circuit on first reject. Framework ships `SessionGate` + `MatchStateActionGate`; games append. Uniform across every `GameCommand` subtype. |
+| `GameCommandHandler<TCommand, TResult>` | Abstract base for handlers: `[Inject] protected Store Store`. Subclasses override `Handle`. |
+| `CommandValidator<TCommand>` | Abstract base for validators: `[Inject] protected Store Store`. Subclasses override `Validate`. |
+| `ValidatedCommandHandler<TCommand, TResult>` | Combined base — one class implements both `ICommandValidator<TCommand>` and `ICommandHandler<TCommand, TResult>`. Common case when validation and handling logic live together. |
+| `SessionGate` | Framework-default validator. Rejects commands when `engine.Session` is not accepting them (`NotStartedSession` except lifecycle commands; `EndedSession`). |
+| `MatchStateActionGate` | Framework-default validator. Rejects commands whose runtime type isn't in `MatchStateSlice.Current.Actions`. Lifecycle commands (`StartMatchCommand`, `EndMatchCommand`, `TransitionStateCommand`) bypass. |
+| `ICommandPipeline` | Framework executor: `Validate(cmd, out reason)` (runs the registered validator chain) + `Execute(action) → CommandResult` (full lifecycle for one action). |
 | `CommandResult` | Typed return from a handler. Subclasses per command. Populates `HistoryEnvelope.Result`. May carry cancellation flag, redirected target, damage amount, drawn instance, opened decision id, etc. |
 | `HistoryEnvelope` | The grouping unit observers consume — one per `GameAction`, with cause metadata (`OriginCommandId`, `OriginIntent` (first only), `Actor`, `SourceInstance`, `Result`, `Entries[]`). |
 | `OriginCommandId` | ID of the first command in a chain. Threaded by the engine onto every evaluator follow-up so all chain members share identity. |
@@ -63,44 +71,46 @@ Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline
 
 ## Architecture
 
-The feature has five Models. Each is the canonical home for one load-bearing element of the action pipeline:
+The feature has six Models. Each is the canonical home for one load-bearing element of the action pipeline:
 
-1. **`ICommandPipeline`** ([`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md)) — the dispatch flow: lifecycle gate → validate → enqueue → drain (before-fold → handler → after-fold → envelope) → evaluate. Type hierarchy reference. Framework-FIFO routing per ADR-0006.
-2. **`IIntentMapper`** ([`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md)) — the boundary that turns `PlayerIntent` (UI/AI/network/etc) into a typed `GameCommand`. Owns `PlayerIntent` and `IntentGateway` as its tied surfaces.
-3. **`ICommandHandler<TCommand, TResult>`** ([`03-command-handler.md`](features/actions/models/03-command-handler.md)) — the per-command resolver. `Validate` (authoritative) + `Handle` (writes via mutators, returns typed `CommandResult`).
+1. **`ICommandPipeline`** ([`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md)) — the dispatch flow: validator chain → enqueue → drain (before-fold → handler → after-fold → envelope) → evaluate. Type hierarchy reference. Framework-FIFO routing per ADR-0006.
+2. **`IIntentMapper`** ([`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md)) — the boundary that turns `PlayerIntent` (UI/AI/network/etc) into a typed `GameCommand`. Owns `PlayerIntent` and `IntentGateway` as its tied surfaces. *(Rework pending under [ADR-0012 — *forthcoming*].)*
+3. **`ICommandHandler<TCommand, TResult>`** ([`03-command-handler.md`](features/actions/models/03-command-handler.md)) — the per-command resolver. `Handle` (writes via mutators, returns typed `CommandResult`). Extends `GameCommandHandler<,>` base with property-injected `Store`.
 4. **`HistoryEnvelope`** ([`04-history-envelope.md`](features/actions/models/04-history-envelope.md)) — the grouping unit observers consume. One per `GameAction`. `HistoryState` slice holds the ordered envelope log.
-5. **`AvailableActionsSnapshot`** ([`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md)) — typed `ActionTemplate` per command type; `PlayerChoice` shape; eligibility framing.
+5. **`AvailableActionsSnapshot`** ([`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md)) — typed `ActionTemplate` per command type; `PlayerChoice` shape; eligibility framing. *(Rework pending under [ADR-0012 — *forthcoming*].)*
+6. **`ICommandValidator<TCommand>`** ([`06-command-validator.md`](features/actions/models/06-command-validator.md)) — per-command legality. Validator chain machinery; framework defaults (`SessionGate`, `MatchStateActionGate`); `CommandValidator<>` and `ValidatedCommandHandler<,>` bases.
 
 The six shapes that flow through the pipeline (`PlayerIntent` → `ActionTemplate` → `GameCommand` → `StateMutation` → `CommandResult` → `HistoryEnvelope`) are owned across these models plus `triggers/` (`GameCommand` type hierarchy) and `state/` (`StateMutation`).
 
 ### The five validation layers
 
-Validation is layered explicitly. **`handler.Validate` is authoritative at dispatch**; the others narrow the search space, gate UI, ensure well-formedness, or enforce engine-level flow. Full breakdown lives in [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) (project-wide ADR — spans engine + actions + presentation).
+Validation is layered explicitly. **The registered validator chain is authoritative at dispatch** (per [ADR-0010](Product/decisions/0010-validator-handler-split.md)); the other layers narrow the search space, gate UI, or ensure well-formedness. Full breakdown lives in [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0007-five-validation-layers.md) (project-wide ADR — spans engine + actions + presentation; refined by ADR-0010).
 
 | Layer | Owner feature | Concern | When |
 |---|---|---|---|
-| Per-template eligibility | `engine/` (runtime's `Evaluate`) | Which templates are even relevant | Snapshot construction |
-| `AffordanceMap` | `presentation/` | UI affordance projection | UI render |
-| `IIntentMapper.Map` | `actions/` | Well-formedness | Intent → command translation |
-| `handler.Validate` | `actions/` | Authoritative legality | Engine intake (every dispatch) |
-| Engine lifecycle gate | `engine/` (framework) | Match-lifecycle gate (paused/ended) | Engine intake (every dispatch) |
+| Per-state ViewModel affordances | `presentation/` (per-state VM, [ADR-0012 — *forthcoming*]) | Which actions the UI surfaces | UI render |
+| `IIntentMapper.Map` | `actions/` (rework pending under ADR-0012) | Well-formedness | Intent → command translation |
+| `SessionGate` (framework default) | `actions/` (validator; reads `engine.Session`) | Engine-is-accepting-commands gate | Engine intake (every dispatch) |
+| `MatchStateActionGate` (framework default) | `actions/` (validator; reads `MatchStateSlice.Current.Actions`) | Match-state-actions gate | Engine intake (every dispatch) |
+| Game-shipped `ICommandValidator<TCommand>` | `actions/` (game-supplied) | Authoritative command-specific legality | Engine intake (every dispatch) |
 
 ## Composition
 
 | Model | Role |
 |---|---|
 | [`01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) | `ICommandPipeline`; dispatch flow; type-hierarchy reference; framework-FIFO routing |
-| [`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) | `IIntentMapper` + `PlayerIntent` + `IntentGateway` (input boundary) |
-| [`03-command-handler.md`](features/actions/models/03-command-handler.md) | `ICommandHandler<TCommand, TResult>` + `CommandResult` (per-command resolver) |
+| [`02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) | `IIntentMapper` + `PlayerIntent` + `IntentGateway` (input boundary) — *rework pending under ADR-0012* |
+| [`03-command-handler.md`](features/actions/models/03-command-handler.md) | `ICommandHandler<TCommand, TResult>` + `CommandResult` (per-command resolver); `GameCommandHandler<,>` base |
 | [`04-history-envelope.md`](features/actions/models/04-history-envelope.md) | `HistoryEnvelope` + `HistoryState` slice (envelope log) |
-| [`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) | `AvailableActionsSnapshot`, typed `ActionTemplate`, `PlayerChoice`, eligibility |
+| [`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) | `AvailableActionsSnapshot`, typed `ActionTemplate`, `PlayerChoice`, eligibility — *rework pending under ADR-0012* |
+| [`06-command-validator.md`](features/actions/models/06-command-validator.md) | `ICommandValidator<TCommand>` + `CommandValidator<>` + `ValidatedCommandHandler<,>`; framework defaults (`SessionGate`, `MatchStateActionGate`) |
 
 ## Invariants
 
 Cross-Model rules that hold across both Models and shape how downstream features must use the actions pipeline.
 
 - **One enforced entry point.** Every `GameCommand` enters the pipeline through `engine.Dispatch`. No bypass paths; no in-process injection.
-- **`handler.Validate` is authoritative.** Pre-template eligibility, AffordanceMap, IntentMapper, and the engine lifecycle gate are advisory or specialized; the handler is final at dispatch.
+- **The validator chain is authoritative.** Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), registered `ICommandValidator<TCommand>`s (framework defaults first, then game-shipped) run in DI order with short-circuit-on-reject. The per-state ViewModel and IntentMapper are advisory; the chain is final at dispatch.
 - **Handlers return typed results.** `CommandResult` subtypes per command (`MoveCardResult`, `DealDamageResult`, etc.). Effects branch on these.
 - **One handler per command type.** DI registration is closed-generic (`ICommandHandler<DealDamageCommand, DamageResult>`). Multiple registrations for the same `TCommand` are an error at container build.
 - **Handlers are the only layer that issues mutators.** Effects sequence commands; mutators write state; handlers bridge by calling `ctx.Store.Execute(payload)`.
@@ -108,13 +118,13 @@ Cross-Model rules that hold across both Models and shape how downstream features
 - **`OriginCommandId` is engine-threaded.** The engine copies it from the just-executed command onto every evaluator follow-up; effects do not need to set it.
 - **`OriginIntent` is recorded once, on the first envelope.** Subsequent envelopes in the chain share `OriginCommandId` but carry no `OriginIntent`.
 - **UI creates intents, not state changes.** `PlayerIntent` is the boundary; everything beyond is framework / game logic.
-- **Snapshot is approximate; dispatch is authoritative.** Per-binding `Validate` runs at dispatch (always) and may run during snapshot enumeration (on-demand by the rule). UI gates may show stale bindings; dispatch catches them.
+- **Snapshot is approximate; dispatch is authoritative.** The validator chain runs at dispatch (always); UI gates may show stale affordances; dispatch catches them.
 - **`ActionTemplate` is the snapshot wire-form.** `Ref<T>` and `Reference` fields on templates are boundary-correct (per [ADR-0005](Product/decisions/0005-objects-over-ids.md)) — they're transported to presentation and consumed by `IntentMapper`.
 - **Command-queue routing is framework-FIFO.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does not gate intake or route commands; game-style differences in how reactions are scheduled live at the effect-level orchestration layer.
 
 ## Boundaries
 
-**Owns:** `PlayerIntent` and `IntentGateway` contracts; `IIntentMapper` interface; `GameCommand` pipeline mechanics (validate / before-fold integration / handler / after-fold integration / envelope close); `ICommandHandler<TCommand, TResult>` and `CommandHandler<TCommand, TResult>` typed base; `CommandResult` and its variant convention; `HistoryEnvelope` shape and `OriginCommandId` / `OriginIntent` threading; `AvailableActionsSnapshot`; `ActionTemplate` (abstract base + typed subtypes per command); `PlayerChoice`; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks.
+**Owns:** `PlayerIntent` and `IntentGateway` contracts; `IIntentMapper` interface; `GameCommand` pipeline mechanics (validator chain / before-fold integration / handler / after-fold integration / envelope close); `ICommandHandler<TCommand, TResult>` and the `GameCommandHandler<TCommand, TResult>` typed base; `ICommandValidator<TCommand>` and the `CommandValidator<TCommand>` / `ValidatedCommandHandler<TCommand, TResult>` bases; framework-default validators (`SessionGate`, `MatchStateActionGate`); `CommandResult` and its variant convention; `HistoryEnvelope` shape and `OriginCommandId` / `OriginIntent` threading; `AvailableActionsSnapshot`; `ActionTemplate` (abstract base + typed subtypes per command); `PlayerChoice`; `TargetSlot` / `ModeOption` / `ParameterSpec` building blocks.
 
 **Does not own:**
 - `GameCommand` type hierarchy (`GameAction`, `CompositeAction`, `GameSignal`) → `triggers/`

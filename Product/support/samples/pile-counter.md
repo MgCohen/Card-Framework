@@ -7,6 +7,8 @@ tags: [#sample, #pile-counter]
 
 # Pile Counter — Reference Sample Game
 
+> **Post-cascade rewrite pending.** This sample was authored pre-FSM-arch cascade and uses retired vocabulary in places (`IHandlerContext`, `ctx.Store.Execute(...)`, `IAvailableActions`, `ActionTemplate`, global `IIntentMapper`). The framework concepts it illustrates are still sound, but the *code samples* and several Q-resolutions below reference Models that have moved or been archived. A revision pass to use the post-cascade vocabulary (`GameCommandHandler<,>` base, `ICommandValidator<TCommand>`, `MatchState.Actions`, per-state ViewModel) is scheduled before the vertical-slice work executes. Treat the high-level shape as canonical; treat the code as illustrative of the *direction* rather than the *current* contract.
+
 This document defines a small, deliberately simple game we use as a working reference while shaping the framework. Whenever a framework concept feels under- or over-specified, we sketch its implementation in **Pile Counter** and see where the seams are.
 
 The game has no triggers, no abilities, no players-vs-players, no async decisions. That's intentional — it's the floor of what the framework must support, before any of the harder features pile on.

@@ -84,14 +84,16 @@ public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template
 };
 ```
 
-`IIntentMapper.Map` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — it gates well-formedness, not legality.
+`IIntentMapper.Map` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — it gates well-formedness, not legality. Authoritative legality is the registered validator chain at dispatch (per [ADR-0010](Product/decisions/0010-validator-handler-split.md); see [`06-command-validator.md`](features/actions/models/06-command-validator.md)).
+
+> **Rework pending.** This Model is superseded by [ADR-0012 — *forthcoming*] — the global `IIntentMapper` retires in favor of per-state `MatchStateViewModel<TState>.Map(intent)`. Content here is preserved as the pre-ADR-0012 shape; for the post-cascade picture see the ADR when it lands.
 
 ## Invariants
 
 - **UI creates intents, not state changes.** `PlayerIntent` is the boundary; everything beyond is framework / game logic.
 - **Mapper is decision-unaware.** No snapshot scope inspection. The mapper produces `SelectTargetCommand` whether or not a decision is open — it does not know.
 - **Each game ships its own mapper and gateway.** The framework provides only the `IIntentMapper` contract.
-- **Mapper output is well-formed but not yet legal.** Authoritative legality is `handler.Validate` at dispatch (per [`03-command-handler.md`](features/actions/models/03-command-handler.md)).
+- **Mapper output is well-formed but not yet legal.** Authoritative legality is the registered validator chain at dispatch (per [`06-command-validator.md`](features/actions/models/06-command-validator.md) and [ADR-0010](Product/decisions/0010-validator-handler-split.md)).
 
 ## Decisions
 

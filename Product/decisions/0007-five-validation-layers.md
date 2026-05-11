@@ -15,6 +15,21 @@ Proposal: features/presentation/models/01-presentation-loop.md, features/actions
 
 Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the fifth layer is now the **engine lifecycle gate** (framework, checks `EngineState.Lifecycle`) rather than `OnIncomingCommand` (deleted). The five-layer principle is unchanged; only the name and owner of the flow-level layer shifted from runtime to framework. The other four layers (per-template eligibility, AffordanceMap, IntentMapper, `handler.Validate`) are unaffected.
 
+## Amendment — 2026-05-11 (validator / handler split per ADR-0010)
+
+Per [ADR-0010](decisions/0010-validator-handler-split.md), the "authoritative legality at dispatch" layer changes shape: instead of a single `ICommandHandler<TCommand, TResult>.Validate` method, it is a **registered `ICommandValidator<TCommand>` chain** running in DI order with short-circuit-on-reject. Framework defaults `SessionGate` and `MatchStateActionGate` ride the same chain (replacing the inline lifecycle gate + match-state-actions gate). The five-layer principle is unchanged in spirit — five named layers, one authoritative answer composed at dispatch — but the named layers refresh:
+
+| Pre-ADR-0010 layer | Post-ADR-0010 expression |
+|---|---|
+| Per-template eligibility (runtime) | Per-state `MatchState.Actions` (engine) — refined by [ADR-0009](decisions/0009-engine-as-fsm.md); UI-side projection per [ADR-0012 — *forthcoming*] |
+| `AffordanceMap` (presentation) | Per-state `MatchStateViewModel<TState>` affordances per [ADR-0012 — *forthcoming*] |
+| `IIntentMapper.Map` well-formedness (actions) | Per-VM `Map(intent)` per [ADR-0012 — *forthcoming*] (well-formedness role unchanged) |
+| `handler.Validate` authoritative (actions) | Registered `ICommandValidator<TCommand>` chain (per [ADR-0010](decisions/0010-validator-handler-split.md)); authoritative role unchanged |
+| Engine lifecycle gate (framework, ADR-0006) | `SessionGate` validator (framework default in the chain) |
+| *(new)* — | `MatchStateActionGate` validator (framework default in the chain; cheap prophylactic type gate from ADR-0009's `MatchState.Actions`) |
+
+`MatchStateActionGate` is technically a sixth checkpoint structurally, but it shares the same "framework-owned flow gate" role as `SessionGate` and lives in the same chain as a co-default; the canonical reference is the five-rejection-paths table in [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md). The five-layer mental model is preserved (UI affordance / well-formedness / framework gates / authoritative legality / mid-execution cancel).
+
 ## Context
 "Where is the validation?" was unanswerable because validation was scattered. We needed an explicit list of layers, with a single authoritative one, so each layer's role is clear.
 
