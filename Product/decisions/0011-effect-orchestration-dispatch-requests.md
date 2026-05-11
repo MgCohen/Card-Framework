@@ -11,6 +11,8 @@ Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D13â
 Context-docs: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, new Models `effects/05-pending-effects.md`, `effects/06-request-system.md`, `Product/features/actions/models/01-command-pipeline.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
+> **Refresh (2026-05-11, same-day) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** "Single unified `Dispatch`" extends scope-level: **`scope.Emit(signal)` and `scope.Execute(composite)` retire** â€” `scope.Dispatch(GameCommand)` is the sole inside-handler / inside-effect entry, same shape as `engine.Dispatch`. The five-sibling `GameCommand` family stays. Engine pattern-matches type and routes (full table in ADR-0013).
+
 ## Context
 
 After ADR-0009 (engine IS the FSM) and ADR-0010 (validator/handler split), five intertwined questions remained open at the effect-orchestration layer. The pre-ADR-0011 surface had:

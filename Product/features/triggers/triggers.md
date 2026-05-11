@@ -7,6 +7,13 @@ tags: [#triggers]
 
 # triggers — feature
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Two structural changes land in this feature:
+>
+> 1. **Engine holds `ITriggerPipeline`, not the action pipeline.** The fold is invoked from `engine`'s drain switch at the before-fold and after-fold points for `GameAction` and `GameSignal`. The action pipeline (single-concern under ADR-0013) no longer references triggers at runtime.
+> 2. **`runtime.FilterTriggers` retires.** Eligibility moves fully into `Trigger<T>.Validate(cmd, scope)` (per-trigger). `TriggerSystem` internally walks its registry, calls `Validate` per candidate, and folds the passing ones. No upstream filter call.
+>
+> Triggers feature still owns: `Trigger<T>`, `ITriggerSystem`, `ITriggerPipeline`, fold semantics, in-memory registry, register/unregister lifecycle via `AbilityDefinition`. Same `OnBefore<T>` / `OnAfter<T>` API is used at game install (most triggers) and at instance spawn/leave (per-card abilities) — one mechanism, varying timing; no "static vs dynamic" categories.
+
 ## What it is
 
 The framework's reactive fan-out. When a `GameCommand` flows through the pipeline, **`OnBefore<T>`** triggers run first (they may modify, cancel, or replace the command), then the handler executes (`GameAction` only), then **`OnAfter<T>`** triggers run (they may dispatch reactions). Triggers are typed by the command shape they observe; the **trigger fold** runs them in sequence so the framework — not the trigger author — handles aggregation, ordering, and replacement uniformly.

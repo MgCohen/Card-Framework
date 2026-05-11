@@ -7,6 +7,15 @@ tags: [#engine, #evaluation-loop, #orchestrator, #fsm, #effects]
 
 # Game Engine — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The engine is now the explicit **pipeline orchestrator**: its drain loop pattern-matches the `GameCommand`'s runtime type and routes to the right subsystem at the right step. Per-type routing table (full table in ADR-0013):
+>
+> - **`GameAction`** → validator chain → trigger before-fold (engine calls `ITriggerPipeline.RunBefore`) → handler → trigger after-fold (engine calls `ITriggerPipeline.RunAfter`) → `runtime.Evaluate`.
+> - **`GameSignal`** → trigger folds only (no validator chain, no handler).
+> - **`Request<TResponse>`** / **`Response`** → validator chain → handler (writes `RequestsSlice` / `AnswersSlice`); no trigger fold.
+> - **`CompositeAction`** → inline expansion within parent scope; never reaches `Dispatch`.
+>
+> Engine holds `ITriggerPipeline` (was held by `actions` pipeline). `runtime.FilterTriggers` retires — eligibility lives on `Trigger<T>.Validate`. The action pipeline becomes single-concern (validators + handlers + envelope), as do the trigger and effect pipelines.
+
 ## What it is
 
 The engine is the **orchestrator** of the framework's command pipeline: a strict-FIFO queue, a per-step drain loop that calls `pipeline.Execute` then `runtime.Evaluate`, a single `Dispatch` entry point used by every external source (player input, timers, trigger reactions). Validation runs through the registered `ICommandValidator<TCommand>` chain per [ADR-0010](Product/decisions/0010-validator-handler-split.md) — including two framework-default validators that gate session lifecycle and match-state-actions (`SessionGate`, `MatchStateActionGate`; see [`actions/06-command-validator.md`](features/actions/models/06-command-validator.md)). **Session lifecycle** lives as a typed sealed hierarchy on `GameEngine.Session` (`NotStartedSession` / `InMatchSession` / `EndedSession`); **match-state legality** consults `MatchStateSlice.Current.Actions` from the Store. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md) the engine IS the FSM — `runtime.Evaluate` returns a `MatchState`; the engine detects type-changes and dispatches `TransitionStateCommand`. The engine does not know what any particular action means or what game is being played — that knowledge lives in the runtime ([`03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md)) and in the concrete `MatchState` / `ITurnFlow` / `ISBA` implementations ([`07-match-state.md`](features/engine/models/07-match-state.md), [`08-turn-flow.md`](features/engine/models/08-turn-flow.md), [`09-state-based-actions.md`](features/engine/models/09-state-based-actions.md)).

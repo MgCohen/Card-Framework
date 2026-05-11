@@ -7,6 +7,13 @@ tags: [#triggers, #pipeline, #fold, #model]
 
 # Trigger Pipeline — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Two changes:
+>
+> 1. **Engine holds `ITriggerPipeline`**, not the action pipeline. The fold is invoked from the engine's drain switch (before-fold + after-fold for `GameAction`; both folds for `GameSignal`; bypassed for `Request` / `Response` / `CompositeAction`).
+> 2. **No upstream `FilterTriggers` filter call.** `ITriggerPipeline.RunBefore` / `RunAfter` now own filtering internally — they walk the in-memory registry for type `T`, call each candidate's `Trigger<T>.Validate`, and fold the passing ones. The "candidate list filtered upstream" narrative below reflects the pre-cascade shape.
+>
+> Registry storage is in-memory in `TriggerSystem` for v1. Migration to a Store-resident slice deferred until the slice-linked-services pattern formalizes.
+
 ## What it is
 
 `ITriggerPipeline` is the **pipeline-internal execution surface** that runs the trigger fold. It receives a filtered candidate list (filtered upstream by `GameRulesRuntime.FilterTriggers`) and executes them in priority order, producing a `TriggerFoldResult` for the before-fold or running reactions to completion for the after-fold. Game authors never call this directly — `ITriggerSystem` is their surface; `ITriggerPipeline` is the framework's. The framework ships a default `FifoPipeline`; games that need richer ordering (MTG-style controller-choice replacement order) swap in a custom implementation.

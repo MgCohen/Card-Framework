@@ -7,6 +7,8 @@ tags: [#actions, #model, #pipeline]
 
 # Command Pipeline — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The drain mechanic + per-type routing decision now lives in `engine`, not in this feature. The `actions` feature owns: `GameCommand` family + validators + handlers + `HistoryEnvelope` shape. The `engine` drain pattern-matches command type and invokes the validator chain / handler / trigger fold in the right order per type (full table in ADR-0013). This Model's drain narrative below still describes the *what* (the sequence of validator → before-fold → handler → after-fold → envelope for actions) — but the *who* (orchestrator) is now engine. `ITriggerPipeline` is held by engine, not by this pipeline. Per-type bypass rules: `GameSignal` skips the validator chain; `CompositeAction` expands inline within parent scope and never reaches `engine.Dispatch`.
+
 ## What it is
 
 The dispatch mechanic: how a `GameCommand` flows through `engine.Dispatch` — registered validator chain (per [ADR-0010](Product/decisions/0010-validator-handler-split.md)), enqueue, drain (before-fold → handler → after-fold → envelope) — and how the queue is drained framework-FIFO per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md).
