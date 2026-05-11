@@ -83,8 +83,7 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-<<<<<<< HEAD
-**FSM-arch cascade in progress (3 of 4 sub-ADRs landed).** The structural design is settled across FSM, dispatch, effects, requests, lifecycle layering, and validators. Decomposed into 4 sub-ADRs by axis:
+**FSM-arch cascade complete (4 of 4 sub-ADRs landed).** The structural design is settled across FSM, dispatch, effects, requests, lifecycle layering, validators, and presentation. Decomposed into 4 sub-ADRs by axis:
 
 - ✅ **ADR-0009 — Engine as FSM** (landed 2026-05-10). D1–D5 + D12. Engine Models 01 / 03 patched; 04 archived; new Models 07 / 08 / 09 added.
 - ✅ **ADR-0010 — Validator / handler split** (landed 2026-05-11). D10–D11. Actions row 5→6 (new `06-command-validator`; heavy patch to `03-command-handler`). Effects row drops `03-handler-context` (archived). Engine Models 01 + 03 + 07 patched. ADR-0007 amendment added.
