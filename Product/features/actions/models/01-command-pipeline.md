@@ -128,9 +128,9 @@ Per [`effects/01-effect.md`](features/effects/models/01-effect.md):
 ## Invariants
 
 - **One enforced entry point.** Every `GameCommand` enters the pipeline through `engine.Dispatch`. No bypass paths; no in-process injection.
-- **Snapshot is approximate; dispatch is authoritative.** Per-binding `Validate` runs at dispatch (always) and may run during snapshot enumeration (on-demand by the rule). UI gates may show stale bindings; dispatch catches them.
-- **Command-queue routing is framework-FIFO.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does not gate intake or route commands; game-style differences in how reactions are scheduled live at the effect-level orchestration layer.
-- **`ActionTemplate` is the snapshot wire-form.** `Ref<T>` and `Reference` fields on templates are boundary-correct (per [ADR-0005](Product/decisions/0005-objects-over-ids.md)) — they're transported to presentation and consumed by `IntentMapper`.
+- **UI affordances are approximate; dispatch is authoritative.** Per-state `MatchStateViewModel<TState>` observables project the affordance surface (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); the registered `ICommandValidator<TCommand>` chain runs at dispatch and has the final say. UI gates may show stale options; dispatch catches them.
+- **Command-queue routing is framework-FIFO.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does not gate intake or route commands; game-style differences in how reactions are scheduled live at the effect-level orchestration layer (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)).
+- **`Ref<T>` and `Reference` fields on `GameCommand`s are boundary-correct.** Per [ADR-0005](Product/decisions/0005-objects-over-ids.md) — typed references flow through the pipeline and the envelope verbatim; serialization rides the typed shape. The retired `ActionTemplate` wire-form was the previous carrier; post-cascade the carrier is the typed `GameCommand` itself (`MoveCardCommand(Ref<Card>, Ref<Zone>, Ref<Zone>)`, etc.) produced by `MatchStateViewModel<TState>.Map(intent)`.
 
 ## Decisions
 
@@ -148,35 +148,54 @@ Linked: [`Product/decisions/0011-effect-orchestration-dispatch-requests.md`](Pro
 
 ```text
 Player drags top card of Pile A onto Pile B
-  → IntentGateway.Submit(MoveAttempt, MoveCardTemplate(card, [pileB]), choice)
-  → IIntentMapper.Map(MoveCardTemplate, choice) → MoveCardCommand(card, A, B)
+  → IntentGateway produces a typed PlayerIntent: new DropCardIntent(card, A, B)
+  → Gateway looks up active VM via ViewModelRegistry.Create(MatchStateSlice.Current)
+  → ActiveVM.Map(intent) → MoveCardCommand(card, A, B)         // per ADR-0012
   → engine.Dispatch(MoveCardCommand)
-     ├─ Engine lifecycle gate: Started → permitted
-     ├─ pipeline.Validate → MoveCardHandler.Validate(card, A, B) → ok
+     ├─ Framework validators (registered first per ADR-0010):
+     │    SessionGate           → engine.Session is InMatchSession → permitted
+     │    MatchStateActionGate  → typeof(MoveCardCommand) ∈ MatchStateSlice.Current.Actions → permitted
+     ├─ Game-shipped validators (in DI registration order):
+     │    MoveCardValidator.Validate → ok
+     ├─ short-circuit-on-reject (none rejected here)
      └─ enqueued (framework FIFO)
 
 Drain begins:
   ├─ Dequeue MoveCardCommand
-  ├─ envelope opens (OriginCommandId = newGuid, OriginIntent = MoveAttempt)
-  ├─ ITriggerPipeline.RunBefore → no triggers registered → fold continues
-  ├─ MoveCardHandler.Handle:
-  │    ctx.Store.Execute(new MoveCardPayload(card, A, B))
-  │      → PileMoveMutator.Change → new PilesState (card moved A→B)
-  │      → LastMoveMutator.Change → new LastMoveState(card, A, B)
+  ├─ envelope opens (OriginCommandId = newGuid, OriginIntent = DropCardIntent)
+  ├─ ITriggerPipeline.OnBefore<MoveCardCommand> → no triggers registered → fold continues
+  ├─ MoveCardHandler.Handle:                                    // extends ValidatedCommandHandler<,>
+  │    Store.Execute(new MoveCardPayload(card, A, B))          // [Inject] Store on the base; no IHandlerContext
+  │      → MoveCardMutator      → ZoneContentsState updates (card moved A→B)
+  │      → PileCounterMutator   → per-pile PileState count updates
+  │      → LastMoveMutator      → LastMoveState updates
   │      → atomic commit
   │    return new MoveCardResult(card, A, B)
-  ├─ ITriggerPipeline.RunAfter → no triggers → fold continues
+  ├─ ITriggerPipeline.OnAfter<MoveCardCommand> → no triggers → fold continues
   └─ envelope publishes (per 04-history-envelope.md)
 
-GameRulesRuntime.Evaluate(MoveCardCommand, MoveCardResult):
-  → All piles match target? → return [new EndMatchCommand(Win(player1))]
-  → publish updated snapshot via Actions.Set(...)
-  → enqueue follow-up with shared OriginCommandId
+GameRulesRuntime.Evaluate(MoveCardCommand, MoveCardResult):                 // per ADR-0009
+  → SBA pass (ISBA.Check) — none applies
+  → MatchStateSlice.Current.ShouldExit(action, result, scope)?
+       All piles match target? → true → exit current state
+  → Flow.NextAfter(current) → new PileGameOverState(winner: player1)
+  → return PileGameOverState
 
-(continues until queue empty)
+Engine notices type change:
+  → enqueue TransitionStateCommand(newState)
+  → TransitionStateHandler:
+       Store.Execute(new SetMatchStatePayload(newState))         // MatchStateSlice mutator
+       enqueue newState.EnterCommands (e.g., EndMatchCommand(Win(player1)))
+
+Presenter (subscribed to MatchStateSlice):
+  → notices state-type change → ViewModelRegistry.Create(PileGameOverState)
+  → new PileGameOverViewModel.Bind(state, scope) runs
+  → view rebinds via MVVM template selection
+
+(drain continues until queue empty)
 ```
 
-The envelope is the unit observers consume. Triggers are fold steps in the same execution. Mutators are pure functions of `(currentState, payload, scope)` returning new state. Snapshot publication folds into `Evaluate` per ADR-0006.
+The envelope is the unit observers consume. Triggers are fold steps in the same execution. Mutators are pure functions of `(currentState, payload, scope)` returning new state. FSM transitions flow through the command pipeline as `TransitionStateCommand`s (per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)) — same envelope shape as any other command. UI rebinds via state-slice subscription on the presenter side (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); no out-of-band snapshot push.
 
 ## Open follow-ups
 
