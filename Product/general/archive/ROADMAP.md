@@ -1,7 +1,14 @@
 ---
 type: reference
-status: settled
+status: abandoned
+archived_on: 2026-05-10
+reason: Research-phase phase-0→8 outline overtaken by current Models, FEATURE-MAP, and SESSION-CHECKPOINT. Claimed "current phase: Research Skeleton" but project is mid-Phase 2 design.
 tags: [#general, #roadmap]
+---
+
+> **Archived 2026-05-10.** Status: Abandoned — Research-phase phase-0→8 outline overtaken by current Models, FEATURE-MAP, and SESSION-CHECKPOINT. Claimed "current phase: Research Skeleton" but project is mid-Phase 2 design.
+> Original content preserved below for historical record.
+
 ---
 
 # Initial Roadmap

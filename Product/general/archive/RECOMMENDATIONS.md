@@ -1,7 +1,14 @@
 ---
 type: reference
-status: settled
+status: abandoned
+archived_on: 2026-05-10
+reason: First-pass synthesis from research phase; predates ADRs 0005–0008 and FSM-arch locks. Suggests Slay-style first vertical slice; we picked pile-counter.
 tags: [#general, #recommendations]
+---
+
+> **Archived 2026-05-10.** Status: Abandoned — First-pass synthesis from research phase; predates ADRs 0005–0008 and FSM-arch locks. Suggests Slay-style first vertical slice; we picked pile-counter.
+> Original content preserved below for historical record.
+
 ---
 
 # Current Recommendations
