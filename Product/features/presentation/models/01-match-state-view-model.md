@@ -186,7 +186,7 @@ The per-state VM is **prophylactic** — it shouldn't surface a UI affordance th
 
 ## Decisions
 
-Linked: [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) — per-state polymorphic ViewModels; global `IIntentMapper` + `AffordanceMap` + `ActionTemplate` retired; `PlayerIntent` survives. Spike provenance: `Product/spikes/fsm-architecture.md` D6–D9.
+Linked: [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) — per-state polymorphic ViewModels; global `IIntentMapper` + `AffordanceMap` + `ActionTemplate` retired; `PlayerIntent` survives. Spike provenance: `Product/spikes/archive/fsm-architecture.md` D6–D9.
 
 Linked: [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — `MatchState` / `MatchStateSlice` shape this Model binds against.
 

@@ -1,15 +1,15 @@
 ---
 type: adr
 status: accepted
-references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, spikes/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
+references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
 tags: [#adr, #presentation, #engine, #fsm, #view-model, #intent]
 ---
 
 # ADR-0012 — Presentation as per-state polymorphic ViewModels; global `IIntentMapper` + `AffordanceMap` + `ActionTemplate` retired
 
-Date: 2026-05-11 (drafted from `Product/spikes/fsm-architecture.md` D6–D9; sub-ADR D of the FSM-arch cascade following ADR-0009 + ADR-0010 + ADR-0011)
+Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D6–D9; sub-ADR D of the FSM-arch cascade following ADR-0009 + ADR-0010 + ADR-0011)
 Context-docs: new Models `presentation/01-match-state-view-model.md`, `presentation/02-view-model-registry.md`, rewritten `presentation/presentation.md`, archived `actions/02-intent-mapper.md`, archived `actions/05-available-actions-snapshot.md`
-Proposal: `Product/spikes/fsm-architecture.md`
+Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 ## Context
 
@@ -19,7 +19,7 @@ After ADR-0009 (engine IS the FSM), the polymorphic match state lives in `MatchS
 2. **`AffordanceMap` (game-specific projection).** A presentation-side projection from `AvailableActionsSnapshot` into a UI-shaped dictionary (`Ref<Card> → IReadOnlyList<Ref<Zone>>` etc.). Recomputed on every snapshot change. With per-state ViewModels the projection moves *onto the VM* — each state binds its own observables; "what can be dragged where?" is the VM's responsibility for the current state, not a global map.
 3. **`AvailableActionsSnapshot` + `ActionTemplate` wire form.** The pre-ADR-0009 picture had the runtime publishing a typed `IReadOnlyList<ActionTemplate>` describing the legal-action *space* (per-action source, target slots, modes, parameters). After ADR-0009 the legal *command types* live on `MatchState.Actions: IReadOnlyList<Type>`; the rich typed-descriptor wire form (with parameter constraints, target slots, etc.) is unused — the per-state VM projects state into bindings directly, with no intermediate wire format.
 
-The 2026-05-10 open-questions walk on `Product/spikes/fsm-architecture.md` settled the structural direction across D6–D9. ADR-0009 deferred the presentation-side rewrite to this ADR; the dependency is solely on `MatchState` (already landed). Independent of ADR-0010 and ADR-0011 structurally — though it shares cosmetic surfaces with both (the `actions/01-command-pipeline.md` diagram in particular).
+The 2026-05-10 open-questions walk on `Product/spikes/archive/fsm-architecture.md` settled the structural direction across D6–D9. ADR-0009 deferred the presentation-side rewrite to this ADR; the dependency is solely on `MatchState` (already landed). Independent of ADR-0010 and ADR-0011 structurally — though it shares cosmetic surfaces with both (the `actions/01-command-pipeline.md` diagram in particular).
 
 ## Options considered
 
@@ -133,7 +133,7 @@ Smaller switches; mode-scoped; adding a phase doesn't grow a central table — i
 ## Notes
 
 - **Sub-ADR cascade position.** This is sub-ADR D of the FSM-arch cascade — the last of the four. Depends on ADR-0009's `MatchState` shape (already merged); structurally independent of ADR-0010 and ADR-0011. Conflict surface at merge time: the cosmetic `actions/01-command-pipeline.md` diagram and feature roots — all three of ADR-0010 / ADR-0011 / ADR-0012 touch them. Resolution by composition.
-- **Spike provenance.** `Product/spikes/fsm-architecture.md` D6–D9 is the canonical source. The FSM-architecture spike now has all four sub-ADRs landed; a final consolidation PR (separate from this one) archives the spike as `status: superseded` referencing 0009 / 0010 / 0011 / 0012, refreshes `Product/general/ARCHITECTURE.md` to reflect the locked architecture, and sweeps GLOSSARY + OPEN-ITEMS to repoint stale spike references at the landed ADRs.
+- **Spike provenance.** `Product/spikes/archive/fsm-architecture.md` D6–D9 is the historical source. The FSM-architecture spike was archived in the post-cascade consolidation PR (2026-05-11) as `status: superseded` referencing 0009 / 0010 / 0011 / 0012; the same PR swept GLOSSARY + OPEN-ITEMS to repoint stale spike references at the landed ADRs. `Product/general/ARCHITECTURE.md` rewrite is a follow-up PR.
 - **`PlayerIntent` ownership.** Moves from `actions/` (where it sat alongside the now-retired `IIntentMapper`) to presentation feature-root vocabulary. `IntentGateway` likewise. The intent base is a marker type — game-defined records derive from it; each `MatchStateViewModel<TState>.Map` switches on the typed subtypes its state cares about.
 - **`PlayerChoice` retired.** The pre-cascade `PlayerChoice(TemplateIndex, ModeIndex, Targets, Parameters)` flat record carried the player's pick alongside the `ActionTemplate` it was bound against. Per-state VMs absorb this — each VM authors its own intent records carrying typed per-gesture data. No central wire format.
 - **`IntentGateway` shape.** Today: thin entry layer translating raw device gestures (mouse, touch, controller) into typed `PlayerIntent` records, then routing through the active VM (looked up via `ViewModelRegistry` keyed on `MatchStateSlice.Current.GetType()`). Concrete implementation is game-supplied; framework provides the contract through `MatchStateViewModel<TState>` + `ViewModelRegistry`.

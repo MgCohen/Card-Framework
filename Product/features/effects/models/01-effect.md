@@ -119,7 +119,7 @@ When the first scenario forces it (match-end during mid-effect await; disconnect
 
 ## Decisions
 
-Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — async-coroutine `IEffect.Run` (D16); engine-only firing (D13); single async `Dispatch` for the 5-sibling family (D14); `PendingEffectsSlice` as the universal queue (D15); request system for player decisions (D17). Spike provenance: `Product/spikes/fsm-architecture.md` D13 + D16.
+Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — async-coroutine `IEffect.Run` (D16); engine-only firing (D13); single async `Dispatch` for the 5-sibling family (D14); `PendingEffectsSlice` as the universal queue (D15); request system for player decisions (D17). Spike provenance: `Product/spikes/archive/fsm-architecture.md` D13 + D16.
 
 ## Examples
 

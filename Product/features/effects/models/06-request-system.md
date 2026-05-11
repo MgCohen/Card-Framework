@@ -262,7 +262,7 @@ When `EndMatchCommand`'s handler flips `engine.Session` to `EndedSession`, it di
 
 ## Decisions
 
-Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — state-linked request system (D17); 5-sibling `GameCommand` family (D14); single async `Dispatch` surface (D14). Spike provenance: `Product/spikes/fsm-architecture.md` D14 + D17.
+Linked: [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — state-linked request system (D17); 5-sibling `GameCommand` family (D14); single async `Dispatch` surface (D14). Spike provenance: `Product/spikes/archive/fsm-architecture.md` D14 + D17.
 
 Linked: [ADR-0010](Product/decisions/0010-validator-handler-split.md) — uniform validator chain across every `GameCommand` subtype, including `Request<TResponse>` and `Response`.
 

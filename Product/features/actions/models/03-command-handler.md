@@ -129,7 +129,7 @@ Cancellation shape (flag on the base record vs. typed `CancelledResult` subtype)
 
 ## Decisions
 
-Linked: [ADR-0010](Product/decisions/0010-validator-handler-split.md) — `Validate` split out into `ICommandValidator<TCommand>`; `IHandlerContext` retired; `GameCommandHandler<,>` and `ValidatedCommandHandler<,>` bases land. Spike provenance: `Product/spikes/fsm-architecture.md` D10 + D11.
+Linked: [ADR-0010](Product/decisions/0010-validator-handler-split.md) — `Validate` split out into `ICommandValidator<TCommand>`; `IHandlerContext` retired; `GameCommandHandler<,>` and `ValidatedCommandHandler<,>` bases land. Spike provenance: `Product/spikes/archive/fsm-architecture.md` D10 + D11.
 
 Linked: [ADR-0007](Product/decisions/0007-five-validation-layers.md) — five validation layers principle. Refined by ADR-0010: the "authoritative" layer is the registered validator chain (typically game-shipped legality validators).
 

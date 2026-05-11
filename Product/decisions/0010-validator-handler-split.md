@@ -1,15 +1,15 @@
 ---
 type: adr
 status: accepted
-references: [features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, spikes/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
+references: [features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
 tags: [#adr, #actions, #engine, #validation, #handler, #pipeline]
 ---
 
 # ADR-0010 — Validator / handler split; `IHandlerContext` retired; framework intake validators
 
-Date: 2026-05-11 (drafted from `Product/spikes/fsm-architecture.md` D10–D11; sub-ADR B of the FSM-arch cascade following ADR-0009)
+Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D10–D11; sub-ADR B of the FSM-arch cascade following ADR-0009)
 Context-docs: `Product/features/actions/models/03-command-handler.md`, new Model `Product/features/actions/models/06-command-validator.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
-Proposal: `Product/spikes/fsm-architecture.md`
+Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 ## Context
 
@@ -21,7 +21,7 @@ Two related shapes were tied together on the pre-ADR-0010 surface:
 
 3. **The engine's intake gate was inline.** [ADR-0009](Product/decisions/0009-engine-as-fsm.md) added a two-layer intake gate inside `engine.Dispatch` — Layer 1 against `engine.Session`, Layer 2 against `MatchStateSlice.Current.Actions` — as a transitional shape. The cleaner expression of the same checks is registered framework validators (`SessionGate`, `MatchStateActionGate`) running through the validator pipeline alongside game-shipped ones. ADR-0009 explicitly flagged the conversion as ADR-0010's responsibility.
 
-The 2026-05-10 open-questions walk on `Product/spikes/fsm-architecture.md` settled the structural direction (D10–D11). This ADR ratifies it and cascades into the canonical Models.
+The 2026-05-10 open-questions walk on `Product/spikes/archive/fsm-architecture.md` settled the structural direction (D10–D11). This ADR ratifies it and cascades into the canonical Models.
 
 ## Options considered
 
@@ -186,7 +186,7 @@ The narrow `IEngineSession` capability (read-only view of `engine.Session`) is t
 ## Notes
 
 - **Sub-ADR cascade position.** This is sub-ADR B of the FSM-arch cascade (independent of ADR-0009; ADR-0011 — effect orchestration + dispatch + requests — and ADR-0012 — presentation per-state ViewModels — round it out). The structural separation of validator and handler is a precondition for ADR-0011's `Request<TResponse>` / `Response` siblings — the request-system validators (`TargetResponseValidator` etc.) rely on this surface.
-- **Spike provenance.** `Product/spikes/fsm-architecture.md` D10–D11 are the canonical source. Spike stays as canonical-pending until ADR-0011 and ADR-0012 land their Model cascades; then the spike archives as `superseded` referencing 0009–0012.
+- **Spike provenance.** `Product/spikes/archive/fsm-architecture.md` D10–D11 are the historical source. ADR-0011 and ADR-0012 have since landed; the spike was archived in the post-cascade consolidation PR (2026-05-11) as `superseded` referencing 0009 / 0010 / 0011 / 0012.
 - **`IHandlerContext` glossary entry.** Already listed in the GLOSSARY's "Retired terms" table (per the 2026-05-10 walk). This ADR's cascade removes the Model that documented it; the glossary entry's note now points here.
 - **Transitional handlers in existing Models.** A handful of Models include handler example code still using the `IHandlerContext` parameter shape — most notably `engine/07-match-state.md`'s `TransitionStateHandler` and `effects/04-command-awaiter.md`'s `RequestTargetHandler`. The transition-state handler's *behavior* is unchanged; only the registration shape moves to `GameCommandHandler<,>` base. The request-target handler is wholly superseded by the request-system pattern in ADR-0011 and carries a rework-pending banner.
 - **Validator registration ergonomics.** The framework ships `SessionGate` and `MatchStateActionGate` registered first; games append. Whether to expose a `[ValidatorOrder]` attribute or `services.AddValidatorBefore<...>` extension method for finer control is deferred until a real game stresses ordering.

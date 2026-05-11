@@ -1,15 +1,15 @@
 ---
 type: adr
 status: accepted
-references: [features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, spikes/fsm-architecture.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
+references: [features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, spikes/archive/fsm-architecture.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
 tags: [#adr, #effects, #engine, #dispatch, #requests, #fsm]
 ---
 
 # ADR-0011 — Effect orchestration; unified `Dispatch`; `PendingEffectsSlice`; async-coroutine effects; request system
 
-Date: 2026-05-11 (drafted from `Product/spikes/fsm-architecture.md` D13–D17; sub-ADR C of the FSM-arch cascade following ADR-0009 + ADR-0010)
+Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D13–D17; sub-ADR C of the FSM-arch cascade following ADR-0009 + ADR-0010)
 Context-docs: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, new Models `effects/05-pending-effects.md`, `effects/06-request-system.md`, `Product/features/actions/models/01-command-pipeline.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
-Proposal: `Product/spikes/fsm-architecture.md`
+Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 ## Context
 
@@ -21,7 +21,7 @@ After ADR-0009 (engine IS the FSM) and ADR-0010 (validator/handler split), five 
 4. **Dispatch surface for effects was action-only.** `scope.Dispatch(action)` took a `GameAction` and returned `Task<TResult>`; there was no canonical channel for an effect to dispatch a `GameSignal`, expand a `CompositeAction`, or — most critically — open a request and `await` the player's response. Decision routing went through `ICommandAwaiter` on `IHandlerContext` instead (the pattern documented in the now-retired `effects/04-command-awaiter.md`), which forced handler bodies to be async and player-input-aware (the opposite of what ADR-0010 made structural).
 5. **No state-linked request system.** Player decisions mid-effect (target picker, choose-one prompt, split-damage allocation) ran through `ICommandAwaiter` — type-only routing on the handler's await. That mechanism had no `RequestId`, no inspectable queue of open requests, no replay shape (a saved match couldn't be re-played by re-dispatching the recorded responses), no separation between "still asking" and "answered, awaiting consumer." It was the right primitive for the simpler shape but stopped scaling once requests started to compose (concurrent multi-actor decisions, replay determinism, network round-trips).
 
-The 2026-05-10 open-questions walk on `Product/spikes/fsm-architecture.md` settled the structural direction across D13–D17. This ADR ratifies all five locks and cascades them into the canonical Models.
+The 2026-05-10 open-questions walk on `Product/spikes/archive/fsm-architecture.md` settled the structural direction across D13–D17. This ADR ratifies all five locks and cascades them into the canonical Models.
 
 ## Options considered
 
@@ -204,7 +204,7 @@ Canonical Model at [`features/effects/models/06-request-system.md`](features/eff
 ## Notes
 
 - **Sub-ADR cascade position.** This is sub-ADR C of the FSM-arch cascade — structurally independent of ADR-0009 (engine as FSM) and ADR-0010 (validator/handler split); ADR-0012 (presentation per-state ViewModels) lands last and depends on ADR-0009 only. The validator chain from ADR-0010 is the dispatch-time gate for *every* command in the 5-sibling family, including `Request<TResponse>` and `Response`. The two ADRs (0010 + 0011) merge in either order; whichever lands second resolves conflicts in `actions/01-command-pipeline.md`, `effects/04-command-awaiter.md`, the feature roots, and the ledgers.
-- **Spike provenance.** `Product/spikes/fsm-architecture.md` D13–D17 is the canonical source for this ADR. The 2026-05-08 effect-pipeline spike — `Product/spikes/effect-pipeline.md` — is wholly superseded by this ADR's cascade; this PR archives it to `Product/spikes/archive/effect-pipeline.md`. The FSM-architecture spike itself stays canonical-pending until ADR-0012 lands its Model cascade.
+- **Spike provenance.** `Product/spikes/archive/fsm-architecture.md` D13–D17 is the historical source for this ADR. The 2026-05-08 effect-pipeline spike — archived in this ADR's PR to `Product/spikes/archive/effect-pipeline.md` — is wholly superseded. The FSM-architecture spike itself was archived in the post-cascade consolidation PR (2026-05-11) once ADR-0012 had landed its Model cascade.
 - **Effect-pipeline service shape.** The framework ships `InlineEffectPipeline` as the default `IEffectPipeline` — `Run(instance, scope)` resolves the `EffectDefinition` for `(Source, EffectId)` and invokes its `IEffect.Run(scope)`. Games may swap implementations in DI for stack-resolution timing, deferred batching, etc., but the *only call site* remains the engine's drain loop (per lock 1).
 - **`EffectDefinitionCatalog`.** Resolution from `(Source, EffectId)` to a runnable `IEffect` instance happens through an engine-plumbing `IEffectDefinitionCatalog` (Q5 of the 2026-05-08 spike survives). Per-card-bound effects live on `CardDefinition.Effects`; game-bound effects (world rules) live on a synthetic actor's effect list. Catalog shape is engine-internal; authoring vocabulary is `oq-effect-authoring`.
 - **Triggers continue working as today.** `Trigger<T>` / `ITriggerPipeline` / `OnBefore<T>` / `OnAfter<T>` are unchanged. Trigger reactions, when they need to fire effects, push to `PendingEffectsSlice` (same channel as cast handlers). The trigger pipeline's own internals — fold ordering, before-fold cancel/replace/modify — are out of scope for this ADR.

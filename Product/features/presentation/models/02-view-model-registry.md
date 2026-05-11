@@ -218,7 +218,7 @@ Same-type updates (a `MainPhaseState` updated with new hand contents, for exampl
 
 ## Decisions
 
-Linked: [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) — `ViewModelRegistry` maps state type → factory; presenter subscribes to `MatchStateSlice` and rebinds on type change. Spike provenance: `Product/spikes/fsm-architecture.md` D7.
+Linked: [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) — `ViewModelRegistry` maps state type → factory; presenter subscribes to `MatchStateSlice` and rebinds on type change. Spike provenance: `Product/spikes/archive/fsm-architecture.md` D7.
 
 Linked: [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — `MatchStateSlice` shape this registry binds against; same-type semantics from D6.
 

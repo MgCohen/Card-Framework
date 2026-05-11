@@ -1,15 +1,15 @@
 ---
 type: adr
 status: accepted
-references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, spikes/fsm-architecture.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, spikes/archive/fsm-architecture.md]
 tags: [#adr, #engine, #runtime, #fsm, #match-state, #session-lifecycle]
 ---
 
 # ADR-0009 — Engine as FSM; match state as Store slice; session lifecycle as engine field
 
-Date: 2026-05-10 (drafted from `Product/spikes/fsm-architecture.md` D1–D5 + D12 per the 2026-05-10 open-questions walk)
+Date: 2026-05-10 (drafted from `Product/spikes/archive/fsm-architecture.md` D1–D5 + D12 per the 2026-05-10 open-questions walk)
 Context-docs: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`, new Models `engine/07-match-state.md`, `engine/08-turn-flow.md`, `engine/09-state-based-actions.md`
-Proposal: `Product/spikes/fsm-architecture.md`
+Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 ## Context
 
@@ -26,7 +26,7 @@ Three problems compounded:
 2. **Available-actions production was indirect.** Runtime → `IAvailableActions` service → mutator → `AvailableActionsState` slice → gateway / presentation. The snapshot existed so the gateway could reject illegal commands. If the runtime owned the match state directly, the legal-command set could live on that state and the service / slice / wire-form `ActionTemplate` machinery would dissolve.
 3. **Session lifecycle is the wrong shape as a Store slice.** `EngineLifecycle.NotStarted/Started/Ended` is metadata *about* the engine — every networked game needs the same set (`Connecting`, `Reconnecting`, `Lobby`, `ShowingResults`). It must exist before any Store does (bootstrap chicken-and-egg). And no game rule reads it; it is framework infrastructure, not gameplay.
 
-The 2026-05-10 open-questions walk on `Product/spikes/fsm-architecture.md` settled the structural direction: the runtime is structurally a finite-state-machine evaluator, and the framework should adopt that shape directly.
+The 2026-05-10 open-questions walk on `Product/spikes/archive/fsm-architecture.md` settled the structural direction: the runtime is structurally a finite-state-machine evaluator, and the framework should adopt that shape directly.
 
 ## Options considered
 
@@ -124,7 +124,7 @@ Replaces / subsumes the `EngineLifecycle` enum and the `Lifecycle` field on `Eng
 
 ## Notes
 
-- **Spike status.** `Product/spikes/fsm-architecture.md` remains the source-of-truth provenance for this ADR (and ADRs 0010–0012). Archive the spike once all four ADRs land and their Model cascades complete.
+- **Spike status.** `Product/spikes/archive/fsm-architecture.md` is the historical provenance source for this ADR (and ADRs 0010–0012). All four sub-ADRs and their Model cascades have landed; the spike was archived in the post-cascade consolidation PR (2026-05-11).
 - **Sub-ADRs in the cascade.** ADR-0010 (validator / handler split), ADR-0011 (effect orchestration + dispatch + requests), ADR-0012 (presentation per-state ViewModels) each cascade their own piece of the FSM-arch spike. This ADR (0009) is structurally independent of 0010 and 0011; ADR-0012 depends on this one (per-state VMs reference `MatchState` shape).
 - **Hybrid session lifecycle.** The B+C hybrid is flagged but not pinned: framework provides typed `SessionState` + the `SessionChanged` event; host wires the orchestration appropriate to its environment. Pin when the first networked / multi-match host forces the question.
 - **Transition-handler shape.** `TransitionStateHandler` is framework-internal:
