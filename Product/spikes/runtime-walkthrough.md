@@ -6,7 +6,38 @@ tags: [#spike, #runtime, #lifecycle, #walkthrough]
 
 # Runtime Walkthrough — End-to-End Game Lifecycle Spike
 
-> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`, designed to surface gaps in the locked architecture. Uses a concrete "play a card, draw a card, sometimes target" running example. Not an official spec. Inline `⚠ Open` callouts mark unresolved interactions; collected at the end.
+> **Status: draft / exploratory · mid Q-walk (Q1–Q6 resolved 2026-05-11).** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`, designed to surface gaps in the locked architecture. Uses a concrete "play a card, draw a card, sometimes target" running example. Not an official spec.
+
+## Resolutions log (Q1–Q6 walked 2026-05-11)
+
+Six of sixteen Qs walked and locked in conversation. Inline body below retains pre-resolution narrative; this log carries the authoritative answers and points at the cascade artifacts where each lands.
+
+| Q | Resolution | Landed in |
+|---|---|---|
+| **Q1** — pre-match `MatchStateSlice` shape | Slice not seeded until `StartMatchHandler` runs (`Store.Has<MatchStateSlice>()` false pre-match). `MatchStateActionGate` is session-aware — skips in `NotStartedSession`, so absence is fine. Also locked: **action-gate triad** on `MatchState` — `Actions: IReadOnlyList<Type>` (whitelist) + `ActionsOpen: bool` (default `true`, "anything passes"). Authoring patterns: default open; `ActionsOpen = false` + populated `Actions` for whitelist; `ActionsOpen = false` + empty `Actions` for locked (resolving / animating). Also clarified: `SessionState` lives on `engine.Session` (a typed field on `GameEngine`), **not** a Store slice — spike's `EngineState.Session` references are doc errors. | Cascade target: `engine/07-match-state.md` (Actions+ActionsOpen), `engine/01-game-engine.md:218-234` (gates table refresh), `actions/06-command-validator.md` (`MatchStateActionGate` body), ADR-0010 amendment. |
+| **Q2** — does `StartMatchCommand` go through validator chain | **Yes.** Locked option (a). Already in `engine/01-game-engine.md:227-228` rejection table — `SessionGate` accepts it in `NotStartedSession`; `MatchStateActionGate` bypassed for lifecycle commands; game-shipped validators still apply. No new patch. | Already locked. |
+| **Q3** — setup-effect origin | Phantom gap. Locked design already covers it through **two existing mechanisms**: (a) `MatchState.EnterCommands` on the initial state fires when entered (per `engine/01-game-engine.md:268`); (b) `OnAfter<MatchStartedSignal>` triggers fire on the signal that `StartMatchHandler` emits. Deterministic setup actions → `EnterCommands`. Effect-flavored setup → `OnAfter<MatchStartedSignal>` trigger pushes a `SetupEffect` to `PendingEffectsSlice`. No new primitive needed. | Already covered. |
+| **Q4** — VM rebind timing during setup drain | Locked: **command-boundary batching.** Multiple mutations within a single command coalesce into one observable snapshot to subscribers — one command = one notification cycle. No engine quiescence — framework publishes at every command boundary; **presentation owns its own pacing** (VM-side transitions / awaits / animations). Per `Player1TurnVM` author: decide whether to show cinematic in-progress UI or hide affordances until expected state arrives. | Cascade target: `state/state.md` (command-boundary batching contract); `presentation/presentation.md` (pacing-is-VM-responsibility note). |
+| **Q5** — handler mutation granularity | Locked: **single semantic payload + fan-out mutators.** One payload per command (e.g. `PlayCardPayload`), N mutators register against it — each targeting a different slice (`ZoneContentsState`, `LastMoveState`, `OwnershipState`, …). `Store.Execute(payload)` fans out. Reactive-flavored, adding a slice that reacts = register one more mutator; handler unchanged. **`CompositeAction`** is the explicit alternative — for reusable, distinct mutation clusters; runs **inline** within parent scope. Per-slice payload lists via `ExecuteBatch` is **not** the canonical pattern. Spike Phase 3's `ExecuteBatch([MoveCardPayload, LastMovePayload])` framing is wrong-flavored; correct is `Execute(new PlayCardPayload(...))` with fan-out mutators. | Cascade target: `state/state.md` worked example; `actions/03-command-handler.md` authoring-pattern callout; spike Phase 3 narrative fix. |
+| **Q6** — trigger registration source + the broader orchestration question | **Locked as ADR-0013** (engine-driven pipeline orchestration; single `Dispatch` surface; `runtime.FilterTriggers` retires). Engine becomes the explicit orchestrator; the three pipelines (`actions`, `triggers`, `effects`) become single-concern services consumed by engine. `scope.Emit` / `scope.Execute` retire — `scope.Dispatch(GameCommand)` is the sole inside-scope entry. Trigger eligibility lives on `Trigger<T>.Validate`. One registration mechanism (`ITriggerSystem.OnBefore<T>` / `.OnAfter<T>`) used at game install and per-instance. Registry in-memory in `TriggerSystem` for v1. Full per-type routing table in ADR-0013. | **[ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md)** + cascade across 14 docs. |
+
+### Out of scope (deferred to implementation time)
+
+Three sub-questions tracked from the Q-walk for implementation:
+
+- Request / Response inheritance from `GameAction` (validators-by-default vs separate wiring) — decide at concrete-handler-author time.
+- Game-wide trigger eligibility predicates beyond `Trigger.Validate` — v1 is per-trigger only; centralize if scale forces it.
+- Trigger registry slice-resident — defer until slice-linked-services pattern formalizes.
+
+### Inline body notes
+
+Six callouts below (`⚠ Open Q1`–`Q6`) reflect the pre-resolution framing. Their resolutions live in this log. Q7–Q16 are unresolved and stand. Walk resumes from Q7 once ADR-0013 lands.
+
+Inline terminology / framing errors in the body (to be cleaned up after Q-walk completes):
+
+- Phase 1 + Phase 6 references to `EngineState.Session` — should read `engine.Session` (a typed field on `GameEngine`, not a Store slice).
+- Phase 3 handler line `ExecuteBatch([MoveCardPayload, LastMovePayload])` — should read `Execute(new PlayCardPayload(...))` with fan-out mutators.
+- Phase 3 + 4 sequence diagrams show `Triggers` participating as a peer of `Engine` and `Handler`; post-ADR-0013, the trigger fold is **invoked by Engine** (engine holds `ITriggerPipeline`). Diagrams stand as a conceptual depiction; the orchestrator is Engine.
 
 ## Why this exists
 
