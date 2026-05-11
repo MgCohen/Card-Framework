@@ -33,19 +33,19 @@ The framework's orchestrator. The engine owns the **`GameEngine` class** (drain 
                    engine.StartMatch() → dispatch StartMatchCommand
                               │
                               ▼
-       ┌──── Intake gates (framework) ───────────────────────────────┐
-       │  Layer 1: Session gate (NotStarted/InMatch/Ended)            │
-       │  Layer 2: MatchState.Current.Actions (valid command types)   │
+       ┌──── Framework validators (register first) ───────────────────┐
+       │  SessionGate        : engine.Session (NotStarted/InMatch/Ended) │
+       │  MatchStateActionGate: MatchStateSlice.Current.Actions (legal) │
        └──────────────────────────────────────────────────────────────┘
                               │
-   engine.Dispatch(action) ──▶ gates ──▶ pipeline.Validate ──▶ pending.Enqueue
+   engine.Dispatch(action) ──▶ pipeline.Validate (framework+game) ──▶ pending.Enqueue
                                                             │
                                                             ▼
                                                        Drain loop:
                                                        while (queue):
                                                          pipeline.Execute(action)
                                                            ├── before-fold (FilterTriggers + ITriggerPipeline)
-                                                           ├── handler.Handle (ctx.Store.Execute payloads)
+                                                           ├── handler.Handle (GameCommandHandler<,> with [Inject] Store)
                                                            ├── after-fold
                                                            └── envelope published
                                                          runtime.Evaluate(action, result) → MatchState
@@ -91,7 +91,7 @@ The feature has **eight Models**, organized as four concentric layers.
 
 **Match construction (Models 05–06):** match construction ([`05-game-factory.md`](features/engine/models/05-game-factory.md) — `IGameFactory`, `MatchSetup`, `IMatchBuilder`, the two-layer split between DI installation and per-match factory, container open-generic resolution for `GameRulesRuntime<TDefinition>`), and the `GameDefinition` bundle + factory walk ([`06-game-definition.md`](features/engine/models/06-game-definition.md) — bundle shape, `ISliceProvider`, layout blocks, the canonical six-step Build walk). The `GameEngine` lifecycle methods + intake gates + session lifecycle types (`SessionState` hierarchy, `StartMatchCommand`/`EndMatchCommand`, signals, `MatchOutcome`) all live in [`01-game-engine.md`](features/engine/models/01-game-engine.md); setup-command patterns and the disposal split between engine and host live in this feature root (§Match setup and §Disposal split below).
 
-**Archived (Model 04):** [`04-available-actions.md`](features/engine/archive/04-available-actions.md) — `IAvailableActions` service + `AvailableActionsState` slice. Superseded by `MatchState.Actions: IReadOnlyList<Type>` per [ADR-0009](Product/decisions/0009-engine-as-fsm.md). Presentation-side `ActionTemplate` wire-form and per-state UI projection reworked in [ADR-0012 — *forthcoming*].
+**Archived (Model 04):** [`04-available-actions.md`](features/engine/archive/04-available-actions.md) — `IAvailableActions` service + `AvailableActionsState` slice. Superseded by `MatchState.Actions: IReadOnlyList<Type>` per [ADR-0009](Product/decisions/0009-engine-as-fsm.md). Presentation-side `ActionTemplate` wire-form and per-state UI projection retired per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) — replaced by per-state `MatchStateViewModel<TState>` observables.
 
 The execution arc spans these:
 
@@ -220,14 +220,14 @@ New framework-owned slices land at their producing system's canonical home and a
 
 Cross-Model rules that hold across all eight Models and shape how downstream features must use the engine.
 
-- **Strict-FIFO command pipeline; framework-owned routing.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the queue is engine-private FIFO with no runtime customization. Effect-level orchestration (when each effect starts, batching/stacking) is a separate forthcoming surface ([ADR-0011 — *forthcoming*]) — it does NOT customize command routing.
+- **Strict-FIFO command pipeline; framework-owned routing.** Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the queue is engine-private FIFO with no runtime customization. Effect-level orchestration (when each effect starts, batching/stacking) is a separate surface — see [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — and does NOT customize command routing.
 - **Per-step `Evaluate`.** The engine calls `runtime.Evaluate` after every `GameAction`, not once at end of drain. `Evaluate` returns the new `MatchState`; the engine synthesizes `TransitionStateCommand` on type change.
 - **Engine IS the FSM.** Per ADR-0009. Transitions flow through the command pipeline via `TransitionStateCommand`. There is no out-of-pipeline path for state changes — every transition lands in history with a normal envelope.
 - **Runtime holds zero gameplay state.** Per [ADR-0002 (refreshed)](features/engine/models/03-game-rules-runtime.md). All gameplay memory lives as state slices in the Scaffold `Store`. The match's current state lives in `MatchStateSlice`, not on the runtime. Engine-internal plumbing (queue, drain flag) is NOT gameplay state — that's framework wiring.
 - **State pattern is canonical.** `GameState` is multiple typed `BaseState` slices in a Scaffold `Store`. Reads always go through `IStateScope.Get<TState>()`; writes always go through `Store.Execute(payload)` → registered `Mutator<TState, TPayload>`. No `state.Piles` field; no ad-hoc mutation. `MatchStateSlice` is the only slice the framework writes via `TransitionStateCommand`; other writes flow from game handlers.
 - **Framework-owned slices are auto-seeded; game-authored slices declared via `ISliceProvider`.** `MatchStateSlice`, `EngineState`, `HistoryState` install at `Build` from the framework. Game-singleton + per-spawn slices come from `GameDefinition.GetInitialSlices()` and `instance.GetInitialSlices()` (default delegates to `Definition.GetInitialSlices()`). `ISliceProvider` is parameterless; the factory keys at `instance.SelfRef`.
 - **Lifecycle transitions are commands.** `engine.StartMatch()` and `engine.FinishMatch(outcome)` dispatch `StartMatchCommand` / `EndMatchCommand`. Handlers emit signals (`MatchStartedSignal`/`MatchEndedSignal`) and flip `engine.Session` directly (the field is the source of truth). No direct state-slice writes from the public engine surface for session lifecycle — but match-state transitions go through `TransitionStateCommand` → `SetMatchStatePayload` → mutator.
-- **Two-layer intake gate is framework-owned.** `engine.Dispatch` consults `engine.Session` (Layer 1: NotStarted/InMatch/Ended admit different commands) and `MatchStateSlice.Current.Actions` (Layer 2: command type must appear, unless the list is empty or the command is a lifecycle/internal command). Both layers run before `pipeline.Validate`. Per [ADR-0010 — *forthcoming*] the gate moves to registered framework validators (`SessionGate`, `MatchStateActionGate`); until then the inline gate is the transitional shape. Per ADR-0006 there is no runtime-side intake hook.
+- **Two-layer intake gate is framework-owned, expressed as two registered validators.** Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), `SessionGate` consults `engine.Session` (Layer 1: `NotStartedSession` / `InMatchSession` / `EndedSession` admit different commands) and `MatchStateActionGate` consults `MatchStateSlice.Current.Actions` (Layer 2: command type must appear, unless the list is empty or the command is a lifecycle/internal command). Both register first in the validator chain by convention and run before any game-authored validator. Per ADR-0006 there is no runtime-side intake hook.
 - **Session lifecycle lives on `engine.Session`, not a slice.** Per ADR-0009 D12. `SessionState` is a typed sealed hierarchy. Subscribers use `SessionChanged` event or read the field. Match-FSM subscribers continue using `MatchStateSlice`.
 - **Two-layer DI split.** App-level VContainer registers behaviors (handlers, mutators, runtime, ITurnFlow, ISBAs, subsystems); per-match factory accepts only data (`GameDefinition`, actors, seed, overlays). `IGameFactory` is DI-resolved; caller code never sees `IContainerBuilder` / `IObjectResolver`.
 - **`GameDefinition` is the bundle.** Carries `Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, `GetInitialSlices()`. `MatchSetup` does not duplicate any of these — it carries the bundle plus per-match overlays.
@@ -250,15 +250,15 @@ Cross-Model rules that hold across all eight Models and shape how downstream fea
 - Container open-generic resolution for pairing `GameRulesDefinition` to `GameRulesRuntime<TDefinition>`.
 
 **Does not own:**
-- Command-pipeline mechanics (handler resolution, validate/execute, envelope shape, `IIntentMapper` / `IntentGateway`) → `actions/`
+- Command-pipeline mechanics (handler resolution, validate/execute, envelope shape) → `actions/`; per-state `MatchStateViewModel<TState>` + `IntentGateway` (the gesture-to-command translation that replaced the retired global `IIntentMapper`) → `presentation/` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)
 - Trigger fold mechanics (`Trigger<T>`, `OnBefore`/`OnAfter`, subscription, `ITriggerPipeline` ordering) → `triggers/`
-- Effect orchestration (`Effect`, `IEffectScope`, `ICommandAwaiter` — *rework pending under ADR-0011*, attachment-entity pattern) → `effects/`
+- Effect orchestration (`IEffect.Run(scope) : Task` async coroutines, `IEffectScope.Dispatch<TResult>(GameCommand)` single async surface, `PendingEffectsSlice` universal queue, `RequestsSlice` + `AnswersSlice` state-linked request system per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md); attachment-entity pattern) → `effects/`
 - Handler shape (`ICommandHandler<TCommand, TResult>`, `GameCommandHandler<,>` base, `ValidatedCommandHandler<,>` combined base) and validator chain (`ICommandValidator<TCommand>`, `CommandValidator<>` base, framework defaults `SessionGate` + `MatchStateActionGate`) → `actions/`
 - Entity bridge (`EntityState` slice, `InstanceWithSlices<TDef>` parent, modifier factory, `IEntityVariableStorage`) → `entities/`
 - Card-specific shape (`Card`, `CardDefinition`, `CardMapState`) → `cards/`
 - Zone-specific shape (`Zone`, `ZoneDefinition`, `ZoneContentsState`) → `zones/`
 - Player-specific shape (`Player`, `PlayerDefinition`, `PerPlayerZones`) → `players/`
-- Presentation (view bindings, animation handoff, per-state ViewModels per [ADR-0012 — *forthcoming*]) → `presentation/`
+- Presentation (view bindings, animation handoff, per-state ViewModels per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) → `presentation/`
 - Trigger ordering (the default `FifoPipeline`'s priority + stable tie-break, custom `ITriggerPipeline` implementations) → `triggers/`
 - Game-specific subsystems (`IStackSystem`, `IDeckSystem`, etc.) — game-side authoring, registered in the game's installer.
 
@@ -273,7 +273,7 @@ Cross-Model rules that hold across all eight Models and shape how downstream fea
 
 See `ledgers/OPEN-ITEMS.md` — engine-related questions:
 
-- `oq-effect-pipeline` — effect-level orchestration surface (when each effect starts, whether effects nest / batch / stack). Per ADR-0006 the customizable layer where game styles diverge; designed in [ADR-0011 — *forthcoming*].
+- `oq-effect-pipeline` — effect-level orchestration surface (when each effect starts, whether effects nest / batch / stack). Per ADR-0006 the customizable layer where game styles diverge; structural design now landed in [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md). Internals (authoring vocabulary, primitive set, graph vs free-form, recipe shape, definition catalog) remain open.
 - `oq-engine-builder` — service composition (where `IModifierFactory`, deterministic ref/id generators, per-kind registries are constructed, registered, exposed). Pin during the engine implementation pass.
 - `oq-gamerules-composition` — module composition contract for `GameRulesRuntime<T>` (provider/policy ordering, enable-disable, conflict resolution). Service surface supports it mechanically; pin when first composed-rules game forces it.
 - ~~**Validator pipeline migration**~~ — *Resolved 2026-05-11 per [ADR-0010](Product/decisions/0010-validator-handler-split.md).* The two-layer intake gate is now expressed as two registered framework-default validators (`SessionGate`, `MatchStateActionGate`); the inline gate is retired.
@@ -283,7 +283,7 @@ See `ledgers/OPEN-ITEMS.md` — engine-related questions:
 - **`EngineState` surface** — whether `IsRunning`/`CurrentCommand` are the right fields, or whether additional engine-internal state belongs here. Deferred to engine implementation pass.
 - **Empty-actors mode** — whether `MatchSetup.Actors` may be empty (purely simulation-driven games). Defer until a real game forces it.
 - **Networking-driven `IRandom`** — `MatchSetup.Seed` is currently `int`. When networking lands, `IRandom` (or richer determinism contract) replaces this slot.
-- **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await`, the awaiting effect is still alive. Per [ADR-0011 — *forthcoming*] the resolution path threads a `CancellationToken` through `IEffectScope.Dispatch`.
+- **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await`, the awaiting effect is still alive. Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) the resolution path threads a `CancellationToken` through `IEffectScope.Dispatch`. Tracked as `oq-effect-cancellation-on-match-end`.
 - **Multi-winner / team outcomes** — `MatchOutcome.Win` is single-actor. Add `TeamWin` (or similar) when a co-op / team game forces it.
 - `bl-actor-ownership-reverse-index` — `OwnershipState` is one-way today (`Reference → IActor`); reverse direction (`IActor → owned References`) deferred.
 - **Slice-level subscription teardown** — `SubscribeAllReferences<T>` / `SubscribeAny` lack symmetric `Unsubscribe` overloads.

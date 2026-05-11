@@ -253,7 +253,7 @@ Slices don't carry their own primary key. The factory keys per-instance slices e
 - Framework-vs-game tier split (auto-seeded framework slices, declared game-authored slices) → `state.md` §Slice tiers.
 - Catalog index of framework-owned slices → `state.md` §Slice tiers.
 - `ISliceProvider` contract (parameterless `GetInitialSlices()`) → `engine/06`.
-- Specific framework slice schemas (`AvailableActionsState`, `EngineState`, `HistoryState`) → their producing models.
+- Specific framework slice schemas (`MatchStateSlice`, `EngineState`, `HistoryState`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice`) → their producing models.
 - Per-entity variable storage (`IEntityVariableStorage`, the entity-side `Subscribe(key, …)` surface) → `entities/02`.
 - The `Store`'s low-level package internals (memory layout, dispatch implementation) → `com.scaffold.states` package documentation.
 
@@ -262,7 +262,7 @@ Slices don't carry their own primary key. The factory keys per-instance slices e
 *Mirrors the front-matter `references:` array in human-readable form.*
 
 - **Upstream:** Scaffold.State package (`com.scaffold.states` — see [`DOCS/scaffold.md`](../../../DOCS/scaffold.md) for how Scaffold packages are sourced and updated).
-- **Downstream:** every feature that reads or writes game state — `engine` (lifecycle, snapshot, factory), `actions` (history envelopes, command pipeline), `effects` (mutation discipline, handler context), `entities` (entity-bridge slices), `triggers`, `presentation`, and game authors.
+- **Downstream:** every feature that reads or writes game state — `engine` (lifecycle, FSM, factory), `actions` (history envelopes, command pipeline, `GameCommandHandler<,>` base reads via `[Inject] Store`), `effects` (mutation discipline, `IEffectScope` reads), `entities` (entity-bridge slices), `triggers`, `presentation`, and game authors.
 
 ## Open
 

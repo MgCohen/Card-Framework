@@ -105,7 +105,7 @@ public sealed record RequestsSlice(
 
 - **Framework-owned, auto-seeded** at `Build()` with `Open = ImmutableDictionary<RequestId, Request>.Empty`.
 - **Indexed by `RequestId`.** Multi-actor parallel requests (each player chooses simultaneously) are supported by the dictionary, but querying "any open request for actor X" is O(N) until a parallel actor-index slice surfaces (`oq-requests-actor-index`).
-- **The wire format clients see.** UI subscribes to `RequestsSlice`; renders pickers from `Open` entries; in request-mode, the active VM (per [ADR-0012 — *forthcoming*]) returns a `Response` from `Map(intent)`.
+- **The wire format clients see.** UI subscribes to `RequestsSlice`; renders pickers from `Open` entries; in request-mode, the active VM (per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) returns a `Response` from `Map(intent)`.
 - **Drain pauses on non-empty.** Per [`05-pending-effects.md`](features/effects/models/05-pending-effects.md), the default `Evaluate` body returns `Current` while `RequestsSlice.Open.Count > 0` — FSM does not transition; pending effects do not drain.
 
 ### `AnswersSlice` — "answered, awaiting consumer"
@@ -224,7 +224,7 @@ The `Dispatch` router (per [`features/actions/models/01-command-pipeline.md`](fe
 3. Client subscribed to RequestsSlice renders a picker showing only the validIds.
    Player taps a target.
 
-4. VM (in request-mode, per ADR-0012 — *forthcoming*) maps the gesture:
+4. VM (in request-mode, per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)) maps the gesture:
      return new TargetResponse(currentRequestId, chosenRef);
    The Response is dispatched into the engine.
 

@@ -21,9 +21,9 @@ Per [ADR-0010](decisions/0010-validator-handler-split.md), the "authoritative le
 
 | Pre-ADR-0010 layer | Post-ADR-0010 expression |
 |---|---|
-| Per-template eligibility (runtime) | Per-state `MatchState.Actions` (engine) — refined by [ADR-0009](decisions/0009-engine-as-fsm.md); UI-side projection per [ADR-0012 — *forthcoming*] |
-| `AffordanceMap` (presentation) | Per-state `MatchStateViewModel<TState>` affordances per [ADR-0012 — *forthcoming*] |
-| `IIntentMapper.Map` well-formedness (actions) | Per-VM `Map(intent)` per [ADR-0012 — *forthcoming*] (well-formedness role unchanged) |
+| Per-template eligibility (runtime) | Per-state `MatchState.Actions` (engine) — refined by [ADR-0009](decisions/0009-engine-as-fsm.md); UI-side projection per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) |
+| `AffordanceMap` (presentation) | Per-state `MatchStateViewModel<TState>` affordances per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) |
+| `IIntentMapper.Map` well-formedness (actions) | Per-VM `Map(intent)` per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) (well-formedness role unchanged) |
 | `handler.Validate` authoritative (actions) | Registered `ICommandValidator<TCommand>` chain (per [ADR-0010](decisions/0010-validator-handler-split.md)); authoritative role unchanged |
 | Engine lifecycle gate (framework, ADR-0006) | `SessionGate` validator (framework default in the chain) |
 | *(new)* — | `MatchStateActionGate` validator (framework default in the chain; cheap prophylactic type gate from ADR-0009's `MatchState.Actions`) |

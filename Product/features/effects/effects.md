@@ -42,7 +42,7 @@ Effects are not authored as `Task<Result>` returned from a handler — that woul
 
 ## Vocabulary
 
-**Feature-owned terms only.** Cross-feature terms used by this feature — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `ITriggerSystem`, `ITriggerPipeline`, `TriggerPhase` (defined in `triggers/`); `GameRulesRuntime`, `Evaluate`, `IAvailableActions`, `AvailableActionsSnapshot`, `Store`, `Mutator<TState, TPayload>`, `IStateScope`, `IStoreScope` (defined in `engine/`); `IntentMapper`, `PlayerIntent`, `IIntentMapper`, `CommandResult`, `HistoryEnvelope` (defined in `actions/`); `IModifierFactory`, `ActiveModifier`, `ModifierId`, `ModifierSource`, `IEntityVariableStorage`, `InstanceWithSlices<TDef>`, `EntityState` (defined in `entities/`); `Reference`, `Ref<T>`, `Card`, `Zone` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameCommand`, `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `ITriggerSystem`, `ITriggerPipeline`, `TriggerPhase` (defined in `triggers/`); `GameRulesRuntime`, `Evaluate`, `MatchState`, `MatchStateSlice`, `Store`, `Mutator<TState, TPayload>`, `IStateScope`, `IStoreScope` (defined in `engine/`); `CommandResult`, `HistoryEnvelope`, `ICommandValidator<TCommand>`, `GameCommandHandler<,>`, `ValidatedCommandHandler<,>` (defined in `actions/`); `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` (defined in `presentation/` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); `IModifierFactory`, `ActiveModifier`, `ModifierId`, `ModifierSource`, `IEntityVariableStorage`, `InstanceWithSlices<TDef>`, `EntityState` (defined in `entities/`); `Reference`, `Ref<T>`, `Card`, `Zone` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -148,9 +148,9 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 - Attachment-entity usage pattern (ongoing effects realized as entities) → `entities/`
 - `GameRulesRuntime.FilterTriggers` (availability policy) → `engine/`
 - Engine framework FIFO routing, drain → `engine/`
-- `IAvailableActions`, snapshot shape → `engine/`
+- `MatchState.Actions` (intake-legal command types), `MatchStateSlice`, `SessionState` hierarchy → `engine/`
 - Pipeline envelope, history entries → `actions/`
-- `IIntentMapper.Map` implementation → `actions/`
+- `MatchStateViewModel<TState>.Map(intent)` implementation → `presentation/`
 - `IModifierFactory` implementation → `entities/`
 - `store.Catalog` mechanism → `engine/`
 - Animation handoff, presentation-side async → `presentation/`
@@ -159,7 +159,7 @@ Cross-Model rules that hold across the four Models and shape how downstream feat
 
 *Mirrors the front-matter `references:` array in human-readable form (per §3).*
 
-- **Upstream:** `triggers/` (type hierarchy, `OnBefore`/`OnAfter`, `ITriggerPipeline`, fold mechanic), `actions/` (pipeline, envelope, `IIntentMapper`), `engine/` (`GameRulesRuntime`, `IAvailableActions`, evaluation loop, `Store`, `Mutator`), `entities/` (entity bridge, modifier factory, attachment-entity pattern via `InstanceWithSlices<TDef>`).
+- **Upstream:** `triggers/` (type hierarchy, `OnBefore`/`OnAfter`, `ITriggerPipeline`, fold mechanic), `actions/` (pipeline, envelope, validator chain, `GameCommandHandler<,>` base), `engine/` (`GameRulesRuntime`, `MatchStateSlice`, `MatchState.Actions`, evaluation loop, `Store`, `Mutator`), `entities/` (entity bridge, modifier factory, attachment-entity pattern via `InstanceWithSlices<TDef>`), `presentation/` (`PlayerIntent` ownership; per-state VM `Map`).
 - **Downstream:** game-side rules code (defines `Effect` subclasses, `AbilityDefinition`s, ongoing-effect attachments), `presentation/` (consumes `DecisionOpenedSignal` / `DecisionResolvedSignal` to render decision UI).
 
 ## Open

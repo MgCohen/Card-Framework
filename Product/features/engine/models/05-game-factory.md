@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/state/state.md, features/engine/models/06-game-definition.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/state/state.md, features/engine/models/06-game-definition.md, features/presentation/models/02-view-model-registry.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#engine, #factory, #bootstrap]
 ---
 
@@ -9,7 +9,7 @@ tags: [#engine, #factory, #bootstrap]
 
 ## What it is
 
-The match-construction layer. Building a `GameEngine` for a single match needs three separate inputs: **per-game behavior types** (handlers, mutators, `GameRulesRuntime<T>` implementations, `IIntentMapper`), **per-match data** (initial slice values, actor catalog, RNG seed, rules selection via `GameDefinition`), and **framework services** (`IStateScope`, `IAvailableActions`, `ICommandPipeline`). This Model defines a clean two-layer split between **DI installation** (the app-level VContainer installer registering every behavior type, one-time) and **match construction** (a per-match factory that takes only match-specific data). The factory is itself DI-resolved; caller code never sees `IContainerBuilder` / `IObjectResolver`.
+The match-construction layer. Building a `GameEngine` for a single match needs three separate inputs: **per-game behavior types** (handlers, mutators, `GameRulesRuntime<T>` implementations, registered `ICommandValidator<TCommand>` chain per [ADR-0010](Product/decisions/0010-validator-handler-split.md), and — for UI games — per-state `MatchStateViewModel<TState>` subclasses + `ViewModelRegistry` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)), **per-match data** (initial slice values, actor catalog, RNG seed, rules selection via `GameDefinition`), and **framework services** (`IStateScope`, `ICommandPipeline`, `IRequestService`). This Model defines a clean two-layer split between **DI installation** (the app-level VContainer installer registering every behavior type, one-time) and **match construction** (a per-match factory that takes only match-specific data). The factory is itself DI-resolved; caller code never sees `IContainerBuilder` / `IObjectResolver`.
 
 ```csharp
 public interface IGameFactory
@@ -20,13 +20,13 @@ public interface IGameFactory
 ```
 
 ```
-App-level installer (one-time):           Per-match factory (every match):
-  EngineInstaller — framework services      caller resolves IGameFactory
-  GameInstaller   — handlers, mutators,     factory.NewMatch().With...().Build()
-                    GameRulesRuntime<T>,    or factory.Create(MatchSetup)
-                    IIntentMapper, …                   │
-                                                       ▼
-                                              GameEngine in NotStarted
+App-level installer (one-time):                Per-match factory (every match):
+  EngineInstaller — framework services           caller resolves IGameFactory
+  GameInstaller   — handlers, mutators,          factory.NewMatch().With...().Build()
+                    GameRulesRuntime<T>,         or factory.Create(MatchSetup)
+                    validators (game-shipped),              │
+                    per-state ViewModels +                  ▼
+                    ViewModelRegistry, …            GameEngine with Session = NotStartedSession
 ```
 
 ## Contracts
@@ -41,7 +41,7 @@ App-level installer (one-time):           Per-match factory (every match):
 | `GameRulesDefinition` | Pure `[SerializeField]`-bearing data class (non-`UnityObject`) carrying authored config for a game-mode variant. Asset-friendly; replay/save/network-safe. Wrapped by a Unity-side asset (e.g. `GameRulesAsset : ScriptableObject`) for editor assignability. See [`engine/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md). |
 | `GameRulesRuntime<TDefinition>` | Stateful runtime class holding framework services, game-specific subsystems, and a typed `Definition`. Implements the contract methods. DI-resolved per match via container open-generic resolution. See [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md). |
 | `Player` | Framework-provided baseline `IActor` shape (entity-backed via `InstanceWithSlices<PlayerDefinition>`). Game-specific player data lives in game-authored slices keyed by `ActorId`. |
-| Per-game behavior | Handlers, mutators, `GameRules` implementations, `IIntentMapper` — same set every match; lives in the game's VContainer installer. |
+| Per-game behavior | Handlers, mutators, `GameRulesRuntime<T>` implementations, registered `ICommandValidator<TCommand>` chain, and (for UI games) per-state `MatchStateViewModel<TState>` subclasses + `ViewModelRegistry` — same set every match; lives in the game's VContainer installer. |
 | Per-match data | Initial slice values, actor catalog, rules selection (via `GameDefinition`), seed — varies every match; flows through the factory. |
 
 ### Two-layer split
@@ -49,8 +49,8 @@ App-level installer (one-time):           Per-match factory (every match):
 The framework commits to two distinct registration boundaries:
 
 **App-level VContainer installation (one-time, per app):**
-- Framework `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `ICommandPipeline`, `Store`, and `IGameFactory`. (Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `IIntakeQueue` — the command queue is engine-private FIFO.)
-- Game installer registers every `ICommandHandler<TCommand, TResult>`, every `Mutator<TState, TPayload>`, every `GameRulesRuntime<TDefinition>` implementation (closed-generic, e.g. `Register<GameRulesRuntime<MagicRulesDefinition>, MagicRulesRuntime>()`), `IIntentMapper`, any game-specific subsystems the runtime depends on (`IStackSystem`, `IDeckSystem`, …), and any other game services.
+- Framework `EngineInstaller` registers `IStateScope`, `ICommandPipeline`, `IRequestService` (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)), `Store`, the framework-default validators (`SessionGate`, `MatchStateActionGate` per [ADR-0010](Product/decisions/0010-validator-handler-split.md)), and `IGameFactory`. (Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), there is no `IIntakeQueue` — the command queue is engine-private FIFO. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), there is no `IAvailableActions` service — `MatchState.Actions` replaces it.)
+- Game installer registers every `ICommandHandler<TCommand, TResult>` (typically extending `GameCommandHandler<,>` or `ValidatedCommandHandler<,>`), every game-shipped `ICommandValidator<TCommand>`, every `Mutator<TState, TPayload>`, every `GameRulesRuntime<TDefinition>` implementation (closed-generic, e.g. `Register<GameRulesRuntime<MagicRulesDefinition>, MagicRulesRuntime>()`), the `ITurnFlow` and any `ISBA` implementations the runtime composes, each per-state `MatchStateViewModel<TState>` subclass + a `ViewModelRegistry` composed via `ViewModelRegistryBuilder` (for UI games; see [`presentation/02-view-model-registry.md`](features/presentation/models/02-view-model-registry.md)), any game-specific subsystems the runtime depends on (`IStackSystem`, `IDeckSystem`, …), and any other game services.
 
 **Per-match construction (every match):**
 - Caller resolves `IGameFactory` from the container.
@@ -69,10 +69,11 @@ The framework `EngineInstaller` registers every framework service the engine nee
 |---|---|---|
 | `Store` | Singleton (per match scope) | Canonical state container; owns slices and the catalog |
 | `IStateScope` | Resolves through `Store` | Read-only state surface |
-| `IAvailableActions` | Singleton | Snapshot service consumed by `GameRulesRuntime` |
 | `ICommandPipeline` | Singleton | Dispatch + before/after fold orchestration |
+| `IRequestService` | Singleton | Mediates `Request<TResponse>` / `Response` routing through `RequestsSlice` + `AnswersSlice` (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)) |
 | `IGameFactory` | Singleton | The factory itself |
-| Framework mutators for `EntityState`, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`, `EngineState`, `HistoryState`, `AvailableActionsState`, `LastMoveState` | Singleton, `AsImplementedInterfaces` | Bridge primitives + framework-owned slices |
+| `SessionGate`, `MatchStateActionGate` (framework default `ICommandValidator<GameCommand>`s) | Singleton, `AsImplementedInterfaces` | Two-layer intake gate per [ADR-0010](Product/decisions/0010-validator-handler-split.md) — registered first so they run before any game-shipped validator |
+| Framework mutators for `EntityState`, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`, `EngineState`, `HistoryState`, `MatchStateSlice`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice` | Singleton, `AsImplementedInterfaces` | Bridge primitives + framework-owned slices |
 | `IModifierFactory` | Singleton | Deterministic modifier-id allocator |
 
 Game installers **do not** register any of these. Doing so produces a `Build` validation error (duplicate registration).
@@ -82,8 +83,10 @@ Game installers **do not** register any of these. Doing so produces a `Build` va
 | Registration | Form | Purpose |
 |---|---|---|
 | `GameRulesRuntime<TDefinition>` for the game's definition type | `Register<GameRulesRuntime<TPileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient)` | The game-specific runtime brain |
+| `ITurnFlow` for the game | `Register<PileCounterTurnFlow>(Lifetime.Singleton).AsImplementedInterfaces()` | Successor knowledge for the FSM (per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)) |
 | One `Mutator<TState, TPayload>` per game-authored slice | `Register<PileCounterMutator>(Lifetime.Singleton).AsImplementedInterfaces()` | Each slice declared via `ISliceProvider` needs at least one mutator (warning, not error — see Validation below) |
-| One `ICommandHandler<TCommand, TResult>` per game-authored `GameAction` | `Register<TMoveCardHandler>(Lifetime.Singleton).AsImplementedInterfaces()` | Handler resolution at dispatch time |
+| One `ICommandHandler<TCommand, TResult>` per game-authored `GameAction` | `Register<MoveCardHandler>(Lifetime.Singleton).AsImplementedInterfaces()` | Handler resolution at dispatch time. Most handlers extend `GameCommandHandler<,>` (or `ValidatedCommandHandler<,>` when they also carry their validator) per [ADR-0010](Product/decisions/0010-validator-handler-split.md). |
+| Each `ICommandValidator<TCommand>` the game ships | `Register<MoveCardValidator>(Lifetime.Singleton).AsImplementedInterfaces()` | Game-shipped per-command legality; runs after the framework defaults in DI registration order per [ADR-0010](Product/decisions/0010-validator-handler-split.md) |
 
 `Build` throws an aggregate exception if any required registration is missing.
 
@@ -91,7 +94,8 @@ Game installers **do not** register any of these. Doing so produces a `Build` va
 
 | Registration | Purpose |
 |---|---|
-| `IIntentMapper` implementation | Required only if the game uses the gateway intent → action flow; pure-headless games may omit |
+| Per-state `MatchStateViewModel<TState>` subclasses + `ViewModelRegistry` (composed via `ViewModelRegistryBuilder`) | Required when the game ships UI; pure-headless games omit. Canonical Model: [`presentation/02-view-model-registry.md`](features/presentation/models/02-view-model-registry.md). |
+| `ISBA` implementations (cross-cutting state-driven overrides) | Required when the game has state-based-action checks (game-over, lethal damage cleanup, legend rule); omit if `GameRulesRuntime<T>.StateBasedActions` returns empty |
 | Game-specific subsystems (`IStackSystem`, `IDeckSystem`, `IPuzzleFactory`, …) | Whatever the runtime constructor declares as dependencies |
 | Per-actor / per-game services | Game's choice |
 
@@ -102,8 +106,8 @@ The factory resolves registrations in this order:
 1. `MatchSetup.Game.Rules` (a `GameRulesDefinition` instance) is registered into the per-match scope so the runtime constructor can take it as a typed parameter.
 2. `GameRulesRuntime<TDefinition>` resolved via container open-generic resolution: `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))`.
 3. `IEnumerable<Mutator>` collection-resolved; primes the `Store`.
-4. `ICommandPipeline` resolved (handlers resolve at dispatch time).
-5. `IIntentMapper` resolved when present.
+4. `ICommandPipeline` resolved (handlers + validators resolve at dispatch time).
+5. `ViewModelRegistry` resolved when present (UI games). Headless games omit; the engine boots without one.
 
 The factory itself never sees `IContainerBuilder` or `IObjectResolver` — those are owned by the host or app-level controller. The factory is constructor-injected by VContainer with the resolver it needs.
 
@@ -182,10 +186,10 @@ The factory operates **inside** a per-match DI scope opened by the host (or app-
 1. Registers the `MatchSetup.Game.Rules` definition instance into the surrounding scope (so the runtime constructor can take its typed `TDefinition` parameter).
 2. Resolves `GameRulesRuntime<TDefinition>` via container open-generic resolution — `container.Resolve(typeof(GameRulesRuntime<>).MakeGenericType(setup.Game.Rules.GetType()))` — picking up the definition, framework services, and any game-specific subsystems in one constructor call.
 3. Collection-resolves every `Mutator` from the container; primes the `Store`.
-4. Resolves `ICommandPipeline` (which resolves handlers from the container at dispatch time).
-5. Resolves `IIntentMapper` if the game registered one.
-6. Constructs the `Store` and walks the slice-installation pseudocode from [Game Definition §Build walk](features/engine/models/06-game-definition.md): framework slices auto-seeded, then per-spawn instances (zones, players) spawned from the layout blocks + overlays, then game-singletons from `GameDefinition.GetInitialSlices()`, then manual `MatchSetup.InitialSlices` overlay.
-7. Constructs the `GameEngine` with pipeline, runtime, store. The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine.md §Disposal split`](features/engine/engine.md)).
+4. Resolves `ICommandPipeline` (which resolves handlers + validators from the container at dispatch time).
+5. Resolves `ViewModelRegistry` if the game registered one (UI games only).
+6. Constructs the `Store` and walks the slice-installation pseudocode from [Game Definition §Build walk](features/engine/models/06-game-definition.md): framework slices auto-seeded (including `MatchStateSlice` from `ITurnFlow.Initial`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice`), then per-spawn instances (zones, players) spawned from the layout blocks + overlays, then game-singletons from `GameDefinition.GetInitialSlices()`, then manual `MatchSetup.InitialSlices` overlay.
+7. Constructs the `GameEngine` with pipeline, runtime, store, and sets `engine.Session = NotStartedSession` (per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)). The engine disposes the runtime instance on its own `Dispose`; the surrounding DI scope is owned and torn down by the host (see [`engine.md §Disposal split`](features/engine/engine.md)).
 
 The factory does not register behaviors itself — those came in via the installer. The factory only assembles them. The runtime is single-phase constructed: when its constructor returns, every dependency is bound; there is no separate `Initialize` hook.
 
@@ -208,7 +212,7 @@ The exception carries the full error list, not just the first.
 
 ### Engine state at return
 
-After `Build` returns, the `GameEngine` is in `EngineLifecycle.NotStarted` — framework slices are seeded (including `EngineState { Lifecycle: NotStarted, IsRunning: false, CurrentCommand: null }`), game-authored slices hold their initial values, and the lifecycle gate rejects any `Dispatch` that isn't `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to transition to `Started` and open the engine for normal play; that call internally dispatches `StartMatchCommand`, which emits `MatchStartedSignal` and flips the lifecycle. Match-specific setup (deal opening hands, advance to first phase) is *not* a factory or `StartMatch` parameter — it is the host's or runtime's responsibility, expressed as ordinary commands dispatched after `StartMatch`. See [`engine.md §Match setup`](features/engine/engine.md).
+After `Build` returns, `engine.Session` is `NotStartedSession` per [ADR-0009](Product/decisions/0009-engine-as-fsm.md) — framework slices are seeded (`EngineState`, `MatchStateSlice`, `HistoryState`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice`), game-authored slices hold their initial values, and the `SessionGate` validator (registered first in the chain per [ADR-0010](Product/decisions/0010-validator-handler-split.md)) rejects any `Dispatch` that isn't `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to transition `engine.Session` to `InMatchSession` and open the engine for normal play; that call internally dispatches `StartMatchCommand`, which emits `MatchStartedSignal` and flips the session field. Match-specific setup (deal opening hands, advance to first phase) is *not* a factory or `StartMatch` parameter — it is the host's or runtime's responsibility, expressed as ordinary commands dispatched after `StartMatch` (or as the initial `MatchState.EnterCommands` per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)). See [`engine.md §Match setup`](features/engine/engine.md).
 
 ### Mode-specific command vocabularies
 
@@ -217,13 +221,13 @@ The factory does not accept a per-match handler pool. Vocabulary differences bet
 ## Invariants
 
 1. **The factory is DI-resolved.** Callers never `new` a `GameFactory`; they ask the container for `IGameFactory`. VContainer never appears in the caller's match-construction code.
-2. **Per-game behaviors are installer-only.** Handlers, mutators, `GameRulesRuntime<TDefinition>` implementations, `IIntentMapper`, and game-specific subsystems are registered exactly once per app in the installer. The factory never accepts them as match parameters.
+2. **Per-game behaviors are installer-only.** Handlers, validators, mutators, `GameRulesRuntime<TDefinition>` implementations, `ITurnFlow` + `ISBA` implementations, per-state `MatchStateViewModel<TState>` subclasses + `ViewModelRegistry`, and game-specific subsystems are registered exactly once per app in the installer. The factory never accepts them as match parameters.
 3. **Per-match data is factory-only.** `GameDefinition`, actors, seed, and overlays enter through `MatchSetup` (or `IMatchBuilder`) on every match. They are never registered globally.
 4. **`GameDefinition` is the bundle.** It carries `Rules`, `SharedZones`, `CardCatalog`, `DefaultPlayerDefinition`, and `GetInitialSlices()`. `MatchSetup` does not duplicate any of these — it carries the bundle and the per-match overlays.
-5. **Framework slices are auto-seeded.** Game authors never include `AvailableActionsState`, `EngineState`, `HistoryState`, or any framework-owned slice in `GameDefinition.GetInitialSlices()` or `MatchSetup.InitialSlices`.
+5. **Framework slices are auto-seeded.** Game authors never include `EngineState`, `HistoryState`, `MatchStateSlice`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice`, or any framework-owned slice in `GameDefinition.GetInitialSlices()` or `MatchSetup.InitialSlices`.
 6. **Validation is collect-all.** `Build` reports every detected error in a single aggregate exception; it does not throw on the first issue.
-7. **Engine is in `NotStarted` at return.** No commands have been dispatched; no drain has run; the lifecycle gate rejects all `Dispatch` calls except `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to open the engine; match-specific setup is dispatched as ordinary commands after that.
-8. **Mode-specific command vocabularies are rules-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in `GameRulesRuntime` and the snapshot.
+7. **`engine.Session` is `NotStartedSession` at return.** No commands have been dispatched; no drain has run; the `SessionGate` framework-default validator rejects all `Dispatch` calls except `StartMatchCommand` / `EndMatchCommand`. The host calls `engine.StartMatch()` to flip `engine.Session` to `InMatchSession` and open the engine; match-specific setup is dispatched as ordinary commands after that (or fires from the initial `MatchState.EnterCommands` per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)).
+8. **Mode-specific command vocabularies are validator- and state-mediated.** The factory does not accept a per-match handler pool; vocabulary differences live in the registered `ICommandValidator<TCommand>` chain (per-command legality per [ADR-0010](Product/decisions/0010-validator-handler-split.md)) and `MatchState.Actions: IReadOnlyList<Type>` (per-state prophylactic type-gate per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)).
 9. **Single-phase runtime construction.** `GameRulesRuntime<TDefinition>` is fully constructed by the container in one shot — no two-phase Initialize. Definition + framework services + game subsystems all flow through the constructor.
 10. **Engine disposes its runtime instance.** `engine.Dispose` releases the runtime if it implements `IDisposable`. The per-match DI scope is owned and torn down by the host, not the engine — see [`engine.md §Disposal split`](features/engine/engine.md).
 11. **Build orders per-spawn first, singletons second.** Zones (from layout blocks + overlay) and players (from actors + definition overlay) spawn before game-singleton slices install. Singletons that need actor refs as data start with default/null values; setup commands populate them after `engine.StartMatch()`.
@@ -269,7 +273,8 @@ public sealed class PileCounterGameDefinition : GameDefinition
     public override IEnumerable<BaseState> GetInitialSlices()
     {
         yield return new LastMoveState(Move: null);
-        // Framework slices (AvailableActionsState, EngineState, HistoryState) auto-seeded.
+        // Framework slices auto-seeded: EngineState, HistoryState, MatchStateSlice
+        // (from ITurnFlow.Initial), PendingEffectsSlice, RequestsSlice, AnswersSlice.
         // Per-zone slices come from each PileDefinition.GetInitialSlices() at spawn.
     }
 }
@@ -282,11 +287,19 @@ public sealed class PileCounterInstaller : IInstaller
 {
     public void Install(IContainerBuilder builder)
     {
-        builder.Register<MoveCardHandler>          (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<PileCounterMutator>       (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<LastMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
+        // Handlers + validators (per ADR-0010).
+        builder.Register<MoveCardHandler>     (Lifetime.Singleton).AsImplementedInterfaces();   // extends ValidatedCommandHandler<MoveCardCommand, MoveCardResult>
+        builder.Register<PileCounterMutator>  (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<LastMoveMutator>     (Lifetime.Singleton).AsImplementedInterfaces();
+
+        // Runtime + FSM composition (per ADR-0009).
         builder.Register<GameRulesRuntime<PileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient);
-        builder.Register<PileCounterIntentMapper>  (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<PileCounterTurnFlow> (Lifetime.Singleton).AsImplementedInterfaces();   // ITurnFlow
+
+        // Per-state ViewModels + registry (per ADR-0012; see presentation/02).
+        builder.Register<PilePlayingViewModel>  (Lifetime.Transient);
+        builder.Register<PileGameOverViewModel> (Lifetime.Transient);
+        builder.Register<ViewModelRegistry>     (Lifetime.Singleton);   // composed via ViewModelRegistryBuilder; see presentation/02-view-model-registry.md
     }
 }
 ```
