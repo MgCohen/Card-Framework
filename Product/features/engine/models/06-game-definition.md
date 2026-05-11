@@ -114,7 +114,7 @@ Each overlay entry is a `(ZoneDefinition, owner)` pair. Owner is the `IActor` th
 ### Build walk
 
 ```text
-1. Auto-seed framework slices (AvailableActionsState, EngineState, HistoryState, …)
+1. Auto-seed framework slices (MatchStateSlice, EngineState, HistoryState, PendingEffectsSlice, RequestsSlice, AnswersSlice, …)
    — declared by per-feature Models, not enumerated here.
 
 2. Spawn per-spawn instances:

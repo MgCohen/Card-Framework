@@ -34,7 +34,7 @@ public interface ICommandHandler<TCommand, TResult>
 }
 ```
 
-Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`. Handler bodies are atomic from the player-input POV — no awaiting player decisions inside `Handle` (player decisions flow through the request system per [ADR-0011 — *forthcoming*]). The `Task<TResult>` return shape stays for two reasons: (a) effect orchestrators still `await scope.Dispatch(...)` against handler completion, and (b) framework-internal asynchronous work (transition handlers enqueueing follow-ups, for example) composes naturally on the same shape.
+Each `GameCommand` type has exactly one registered handler. Most handlers complete synchronously and return `Task.FromResult(...)`. Handler bodies are atomic from the player-input POV — no awaiting player decisions inside `Handle` (player decisions flow through the request system per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)). The `Task<TResult>` return shape stays for two reasons: (a) effect orchestrators still `await scope.Dispatch(...)` against handler completion, and (b) framework-internal asynchronous work (transition handlers enqueueing follow-ups, for example) composes naturally on the same shape.
 
 ### `GameCommandHandler<TCommand, TResult>` — the abstract base
 
@@ -123,7 +123,7 @@ Cancellation shape (flag on the base record vs. typed `CancelledResult` subtype)
 - **Handlers return typed `CommandResult` subtypes.** Effects branch on these.
 - **Handlers are the only layer that issues mutators.** Effects sequence commands; mutators write state; handlers bridge by calling `Store.Execute(payload)`.
 - **Handlers never dispatch other `GameAction`s.** Sequencing belongs to effects (per [`effects/01-effect.md`](features/effects/models/01-effect.md)).
-- **Handler bodies are atomic from the player-input POV.** No awaits on player decisions inside `Handle`. Player decisions are routed through the request system per [ADR-0011 — *forthcoming*].
+- **Handler bodies are atomic from the player-input POV.** No awaits on player decisions inside `Handle`. Player decisions are routed through the request system per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md).
 - **`Handle` returns `Task<TResult>`.** Synchronous handlers return `Task.FromResult(...)`; the framework-internal transition handler enqueues follow-ups inside `Handle` and still returns synchronously.
 - **`Store` access is via the base.** Handlers read `Store` through the property-injected `GameCommandHandler<,>` base; the retired `IHandlerContext` is no longer a parameter.
 
@@ -233,4 +233,4 @@ The validator chain gives one canonical *answer* to "is this command valid right
 
 - **Enables:** one canonical legality answer composed from multiple validators; framework defaults and game-shipped validators share one registry; reusable legality across commands.
 - **Constrains:** validators must be independent (no shared scratchpad); registration order matters and is convention by default.
-- **Cascade:** consumed by [`engine/01`](features/engine/models/01-game-engine.md) (intake gates are now registered validators); [`engine/03`](features/engine/models/03-game-rules-runtime.md) (rejection-paths refresh); [`presentation/01`](features/presentation/models/01-presentation-loop.md) (the per-state-VM presentation layer is the UI-side affordance gate; the framework-side legality is the validator chain).
+- **Cascade:** consumed by [`engine/01`](features/engine/models/01-game-engine.md) (intake gates are now registered validators); [`engine/03`](features/engine/models/03-game-rules-runtime.md) (rejection-paths refresh); [`presentation/01`](features/presentation/models/01-match-state-view-model.md) (the per-state-VM presentation layer is the UI-side affordance gate; the framework-side legality is the validator chain).

@@ -46,7 +46,7 @@ Per [ADR-0006 — two-pipeline architecture](Product/decisions/0006-two-pipeline
 
 ## Vocabulary
 
-**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `MatchState`, `MatchStateSlice`, `EngineLifecycle`, `EngineState` (defined in `engine/`); `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` (defined in `presentation/` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `GameAction`, `CompositeAction`, `GameSignal`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerFoldResult`, `TriggerPhase` (defined in `triggers/`); `IEffectScope`, `Effect`, `Mutator` (defined in `effects/`); `GameRulesRuntime`, `MatchState`, `MatchStateSlice`, `SessionState`, `EngineState` (defined in `engine/`); `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` (defined in `presentation/` per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)); `Card`, `CardRef`, `Zone`, `Reference`, `Ref<T>`, `IActor`, `ActorId` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
 
 | Term | Meaning |
 |---|---|
@@ -139,7 +139,7 @@ Cross-Model rules that hold across both Models and shape how downstream features
 - `MatchState.Actions` intake-gate surface and `MatchStateSlice` → `engine/`
 - `GameRulesRuntime` contract — `FilterTriggers` and `Evaluate` are owned by → `engine/`
 - `Mutator<TState, TPayload>` and `Store.Execute(payload)` mechanics → `engine/` (`state/state`)
-- Engine lifecycle gate, framework FIFO, drain loop → `engine/`
+- `SessionState` typed hierarchy on `engine.Session`, framework FIFO, drain loop → `engine/` (the lifecycle gate now lives as the `SessionGate` validator in the chain — see `06-command-validator.md`)
 - Card-specific shape, zone-specific shape → `cards/`, `zones/`
 - `PlayerIntent`, `IntentGateway`, `MatchStateViewModel<TState>`, `ViewModelRegistry` — moved to `presentation/` by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)
 - UI presentation and per-state UI projection → `presentation/`
@@ -148,8 +148,8 @@ Cross-Model rules that hold across both Models and shape how downstream features
 
 *Mirrors the front-matter `references:` array in human-readable form (per §3).*
 
-- **Upstream:** `entities/`, `zones/`, `triggers/` (type hierarchy hosting the pipeline), `engine/` (lifecycle gate, framework FIFO, `GameRulesRuntime` runtime), `effects/` (handler signature returns `Task<TResult>`; effects orchestrate via `scope.Dispatch`).
-- **Downstream:** `presentation/` (consumes `AvailableActionsSnapshot`, `HistoryEnvelope`, builds `AffordanceMap`).
+- **Upstream:** `entities/`, `zones/`, `triggers/` (type hierarchy hosting the pipeline), `engine/` (`SessionState` hierarchy, `MatchStateSlice`, framework FIFO, `GameRulesRuntime` runtime), `effects/` (handler signature returns `Task<TResult>`; effects orchestrate via `scope.Dispatch`).
+- **Downstream:** `presentation/` (consumes `MatchStateSlice` + `HistoryEnvelope` + `RequestsSlice`; per-state `MatchStateViewModel<TState>` projects affordances from those slices per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md)).
 
 ## Open
 
@@ -158,5 +158,4 @@ See `ledgers/OPEN-ITEMS.md`:
 - **`bl-interaction-feature`** — `interaction/` feature for the gesture-to-intent layer (the layer between presentation gestures and `PlayerIntent`). All intent vocabulary depends on it.
 - Scheduler models — broader scheduling design (interrupt injection, priority queues, MTG-stack semantics) lives in `engine/` + `effects/` per ADR-0006; affects this pipeline indirectly via the effect-level layer.
 - Rollback / rejection signaling to presentation — how rejected dispatches surface to UI (toast? state subscription? envelope entry?).
-- Mandatory `HistoryEnvelope` metadata — partially settled (`OriginCommandId`, `OriginIntent`, `Actor`, `SourceInstance`, `Result`, `Entries`); typed `HistoryEnvelope` record pin tracked under `engine/04`.
-- `PlayerChoice` shape under typed templates — may collapse to positional `IReadOnlyList<EntityId>` + `IReadOnlyDictionary<string, object>` parameters now that templates carry typed slot data. Pin when `IIntentMapper` is implemented.
+- Mandatory `HistoryEnvelope` metadata — partially settled (`OriginCommandId`, `OriginIntent`, `Actor`, `SourceInstance`, `Result`, `Entries`); typed `HistoryEnvelope` record pin tracked under [`04-history-envelope.md`](features/actions/models/04-history-envelope.md) and `oq-history-envelope`.

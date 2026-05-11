@@ -41,7 +41,7 @@ public abstract class MatchStateViewModel<TState> : ViewModel
 ```
 
 - **`Bind(state, scope)`** — called once when the FSM transitions *into* this state. The presenter resolves the typed `TState` via the `ViewModelRegistry`'s factory; the VM reads typed phase-specific fields directly (no cast). The `IStateScope` is the wider read-only state surface — the VM can read sibling slices (`HandState`, `ZoneContentsState`, `RequestsSlice`, etc.) to populate observables. Idempotent for testing.
-- **`Map(intent)`** — translates a `PlayerIntent` (game-defined typed gesture record) into a `GameCommand`. Most often returns a `GameAction`; in request-mode (a `Request<TResponse>` open for the VM's actor per [ADR-0011 — *forthcoming*]/landed via the request system), returns a `Response`. Throws `InvalidOperationException` for intent types the VM doesn't recognize in its current mode.
+- **`Map(intent)`** — translates a `PlayerIntent` (game-defined typed gesture record) into a `GameCommand`. Most often returns a `GameAction`; in request-mode (a `Request<TResponse>` open for the VM's actor per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)'s request system), returns a `Response`. Throws `InvalidOperationException` for intent types the VM doesn't recognize in its current mode.
 
 The framework provides the abstract base. Game authors derive concrete VMs typed to specific `MatchState` subtypes:
 
@@ -91,7 +91,7 @@ The pre-cascade `PlayerChoice` separate-data record retires — the choice is en
 
 ### Request-mode `Map`
 
-When `RequestsSlice.Open` (per [ADR-0011 — *forthcoming*]/landed; see [`features/effects/models/06-request-system.md`](features/effects/models/06-request-system.md)) has an open `Request<TResponse>` targeting the VM's actor, the same `Map` returns a `Response` instead of a normal `GameAction`. The `GameCommand` return type covers both — `Response` is one of the five `GameCommand` siblings per the request system.
+When `RequestsSlice.Open` (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md); see [`features/effects/models/06-request-system.md`](features/effects/models/06-request-system.md)) has an open `Request<TResponse>` targeting the VM's actor, the same `Map` returns a `Response` instead of a normal `GameAction`. The `GameCommand` return type covers both — `Response` is one of the five `GameCommand` siblings per the request system.
 
 ```csharp
 public override GameCommand Map(PlayerIntent intent)
@@ -168,7 +168,7 @@ Per [ADR-0007](Product/decisions/0007-five-validation-layers.md) (refined by ADR
 |---|---|---|
 | **Per-state VM affordance projection** | This Model (game-defined VM subclasses) | UI-side prophylactic — the VM doesn't surface affordances that would be illegal |
 | `Map(intent)` well-formedness | This Model | Throws / no-ops for intents the current mode doesn't recognize |
-| Framework intake gates (session, match-state-actions) | `actions/` validators (per ADR-0010 if landed) or `engine.Dispatch` inline (pre-merge) | Reject if engine not accepting or command not in `MatchState.Actions` |
+| Framework intake gates (session, match-state-actions) | `actions/` validators `SessionGate` + `MatchStateActionGate` (per [ADR-0010](Product/decisions/0010-validator-handler-split.md)) | Reject if engine not accepting or command not in `MatchState.Actions` |
 | Registered command validators (game-shipped legality) | `actions/` validators | Authoritative legality check at dispatch |
 | Before-fold `Cancel` (mid-execution) | `triggers/` | Effect-driven cancel after handler entry |
 

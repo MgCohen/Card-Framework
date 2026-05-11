@@ -352,7 +352,7 @@ Are stacks zones, relationships, or both?
 
 If multiple cards are in the same stack zone, the relationship is already represented by zone membership. The zone owns the organization that makes those members behave like a stack.
 
-### Q4 — Visibility (early framing; full mechanism in elevated ADR-0006)
+### Q4 — Visibility (early framing; full mechanism in elevated ADR-0008)
 
 How should hidden, partially visible, and viewer-specific state be modeled?
 
@@ -416,7 +416,7 @@ The chosen direction across Q1–Q8 produces a coherent shape:
 - **Responsibilities-not-traits** (Q1) keeps the model open for stacks, reward offers, shop rows, and other non-pile concepts without forcing them through a fixed boolean schema.
 - **Spatial out of scope** (Q2) avoids forcing every zone to understand layout; spatial-rules games add fields when concrete requirements arrive.
 - **Stacks-as-zones** (Q3) reuses zone membership for the relationship, with custom organization for ordering.
-- **Two visibility channels** (Q4) separates "something is there" from "I know what it is"; the runtime mechanism in ADR-0006 cuts data per actor without altering identity.
+- **Two visibility channels** (Q4) separates "something is there" from "I know what it is"; the runtime mechanism in [ADR-0008](decisions/0008-zone-visibility-model.md) cuts data per actor without altering identity.
 - **Movement is normal action flow** (Q5) keeps the action pipeline as the single approval/execution path; zones stay focused on organization.
 - **Generated choices deferred** (Q6) prevents mixing zone modeling with action/decision/reward/economy/presentation concerns.
 - **Zone-as-thin-handle on the entity bridge** (Q7) gives the polymorphic targeting benefit (zones and cards both addressable via `Reference`) without dragging in heavy modifier-stack expectations.

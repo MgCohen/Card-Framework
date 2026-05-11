@@ -11,7 +11,7 @@ tags: [#actions, #model, #validator]
 
 `ICommandValidator<TCommand>` is the per-command legality interface. Validators are independent — each receives only the command and answers a yes/no question against the store (read via DI on the abstract base). The pipeline resolves every registered validator for the command's runtime type, runs them in DI registration order, and short-circuits on the first rejection. Authoring a validator that is also a handler uses the combined `ValidatedCommandHandler<TCommand, TResult>` base.
 
-Validators are uniform across the entire `GameCommand` family — `GameAction`, `CompositeAction`, `GameSignal`, and (per ADR-0011 — *forthcoming*) `Request<TResponse>` and `Response`. The same registry, the same short-circuit semantics, the same registration-order rule. Framework defaults (`SessionGate`, `MatchStateActionGate`) register first; games append.
+Validators are uniform across the entire `GameCommand` family — `GameAction`, `CompositeAction`, `GameSignal`, and (per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)) `Request<TResponse>` and `Response`. The same registry, the same short-circuit semantics, the same registration-order rule. Framework defaults (`SessionGate`, `MatchStateActionGate`) register first; games append.
 
 ```text
 Dispatch(command)

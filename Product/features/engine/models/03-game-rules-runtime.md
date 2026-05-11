@@ -75,7 +75,7 @@ Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime
 | State mutators (consume payloads dispatched by handlers, write slices) | Per-payload | Scaffold `Mutator<TState, TPayload>` |
 | Per-state intent mapping | Game (presentation) | `MatchStateViewModel<TState>.Map` — [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) |
 | Match lifecycle (start, end, disposal) | Framework | `GameEngine` per [`engine/01`](features/engine/models/01-game-engine.md) (surface + gates + session lifecycle types) |
-| Effect-level orchestration (when each effect starts) | **Game** (forthcoming) | `GameRulesRuntime<T>` (separate design pass; tracked as `oq-effect-pipeline`; [ADR-0011 — *forthcoming*]) |
+| Effect-level orchestration (when each effect starts) | **Game** (internals) / **Framework** (structural surface) | Structural surface landed in [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) — async coroutines, `PendingEffectsSlice` queue, single async `Dispatch`. Internals (recipe shape, authoring vocab) remain open under `oq-effect-pipeline` and live on `GameRulesRuntime<T>`. |
 | Broader session lifecycle (lobby, matchmaking, reconnect) | Host (per ADR-0009 D12 hybrid future) | External controller wrapping `GameEngine`; framework provides `Session` + `SessionChanged` hooks |
 
 ### The interface
@@ -252,7 +252,7 @@ public override MatchState Evaluate(
 
 `Evaluate` is **not** the place to mutate state slots. State updates flow through state mutators reacting to commands. `Evaluate` reads state and decides what `MatchState` runs next; the engine handles transitions through `TransitionStateCommand`.
 
-**Custom orchestration.** Games that need to interleave their own logic between SBAs / ShouldExit / Flow override `Evaluate` directly. MTG-style stack-resolution timing, multi-step decision sequencing, etc. The base body is the *default composition*; overriding lets the runtime weave its own checks in. The drain-policy composition for [ADR-0011 — *forthcoming*] (pause if `RequestsSlice` is non-empty; drain `PendingEffectsSlice` if non-empty) is one such composition.
+**Custom orchestration.** Games that need to interleave their own logic between SBAs / ShouldExit / Flow override `Evaluate` directly. MTG-style stack-resolution timing, multi-step decision sequencing, etc. The base body is the *default composition*; overriding lets the runtime weave its own checks in. The drain-policy composition per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) (pause if `RequestsSlice` is non-empty; drain `PendingEffectsSlice` if non-empty) is one such composition.
 
 ### Where command routing lives (it's not here)
 
@@ -263,7 +263,7 @@ Earlier drafts of this contract included an `OnIncomingCommand` (a.k.a. `Route`)
 - **Match-state and session gating moved to the framework intake gate.** Framework checks `engine.Session` and `MatchStateSlice.Current.Actions` at `engine.Dispatch` and rejects ineligible dispatches uniformly. See [`engine/01 §Intake gates`](features/engine/models/01-game-engine.md).
 - **Game-flow legality lives in `pipeline.Validate`.** Per [ADR-0010](Product/decisions/0010-validator-handler-split.md), the registered validator chain (game-shipped `ICommandValidator<TCommand>` after the framework defaults) catches command-specific legality.
 
-The forthcoming effect-pipeline surface (ADR-0011) is where game-level scheduling decisions live. Until it lands, MTG-style stack semantics is expressible via game-state zones (the stack is a `ZoneContentsState`) plus `Evaluate` overrides watching that zone and returning custom `MatchState`s.
+The effect-pipeline surface ([ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md)) is where game-level scheduling decisions live. MTG-style stack semantics is expressible via game-state zones (the stack is a `ZoneContentsState`) plus `Evaluate` overrides watching that zone and returning custom `MatchState`s.
 
 ### Five rejection paths
 
@@ -310,7 +310,7 @@ Concrete anti-scope. If you're tempted to put one of these in `GameRulesRuntime`
 | Match-state structure (phase shape, transitions) | `ITurnFlow` ([`08-turn-flow.md`](features/engine/models/08-turn-flow.md)) + concrete `MatchState` subclasses ([`07-match-state.md`](features/engine/models/07-match-state.md)) |
 | Cross-cutting state-driven overrides (game-over, legend rule) | `ISBA` ([`09-state-based-actions.md`](features/engine/models/09-state-based-actions.md)) |
 
-The runtime is purely for **game-wide FSM evaluation during play**: which triggers are eligible to fire, what `MatchState` runs next given current state, and (forthcoming) effect-level orchestration. Any logic that belongs to a specific card, action, or ability lives on that card, action, or ability. Any structural turn knowledge lives in `ITurnFlow` and concrete `MatchState`s. Any cross-cutting state check lives in `ISBA`.
+The runtime is purely for **game-wide FSM evaluation during play**: which triggers are eligible to fire, what `MatchState` runs next given current state, and effect-level orchestration (structural surface per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md); recipe-shape internals open under `oq-effect-pipeline`). Any logic that belongs to a specific card, action, or ability lives on that card, action, or ability. Any structural turn knowledge lives in `ITurnFlow` and concrete `MatchState`s. Any cross-cutting state check lives in `ISBA`.
 
 The runtime may hold *configuration* — rule modules, lookup tables, cached evaluators that are deterministic functions of inputs — and the immutable `Definition` reference. It must *not* hold gameplay memory. Test: if you reset the engine and replay all commands against a fresh `GameState`, does the runtime produce identical outputs without any of its own state being touched? It should. If a private field on the runtime influences an `Evaluate` output, that field belongs in `GameState` instead.
 
@@ -419,7 +419,7 @@ The override weaves stack-resolution between SBAs and the default ShouldExit/Flo
 
 ## Open follow-ups
 
-- **Effect pipeline shape** — the substantive open design surface. How does the runtime express effect-level orchestration (when each effect starts, whether nesting / batching / stacking)? Per ADR-0006, separate from command routing. Tracked as `oq-effect-pipeline`; designed in [ADR-0011 — *forthcoming*].
+- **Effect pipeline internals** — structural surface landed in [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) (async coroutines, `PendingEffectsSlice` queue, single async `Dispatch`, request system). What lives *inside* an effect (authoring vocabulary, primitive set, graph vs free-form, recipe shape, definition catalog) remains open under `oq-effect-pipeline`. Per ADR-0006, this surface is separate from command routing.
 - **`GameState` slice catalog** — concrete catalog of slices the rule reads through `IStateScope`. Pin per-game; framework-shipped catalog stays minimal. See [`state/state.md`](features/state/state.md).
 - **`IHandlerRegistry` shape** — final shape (typed lookup, error semantics, registration) resolves with the action-pipeline doc.
 - **MTG SBA ordering** — if a future game needs MTG-strict ordering, decide whether to add a pre-after-fold evaluator hook or document the workaround (encode SBAs inside `Evaluate` and accept the post-after-fold timing). See Q3 below.
