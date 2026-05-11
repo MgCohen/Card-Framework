@@ -1,8 +1,8 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/01-command-pipeline.md, features/actions/models/06-command-validator.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/state/state.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
-tags: [#engine, #evaluation-loop, #orchestrator, #fsm]
+references: [features/actions/models/01-command-pipeline.md, features/actions/models/06-command-validator.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/state/state.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
+tags: [#engine, #evaluation-loop, #orchestrator, #fsm, #effects]
 ---
 
 # Game Engine — model
@@ -102,26 +102,51 @@ public sealed class GameEngine : IDisposable
         return true;
     }
 
-    private void Drain()
+    private async Task Drain()
     {
         running = true;
 
-        while (pending.Count > 0)
+        while (HasWork())
         {
-            var action = pending.Dequeue();
-            var result = pipeline.Execute(action);
+            // Phase 1 — drain the GameAction queue.
+            while (pending.Count > 0)
+            {
+                var action = pending.Dequeue();
+                var result = pipeline.Execute(action);
 
-            // Game-specific: given the state after this action, what is the new MatchState?
-            var newState = runtime.Evaluate(action, result);
-            var current  = store.Get<MatchStateSlice>().Current;
-            if (newState.GetType() != current.GetType())
-                pending.Enqueue(new TransitionStateCommand(newState) with {
-                    OriginCommandId = action.OriginCommandId
-                });
+                // Game-specific: given the state after this action, what is the new MatchState?
+                var newState = runtime.Evaluate(action, result);
+                var current  = store.Get<MatchStateSlice>().Current;
+                if (newState.GetType() != current.GetType())
+                    pending.Enqueue(new TransitionStateCommand(newState) with {
+                        OriginCommandId = action.OriginCommandId
+                    });
+            }
+
+            // Phase 2 — drain PendingEffectsSlice if drain-policy allows (per ADR-0011).
+            if (DrainPolicy.AllowsEffectDrain(store))
+            {
+                var pendingEffects = store.Get<PendingEffectsSlice>();
+                if (!pendingEffects.Pending.IsEmpty)
+                {
+                    var instance = pendingEffects.Pending[^1];                    // LIFO default
+                    store.Execute(new PopPendingEffectPayload());
+                    await effectPipeline.Run(instance, scope);                    // ← only call site
+                    continue;   // re-enter Phase 1: effects may have queued sub-commands or pushed siblings
+                }
+            }
+
+            // Steady state — nothing more to do this drain cycle.
+            break;
         }
 
         running = false;
     }
+
+    private bool HasWork()
+        => pending.Count > 0
+        || (DrainPolicy.AllowsEffectDrain(store)
+            && !store.Get<PendingEffectsSlice>().Pending.IsEmpty);
 
     // If Session is not EndedSession, dispatches EndMatchCommand(Aborted("Disposed")) so the
     // end signal lands in history. Then disposes the runtime if IDisposable. The per-match

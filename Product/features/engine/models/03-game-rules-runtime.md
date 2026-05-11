@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/triggers/models/01-trigger.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/02-game-rules-definition.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/triggers/models/01-trigger.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
 tags: [#engine, #gamerules, #runtime, #fsm]
 ---
 
@@ -29,10 +29,18 @@ public abstract class GameRulesRuntime<TDefinition>
         GameAction    justExecuted,
         CommandResult result)
     {
+        // SBAs preempt — cross-cutting overrides (game-over, legend rule, lethal damage).
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
         var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011:
+        //   • Pause on open requests (RequestsSlice non-empty).
+        //   • Stay stationary while pending effects exist; the engine will drain them.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;
@@ -51,7 +59,7 @@ The rules layer is the **game's decision layer**. The framework engine drives th
 
 It is **not** a place for command-specific legality, action handlers, ability logic, state mutation, or async work. See "Anti-scope" below for the explicit list.
 
-Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does **not** own command-queue routing — that's framework FIFO. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the FSM evaluator shape replaces the previous `Evaluate → IReadOnlyList<GameAction>` contract. Effect-level orchestration (when each effect starts, whether effects nest / batch / stack) is a forthcoming surface; tracked as `oq-effect-pipeline`, designed in [ADR-0011 — *forthcoming*].
+Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md), the runtime does **not** own command-queue routing — that's framework FIFO. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the FSM evaluator shape replaces the previous `Evaluate → IReadOnlyList<GameAction>` contract. Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md), effect-level orchestration runs through `PendingEffectsSlice` (the engine drains; cast handlers and triggers push) — the default `Evaluate` body composes SBAs preempt → request pause → pending-effect pause → `ShouldExit` + Flow. Games override `Evaluate` for custom drain timing (MTG-style stack resolution gating drain on priority pass).
 
 ### Position in the system
 
@@ -108,16 +116,22 @@ public abstract class GameRulesRuntime<TDefinition>
         GameAction    justExecuted,
         CommandResult result)
     {
+        // SBAs preempt — cross-cutting overrides (game-over, legend rule, lethal damage).
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
         var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011:
+        //   • Pause on open requests (RequestsSlice non-empty).
+        //   • Stay stationary while pending effects exist; the engine will drain them.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;
     }
-
-    // Effect-pipeline orchestration surface — separate design pass; tracked as oq-effect-pipeline.
 }
 ```
 
@@ -381,14 +395,19 @@ public sealed class StandardMagicRulesRuntime : GameRulesRuntime<StandardMagicRu
         foreach (var sba in StateBasedActions)
             if (sba.Check(State) is { } over) return over;
 
-        // Stack-resolution: if a card is on the stack and priority has been passed,
-        // resolve the top before advancing the FSM. The "stack" is a game-state zone
-        // plus a state slice tracking priority passes.
+        var current = State.Get<MatchStateSlice>().Current;
+
+        // Drain-policy composition per ADR-0011 — same guards the default body uses.
+        if (State.Get<RequestsSlice>().Open.Count > 0)         return current;
+        if (!State.Get<PendingEffectsSlice>().Pending.IsEmpty) return current;
+
+        // MTG-style stack-resolution timing: if priority has been passed twice
+        // and the stack has a resolvable instance, transition to ResolveStackTopState.
+        // (The "stack" is a game-state zone; priority tracking is a game-state slice.)
         if (_stack.HasResolvable(State))
             return new ResolveStackTopState(_stack.Top(State));
 
-        // Default: current.ShouldExit + Flow.NextAfter.
-        var current = State.Get<MatchStateSlice>().Current;
+        // Default tail: current.ShouldExit + Flow.NextAfter.
         return current.ShouldExit(justExecuted, result, State)
             ? Flow.NextAfter(current)
             : current;

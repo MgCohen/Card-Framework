@@ -1,12 +1,24 @@
 ---
 type: spike
-status: draft
-tags: [#spike, #effects, #effect-pipeline, #runtime, #scope]
+status: superseded
+superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md]
+archived_on: 2026-05-11
+reason: "Wholly superseded by ADR-0011. The 2026-05-08 design pass's Q1 unification verdict (cast handlers + trigger fold both calling `IEffectPipeline.RunEffect`) is rolled back; the surviving Q2–Q10 verdicts are absorbed into the canonical Models — async-coroutine effects (`IEffect.Run(scope)`), single async `Dispatch` surface for the 5-sibling `GameCommand` family, engine-only effect firing via `PendingEffectsSlice`, state-linked request system. No design surface remains here that isn't reflected in the canonical Models."
+tags: [#spike, #effects, #effect-pipeline, #runtime, #scope, #archived]
 ---
+
+> **Archived 2026-05-11.** Superseded by [ADR-0011](../decisions/0011-effect-orchestration-dispatch-requests.md) and the cascade it lands. The canonical homes for everything in this spike are:
+> - **Async-coroutine `IEffect.Run`** — [`features/effects/models/01-effect.md`](../features/effects/models/01-effect.md)
+> - **Single async `Dispatch` surface for the 5-sibling family** — [`features/effects/models/02-effect-scope.md`](../features/effects/models/02-effect-scope.md)
+> - **`PendingEffectsSlice` universal queue + drain policy** — [`features/effects/models/05-pending-effects.md`](../features/effects/models/05-pending-effects.md)
+> - **State-linked request system** — [`features/effects/models/06-request-system.md`](../features/effects/models/06-request-system.md)
+> - **Validator / handler split + `IHandlerContext` retirement** — [`features/actions/models/06-command-validator.md`](../features/actions/models/06-command-validator.md), [`features/actions/models/03-command-handler.md`](../features/actions/models/03-command-handler.md) (per [ADR-0010](../decisions/0010-validator-handler-split.md))
+>
+> The 2026-05-08 spike's Q1 unification verdict (cast handlers + trigger fold both calling `IEffectPipeline.RunEffect`) is rolled back by ADR-0011 lock 1; the surviving Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler) are absorbed into the canonical Models. Content below is preserved as historical record; treat the type sketches and flow diagrams as obsolete.
 
 # Effect Pipeline — Design Sketch
 
-> **⚠️ Partially superseded (2026-05-10).** Several design points here are overridden by [`fsm-architecture.md`](fsm-architecture.md) D13–D17 — most notably: cast handlers and the trigger fold no longer call `IEffectPipeline.RunEffect` directly (D13 layering rule); effects fire only via the engine draining `PendingEffectsSlice` (D15); effects are async coroutines with one `IEffect.Run(scope)` method (D16); `Dispatch` is a single async surface routing five `GameCommand` siblings including `Request<TResponse>` / `Response` (D14, D17); `ICommandAwaiter` is dead (replaced by request/response). This spike is pending a full rewrite to inherit those locks — tracked as `oq-effect-pipeline` in `OPEN-ITEMS.md`. Read for the locked Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler); the Q1 unification verdict (cast handlers + trigger fold both call `RunEffect`) is rolled back.
+> **⚠️ Partially superseded (2026-05-10).** Several design points here are overridden by [`fsm-architecture.md`](../fsm-architecture.md) D13–D17 — most notably: cast handlers and the trigger fold no longer call `IEffectPipeline.RunEffect` directly (D13 layering rule); effects fire only via the engine draining `PendingEffectsSlice` (D15); effects are async coroutines with one `IEffect.Run(scope)` method (D16); `Dispatch` is a single async surface routing five `GameCommand` siblings including `Request<TResponse>` / `Response` (D14, D17); `ICommandAwaiter` is dead (replaced by request/response). This spike is pending a full rewrite to inherit those locks — tracked as `oq-effect-pipeline` in `OPEN-ITEMS.md`. Read for the locked Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler); the Q1 unification verdict (cast handlers + trigger fold both call `RunEffect`) is rolled back.
 
 > **Status: draft / iterating.** Working sketch for the effect-pipeline shape. Captures the decisions from the effect-pipeline design pass (2026-05-07 session). **Self-contained** — readable standalone. **Not yet propagated to canonical Models** by design — Models stay frozen until this sketch settles. When iteration finishes, the resolution path is to create ADR-0007 and patch `effects/04`, `effects/01`, `triggers/01`, `engine/01`, `engine/02`, plus ledgers.
 
