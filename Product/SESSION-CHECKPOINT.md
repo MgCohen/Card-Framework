@@ -11,6 +11,8 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**ADR-0009 — Engine as FSM landed (2026-05-10).** First sub-ADR of the FSM-arch cascade per the agreed decomposition (4 sub-ADRs by axis: A engine-as-FSM, B validator/handler split, C effect orchestration + dispatch + requests, D presentation per-state VMs). [`decisions/0009-engine-as-fsm.md`](decisions/0009-engine-as-fsm.md) ratifies spike D1–D5 + D12: engine IS the FSM (`Evaluate → MatchState`); `MatchStateSlice` wraps polymorphic `MatchState`; states are data + `ShouldExit`; successor knowledge in `ITurnFlow.NextAfter`; cross-cutting overrides via `ISBA`; session lifecycle is typed sealed `SessionState` on `engine.Session` field. Cascade: three new Models (`engine/07-match-state`, `engine/08-turn-flow`, `engine/09-state-based-actions`); heavy patches to `engine/01-game-engine` (replaced `EngineLifecycle` enum with `SessionState` typed hierarchy; intake gate now two-layer — `Session` + `MatchState.Actions`; available-actions snapshot section removed; `EngineState.Lifecycle` field retired) and `engine/03-game-rules-runtime` (`Evaluate(action, result) → MatchState`; `Flow` + `StateBasedActions` abstract properties; default `Evaluate` body composes SBAs + ShouldExit + Flow; `IAvailableActions` removed from injected services; example Pile Counter runtime updated); `engine/04-available-actions` archived to `engine/archive/`; engine feature root rewritten (Composition 6→8, framework-slice catalog swaps `AvailableActionsState` for `MatchStateSlice`); FEATURE-MAP engine row 6→8 with archive note; cross-feature refs in `actions/05`, `presentation/01` get banners flagging upcoming ADR-0012 rework. Transitional shape: the two-layer intake gate stays inline in `engine.Dispatch` until ADR-0010 swaps it for registered framework validators. Spike `fsm-architecture.md` remains canonical-pending until all four sub-ADRs land.
+
 **FSM-architecture open-questions walk complete (2026-05-10).** Q-by-Q resolution of the deferred items in [`spikes/fsm-architecture.md`](spikes/fsm-architecture.md). Six structural locks landed (D12–D17 in the spike): session lifecycle as engine field (typed `SessionState`, not Store slice) with B+C hybrid (host orchestrates, engine hooks) flagged; validator pipeline policy (short-circuit / registration order / independent / state via DI; uniform across all `GameCommand` kinds); engine-only effect firing (rolls back 2026-05-08 Q1 cast-handler dispatch); `PendingEffectsSlice` as the universal effect queue (D-universal); effects as async coroutines (`IEffect.Run(scope) : Task`; no state-machine steps; save/load mid-effect not supported); `Request<TResponse>` / `Response` as state-linked service (`RequestsSlice` + `AnswersSlice` + `IRequestService`); single `Dispatch` surface on `IEffectScope` routing all five `GameCommand` siblings. Spike rewritten end-to-end. OPEN-ITEMS audit cascaded (5 closed, 4 added, 5 updated, 1 demoted to task — net -1 entry). GLOSSARY updated (21 additions; 9 retirements). **The big structural questions in `Engine + runtime` are settled** — remaining entries are deferred-with-trigger, small follow-ups, tasks, or authoring concerns. **Vertical-slice-ready.**
 
 **Engine reorg Phase A landed (2026-05-09).** Six-item audit list opened; first four (engine-side) cascaded as one move:
@@ -75,13 +77,19 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Vertical-slice-ready.** The structural design is settled across FSM, dispatch, effects, requests, lifecycle layering, and validators. The remaining work splits cleanly:
+**FSM-arch cascade in progress (1 of 4 sub-ADRs landed).** The structural design is settled across FSM, dispatch, effects, requests, lifecycle layering, and validators. Decomposed into 4 sub-ADRs by axis:
 
-- **ADR-0009 cascade** — promote [`spikes/fsm-architecture.md`](spikes/fsm-architecture.md) decisions to a project-wide ADR (`0009-engine-as-fsm-and-dispatch-unification.md`) and patch the canonical Models listed in the spike's "When this lands" section (engine/01, engine/03, engine/04, actions/01–05, effects/01–04, presentation/01, plus new Models for match-state, transition-pipeline, session-state, pending-effects, request-system, validator-handler-split, view-model-registry).
-- **Effect-pipeline spike rewrite** — inherit today's locks (D13–D17); resolve the residual Q1–Q10 verdicts from 2026-05-08 (Q1 cast-handler-fires-effect now rolled back per FSM-arch D13). Tracked as task-shaped `oq-effect-pipeline` in OPEN-ITEMS.
-- **First vertical-slice prototype** — build `PileCounterGameDefinition` against the settled domain model. Exercises every contract end-to-end; surfaces concrete drift before the canonical-Model cascade lands.
+- ✅ **ADR-0009 — Engine as FSM** (landed 2026-05-10). D1–D5 + D12. Engine Models 01 / 03 patched; 04 archived; new Models 07 / 08 / 09 added.
+- ⏳ **ADR-0010 — Validator / handler split.** D10–D11. Patches: `actions/03`, `effects/03` (retire `IHandlerContext`). New Model: validator. Swaps the inline intake gate for registered framework validators (`SessionGate`, `MatchStateActionGate`). Independent of 0009.
+- ⏳ **ADR-0011 — Effect orchestration + dispatch + requests.** D13–D17. Patches: `effects/01`, `effects/02`; retires `effects/04`. Adds `actions/01` `GameCommand` family expansion. New Models: pending-effects, request-system. Structurally independent of 0009.
+- ⏳ **ADR-0012 — Presentation per-state ViewModels.** D6–D9. Patches: `presentation/01`, `actions/02`, `actions/05`. New Model: viewmodel-registry. Depends on ADR-0009 (per-state VMs reference `MatchState`).
 
-Order is open. The ADR cascade is mechanical and removes drift between spike and Models. The vertical slice tests the locks under real game pressure. Either is the natural next thread; both can run in parallel.
+Other open threads:
+
+- **Effect-pipeline spike rewrite** — inherit FSM-arch locks; folds into ADR-0011 cascade. Tracked as task-shaped `oq-effect-pipeline` in OPEN-ITEMS.
+- **First vertical-slice prototype** — build `PileCounterGameDefinition` against the settled domain model. Can start in parallel; touchpoints with the cascade are localized to the four affected axes.
+
+Next natural thread: ADR-0010 (independent of 0009; can start immediately).
 
 ---
 

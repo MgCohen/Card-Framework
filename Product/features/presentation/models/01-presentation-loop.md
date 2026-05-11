@@ -1,9 +1,11 @@
 ---
 type: model
 status: settled
-references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/04-available-actions.md, features/engine/models/03-game-rules-runtime.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md]
+references: [features/actions/models/05-available-actions-snapshot.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/effects/models/01-effect.md, decisions/0007-five-validation-layers.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md]
 tags: [#presentation, #loop, #available-actions, #model]
 ---
+
+> **Rework pending.** Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the `IAvailableActions` service + `AvailableActionsState` slice are retired; valid command types live on `MatchState.Actions`. The `AffordanceMap` projection + global `IIntentMapper` described below are reworked as per-state polymorphic ViewModels (`MatchStateViewModel<TState>.Bind` + `Map`) under [ADR-0012 — *forthcoming*]. The content of this Model is preserved as-is until ADR-0012's cascade lands the per-state VM shape.
 
 # Presentation Loop — model
 
