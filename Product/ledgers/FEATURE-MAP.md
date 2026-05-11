@@ -99,12 +99,12 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/02-instance.md`](features/entities/models/02-instance.md) — *Instance* — settled, references: `entities/01`, `entities/03`, `entities/04`, `entities/05`, `cards/01`, `zones/01`, `players/01`, `engine/06`
 - [`models/03-variable.md`](features/entities/models/03-variable.md) — *Variable* — settled, references: `entities/01`, `entities/02`, `entities/04`
 - [`models/04-modifier.md`](features/entities/models/04-modifier.md) — *Modifier* — settled, references: `entities/01`, `entities/02`, `entities/03`, `entities/05`
-- [`models/05-attachment.md`](features/entities/models/05-attachment.md) — *Attachment* — settled, references: `entities/01`, `entities/02`, `entities/03`, `entities/04`, `effects/03`
+- [`models/05-attachment.md`](features/entities/models/05-attachment.md) — *Attachment* — settled, references: `entities/01`, `entities/02`, `entities/03`, `entities/04`, `actions/03`
 
 *Reorg 2026-05-09:* `01-definition-instance-model.md` + `02-runtime-surface.md` split per concept axis (definition / instance / variable / modifier / attachment). `ISliceProvider` now declared in `01-definition.md` (canonical home; engine/06 references it).
 
 ### `zones` (settled)
-- [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, references: `root`
+- [`models/01-zone-model.md`](features/zones/models/01-zone-model.md) — settled, references: `entities/02`, `cards/01`, `decisions/0008`
 
 ### `cards` (settled)
 - [`models/01-card-model.md`](features/cards/models/01-card-model.md) — settled, references: `entities/01`, `entities/02`, `zones/01`
@@ -112,7 +112,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 ### `actions` (settled)
 - [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — *Command Pipeline* — settled, references: `actions/03`, `actions/04`, `actions/06`, `triggers/01`, `effects/02`, `effects/05`, `effects/06`, `engine/03`, `engine/07`, `presentation/01`, `decisions/0006`, `decisions/0007`, `decisions/0010`, `decisions/0011`, `decisions/0012`
 - [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — *ICommandHandler* — settled, references: `actions/01`, `actions/04`, `actions/06`, `state`, `decisions/0007`, `decisions/0010`
-- [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — *HistoryEnvelope* — settled, references: `actions/01`, `actions/03`, `engine/04`
+- [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — *HistoryEnvelope* — settled, references: `actions/01`, `actions/03`, `state`
 - [`models/06-command-validator.md`](features/actions/models/06-command-validator.md) — *ICommandValidator* — settled, references: `actions/01`, `actions/03`, `engine/01`, `engine/07`, `state`, `decisions/0007`, `decisions/0010`
 - ~~[`models/02-intent-mapper.md`]~~ — **archived 2026-05-11** ([`archive/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md)) — global `IIntentMapper` retired per ADR-0012; replaced by per-state `MatchStateViewModel<TState>.Map` in `presentation/`
 - ~~[`models/05-available-actions-snapshot.md`]~~ — **archived 2026-05-11** ([`archive/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md)) — `AvailableActionsSnapshot` / `ActionTemplate` typed-descriptor wire form retired per ADR-0009 + ADR-0012; replaced by `MatchState.Actions` (intake gate) + per-state VM observables (rich projection)
@@ -125,7 +125,7 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 
 ### `effects` (settled)
 - [`models/01-effect.md`](features/effects/models/01-effect.md) — *IEffect* — settled, references: `triggers/01`, `actions/01`, `effects/02`, `effects/05`, `effects/06`, `engine/01`, `decisions/0011`
-- [`models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) — *IEffectScope* — settled, references: `effects/01`, `effects/05`, `effects/06`, `actions/01`, `actions/03`, `state`, `decisions/0011`
+- [`models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) — *IEffectScope* — settled, references: `effects/01`, `effects/05`, `effects/06`, `actions/01`, `state`, `decisions/0011`
 - [`models/05-pending-effects.md`](features/effects/models/05-pending-effects.md) — *PendingEffectsSlice* — settled, references: `effects/01`, `effects/02`, `effects/06`, `engine/01`, `engine/03`, `engine/07`, `state`, `decisions/0011`
 - [`models/06-request-system.md`](features/effects/models/06-request-system.md) — *Request system* — settled, references: `effects/01`, `effects/02`, `effects/05`, `actions/01`, `actions/06`, `engine/01`, `state`, `decisions/0011`, `decisions/0010`
 - ~~[`models/03-handler-context.md`]~~ — **archived 2026-05-11** ([`archive/03-handler-context.md`](features/effects/archive/03-handler-context.md)) — `IHandlerContext` retired per ADR-0010; replaced by `GameCommandHandler<TCommand, TResult>` base in `actions/03`
@@ -134,10 +134,10 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 *Reorg 2026-05-11 (ADR-0010 + ADR-0011 cascades):* `effects/03-handler-context.md` archived (`IHandlerContext` aggregator retired; handlers extend `GameCommandHandler<TCommand, TResult>` per `actions/03`). `effects/04-command-awaiter.md` archived (`ICommandAwaiter` retired; replaced by the state-linked request system per `effects/06`). New Models `05-pending-effects` (universal effect queue) and `06-request-system` (request/response routing) land. Heavy rewrites of `01-effect.md` (async-coroutine `IEffect.Run`) and `02-effect-scope.md` (single async `Dispatch<TResult>(GameCommand)` surface).
 
 ### `engine` (settled)
-- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/03`, `engine/07`, `engine/08`, `actions/01`, `effects/05`, `effects/06`, `state`, `decisions/0009`, `decisions/0011`
+- [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `actions/01`, `actions/06`, `engine/03`, `engine/07`, `engine/08`, `effects/05`, `effects/06`, `state`, `decisions/0009`, `decisions/0010`, `decisions/0011`
 - [`models/02-game-rules-definition.md`](features/engine/models/02-game-rules-definition.md) — *GameRulesDefinition* — settled, references: `engine/03`, `engine/05`, `engine/06`
-- [`models/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) — *GameRulesRuntime\<T\>* — settled, references: `engine/01`, `engine/02`, `engine/05`, `engine/06`, `engine/07`, `engine/08`, `engine/09`, `effects/05`, `effects/06`, `triggers/01`, `decisions/0009`, `decisions/0011`
-- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — settled, references: `engine/01`, `engine/03`, `engine/06`, `engine.md`
+- [`models/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md) — *GameRulesRuntime\<T\>* — settled, references: `engine/01`, `engine/02`, `engine/05`, `engine/06`, `engine/07`, `engine/08`, `engine/09`, `actions/03`, `actions/06`, `effects/05`, `effects/06`, `triggers/01`, `decisions/0009`, `decisions/0010`, `decisions/0011`
+- [`models/05-game-factory.md`](features/engine/models/05-game-factory.md) — *IGameFactory* — settled, references: `engine/01`, `engine/03`, `engine/06`, `presentation/02`, `state`, `decisions/0009`, `decisions/0010`, `decisions/0012`
 - [`models/06-game-definition.md`](features/engine/models/06-game-definition.md) — *GameDefinition* — settled, references: `engine/02`, `engine/05`, `state`, `zones/01`, `cards/01`, `players/01`, `entities/01`, `entities/02`
 - [`models/07-match-state.md`](features/engine/models/07-match-state.md) — *MatchState* — settled, references: `engine/01`, `engine/03`, `engine/08`, `engine/09`, `state`, `actions/01`, `decisions/0009`
 - [`models/08-turn-flow.md`](features/engine/models/08-turn-flow.md) — *ITurnFlow* — settled, references: `engine/03`, `engine/07`, `engine/09`, `decisions/0009`
