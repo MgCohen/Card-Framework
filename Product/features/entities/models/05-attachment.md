@@ -1,7 +1,7 @@
 ---
 type: model
 status: settled
-references: [features/entities/models/01-definition.md, features/entities/models/02-instance.md, features/entities/models/03-variable.md, features/entities/models/04-modifier.md, features/effects/models/03-handler-context.md]
+references: [features/entities/models/01-definition.md, features/entities/models/02-instance.md, features/entities/models/03-variable.md, features/entities/models/04-modifier.md, features/actions/models/03-command-handler.md]
 tags: [#entities, #attachment, #composition, #ongoing-effects, #model]
 ---
 
@@ -157,17 +157,22 @@ public sealed class SwordDefinition : EntityDefinition { /* ... */ }
 public sealed record EquipSwordCommand(Ref<Villager> Wearer, Ref<Sword> Sword) : GameAction;
 public sealed record EquipResult(int AttackBefore, int AttackAfter) : CommandResult;
 
-public sealed class EquipSwordHandler : ICommandHandler<EquipSwordCommand, EquipResult>
+public sealed class EquipSwordHandler
+    : GameCommandHandler<EquipSwordCommand, EquipResult>
 {
-    public Task<EquipResult> Handle(EquipSwordCommand cmd, IHandlerContext ctx)
+    private readonly IModifierFactory modifiers;
+    public EquipSwordHandler(IModifierFactory modifiers) { this.modifiers = modifiers; }
+
+    // Store comes from the GameCommandHandler<,> base via [Inject] (per ADR-0010).
+    public override Task<EquipResult> Handle(EquipSwordCommand cmd)
     {
-        var villager = ctx.Store.Catalog.Resolve(cmd.Wearer);
-        var sword    = ctx.Store.Catalog.Resolve(cmd.Sword);
+        var villager = Store.Catalog.Resolve(cmd.Wearer);
+        var sword    = Store.Catalog.Resolve(cmd.Sword);
 
         var before = villager.Storage.GetVariable<int>(Vars.Attack);   // 1 (definition default)
 
         // Build the +3 attack buff, sourced to the sword instance
-        var attackBuff = ctx.Modifiers.Create(
+        var attackBuff = modifiers.Create(
             Vars.Attack,
             new IntAddModifier { Amount = 3, Order = 100 },
             new ModifierSource(sword.SelfRef, 0));
@@ -184,17 +189,18 @@ public sealed class EquipSwordHandler : ICommandHandler<EquipSwordCommand, Equip
 public sealed record UnequipSwordCommand(Ref<Villager> Wearer, Ref<Sword> Sword) : GameAction;
 public sealed record UnequipResult(int AttackAfter) : CommandResult;
 
-public sealed class UnequipSwordHandler : ICommandHandler<UnequipSwordCommand, UnequipResult>
+public sealed class UnequipSwordHandler
+    : GameCommandHandler<UnequipSwordCommand, UnequipResult>
 {
-    public Task<UnequipResult> Handle(UnequipSwordCommand cmd, IHandlerContext ctx)
+    public override Task<UnequipResult> Handle(UnequipSwordCommand cmd)
     {
-        var villager = ctx.Store.Catalog.Resolve(cmd.Wearer);
+        var villager = Store.Catalog.Resolve(cmd.Wearer);
 
         // Sweep every modifier on the wearer that came from the sword
         villager.Storage.RemoveModifiersFromSource(new ModifierSource(cmd.Sword, 0));
 
         // Destroy the sword instance — slice unregistered, catalog entry cleared
-        ctx.Store.Destroy(cmd.Sword);
+        Store.Destroy(cmd.Sword);
 
         var after = villager.Storage.GetVariable<int>(Vars.Attack);    // 1 (back to definition default)
 
@@ -240,11 +246,12 @@ public sealed class ApplyDamageAmpEffect : Effect
     }
 }
 
-public sealed class ApplyDamageAmpHandler : ICommandHandler<ApplyDamageAmpAction, ApplyResult>
+public sealed class ApplyDamageAmpHandler
+    : GameCommandHandler<ApplyDamageAmpAction, ApplyResult>
 {
-    public Task<ApplyResult> Handle(ApplyDamageAmpAction cmd, IHandlerContext ctx)
+    public override Task<ApplyResult> Handle(ApplyDamageAmpAction cmd)
     {
-        var enemy = ctx.Store.Catalog.Resolve(cmd.Target);
+        var enemy = Store.Catalog.Resolve(cmd.Target);
         enemy.Storage.AddModifier(cmd.Modifier);
         return Task.FromResult(new ApplyResult(cmd.Target));
     }

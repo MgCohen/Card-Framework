@@ -45,8 +45,8 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: first vertical-slice game with pre-play targeting requirements (Magic-style auras, choose-cast-mode cards).
   References: `Product/spikes/fsm-architecture.md` § Deferred.
 
-- id: oq-validator-defaults | kind: question | **Framework-default validator set** — which validators ship as framework defaults: `MatchStateActionGate` (reject commands not in `current.Actions`) is canonical; a `SessionGate` analogue (reject dispatches outside an in-match session) is the other candidate. Plus registration-order convention crispness (framework defaults register first; document as convention or enforce). Q5d deferred from the 2026-05-10 open-questions walk.
-  References: `Product/spikes/fsm-architecture.md` D10, D12.
+- id: oq-validator-defaults | kind: question | **Framework-default validator set — registration-order crispness and additional defaults.** [ADR-0010](Product/decisions/0010-validator-handler-split.md) lands two framework defaults: `SessionGate` (rejects when `engine.Session` is not accepting commands) and `MatchStateActionGate` (rejects commands whose type isn't in `MatchStateSlice.Current.Actions`). Both register first by convention; games append. Still open: (a) whether the framework enforces ordering (e.g. via a `[ValidatorOrder]` attribute or `services.AddValidatorBefore<...>` extension) or leaves it as documented convention, and (b) whether a third framework-default validator joins them (candidates: a disposal guard, a re-entrancy guard).
+  References: `Product/decisions/0010-validator-handler-split.md`, `Product/features/actions/models/06-command-validator.md`, `Product/spikes/fsm-architecture.md` D10.
 
 - id: oq-effect-save-load | kind: defer | **Mid-effect save/load** — effects are async coroutines (per `Product/spikes/fsm-architecture.md` D16); a C# `Task` continuation isn't serializable. Save/load can happen at quiescent points (no effect's `Run` currently in flight). If a game later forces mid-effect save/load, would force state-machine effects — a separate spike.
   Trigger: first save/load consumer that needs mid-effect serialization.

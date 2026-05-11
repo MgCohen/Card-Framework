@@ -212,7 +212,7 @@ After `Build` returns, the `GameEngine` is in `EngineLifecycle.NotStarted` — f
 
 ### Mode-specific command vocabularies
 
-The factory does not accept a per-match handler pool. Vocabulary differences between game modes (Tutorial disabling certain commands, Sandbox enabling debug commands) are expressed in `handler.Validate` rejection (per-command legality) and in the available-actions snapshot (UI prophylactic). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md) the runtime no longer has an `OnIncomingCommand` hook; mode-specific vocabulary lives in handlers and the snapshot. Every match resolves the full installed handler catalog from the container.
+The factory does not accept a per-match handler pool. Vocabulary differences between game modes (Tutorial disabling certain commands, Sandbox enabling debug commands) are expressed in the registered `ICommandValidator<TCommand>` chain (per-command legality per [ADR-0010](Product/decisions/0010-validator-handler-split.md)) and in `MatchState.Actions` (the prophylactic type-only gate per [ADR-0009](Product/decisions/0009-engine-as-fsm.md)). Per [ADR-0006](Product/decisions/0006-two-pipeline-architecture.md) the runtime has no `OnIncomingCommand` hook; mode-specific vocabulary lives in validators and per-state `Actions`. Every match resolves the full installed handler and validator catalog from the container.
 
 ## Invariants
 
@@ -327,8 +327,8 @@ var engine = factory.Create(new MatchSetup
 
 ### Sub-decision — handler pool scoping
 
-- **Build-time scoped pool** — factory takes `WithCommandPool(...)`; pipeline rejects out-of-pool commands at intake. Rejected: duplicates `handler.Validate`'s authority over per-command legality; introduces a parallel filter that handlers and pool must agree on by convention.
-- **Install-time fixed pool** — chosen. Every match resolves the full installed handler catalog; mode-specific vocabularies are expressed in `handler.Validate` rejection and the available-actions snapshot.
+- **Build-time scoped pool** — factory takes `WithCommandPool(...)`; pipeline rejects out-of-pool commands at intake. Rejected: duplicates the validator chain's authority over per-command legality (per [ADR-0010](Product/decisions/0010-validator-handler-split.md)); introduces a parallel filter that validators and pool must agree on by convention.
+- **Install-time fixed pool** — chosen. Every match resolves the full installed handler and validator catalog; mode-specific vocabularies are expressed in the registered validator chain and in `MatchState.Actions`.
 
 ### Sub-decision — rules selection form
 

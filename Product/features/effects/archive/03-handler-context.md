@@ -1,9 +1,14 @@
 ---
 type: model
-status: settled
+status: superseded
+superseded_by: [decisions/0010-validator-handler-split.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md]
+archived_on: 2026-05-11
+reason: "`IHandlerContext` aggregator retired by ADR-0010. `Store` moves to property injection on the `GameCommandHandler<,>` base; `Modifiers` becomes per-handler constructor injection; `Actions` was already retired by ADR-0009 (the `IAvailableActions` snapshot writer is gone); `Resolver` (the `ICommandAwaiter` decision-await mechanism) is retired by ADR-0011 in favor of the request system. No remaining caller."
 references: [features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/actions/models/03-command-handler.md, features/state/state.md, features/entities/models/02-instance.md]
-tags: [#effects, #model, #handler-context]
+tags: [#effects, #model, #handler-context, #archived]
 ---
+
+> **Archived 2026-05-11.** Superseded by [ADR-0010](Product/decisions/0010-validator-handler-split.md). `IHandlerContext` is gone; handlers inherit from `GameCommandHandler<TCommand, TResult>` (property-injected `Store`) and constructor-inject any additional services. The canonical home for the new handler shape is [`features/actions/models/03-command-handler.md`](features/actions/models/03-command-handler.md); validation lives separately in [`features/actions/models/06-command-validator.md`](features/actions/models/06-command-validator.md). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
 
 # Handler Context — model
 

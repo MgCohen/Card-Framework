@@ -1,9 +1,11 @@
 ---
 type: model
 status: settled
-references: [features/effects/models/01-effect.md, features/effects/models/03-handler-context.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/engine/models/01-game-engine.md]
+references: [features/effects/models/01-effect.md, features/actions/models/02-intent-mapper.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/engine/models/01-game-engine.md]
 tags: [#effects, #model, #awaiter, #decisions]
 ---
+
+> **Rework pending.** This Model is superseded by [ADR-0011 — *forthcoming*] (effect orchestration + dispatch + requests). `ICommandAwaiter` retires entirely in favor of the request system (`Request<TResponse>` / `Response` / `RequestsSlice` / `AnswersSlice` / `IRequestService`); handler bodies become atomic from the player-input POV, and player decisions are routed through `await scope.Dispatch(request)` from effects. The `IHandlerContext` references throughout this Model are also stale — per [ADR-0010](Product/decisions/0010-validator-handler-split.md) the aggregator is gone (archived at `Product/features/effects/archive/03-handler-context.md`). Content here is preserved as the pre-cascade shape; for the post-cascade picture see ADR-0011 when it lands.
 
 # Command Awaiter — model
 
@@ -43,7 +45,7 @@ public interface ICommandAwaiter
 - **`Wait<TCommand>(ct)`** — registers a closure-captured `cmd is TCommand` predicate backed by a `TaskCompletionSource<TCommand>`. Returns the `Task`. Used by decision handlers to pause until a matching command arrives. Single-open per type-hierarchy is a runtime assert.
 - **`TryResolve(cmd)`** — pattern-matches `cmd` against every registered predicate. On a match, completes the associated TCS with the concrete command; returns `true`. Returns `false` if no predicate matches (the engine falls through to the normal pipeline). Called by the engine's pre-pipeline check on every `Dispatch`.
 
-The awaiter is exposed on `IHandlerContext` (per [`03-handler-context.md`](features/effects/models/03-handler-context.md)). Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
+The awaiter was exposed on the (now retired) `IHandlerContext` — see the archived Model at [`archive/03-handler-context.md`](features/effects/archive/03-handler-context.md). Decision handlers called `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`. This whole arrangement is replaced by the request system per ADR-0011 (see the rework-pending banner at the top).
 
 ### Decision routing — type-only
 

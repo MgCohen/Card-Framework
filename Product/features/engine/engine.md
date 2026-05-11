@@ -55,7 +55,7 @@ The framework's orchestrator. The engine owns the **`GameEngine` class** (drain 
 
 ## Vocabulary
 
-**Feature-owned terms only.** Cross-feature terms used by this feature — `Store`, `BaseState`, `IStateScope`, `Mutator<TState, TPayload>`, `StateChangeEvent` (defined in `state/`); `GameAction`, `GameSignal`, `CompositeAction`, `GameCommand`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerPhase`, `ITriggerPipeline` (defined in `triggers/`); `IEffectScope`, `IHandlerContext`, `Effect`, `ICommandPipeline`, `ICommandHandler`, `PlayerIntent`, `HistoryEnvelope`, `CommandResult` (defined in `effects/` / `actions/`); `Reference`, `Ref<T>`, `IActor`, `ActorId`, `Card`, `Zone`, `Player`, `CardDefinition`, `ZoneDefinition`, `PlayerDefinition`, `InstanceWithSlices<TDef>`, `DefinitionWithSlices`, `IModifierFactory`, `ZoneContentsState`, `CardMapState`, `OwnershipState`, `EntityState` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate.
+**Feature-owned terms only.** Cross-feature terms used by this feature — `Store`, `BaseState`, `IStateScope`, `Mutator<TState, TPayload>`, `StateChangeEvent` (defined in `state/`); `GameAction`, `GameSignal`, `CompositeAction`, `GameCommand`, `Trigger<T>`, `OnBefore`/`OnAfter`, `TriggerMatch`, `TriggerPhase`, `ITriggerPipeline` (defined in `triggers/`); `IEffectScope`, `Effect`, `ICommandPipeline`, `ICommandHandler`, `ICommandValidator`, `GameCommandHandler<,>`, `CommandValidator<>`, `SessionGate`, `MatchStateActionGate`, `PlayerIntent`, `HistoryEnvelope`, `CommandResult` (defined in `effects/` / `actions/`); `Reference`, `Ref<T>`, `IActor`, `ActorId`, `Card`, `Zone`, `Player`, `CardDefinition`, `ZoneDefinition`, `PlayerDefinition`, `InstanceWithSlices<TDef>`, `DefinitionWithSlices`, `IModifierFactory`, `ZoneContentsState`, `CardMapState`, `OwnershipState`, `EntityState` — live in their owning features or `Product/ledgers/GLOSSARY.md`; link to their canonical home, don't restate. Retired terms (`IHandlerContext`, `IAvailableActions`, `EngineLifecycle`) live in `GLOSSARY.md` §Retired terms.
 
 | Term | Meaning |
 |---|---|
@@ -252,7 +252,8 @@ Cross-Model rules that hold across all eight Models and shape how downstream fea
 **Does not own:**
 - Command-pipeline mechanics (handler resolution, validate/execute, envelope shape, `IIntentMapper` / `IntentGateway`) → `actions/`
 - Trigger fold mechanics (`Trigger<T>`, `OnBefore`/`OnAfter`, subscription, `ITriggerPipeline` ordering) → `triggers/`
-- Effect orchestration (`Effect`, `IEffectScope`, `IHandlerContext`, `ICommandAwaiter`, attachment-entity pattern) → `effects/`
+- Effect orchestration (`Effect`, `IEffectScope`, `ICommandAwaiter` — *rework pending under ADR-0011*, attachment-entity pattern) → `effects/`
+- Handler shape (`ICommandHandler<TCommand, TResult>`, `GameCommandHandler<,>` base, `ValidatedCommandHandler<,>` combined base) and validator chain (`ICommandValidator<TCommand>`, `CommandValidator<>` base, framework defaults `SessionGate` + `MatchStateActionGate`) → `actions/`
 - Entity bridge (`EntityState` slice, `InstanceWithSlices<TDef>` parent, modifier factory, `IEntityVariableStorage`) → `entities/`
 - Card-specific shape (`Card`, `CardDefinition`, `CardMapState`) → `cards/`
 - Zone-specific shape (`Zone`, `ZoneDefinition`, `ZoneContentsState`) → `zones/`
@@ -275,14 +276,14 @@ See `ledgers/OPEN-ITEMS.md` — engine-related questions:
 - `oq-effect-pipeline` — effect-level orchestration surface (when each effect starts, whether effects nest / batch / stack). Per ADR-0006 the customizable layer where game styles diverge; designed in [ADR-0011 — *forthcoming*].
 - `oq-engine-builder` — service composition (where `IModifierFactory`, deterministic ref/id generators, per-kind registries are constructed, registered, exposed). Pin during the engine implementation pass.
 - `oq-gamerules-composition` — module composition contract for `GameRulesRuntime<T>` (provider/policy ordering, enable-disable, conflict resolution). Service surface supports it mechanically; pin when first composed-rules game forces it.
-- **Validator pipeline migration ([ADR-0010 — *forthcoming*]).** The two-layer intake gate moves from inline `Dispatch` code to registered framework validators (`SessionGate`, `MatchStateActionGate`). Until then the inline gate is the transitional shape.
+- ~~**Validator pipeline migration**~~ — *Resolved 2026-05-11 per [ADR-0010](Product/decisions/0010-validator-handler-split.md).* The two-layer intake gate is now expressed as two registered framework-default validators (`SessionGate`, `MatchStateActionGate`); the inline gate is retired.
 - **Hybrid session lifecycle.** Per ADR-0009 D12, the long-term shape splits session orchestration between host and engine. The `Session` property + `SessionChanged` event are the framework hooks; how host code composes lobby / matchmaking / reconnect against them is host-shaped, not framework-shaped. Pin when networking lands.
 - **MTG SBA ordering** — the framework's evaluation loop diverges from MTG-strict state-based-action ordering by design. If a future game needs MTG semantics, decide whether to add a pre-after-fold evaluator hook or document the workaround. Re-open trigger: first game forcing the issue.
 - **`HistoryEnvelope` typed definition** — concrete C# record (fields: `envelopeId`, `originCommandId`, `actor`, `entries[]`) is pseudocode. Pin when replay or multiplayer transport is designed.
 - **`EngineState` surface** — whether `IsRunning`/`CurrentCommand` are the right fields, or whether additional engine-internal state belongs here. Deferred to engine implementation pass.
 - **Empty-actors mode** — whether `MatchSetup.Actors` may be empty (purely simulation-driven games). Defer until a real game forces it.
 - **Networking-driven `IRandom`** — `MatchSetup.Seed` is currently `int`. When networking lands, `IRandom` (or richer determinism contract) replaces this slot.
-- **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await`, the awaiting effect is still alive. Whether to thread a `CancellationToken` through `IHandlerContext` / `IEffectScope` is an effect-flow concern.
+- **Async-effect cancellation on match end** — when `EndMatchCommand` resolves while an effect is mid-`await`, the awaiting effect is still alive. Per [ADR-0011 — *forthcoming*] the resolution path threads a `CancellationToken` through `IEffectScope.Dispatch`.
 - **Multi-winner / team outcomes** — `MatchOutcome.Win` is single-actor. Add `TeamWin` (or similar) when a co-op / team game forces it.
 - `bl-actor-ownership-reverse-index` — `OwnershipState` is one-way today (`Reference → IActor`); reverse direction (`IActor → owned References`) deferred.
 - **Slice-level subscription teardown** — `SubscribeAllReferences<T>` / `SubscribeAny` lack symmetric `Unsubscribe` overloads.

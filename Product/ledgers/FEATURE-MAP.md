@@ -25,9 +25,9 @@ When a `considered` row is promoted, follow the §5.11 *Adding a new feature* ce
 | [`entities`](features/entities/entities.md) | settled | 5 | Definition / Instance / Variable / Modifier / Attachment Models — the entity bridge primitive. Foundation for every runtime object. |
 | [`zones`](features/zones/zones.md) | settled | 1 | Zone organization, membership, movement. Where instances live. |
 | [`cards`](features/cards/cards.md) | settled | 1 | `Card` handle on top of the entity bridge with privacy-rotating `CardRef`. |
-| [`actions`](features/actions/actions.md) | settled | 5 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot. |
+| [`actions`](features/actions/actions.md) | settled | 6 | Command pipeline + intent mapper + command handler + history envelope + available-actions snapshot + command validator. Per [ADR-0010](decisions/0010-validator-handler-split.md), validators split from handlers and ride a uniform registry across the `GameCommand` family; framework defaults `SessionGate` + `MatchStateActionGate` register first. |
 | [`triggers`](features/triggers/triggers.md) | settled | 2 | `Trigger<T>` reaction class + `ITriggerPipeline` fold orchestrator. `OnBefore<T>` / `OnAfter<T>` registration around command handlers. |
-| [`effects`](features/effects/effects.md) | settled | 4 | Effect orchestration + effect scope + handler context + command awaiter (decision routing). Before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
+| [`effects`](features/effects/effects.md) | settled | 3 | Effect orchestration + effect scope + command awaiter (decision routing — *rework pending under ADR-0011*). Handler-context retired (ADR-0010 archived `03-handler-context`); before-fold semantics live in `triggers/`; attachment-entity pattern lives in `entities/`. |
 | [`engine`](features/engine/engine.md) | settled | 8 | `GameEngine` class (with two-layer intake gate + session lifecycle), `GameRulesDefinition` (data) + `GameRulesRuntime<T>` (FSM evaluator) split, FSM machinery (`MatchState` + `ITurnFlow` + `ISBA`), game factory, `GameDefinition` bundle. Slice-tier conventions live in `state/`; framework-slice catalog in `engine.md`. The simulation core. Per [ADR-0009](decisions/0009-engine-as-fsm.md) the engine IS the FSM. |
 | [`players`](features/players/players.md) | settled | 1 | `Player : EntityInstance<PlayerDefinition>, IActor`, `IActor` interface, `PlayerDefinition` shape, per-player slice conventions. |
 | [`presentation`](features/presentation/presentation.md) | settled | 1 | Reactive presentation loop reading state + history. |
@@ -85,7 +85,7 @@ graph TD
   networking -.-> engine
 ```
 
-**Cycle observation:** `actions ↔ engine` was bidirectional via the pre-ADR-0009 `engine/04-available-actions` / `actions/05-available-actions-snapshot` pair. With `engine/04` archived (ADR-0009 retired `IAvailableActions` + `AvailableActionsState`) and `actions/05`'s wire-form `ActionTemplate` flagged for rework under [ADR-0012 — *forthcoming*], the cycle is dissolving. Final shape lands when ADR-0012's presentation cascade replaces `ActionTemplate` with per-state ViewModels.
+**Cycle observation:** `actions ↔ engine` was bidirectional via the pre-ADR-0009 `engine/04-available-actions` / `actions/05-available-actions-snapshot` pair. With `engine/04` archived (ADR-0009 retired `IAvailableActions` + `AvailableActionsState`) and `actions/05`'s wire-form `ActionTemplate` flagged for rework under [ADR-0012 — *forthcoming*], the legacy cycle is dissolving. ADR-0010 introduces a new (cleaner) `actions/06 → engine/01 + engine/07` dependency: the framework-default validators `SessionGate` and `MatchStateActionGate` read `engine.Session` and `MatchStateSlice.Current.Actions` — directional, not cyclic. Final cycle-shape lands when ADR-0012's presentation cascade replaces `ActionTemplate` with per-state ViewModels.
 
 Solid arrows = current `references` edges between settled features. Dashed arrows = expected dependency direction once the considered feature lands.
 
@@ -110,11 +110,12 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - [`models/01-card-model.md`](features/cards/models/01-card-model.md) — settled, references: `entities/01`, `entities/02`, `zones/01`
 
 ### `actions` (settled)
-- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — settled, references: `actions/02`, `actions/03`, `actions/04`, `triggers/01`, `effects/02`, `engine/03`, `decisions/0006`, `decisions/0007`
-- [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — settled, references: `actions/01`, `actions/05`, `triggers/01`
-- [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — settled, references: `actions/01`, `actions/04`, `state`, `engine/04`
-- [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — settled, references: `actions/01`, `actions/03`, `engine/04`
-- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — settled (**rework pending under ADR-0012**), references: `actions/02`, `actions/01`
+- [`models/01-command-pipeline.md`](features/actions/models/01-command-pipeline.md) — *Command Pipeline* — settled, references: `actions/02`, `actions/03`, `actions/04`, `actions/06`, `triggers/01`, `effects/02`, `engine/03`, `decisions/0006`, `decisions/0007`, `decisions/0010`
+- [`models/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md) — *IIntentMapper* — settled (**rework pending under ADR-0012**), references: `actions/01`, `actions/05`, `triggers/01`
+- [`models/03-command-handler.md`](features/actions/models/03-command-handler.md) — *ICommandHandler* — settled, references: `actions/01`, `actions/04`, `actions/06`, `state`, `decisions/0007`, `decisions/0010`
+- [`models/04-history-envelope.md`](features/actions/models/04-history-envelope.md) — *HistoryEnvelope* — settled, references: `actions/01`, `actions/03`, `engine/04`
+- [`models/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) — *AvailableActionsSnapshot* — settled (**rework pending under ADR-0012**), references: `actions/02`, `actions/01`
+- [`models/06-command-validator.md`](features/actions/models/06-command-validator.md) — *ICommandValidator* — settled, references: `actions/01`, `actions/03`, `engine/01`, `engine/07`, `state`, `decisions/0007`, `decisions/0010`
 
 ### `triggers` (settled)
 - [`models/01-trigger.md`](features/triggers/models/01-trigger.md) — *Trigger\<T\>* — settled, references: `triggers/02`, `actions/01`, `effects/02`, `engine/03`, `decisions/0006`
@@ -123,10 +124,12 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 *Reorg 2026-05-09:* `01-trigger-fold.md` split per type axis (`Trigger<T>` reaction class + `ITriggerSystem` registration in `01-trigger`; `ITriggerPipeline` orchestrator + fold mechanic + ordering in `02-trigger-pipeline`); cross-Model synthesis (game-style scheduling table, history-when-replaced, dispatch-channel narrative) absorbed into `triggers.md` feature root. Filename now matches central type per `_docs/model.md` gate 3 (title-filename equality).
 
 ### `effects` (settled)
-- [`models/01-effect.md`](features/effects/models/01-effect.md) — settled, references: `triggers/01`, `actions/01`, `effects/02`, `effects/04`, `engine/01`
-- [`models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) — settled, references: `effects/01`, `effects/03`, `state`
-- [`models/03-handler-context.md`](features/effects/models/03-handler-context.md) — settled, references: `effects/02`, `effects/04`, `actions/03`, `state`, `entities/02`
-- [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — settled, references: `effects/01`, `effects/03`, `actions/02`, `actions/03`, `engine/01`
+- [`models/01-effect.md`](features/effects/models/01-effect.md) — *Effect* — settled, references: `triggers/01`, `actions/01`, `effects/02`, `effects/04`, `engine/01`
+- [`models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) — *IEffectScope* — settled, references: `effects/01`, `actions/03`, `state`
+- [`models/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md) — *ICommandAwaiter* — settled (**rework pending under ADR-0011**), references: `effects/01`, `actions/02`, `actions/03`, `actions/06`, `engine/01`
+- ~~[`models/03-handler-context.md`]~~ — **archived 2026-05-11** ([`archive/03-handler-context.md`](features/effects/archive/03-handler-context.md)) — `IHandlerContext` retired per ADR-0010; replaced by `GameCommandHandler<TCommand, TResult>` base in `actions/03`
+
+*Reorg 2026-05-11 (ADR-0010 cascade):* `effects/03-handler-context.md` archived — `IHandlerContext` aggregator retired. Handlers extend `GameCommandHandler<TCommand, TResult>` (property-injected `Store`) per `actions/03`; additional services come via per-handler constructor injection. `effects/04-command-awaiter.md` carries a rework-pending banner ahead of ADR-0011's request-system replacement; until ADR-0011 lands, the awaiter's `IHandlerContext` references are stale but content survives for historical reference.
 
 ### `engine` (settled)
 - [`models/01-game-engine.md`](features/engine/models/01-game-engine.md) — *GameEngine* — settled, references: `engine/03`, `engine/07`, `engine/08`, `actions/01`, `state`, `decisions/0009`
@@ -140,6 +143,8 @@ No models. Feature-root only — `state.md` documents the Scaffold.State integra
 - ~~[`models/04-available-actions.md`]~~ — **archived 2026-05-10** ([`archive/04-available-actions.md`](features/engine/archive/04-available-actions.md)) — `IAvailableActions` service + `AvailableActionsState` slice retired per ADR-0009; `MatchState.Actions: IReadOnlyList<Type>` replaces
 
 *Reorg 2026-05-10 (ADR-0009 cascade):* `04-available-actions.md` archived — `IAvailableActions` service + `AvailableActionsState` slice retired; valid command types now live on `MatchState.Actions`. New Models `07-match-state` (MatchState + MatchStateSlice + TransitionStateCommand), `08-turn-flow` (ITurnFlow.NextAfter), `09-state-based-actions` (ISBA cross-cutting overrides) land. `engine/01` swaps `EngineLifecycle` enum for typed `SessionState` hierarchy on `engine.Session` field; intake gate becomes two-layer (Session + MatchState.Actions). `engine/03`'s `Evaluate` returns `MatchState` (was `IReadOnlyList<GameAction>`); default body composes SBAs + ShouldExit + Flow.
+
+*Reorg 2026-05-11 (ADR-0010 cascade):* `engine/01`'s inline two-layer intake gate converts to registered framework validators `SessionGate` + `MatchStateActionGate` (canonical home: `actions/06-command-validator.md`). `engine/03`'s rejection-paths table refreshes (handler.Validate → validator chain). `engine/07-match-state.md`'s `TransitionStateHandler` example updates to the `GameCommandHandler<,>` base shape. No new engine Models, no archives.
 
 *Reorg 2026-05-09:* `02-gamerules-contract.md` split into `02-game-rules-definition.md` (data half) + `03-game-rules-runtime.md` (runtime half). `03-snapshot-pipeline.md` renamed + renumbered to `04-available-actions.md` (since archived). `07-game-definition.md` renumbered to `06-game-definition.md`.
 
