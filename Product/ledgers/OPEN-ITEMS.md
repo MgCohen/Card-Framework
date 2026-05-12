@@ -39,8 +39,14 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
 
 - id: oq-trigger-ordering | kind: question | **Trigger ordering within fold** — what determines sequence when multiple triggers are registered for the same type: FIFO by registration, priority weight, game-configurable, or something else.
 
-- id: oq-effect-cancellation-on-match-end | kind: task | **Async-effect cancellation on match end** — when match ends mid-`await` (request response pending, sub-command pending), the effect's `Task` is still alive. Shape pinned by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md): thread a `CancellationToken` through `IEffectScope.Dispatch`; engine cancels on match-end transition and GCs `RequestsSlice` / `AnswersSlice`. Implementation task; no open design.
-  References: `Product/decisions/0011-effect-orchestration-dispatch-requests.md`, `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, `Product/features/effects/models/06-request-system.md`, `Product/features/engine/models/01-game-engine.md`.
+<!-- oq-effect-cancellation-on-match-end — closed 2026-05-11 by the spike Q1
+     cancellation lock. Cancellation rides on the typed Response's
+     `bool Cancelled` flag (set on Response base); match-end dispatches a
+     `Cancelled = true` typed response for every open request. No CancellationToken
+     threading needed at the IEffectScope.Dispatch level — the response-flag pattern
+     covers both player-initiated cancel and match-end cancel uniformly. See
+     features/effects/models/06-request-system.md (banner) +
+     decisions/0011-effect-orchestration-dispatch-requests.md (refresh). -->
 
 - id: oq-trigger-subscription-entry | kind: question | **Trigger subscription entry point for regular cards** — `effects/03 §6` shows a handler calling `AbilityDefinition.Register` for attachments. For regular cards entering play (zone entry), no system or lifecycle hook is shown that calls `Register`. Tied to game lifecycle and zone-entry events.
   References: `Product/features/triggers/models/02-trigger-pipeline.md` §Priority and ordering.

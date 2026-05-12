@@ -7,6 +7,14 @@ tags: [#effects, #model, #requests, #player-input, #state-linked-service]
 
 # Request System — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md) + spike Q-walk locks.** Three refinements:
+>
+> 1. **Per-request cancellation policy** — `Request` base gains `virtual bool AllowsCancellation => true`. Mandatory-choice requests (mulligan, must-pick) override to `false`. The UI surface checks this flag to decide whether to expose a cancel affordance.
+> 2. **Cancellation rides on the typed Response, not a separate sibling.** `Response` base gains `bool Cancelled { get; init; }` (default `false`). The player's cancel gesture dispatches the typed response with `Cancelled = true` and default/null payload data — same `scope.Dispatch(Response)` path as a normal answer. Effect code checks `response.Cancelled` after the `await`. No `OperationCanceledException`, no separate `Cancelled : Response` subtype. Match-end cancellation: engine dispatches a `Cancelled = true` typed response for every open request (even ones with `AllowsCancellation = false`; match-end overrides the per-request policy).
+> 3. **Trigger fold runs for Request and Response.** Per ADR-0013's per-type routing table, `OnBefore<TargetRequest>` (redirect / shroud), `OnAfter<TargetRequest>` (when-targeted reactions), `OnBefore<Response>` (answer constraints), `OnAfter<Response>` (post-answer reactions) all fire. The pre-cascade §Cancel and timeout section's framing — `IRequestService.Cancel(id)` + `TaskCanceledException` — is superseded by this typed-Response approach.
+>
+> **Hard rule reaffirmed: all request / response / payload fields are data-only.** No `Func<>`, `Predicate<>`, delegates, or non-serializable handles. Per ADR-0011 D17 (already locked, restated here for visibility). Constraints / option-filters on requests must be data: pre-computed `IReadOnlyList<Ref<Card>> ValidTargets`, or a registered resolver id + serializable params — never a `Func`/`Predicate` field. Required for replay, save/load, network round-trip.
+
 ## What it is
 
 The state-linked service for player decisions mid-effect. An effect calls `await scope.Dispatch(new TargetRequest(...))`; the request system opens the request in `RequestsSlice`, returns a `Task<TResponse>` pending; clients render a picker from the slice; the player's response dispatches as a `Response` command; the system records the answer in `AnswersSlice`, clears the request from `RequestsSlice`, and resolves the awaited Task with the typed response. The pattern follows the state-linked-service shape pinned by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D17: **slice owns the data; injectable façade is the only writer; engine reads for orchestration; clients subscribe**.
