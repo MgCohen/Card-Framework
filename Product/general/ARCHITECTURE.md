@@ -1,204 +1,286 @@
 ---
 type: reference
 status: settled
+references: [features/state/state.md, features/entities/entities.md, features/zones/zones.md, features/cards/cards.md, features/players/players.md, features/actions/actions.md, features/triggers/triggers.md, features/effects/effects.md, features/engine/engine.md, features/presentation/presentation.md, decisions/0005-objects-over-ids.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0008-zone-visibility-model.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#general, #architecture]
 ---
 
-# Architecture Directions
+# Architecture
 
-This note sketches candidate architecture boundaries. It is not an implementation spec.
+The framework's top-down picture. Read in order; each section anchors what comes next. Detail lives in feature roots, Models, and ADRs — link out, don't repeat.
 
-## Core Direction
+## What this is
 
-The strongest direction is a deterministic simulation core with reactive edges:
+A C# framework for **deterministic card-game simulations** with **reactive presentation**. Game-mode-agnostic (TCG / deckbuilder / spatial / puzzle). The core is a FSM-shaped command pipeline backed by a `Store` of state slices; UI subscribes to those slices through per-state ViewModels.
+
+## Layered architecture
+
+```mermaid
+flowchart BT
+  state[state]
+  entities[entities]
+  zones[zones]
+  cards[cards]
+  players[players]
+  actions[actions]
+  triggers[triggers]
+  effects[effects]
+  engine[engine]
+  presentation[presentation]
+
+  entities --> state
+  zones --> entities
+  cards --> entities
+  players --> entities
+
+  actions --> state
+  effects --> actions
+  triggers --> engine
+
+  engine --> actions
+  engine --> effects
+  engine --> entities
+  engine --> players
+
+  presentation --> engine
+
+  authoring[authoring]:::considered
+  interaction[interaction]:::considered
+  networking[networking]:::considered
+
+  authoring -.-> entities
+  interaction -.-> presentation
+  networking -.-> engine
+
+  classDef considered stroke-dasharray: 5 5,opacity:0.6;
+```
+
+| Tier | Feature | Owns | Doesn't own |
+|---|---|---|---|
+| Foundation | [`state`](features/state/state.md) | `Store`, `BaseState`, `Mutator<,>`, `IStateScope`, subscription channels | Anything game-specific |
+| Entity bridge | [`entities`](features/entities/entities.md) | `EntityDefinition`, `InstanceWithSlices<TDef>`, `Variable`, `Modifier`, `Attachment` | Domain-shape specifics |
+| Domain shapes | [`zones`](features/zones/zones.md) · [`cards`](features/cards/cards.md) · [`players`](features/players/players.md) | Zone organization + visibility · `Card` + `CardRef` privacy · `Player` + `IActor` | Game-specific gameplay rules |
+| Dispatch | [`actions`](features/actions/actions.md) · [`triggers`](features/triggers/triggers.md) | `GameCommand` family, validators, handlers, history envelope · `Trigger<T>`, fold mechanic | Effect orchestration |
+| Orchestration | [`effects`](features/effects/effects.md) | `IEffect.Run`, `IEffectScope`, `PendingEffectsSlice`, request system | Command pipeline mechanics |
+| Engine | [`engine`](features/engine/engine.md) | `GameEngine`, FSM (`MatchState` + `ITurnFlow` + `ISBA`), `GameRulesRuntime<T>`, factory, session lifecycle | View concerns |
+| UI | [`presentation`](features/presentation/presentation.md) | Per-state `MatchStateViewModel<TState>`, `ViewModelRegistry`, presenter, `IntentGateway` boundary | Final gameplay legality |
+
+Dashed nodes are **considered** — known gaps with deferred design (see §What's still considered).
+
+## How the engine works
+
+The engine is a strict-FIFO command drain. It is also the FSM.
 
 ```mermaid
 flowchart LR
-  authoring[Definitions and Game Templates] --> setup[Session Setup]
-  setup --> state[Canonical State]
-  input[Presentation Intent] --> intent[PlayerIntent]
-  intent --> pipeline[Game Pipeline]
-  pipeline --> command[GameCommand / StateMutation]
-  command --> queue[Task / Effect Queue]
-  queue --> state
-  state --> events[Events and History]
-  events --> triggers[Triggers / Watches]
-  triggers --> queue
-  events --> vm[Reactive Presentation]
-  events --> replay[Replay / Debug / Tests]
-  events --> network[Optional Network Adapter]
+  d[engine.Dispatch] --> v{Validator chain}
+  v -->|reject| x[rejection reason]
+  v -->|accept| q[Pending queue]
+  q --> drain[Drain loop]
+  drain --> tb[OnBefore fold]
+  tb --> h[Handler]
+  h --> ta[OnAfter fold]
+  ta --> eval[runtime.Evaluate]
+  eval -->|same state-type| drain
+  eval -->|new state-type| t[TransitionStateCommand]
+  t --> q
 ```
 
+- **Strict-FIFO.** No priority, no reordering. (ADR-0006.)
+- **FSM.** `Evaluate(action, result) → MatchState`. Type change synthesizes a `TransitionStateCommand`, dispatched through the same pipeline. (ADR-0009.)
+- **Transitions are commands.** Same envelope; same history fold.
 
+**Session lifecycle is separate.** `engine.Session` is a typed `SessionState` field, not a Store slice.
 
-## Layer Responsibilities
+| Session state | Permits |
+|---|---|
+| `NotStartedSession` | `StartMatchCommand`, `EndMatchCommand` only |
+| `InMatchSession` | All commands subject to validators + `MatchState.Actions` |
+| `EndedSession(MatchOutcome)` | Nothing (terminal) |
 
+Two framework validators gate intake:
 
-| Layer           | Owns                                                                              | Must Not Own                                       |
-| --------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Core Simulation | state, entities, zones, commands, validation, effects, triggers, choices, history | Unity scene objects, input devices, transport APIs |
-| Authoring       | definitions, schemas, catalogs, validation reports, editor-friendly assets        | runtime-only state mutation                        |
-| Presentation    | card views, zone views, layout, animation, feedback, view models                  | final gameplay legality                            |
-| Interaction     | pointer/drag/drop/selection to intent translation                                 | direct state mutation                              |
-| Networking      | command/history/snapshot transport adapters                                       | card rules, effect resolution                      |
-| Tooling         | inspectors, replay viewers, trace/debug utilities                                 | hidden production-only behavior                    |
+- `SessionGate` — rejects when `engine.Session` doesn't admit the command.
+- `MatchStateActionGate` — rejects when the command type isn't in `MatchStateSlice.Current.Actions`.
 
+Both register first. Game-shipped validators run after. (ADR-0010.)
 
-## Data Model Direction
+## How commands work
 
-The framework likely needs both a definition/instance model and a flexible value model.
+`GameCommand` is a five-sibling family. Single async `Dispatch<TResult>(GameCommand)` routes all five. (ADR-0011.)
 
-### Definitions
+| Sibling | Shape | What it does |
+|---|---|---|
+| `GameAction` | Executable, queued | Mutates state via handler |
+| `CompositeAction` | Inline, no queue | Bundles a sequence into one envelope |
+| `GameSignal` | History-only | Records a fact; no handler runs |
+| `Request<TResponse>` | Writes `RequestsSlice` | Opens a player-decision request |
+| `Response` | Writes `AnswersSlice` + clears `RequestsSlice` | Answers a request by ID |
 
-Definitions are stable authored data:
+Each command flows through three execution layers:
 
-- Card definitions.
-- Zone definitions.
-- Effect definitions.
-- Keyword definitions.
-- Visual definitions.
-- Game template definitions.
-- Pack/reward/encounter definitions.
+```
+Effect (orchestrator)
+  ↓ scope.Dispatch(command)
+Handler (atomic state work)
+  ↓ Store.Execute(payload)
+Mutator (pure state → state)
+```
 
-Definitions should be easy to author and reference by stable IDs.
+- **Effect** — async coroutine; composes multiple `Dispatch` calls; never mutates directly.
+- **Handler** — extends `GameCommandHandler<TCommand, TResult>` with `[Inject] Store`. Atomic from player-input POV; calls `Store.Execute` only. (ADR-0010.)
+- **Mutator** — `Mutator<TState, TPayload>`; pure function of `(currentState, payload, scope) → newState`. Registered via DI.
 
-### Instances
+**Validation is a registered chain.** `ICommandValidator<TCommand>` runs at dispatch:
 
-Instances are runtime entities:
+```mermaid
+flowchart LR
+  cmd[GameCommand] --> sg[SessionGate]
+  sg --> msag[MatchStateActionGate]
+  msag --> g1[game validator 1]
+  g1 --> g2[game validator 2]
+  g2 --> ok[accept → enqueue]
+  sg -.->|reject| r[reason]
+  msag -.->|reject| r
+  g1 -.->|reject| r
+  g2 -.->|reject| r
+```
 
-- A specific copy of a card in a deck.
-- A temporary token.
-- A zone created for an encounter.
-- A relic owned by a player.
-- A Stacklands-style resource card on a board.
-- A pending stack item or task source.
+Validators are independent (command-only signature; state via `[Inject]` on `CommandValidator<>` base), short-circuit on first reject, run in DI registration order. Framework defaults register first; game validators append. The same chain applies uniformly to every `GameCommand` sibling. (ADR-0010.)
 
-Instances need an instance ID for lookup/reference, current values, relationships, ownership, visibility, and zone membership.
+## How effects work
 
-### Values
-
-Values should start from a simple key-value variable model inspired by Scaffold Entities but not dependent on hardcoded framework fields:
-
-- Base definition variables.
-- Instance values or overrides.
-- Local modifiers.
-- Attached-instance modifiers.
-- External or contextual modifiers.
-- Effective values calculated by deterministic handlers.
-
-Games, presets, schemas, or authoring packages should define variable keys and value types. Typed concepts can still exist later as helper APIs or preset-specific wrappers over those keys. The early model should avoid splitting state into too many competing representations before we know how Scaffold Entities and Scaffold States fit together.
-
-## Zone Model Direction
-
-Zones need to be more general than deck/hand/discard.
-
-Zones should be richer organization models, not fixed bags of boolean traits. A zone should define contents, arrangement, visibility, capacity defaults, insertion/removal behavior, and change bookkeeping.
-
-Zones should not own broad gameplay legality. A larger game/action rules layer decides whether a card can move to a zone, whether an actor is allowed to perform that move, or whether an effect can ignore a default zone limit.
-
-By default, zone membership should not define the instance. A card or entity remains the same instance when it changes zones unless a game-specific rule explicitly replaces, transforms, destroys, or recreates it.
-
-Spatial placement should not be a core zone requirement for now. It should be view-defined when it is presentation-only, and game-specific when physical position is part of the rules.
-
-Example zone families:
-
-- TCG: library, hand, battlefield, graveyard, exile, stack.
-- Deckbuilder: draw pile, hand, discard, exhaust, reward offer, shop, relic inventory.
-- Spatial sim: world board, physical stack, card pack, production slot, combat group, storage area.
-
-Visibility should eventually be actor-specific and split at least into membership visibility and detail visibility. An actor may know that a zone contains three instances without knowing the definitions or variables behind those instances.
-
-## Effect Resolution Direction
-
-A single "effect resolves immediately" model will not be enough. The framework should distinguish:
-
-- **Intents/requests**: external or system attempts, such as play card or drag card onto another.
-- **Game commands**: approved or approvable high-level commands that run through game rules and return results.
-- **State mutations**: low-level already-approved mutations emitted by handlers.
-- **Tasks/actions**: deterministic work items queued by commands, effects, or triggers.
-- **Events**: facts emitted by tasks or state changes.
-- **Triggers**: reactions to events that enqueue more work.
-- **Replacement/prevention hooks**: reactions that modify an event before it commits.
-- **State checks**: automatic stabilization after relevant moments.
-- **History envelopes**: grouped state changes with cause metadata for UI, replay, debugging, and networking.
-
-Open direction: support multiple schedulers behind a common interface.
-
-
-| Scheduler Style          | Good For                                         | Notes                                                                         |
-| ------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| Immediate queue drain    | Hearthstone-like effects and simple deckbuilders | Straightforward, deterministic, easy to test.                                 |
-| Stack + priority         | Magic-like response windows                      | Requires choice windows, pass handling, pending triggers, state-based checks. |
-| Turn/phase machine       | Traditional turn games                           | Can host queue/stack inside each phase.                                       |
-| Real-time/tick scheduler | Stacklands-like production and timers            | Needs elapsed time, pause, deterministic tick rules.                          |
-
-
-## Decision Flow Direction
-
-All player or actor decisions should follow this shape:
+Only the engine fires effects.
 
 ```mermaid
 sequenceDiagram
-  participant Rules as Rules Engine
-  participant State as State
-  participant Presenter as Presentation
-  participant Actor as Player/AI
+  participant H as Handler
+  participant Q as PendingEffectsSlice
+  participant E as Engine
+  participant Eff as IEffect.Run
+  participant S as IEffectScope
 
-  Rules->>State: compute legal options
-  Rules->>Presenter: publish decision request
-  Presenter->>Actor: show possible actions
-  Actor->>Presenter: choose gesture/action
-  Presenter->>Rules: submit option id + payload
-  Rules->>Rules: validate correlation and legality
-  Rules->>State: resolve through queue
+  H->>Q: enqueue (effect instance)
+  Note over E: drain loop, after commands settle
+  E->>Eff: Run(scope)
+  Eff->>S: await scope.Dispatch(command)
+  S->>E: route through pipeline
+  E-->>Eff: result
+  Eff->>S: await scope.Dispatch(next)
+  Eff-->>E: complete (Task done)
+  E->>Q: dequeue
 ```
 
+- **Engine-only firing.** Cast handlers push to `PendingEffectsSlice`; the engine drains. No handler holds an `IEffectPipeline` reference. (ADR-0011 lock 1.)
+- **Async coroutines.** `IEffect.Run(scope) : Task`. Effects `await scope.Dispatch` calls; no state-machine steps. Mid-effect save/load isn't supported.
+- **Universal queue.** `PendingEffectsSlice` is the single queue. Cast handlers + trigger reactions both push there.
 
+**Player decisions ride the request system.** An effect that needs a player choice routes through `Request<TResponse>` / `Response`:
 
-This supports local play, AI, replays, and multiplayer because the decision surface is explicit.
+```
+effect: await scope.Dispatch(new TargetRequest(...))
+   → engine routes Request through pipeline
+   → handler writes RequestsSlice.Open
+   → drain pauses (RequestsSlice non-empty)
+   → UI (active VM) reads RequestsSlice, prompts player
+   → player gesture → VM.Map → Response
+   → engine handles Response: writes AnswersSlice, clears RequestsSlice.Open
+   → effect awaits, picks up the typed response, continues
+```
 
-## Presentation Direction
+Predicates and option-filters live on the typed `Request` subclass — by ID/data, never by `Func` (so requests serialize cleanly for replay/network). (ADR-0011 D17.)
 
-Presentation should subscribe to state/history and expose multiple render modes:
+## How state works
 
-- UI cards for menus, hand, deckbuilder screens, shops, and mobile-friendly interfaces.
-- 2D world cards for board games and tabletop-like play.
-- 3D cards for physical simulation, stacks, and world-space interactions.
+State is Scaffold.State — `Store` + `BaseState` slices + `Mutator<TState, TPayload>` registered per `(state, payload)` pair.
 
-The same simulation card instance should be presentable by different adapters. Visual state may lag behind simulation state through an animation queue, but it should remain tied to authoritative history.
+| Tier | Examples | Lifecycle | Author |
+|---|---|---|---|
+| Framework-owned | `EngineState`, `HistoryState`, `MatchStateSlice`, `PendingEffectsSlice`, `RequestsSlice`, `AnswersSlice`, `EntityState`, `ZoneContentsState`, `CardMapState`, `OwnershipState` | Auto-seeded at `Build` | Framework |
+| Per-spawn instance | Card slices, zone slices, player slices declared via `ISliceProvider` on the instance | Spawned with the instance | Game |
+| Per-spawn definition | Same shape via `ISliceProvider` on the definition; delegated to from the instance | Spawned with the instance | Game |
+| Game-singleton | `TurnState`, etc., from `GameDefinition.GetInitialSlices()` | Seeded at `Build` | Game |
+| Manual overlay | `MatchSetup.InitialSlices` | Seeded at `Build` after game-singletons | Tests / scripted scenarios |
 
-## Multiplayer Direction
+Mutation discipline:
 
-Multiplayer should be an adapter over the command/history boundary, not a dependency inside core rules.
+- **Reads** via `IStateScope.Get<TState>()`.
+- **Writes** via `Store.Execute(payload)` → registered `Mutator<TState, TPayload>` → new immutable state.
+- **Mutators are pure.** `(currentState, payload, scope) → newState`. No side effects.
+- **`ExecuteBatch`** for atomic multi-payload writes.
 
-Initial multiplayer assumptions:
+Every slice writer is a mutator; every reader resolves through `IStateScope`. See [`state/state.md`](features/state/state.md) for the full Scaffold integration.
 
-- Server or host owns authoritative simulation.
-- Clients receive filtered history and snapshots.
-- Clients send decision responses or command requests.
-- Hidden information is filtered before transport.
-- Randomness is seeded and logged.
-- Definitions are versioned or hashed.
+## How presentation works
 
-This can wait until after local deterministic simulation exists, but the shape of commands, history, IDs, and snapshots should be chosen with networking in mind.
+Presentation is **per-state polymorphic ViewModels**. (ADR-0012.)
 
-## Preset Direction
+```mermaid
+sequenceDiagram
+  participant S as MatchStateSlice
+  participant P as Presenter
+  participant R as ViewModelRegistry
+  participant V as MatchStateViewModel
+  participant Gate as IntentGateway
+  participant E as engine.Dispatch
 
-The framework may be most usable if it ships with presets:
+  S->>P: Updated (new state-type)
+  P->>R: Create(state)
+  R->>V: new VM + Bind(state, scope)
+  P->>P: CurrentVM = V (view rebinds)
 
-- **TCG preset**: turn phases, zones, stack/priority option, targeting, combat helpers.
-- **Deckbuilder preset**: draw/discard/exhaust piles, energy, reward offers, encounter state, relic triggers.
-- **Spatial preset**: freeform board zones, stack interactions, timers, recipes, automatic workers/combat.
+  Note over Gate: later, on player gesture
+  Gate->>V: Map(intent)
+  V-->>Gate: GameCommand
+  Gate->>E: Dispatch(command)
+```
 
-The presets should be compositions of framework primitives, not separate engines.
+- **`MatchStateViewModel<TState>`** — typed VM per `MatchState` subtype. Owns `Bind(state, scope)` + `Map(intent) → GameCommand`.
+- **`ViewModelRegistry`** — sealed type → factory lookup. Many-to-one supported.
+- **Presenter** — subscribes to `MatchStateSlice`; on type change, asks the registry for a new VM; view re-binds via standard MVVM template selection.
 
-## Recommended First Architectural Bet
+No global mapper, no `AffordanceMap`, no `ActionTemplate` wire form. Each VM owns its observables (the affordance projection) and its `Map(intent)` (the gesture-to-command translation). In request-mode (per `RequestsSlice.Open`), `Map` returns a `Response` instead of a `GameAction`.
 
-Start with a minimal deterministic core that can run a Hearthstone/Slay-style command queue:
+`IntentGateway` is the input boundary: raw device gestures → typed `PlayerIntent` records → active VM via `ViewModelRegistry` → `engine.Dispatch` with the mapped command.
 
-- It is simpler than Magic's full priority/stack model.
-- It still exercises definitions, instances, zones, commands, validation, effects, triggers, choices, and history.
-- It gives enough foundation for reactive presentation.
-- It does not block later stack/priority or real-time scheduler work if scheduling is isolated.
+## What's still considered
 
-Then add richer schedulers as explicit extensions, not hidden complexity in the first pass.
+Three feature folders are considered. Tooling is cross-cutting.
+
+| Feature | Owns | Trigger for folder creation |
+|---|---|---|
+| `authoring` | Card catalog, schemas, keyword system, effect recipes, definition editor surfaces | After vertical-slice exercises the runtime contract end-to-end |
+| `interaction` | Raw input gesture → typed `PlayerIntent` translation (drag/drop/click/target) | Next presentation or engine-wiring session |
+| `networking` | Command/history transport, visibility filter on transport, deterministic RNG, versioned definitions, snapshots for join/reconnect | Post-v1; when multiplayer or save/load becomes a real concern |
+
+**Tooling** isn't a feature folder. Items live under [`OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md):
+
+- Definition editor (after `authoring`)
+- Simulation debugger (state + history + pending queues)
+- Scenario runner (load state, dispatch commands, inspect)
+- Replay viewer (step through history)
+- Rule trace (explain legality)
+- Validation reports (broken definitions, bad refs)
+
+Each fires when a real consumer surfaces. None block v1 of the simulation core.
+
+## Cross-cutting doctrines
+
+- **Objects over IDs.** Framework APIs pass typed objects (`Ref<T>`, `Reference`), not bare IDs. Typed objects flow through commands, envelopes, history, and transport. (ADR-0005.)
+- **Two-pipeline architecture.** Framework command pipeline (FIFO, no customization) + game effect pipeline (game-customizable orchestration). Triggers ⊆ effects. (ADR-0006.)
+- **Five validation layers.** Eligibility (`MatchState.Actions`) → UI affordance (VM observables) → gesture well-formedness (VM's `Map` throws on unknown intents) → registered validator chain (authoritative) → engine-internal invariants. Authoritative legality lives in the validator chain. (ADR-0007 refreshed under ADR-0010.)
+- **Visibility.** Per-zone policy (`ZoneVisibilityPolicy`) + per-card visibility flag; server-side `CardRef` rotation hides identity from filtered transports. (ADR-0008.)
+- **Determinism.** `MatchSetup.Seed` (int) today; pinned `IRandom` contract when networking lands.
+
+## Reading order
+
+If you're new to the project, read in this order:
+
+1. This document (top-down).
+2. [`features/engine/engine.md`](features/engine/engine.md) — the simulation core.
+3. [`features/actions/actions.md`](features/actions/actions.md) — the command pipeline.
+4. [`features/effects/effects.md`](features/effects/effects.md) — orchestration.
+5. [`features/state/state.md`](features/state/state.md) — the state primitive.
+6. Then individual Models on demand.
+
+For the locked design decisions, walk [`decisions/`](decisions/) in number order — `0005` (objects over IDs), `0006` (two-pipeline), `0007` (validation layers), `0008` (visibility), `0009`–`0012` (the FSM-arch cascade).
