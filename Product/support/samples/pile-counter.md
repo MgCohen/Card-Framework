@@ -1,17 +1,15 @@
 ---
 type: sample
 status: locked
-references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/05-game-factory.md, features/engine/models/01-game-engine.md, features/engine/models/06-game-definition.md, features/actions/models/01-command-pipeline.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-instance.md]
+references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/05-game-factory.md, features/engine/models/06-game-definition.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/actions/models/01-command-pipeline.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md, features/effects/models/02-effect-scope.md, features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/players/models/01-player-model.md, features/entities/models/02-instance.md, features/presentation/models/01-match-state-view-model.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0013-engine-pipeline-orchestration.md]
 tags: [#sample, #pile-counter]
 ---
 
 # Pile Counter — Reference Sample Game
 
-> **Post-cascade rewrite pending.** This sample was authored pre-FSM-arch cascade and uses retired vocabulary in places (`IHandlerContext`, `ctx.Store.Execute(...)`, `IAvailableActions`, `ActionTemplate`, global `IIntentMapper`). The framework concepts it illustrates are still sound, but the *code samples* and several Q-resolutions below reference Models that have moved or been archived. A revision pass to use the post-cascade vocabulary (`GameCommandHandler<,>` base, `ICommandValidator<TCommand>`, `MatchState.Actions`, per-state ViewModel) is scheduled before the vertical-slice work executes. Treat the high-level shape as canonical; treat the code as illustrative of the *direction* rather than the *current* contract.
-
 This document defines a small, deliberately simple game we use as a working reference while shaping the framework. Whenever a framework concept feels under- or over-specified, we sketch its implementation in **Pile Counter** and see where the seams are.
 
-The game has no triggers, no abilities, no players-vs-players, no async decisions. That's intentional — it's the floor of what the framework must support, before any of the harder features pile on.
+The game has no triggers, no abilities, no players-vs-players, no async decisions. That's intentional — it's the floor of what the framework must support, before any of the harder features pile on. As of 2026-05-11, this sketch reflects the post-FSM-arch + ADR-0013 + Q-walk-locked vocabulary.
 
 ---
 
@@ -90,7 +88,7 @@ No phases beyond "play until won." No automatic advancement, no idle effects.
 
 ## 6. Win Condition
 
-After a move resolves, if `pile.Counter == pile.Target` for **all four piles** simultaneously, the game ends and the player wins. The framework-owned `EndMatchCommand(MatchOutcome.Win(player))` is dispatched by the runtime's `Evaluate`; the framework `EndMatchHandler` emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. See [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
+After a move resolves, if `pile.Counter == pile.Target` for **all four piles** simultaneously, the game ends and the player wins. `runtime.Evaluate` returns the framework-shipped `EndOfMatchState(MatchOutcome.Win(player))`; the engine completes the transition normally and auto-dispatches `EndMatchCommand(outcome)`. `EndMatchCommand`'s handler flips `engine.Session = EndedSession(outcome)` and emits `MatchEndedSignal`. See [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md) §Match-end auto-emit (the banner) and [`engine/07-match-state.md`](features/engine/models/07-match-state.md).
 
 There is no lose condition. The puzzle is always solvable from setup; the player keeps moving until they hit it.
 
@@ -101,19 +99,23 @@ There is no lose condition. The puzzle is always solvable from setup; the player
 This game forces the framework to express:
 
 - **Zones with stack ordering and a derived score.** The score is a per-zone value cached in a `PileState` slice keyed at the pile's `Ref<Zone>`. Maintaining the cache atomically with each move tests the per-zone-type slice + mutator pattern from [`zones/01-zone-model.md`](features/zones/models/01-zone-model.md).
-- **A single action type with legality rules.** Tests `handler.Validate` rejection (per-command legality), `AvailableActions` (the gateway needs to tell the UI which moves are legal), and how legality interacts with the "can't move same card twice in a row" memory.
-- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over, dispatch the framework-owned `EndMatchCommand(outcome)`. The framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended` — see [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
+- **A single action type with legality rules.** Tests `ICommandValidator<MoveCardAction>` per [ADR-0010](decisions/0010-validator-handler-split.md), and how legality interacts with the "can't move same card twice in a row" memory.
+- **State-based win check.** Classic `Evaluate` job: after each action, read state, decide if the game is over by returning `EndOfMatchState(MatchOutcome.Win(player))`. The engine auto-dispatches `EndMatchCommand` per [ADR-0009 refresh](decisions/0009-engine-as-fsm.md). No host orchestrator required.
 - **Move history of size 1.** "Last card moved" is a sliver of state that doesn't fit on a card or a zone — it's *game-level* memory. It lives in a singleton `LastMoveState` slice declared by the `GameDefinition`'s `GetInitialSlices()`.
 - **`GameDefinition` bundle composition.** The puzzle's deck, pile targets, and initial deal flow through a `PileCounterGameDefinition` bundle. Tests the bundle shape from [`engine/06-game-definition.md`](features/engine/models/06-game-definition.md).
-- **Match setup commands.** After `engine.StartMatch()`, the runtime dispatches `CreateCardMutation` calls to spawn each card into its target pile. Tests the setup-command pattern from [`engine.md §Match setup`](features/engine/engine.md).
+- **`MatchState` action-gate triad.** Pile Counter has a single `PilePlayingState : MatchState` with `Actions = [typeof(MoveCardAction)]` + `ActionsOpen = false` — exercises the post-cascade whitelist mode of `MatchStateActionGate` per the [`engine/07`](features/engine/models/07-match-state.md) banner.
+- **Per-state VM with `scope.Subscribe<T>`.** A single `PilePlayingViewModel : MatchStateViewModel<PilePlayingState>` exposes observables for the four piles + computed valid moves. Exercises the post-cascade subscription contract per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) + the spike-Q1 lock.
+- **Match setup via `OnEnter`.** `PilePlayingState.OnEnter(scope)` returns the `CreateCardAction` list that spawns each card into its target pile per `puzzle.Deal`. Exercises the lifecycle hook from the [`engine/07`](features/engine/models/07-match-state.md) banner.
 
 This game does **not** test:
 
 - Triggers, abilities, replacement effects, ongoing effects.
-- Async decisions (no targeting, no choice prompts).
+- Async decisions (no targeting, no choice prompts; no `Request<TResponse>` traffic).
+- Concurrent requests (no second player, no simultaneous decisions).
 - Multi-player or priority.
-- Phase transitions.
+- Phase transitions (only one `MatchState` plus the framework's `EndOfMatchState`).
 - Card variant subclasses (cards are distinguished only by their `Number` variable; no per-card-type `CardDefinition` subclass).
+- `OnExit` hooks (Pile Counter has nothing to clean up on state exit).
 
 We will revisit those features against more elaborate sample games once the floor is solid.
 
@@ -128,7 +130,7 @@ We will revisit those features against more elaborate sample games once the floo
 - **Empty piles:** allowed. An empty pile has counter `0` and still has a target. Winning is possible with an empty pile if its target is `0`.
 - **Puzzle source:** an external **puzzle factory** produces a complete `(deck, deal, targets)` triple. Internally the factory uses random generation plus a solvability check, but that is opaque to the game — the runtime just receives the triple as setup input. No target generation, shuffling, or solvability logic lives inside the framework.
 - **Undo:** out of scope.
-- **Restart / new puzzle:** session-lifecycle concern, out of scope for the runtime.
+- **Restart / new puzzle:** session-lifecycle concern, out of scope for the runtime. Per ADR-0009 refresh (rematch model), `EndedSession` is terminal; new puzzle = `engine.Dispose()` + `GameFactory.Build(...)` for a fresh instance.
 
 All setup decisions are now resolved. The §9 sketch implements them against the canonical Models.
 
@@ -140,306 +142,342 @@ This is the working sketch of Pile Counter against the framework as of this writ
 
 ### 9.1 State shape
 
-State lives as Scaffold `BaseState` slices, each owning one concern. There is no single-record `GameState`; reads go through `IStateScope.Get<TState>()`. See [`effects/02-effect-scope.md`](features/effects/models/02-effect-scope.md) for the binding.
+State lives as Scaffold `BaseState` slices, each owning one concern. There is no single-record `GameState`; reads go through `IStateScope.Get<TState>()`.
 
 ```csharp
 // Per-pile slice — Counter is the cached sum of card Numbers in the pile;
 // Target is the authored win condition. Keyed externally at pile.SelfRef
-// (Ref<Zone>) by the factory walk per [zones/01](features/zones/models/01-zone-model.md).
+// (Ref<Zone>) by the factory walk per zones/01.
 public sealed record PileState(int Counter, int Target) : BaseState;
 
 // Singleton — the "last moved card" memory. Game-level; doesn't fit on a card
 // or a zone. Declared by PileCounterGameDefinition.GetInitialSlices().
 public sealed record LastMoveState(LastMove? Move) : BaseState;
-
 public sealed record LastMove(Ref<Card> Card, Ref<Zone> From, Ref<Zone> To);
 
+// Game-side singleton index — list of the four spawned pile refs. Seeded by
+// the factory's Build walk; consumed by the VM and runtime to enumerate piles
+// without scanning ownership. Per D-PileRefs in PLANS.
+public sealed record PileRefsState(IReadOnlyList<Ref<Zone>> Piles) : BaseState;
+
 // The Card variable catalog. One variable in this game.
-public static class Vars
-{
+public static class Vars {
     public static readonly Variable Number = new("number", "int");
 }
 ```
 
-Framework-owned slices that Pile Counter reads/writes through:
+Framework-owned slices Pile Counter reads/writes through:
 
 - **`ZoneContentsState`** — keyed at each pile's `Ref<Zone>`. Holds `ImmutableList<CardRef>`. Source of truth for "which cards are in which pile, in what order."
 - **`CardMapState`** — singleton. Maps `CardRef ↔ Ref<Card>` for resolution.
 - **`EntityState`** (per card) — keyed at each card's `Ref<Card>`. Holds the `Number` variable. Read via `card.Storage.GetVariable<int>(Vars.Number)`.
-- **`AvailableActionsState`** — singleton. Written by the runtime via `IAvailableActions.Set(...)`.
-- **`EngineState`**, **`HistoryState`** — framework-owned; auto-seeded.
+- **`MatchStateSlice`** — framework singleton (per ADR-0009). Wraps the polymorphic `MatchState` (Pile Counter's `PilePlayingState` or `EndOfMatchState`).
+- **`HistoryState`**, **`PendingEffectsSlice`**, **`RequestsSlice`**, **`AnswersSlice`** — framework-owned auto-seeded; Pile Counter doesn't write them but `HistoryState` records every command.
 
-Slices are immutable; mutators return new records. The runtime holds no game-affecting state.
+Slices are immutable; mutators return new records. The runtime holds zero gameplay state.
 
-### 9.2 Commands, intents, results, payloads
+### 9.2 Match states
+
+Pile Counter has one game-defined `MatchState` plus the framework-shipped `EndOfMatchState`:
 
 ```csharp
-// Player intent (UI emits this on drop)
+// The single play state. ActionsOpen = false + whitelist = MoveCardAction:
+// MatchStateActionGate rejects anything except moves while in this state.
+public sealed record PilePlayingState(IActor Player) : MatchState {
+    public override IReadOnlyList<Type> Actions     => [typeof(MoveCardAction)];
+    public override bool                ActionsOpen => false;
+
+    // Initial setup: spawn each card into its target pile per the puzzle's
+    // deal. CreateCardActions go through the normal pipeline; framework's
+    // CreateCardHandler routes them through the spawn + zone-add path.
+    public override IReadOnlyList<GameAction> OnEnter(IStateScope scope) {
+        // Setup ran on the first OnEnter; subsequent re-entries (none in
+        // Pile Counter, but pattern-clean) return empty.
+        var alreadySpawned = scope.Get<CardMapState>().Refs.Count > 0;
+        if (alreadySpawned) return Array.Empty<GameAction>();
+
+        var def    = scope.Get<MatchSetupState>().Definition as PileCounterGameDefinition;
+        var puzzle = def!.Puzzle;
+        var piles  = scope.Get<PileRefsState>().Piles;
+        var deck   = puzzle.Deck;
+
+        var setup = new List<GameAction>(deck.Count);
+        for (int p = 0; p < puzzle.Deal.Count; p++)
+            foreach (var deckIdx in puzzle.Deal[p])
+                setup.Add(new CreateCardAction(deck[deckIdx], piles[p], InsertPosition.AtTop));
+        return setup;
+    }
+
+    // IsCompleted: did this state's win condition fire? Returns true when
+    // all pile counters equal their targets. Engine's default Evaluate then
+    // calls Flow.NextAfter, which returns EndOfMatchState(Win(Player)).
+    public override bool IsCompleted(GameAction action, CommandResult result, IStateScope scope) {
+        var piles = scope.Get<PileRefsState>().Piles;
+        foreach (var pileRef in piles) {
+            var pile = scope.Get<PileState>(pileRef);
+            if (pile.Counter != pile.Target) return false;
+        }
+        return true;
+    }
+}
+```
+
+The framework-shipped `EndOfMatchState(MatchOutcome.Win(player))` is what `Flow.NextAfter(PilePlayingState)` returns. Engine recognizes it after the transition and auto-dispatches `EndMatchCommand`. Game authors don't write that wiring.
+
+### 9.3 Commands, payloads, results
+
+```csharp
+// Player intent — game-defined; lives in presentation. Carries source and
+// destination refs picked by the player's drag-and-drop gesture.
 public sealed record MoveCardIntent(Ref<Card> Card, Ref<Zone> Destination) : PlayerIntent;
 
-// Engine command (fully resolved). Refs at the boundary — per ADR-0005,
-// command payloads are addressable by ref because they cross
-// serialization/replay/network boundaries.
-public sealed record MoveCardCommand(
+// GameCommand. Data-only fields per the hard rule. Refs at the boundary
+// because envelopes round-trip through replay / save / network (ADR-0005).
+public sealed record MoveCardAction(
     Ref<Card> Card,
     Ref<Zone> From,
     Ref<Zone> To) : GameAction;
 
-// EndMatchCommand is framework-owned (engine/01 §Transitions are commands). Pile Counter does not
-// declare its own end-of-match command; Evaluate dispatches the framework's.
-
-// Result
 public sealed record MoveCardResult(Ref<Card> MovedCard) : CommandResult;
 
-// Game-side payloads — fan out to game-authored mutators when the handler
-// commits the move.
-public sealed record AdjustPileCounterPayload(Ref<Zone> Pile, int Delta)
-    : IPayloadReference
-{
-    public Reference GetReference() => Pile;
-}
-
-public sealed record SetLastMovePayload(LastMove Move);
+// Single semantic payload. N mutators register against it — each writes one
+// slice (per spike Q5 lock: single payload + fan-out, not ExecuteBatch of
+// per-slice payloads). The Card-Number lookup is done once in the handler
+// and baked into the payload as data.
+public sealed record MoveCardPayload(
+    Ref<Card> Card,
+    Ref<Zone> From,
+    Ref<Zone> To,
+    int       Number);
 ```
 
-Note the framework primitive is **generic** `MoveCardCommand` — not `MoveTopCardCommand`. The "top only" rule is a Pile Counter constraint enforced in `Validate`, not a framework concept.
+No `MoveTopCardCommand` framework primitive; "top only" is a Pile Counter constraint enforced by the validator.
 
-The actual zone move (remove from source, rotate `CardRef`, insert into destination) goes through the framework's `MoveCardMutation` `CompositeAction` — see [`cards/01-card-model.md` § Mutations](features/cards/models/01-card-model.md). The handler doesn't write `ZoneContentsState` directly; it issues the composite.
+The actual zone-content rewrite uses the framework's `MoveCardComposite : CompositeMutation` (post-ADR-0013 rename of the former `CompositeAction`). The composite is reached via `scope.Execute(...)` from inside the handler — distinct from `scope.Dispatch(...)`.
 
-### 9.3 Intent mapper (game-specific)
+### 9.4 Validator + handler
+
+Per [ADR-0010](decisions/0010-validator-handler-split.md), validator and handler are separate interfaces. Validator owns legality; handler owns mutation dispatch.
 
 ```csharp
-public class PileCounterIntentMapper : IIntentMapper
-{
-    private readonly IStateScope state;
-    public PileCounterIntentMapper(IStateScope state) => this.state = state;
-
-    public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
-    {
-        MoveCardTemplate m => new MoveCardCommand(
-            Card: m.Card,
-            From: LocateCard(state, m.Card),
-            To:   (Ref<Zone>)choice.Targets[0]),
-        _ => throw new InvalidOperationException($"unknown template: {template}")
-    };
-
-    // Reverse-look the card's current pile by scanning ZoneContentsState slices.
-    // Pile Counter has 4 zones — scan is trivial. Larger games can build a
-    // CardLocationIndex per `bl-card-location-index` in OPEN-ITEMS.md.
-    private static Ref<Zone> LocateCard(IStateScope state, Ref<Card> card)
-    {
-        var map = state.Get<CardMapState>();
-        var cardRef = map.RefOf(card);
-        // Iterate the zone catalog the game knows about — game-side index of pile refs.
-        foreach (var pileRef in PileCounterGameDefinition.PileRefsAt(state))
-            if (state.Get<ZoneContentsState>(pileRef).Cards.Contains(cardRef))
-                return pileRef;
-        throw new InvalidOperationException($"card {card} not in any pile");
+// Legality. Property-injected Store comes from the CommandValidator<> base
+// per ADR-0010 — no IHandlerContext, no ctx.Store.
+public sealed class MoveCardValidator : CommandValidator<MoveCardAction> {
+    public override bool Validate(MoveCardAction move, out string? reason) {
+        if (move.From.Equals(move.To)) {
+            reason = "source and destination must differ"; return false;
+        }
+        var sourceContents = Store.Get<ZoneContentsState>(move.From).Cards;
+        if (sourceContents.Count == 0) {
+            reason = "source pile is empty"; return false;
+        }
+        // Top of the pile = last in the list.
+        var topRef = Store.Get<CardMapState>().RefOf(move.Card);
+        if (!sourceContents[^1].Equals(topRef)) {
+            reason = "only the top card of a pile can be moved"; return false;
+        }
+        if (Store.Get<LastMoveState>().Move?.Card.Equals(move.Card) == true) {
+            reason = "can't move the same card twice in a row"; return false;
+        }
+        reason = null;
+        return true;
     }
 }
-```
 
-The mapper switches on the typed template (no string-keyed slot lookup) and resolves the implicit `From` by scanning zone contents. The `IStateScope` is injected for state-driven mapping; the mapper is decision-unaware (per ADR-0006). See [`engine/04 §3`](features/engine/models/04-available-actions.md).
-
-### 9.4 Handler (validate + handle)
-
-Handlers own command-specific legality and dispatch the mutations / payloads that drive state change. `Validate` reads slices through `IStateScope`; `Handle` returns `Task<TResult>`. See [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md) for the handler signature, §4.4 for `IHandlerContext`.
-
-```csharp
-public class MoveCardHandler : CommandHandler<MoveCardCommand, MoveCardResult>
-{
-    public bool Validate(MoveCardCommand move, IStateScope state, out string? reason)
-    {
-        if (move.From.Equals(move.To))
-        { reason = "source and destination must differ"; return false; }
-
-        var sourceContents = state.Get<ZoneContentsState>(move.From).Cards;
-        if (sourceContents.Count == 0)
-        { reason = "source pile is empty"; return false; }
-
-        // Top card check — last in the list is the top.
-        var topCardRef = state.Get<CardMapState>().RefOf(move.Card);
-        if (!sourceContents[^1].Equals(topCardRef))
-        { reason = "only the top card of a pile can be moved"; return false; }
-
-        if (state.Get<LastMoveState>().Move?.Card.Equals(move.Card) == true)
-        { reason = "can't move the same card twice in a row"; return false; }
-
-        reason = null; return true;
-    }
-
-    public Task<MoveCardResult> Handle(MoveCardCommand move, IHandlerContext ctx)
-    {
-        var card   = ctx.Store.Catalog.Resolve(move.Card);
-        var source = ctx.Store.Catalog.Resolve(move.From);
-        var dest   = ctx.Store.Catalog.Resolve(move.To);
-
+// Handler. Property-injected Store; constructor injection for additional
+// services (none here). Single semantic payload; fan-out mutators handle
+// the per-slice writes. Zone-content rewrite via CompositeMutation.
+public sealed class MoveCardHandler : GameCommandHandler<MoveCardAction, MoveCardResult> {
+    public override Task<MoveCardResult> Handle(MoveCardAction move) {
+        var card   = Store.Catalog.Resolve(move.Card);
         var number = card.Storage.GetVariable<int>(Vars.Number);
 
-        // Atomic batch: the framework's MoveCardMutation handles the actual zone
-        // move (ZoneContentsState updates + CardRef rotation); the game-side
-        // payloads update the cached pile counters and the last-move memory.
-        ctx.Store.ExecuteBatch(new object[]
-        {
-            MoveCardMutation.AtTop(card, source, dest),
-            new AdjustPileCounterPayload(move.From, -number),
-            new AdjustPileCounterPayload(move.To,   +number),
-            new SetLastMovePayload(new LastMove(move.Card, move.From, move.To)),
-        });
+        // 1. Inline mutation cluster for the zone move (framework-shipped).
+        //    Removes from source.ZoneContents, rotates CardRef, inserts at
+        //    destination.ZoneContents — all in this scope, no envelope of
+        //    its own.
+        Scope.Execute(MoveCardComposite.AtTop(move.Card, move.From, move.To));
+
+        // 2. Single semantic payload — fan-out mutators update the cached
+        //    pile counters (×2: source and dest) and the last-move memory.
+        Store.Execute(new MoveCardPayload(move.Card, move.From, move.To, number));
 
         return Task.FromResult(new MoveCardResult(move.Card));
     }
 }
 ```
 
-The handler issues one `ExecuteBatch` call. Scaffold's payload-keyed registry runs every mutator registered for each payload in the batch and commits them atomically. Slice subscribers fire once per affected slice with the post-batch state. See [`effects/03-handler-context.md`](features/effects/models/03-handler-context.md) for `IHandlerContext`'s shape.
+The handler keeps two operations distinct:
+
+- `Scope.Execute(CompositeMutation)` — inline expansion in the handler's scope (framework's `MoveCardComposite` rewrites `ZoneContentsState` and `CardMapState`).
+- `Store.Execute(MoveCardPayload)` — payload-keyed dispatch; multiple mutators register against this single payload and each writes its own slice. No `ExecuteBatch` of per-slice payloads.
 
 ### 9.5 State mutators
 
-Each mutator owns one slice; multiple mutators can register against the same payload type. Mutator type parameters are the **payload**, never the command.
+Three mutators register against `MoveCardPayload`. Each writes one slice. Per spike Q5 lock: `Store.Execute(payload)` fans out — all three run; subscribers fire once per affected slice with the post-mutation state.
 
 ```csharp
-// Per-pile counter — keyed by Ref<Zone> via IPayloadReference.
-public class PileCounterMutator : Mutator<PileState, AdjustPileCounterPayload>
-{
-    public override PileState Change(PileState state, AdjustPileCounterPayload payload, IStateScope scope)
-        => state with { Counter = state.Counter + payload.Delta };
+// Per-pile counter — source delta. Keyed by Ref<Zone>; payload carries the
+// source ref as the IPayloadReference target.
+public sealed class AdjustSourceCounterMutator : Mutator<PileState, MoveCardPayload> {
+    public override PileState Change(PileState state, MoveCardPayload p, IStateScope scope)
+        => p.From == /* match this slice's key */
+            ? state with { Counter = state.Counter - p.Number }
+            : state;
+}
+
+// Per-pile counter — destination delta.
+public sealed class AdjustDestCounterMutator : Mutator<PileState, MoveCardPayload> {
+    public override PileState Change(PileState state, MoveCardPayload p, IStateScope scope)
+        => p.To == /* match this slice's key */
+            ? state with { Counter = state.Counter + p.Number }
+            : state;
 }
 
 // Singleton — overwrites the last-move record.
-public class LastMoveMutator : Mutator<LastMoveState, SetLastMovePayload>
-{
-    public override LastMoveState Change(LastMoveState state, SetLastMovePayload payload, IStateScope scope)
-        => new LastMoveState(payload.Move);
+public sealed class LastMoveMutator : Mutator<LastMoveState, MoveCardPayload> {
+    public override LastMoveState Change(LastMoveState state, MoveCardPayload p, IStateScope scope)
+        => new LastMoveState(new LastMove(p.Card, p.From, p.To));
 }
 ```
 
-`PileCounterMutator` runs against the `PileState` slice keyed at `payload.Pile`. The framework's payload-keyed dispatch routes `AdjustPileCounterPayload` to the slice instance whose key matches `payload.GetReference()`. Two `AdjustPileCounterPayload`s in one batch (one for source, one for destination) update both piles atomically.
+The per-pile mutators each filter on whether the payload's `From` / `To` matches their slice's key (Scaffold's payload-keyed dispatch will run both against each `PileState` instance; the no-op branch returns `state` unchanged). Alternative shapes: split `MoveCardPayload` into `RemoveFromPilePayload(Ref<Zone>, int)` + `AddToPilePayload(Ref<Zone>, int)` (two payloads, each with its own keyed mutator) — clean if the per-pile filter feels awkward. Pile Counter is fine either way; pick during implementation.
 
-The framework's `MoveCardMutation` handles `ZoneContentsState` and `CardMapState` updates via its composite expansion — see [`cards/01-card-model.md` § Composite expansion](features/cards/models/01-card-model.md). No game-authored mutator is needed for the zone move itself.
-
-### 9.6 The rule
+### 9.6 The runtime
 
 ```csharp
 // Authored data — Pile Counter has no per-mode knobs yet, so the definition
-// is empty. A future "Hard Mode" variant would add [SerializeField] fields here
-// (move limit, scoring multiplier, …) and ship as a separate definition asset.
+// is empty. A future "Hard Mode" variant would add [SerializeField] fields
+// here (move limit, scoring multiplier, …) and ship as a separate asset.
 [Serializable]
-public class PileCounterRulesDefinition : GameRulesDefinition
-{
+public sealed class PileCounterRulesDefinition : GameRulesDefinition {
     public static readonly PileCounterRulesDefinition Default = new();
 }
 
-// Runtime brain — generic on its definition. No game-specific subsystems
-// (Pile Counter has no stack, no decks, no priority). Holds a reference
-// to the solo player resolved from the seated-actor list and the per-pile
-// `Ref<Zone>` list resolved from the GameDefinition at construction.
-//
-// Per ADR-0006, the contract has two methods: FilterTriggers and Evaluate.
-// Pile Counter omits FilterTriggers (uses base default) and uses Evaluate
-// for both state-based follow-ups (win check) and snapshot publication.
-public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>
-{
-    private readonly IActor                   _player;
-    private readonly IReadOnlyList<Ref<Zone>> _pileRefs;
+// Runtime brain — generic on its definition. Single contract method
+// (Evaluate); no FilterTriggers (retired per ADR-0013); no StateBasedActions
+// (retired per ADR-0009 refresh).
+public sealed class PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition> {
+    private readonly IActor _player;
+    protected override ITurnFlow Flow { get; }
 
     public PileCounterRulesRuntime(
         PileCounterRulesDefinition definition,
         IStateScope                state,
-        IAvailableActions          actions,
-        IReadOnlyList<IActor>      actors)
-        : base(definition, state, actions)
+        IReadOnlyList<IActor>      actors,
+        PileCounterTurnFlow        flow)
+        : base(definition, state)
     {
-        _player   = actors.Single();
-        _pileRefs = PileCounterGameDefinition.PileRefsAt(state);
+        _player = actors.Single();
+        Flow    = flow;
     }
 
-    // FilterTriggers omitted — base class ships a virtual identity default.
+    // Default Evaluate body suffices:
+    //   - Pause on open requests / pending effects (Pile Counter has neither,
+    //     so this is always no-op).
+    //   - current.IsCompleted? → Flow.NextAfter(current) : current
+    //
+    // PilePlayingState.IsCompleted returns true when all piles match targets;
+    // Flow returns EndOfMatchState(Win(Player)); engine auto-dispatches
+    // EndMatchCommand. Override unnecessary.
+}
 
-    public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult __)
-    {
-        var pileStates = _pileRefs.Select(r => State.Get<PileState>(r));
-
-        // Win check: all piles match their target?
-        if (pileStates.All(p => p.Counter == p.Target))
-            return new[] { new EndMatchCommand(new MatchOutcome.Win(_player)) };
-
-        // No state-based follow-ups. Publish snapshot at this moment.
-        Actions.Set(BuildSnapshot());
-        return Array.Empty<GameAction>();
-    }
-
-    private AvailableActionsSnapshot BuildSnapshot()
-    {
-        var lastMove  = State.Get<LastMoveState>().Move;
-        var templates = new List<ActionTemplate>();
-
-        foreach (var sourceRef in _pileRefs)
-        {
-            var contents = State.Get<ZoneContentsState>(sourceRef).Cards;
-            if (contents.Count == 0) continue;
-
-            var topCardRef  = contents[^1];
-            var topInstance = State.Get<CardMapState>().InstanceOf(topCardRef);
-            if (lastMove?.Card.Equals(topInstance) == true) continue;   // per-template suppression
-
-            var destinations = _pileRefs
-                .Where(p => !p.Equals(sourceRef))
-                .Cast<Reference>()
-                .ToList();
-
-            templates.Add(new MoveCardTemplate(topInstance, destinations));
-        }
-
-        return new AvailableActionsSnapshot(templates);
-    }
+// Turn flow — straightforward successor table. PilePlayingState → EndOfMatch
+// (Win) on completion. EndOfMatchState is terminal so NextAfter isn't called
+// on it.
+public sealed class PileCounterTurnFlow : ITurnFlow {
+    public MatchState NextAfter(MatchState current) => current switch {
+        PilePlayingState p => new EndOfMatchState(new MatchOutcome.Win(p.Player)),
+        _ => throw new InvalidOperationException($"Unhandled state: {current}")
+    };
 }
 ```
 
-The runtime constructor takes its typed `PileCounterRulesDefinition` plus Scaffold's `IStateScope` (read-only) and `IAvailableActions` (snapshot writer). `State.Get<TState>(...)` reads each slice fresh per access; `LastMoveState.Move` is nullable for the game-start case. Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime no longer holds `IIntakeQueue` — the command queue is engine-private FIFO with no runtime service.
+The runtime is intentionally thin. Pile Counter's game logic lives entirely in:
+- The validator (legality)
+- The handler (mutation dispatch)
+- The state's `IsCompleted` predicate (win check)
+- The turn flow (`PilePlayingState → EndOfMatchState`)
 
-The runtime constructs typed `ActionTemplate` entries (per-template enumeration). Per-binding legality runs at dispatch via `MoveCardHandler.Validate`; the runtime does *not* pre-validate every (source × destination) combination during snapshot build. The "twice in a row" rule is per-template suppression — it skips the whole template for that card. See [`engine/04 §2–§3`](features/engine/models/04-available-actions.md).
+There is no overridden `Evaluate` — the default composition handles everything.
 
-### 9.7 Engine intake order
+### 9.7 Presentation
+
+A single per-state ViewModel handles Pile Counter's UI. Per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) + spike Q1 lock, the VM uses `scope.Subscribe<T>(handler) → IDisposable`:
 
 ```csharp
-public bool Dispatch(GameAction action, out string? reason)
-{
-    // 1. Lifecycle gate — framework-only check.
-    var lifecycle = store.Get<EngineState>().Lifecycle;
-    if (lifecycle == EngineLifecycle.Ended)        { reason = "MatchEnded"; return false; }
-    if (lifecycle == EngineLifecycle.NotStarted
-        && action is not StartMatchCommand
-        && action is not EndMatchCommand)          { reason = "MatchNotStarted"; return false; }
+public sealed record MoveAffordance(
+    Ref<Card> Card,
+    Ref<Zone> From,
+    IReadOnlyList<Ref<Zone>> Destinations);
 
-    // 2. Command-specific legality — pipeline resolves the handler and delegates to Validate.
-    if (!pipeline.Validate(action, store, out reason))
-        return false;
+public sealed record MoveCardIntent(Ref<Card> Card, Ref<Zone> Destination) : PlayerIntent;
 
-    // 3. Enqueue onto framework-private FIFO. Drain if not already running.
-    pending.Enqueue(action);
-    if (!running) Drain();
+public sealed class PilePlayingViewModel : MatchStateViewModel<PilePlayingState> {
+    private readonly CompositeDisposable _subs = new();   // host-MVVM-toolkit-dependent
+    private readonly ObservableProperty<IReadOnlyList<MoveAffordance>> _moves = new();
+    private IStateScope? _scope;
 
-    reason = null;
-    return true;
+    public IObservable<IReadOnlyList<MoveAffordance>> Moves => _moves;
+
+    public override void Bind(PilePlayingState state, IStateScope scope) {
+        _scope = scope;
+        _subs.Add(scope.Subscribe<ZoneContentsState>(_ => Recompute()));
+        _subs.Add(scope.Subscribe<LastMoveState>   (_ => Recompute()));
+        Recompute();
+    }
+
+    private void Recompute() {
+        var scope    = _scope!;
+        var piles    = scope.Get<PileRefsState>().Piles;
+        var lastMove = scope.Get<LastMoveState>().Move;
+        var moves    = new List<MoveAffordance>();
+
+        foreach (var sourceRef in piles) {
+            var contents = scope.Get<ZoneContentsState>(sourceRef).Cards;
+            if (contents.Count == 0) continue;
+
+            var topCardRef = contents[^1];
+            var topInstance = scope.Get<CardMapState>().InstanceOf(topCardRef);
+            if (lastMove?.Card.Equals(topInstance) == true) continue;    // twice-in-a-row suppression
+
+            var destinations = piles.Where(p => !p.Equals(sourceRef)).ToList();
+            moves.Add(new MoveAffordance(topInstance, sourceRef, destinations));
+        }
+        _moves.Value = moves;
+    }
+
+    public override GameCommand Map(PlayerIntent intent) => intent switch {
+        MoveCardIntent m => new MoveCardAction(
+            Card: m.Card,
+            From: LocateCard(_scope!, m.Card),
+            To:   m.Destination),
+        _ => throw new InvalidOperationException($"Unhandled intent: {intent.GetType().Name}")
+    };
+
+    private static Ref<Zone> LocateCard(IStateScope scope, Ref<Card> card) {
+        var cardRef = scope.Get<CardMapState>().RefOf(card);
+        foreach (var pileRef in scope.Get<PileRefsState>().Piles)
+            if (scope.Get<ZoneContentsState>(pileRef).Cards.Contains(cardRef))
+                return pileRef;
+        throw new InvalidOperationException($"card {card} not in any pile");
+    }
+
+    // Host MVVM toolkit decides VM lifetime; framework doesn't call Dispose.
 }
 ```
 
-The lifecycle gate runs first (cheap, framework-only), then `pipeline.Validate` (resolves handler, delegates to `handler.Validate`). Either can reject — surfaced via the try-get pattern (`bool` + `out string? reason`). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md), the runtime no longer participates in intake gating; the command queue is framework-private FIFO and game-specific routing customization lives at the effect-pipeline level (separate design pass; tracked as `oq-effect-pipeline`).
+The pre-cascade `IIntentMapper` / `ActionTemplate` / `AvailableActionsSnapshot` machinery retires entirely — the VM owns both the affordance projection (`Moves` observable) and the intent-to-command translation (`Map`). When the win condition fires and the FSM transitions to `EndOfMatchState`, the presenter rebinds to an `EndOfMatchViewModel : MatchStateViewModel<EndOfMatchState>` (framework-shipped or game-shipped; renders the win banner + "new puzzle" button).
 
 ### 9.8 Bootstrap
 
 ```csharp
 // Authored card definition — variant-free; one CardDefinition shape covers
 // the whole deck. Per-card variation (the Number) lives in the variable bag.
-public class PileCounterCardDefinition : CardDefinition
-{
+public sealed class PileCounterCardDefinition : CardDefinition {
     public int Number { get; init; }
-
     public override IEnumerable<Variable> DefinedVariables => new[] { Vars.Number };
-
-    public override bool TryGetDefaultValue(Variable key, out VariableValue value)
-    {
+    public override bool TryGetDefaultValue(Variable key, out VariableValue value) {
         if (key == Vars.Number) { value = new IntVariableValue(Number); return true; }
         value = default!; return false;
     }
@@ -448,23 +486,18 @@ public class PileCounterCardDefinition : CardDefinition
 // Authored zone definition — one PileDefinition per pile, parameterized by
 // its target. AllPublic visibility (battlefield-style); top-insertion is
 // the default for stack-shaped piles.
-public class PileDefinition : ZoneDefinition
-{
+public sealed class PileDefinition : ZoneDefinition {
     public int Target { get; init; }
-
-    public PileDefinition()
-    {
+    public PileDefinition() {
         DefaultPosition = new InsertPosition.AtTop();
         Visibility      = new ZoneVisibilityPolicy.AllPublic();
     }
-
-    public override IEnumerable<BaseState> GetInitialSlices()
-    {
+    public override IEnumerable<BaseState> GetInitialSlices() {
         yield return new PileState(Counter: 0, Target: Target);
     }
 }
 
-// The puzzle data the factory produces.
+// Puzzle data — produced by the puzzle factory; data-only.
 public sealed record Puzzle(
     IReadOnlyList<PileCounterCardDefinition> Deck,
     IReadOnlyList<int>                       Targets,    // 4 entries
@@ -473,157 +506,124 @@ public sealed record Puzzle(
 
 public interface IPuzzleFactory { Puzzle Create(); }
 
-// The GameDefinition bundle — consolidates Rules + CardCatalog + SharedZones
-// + DefaultPlayerDefinition + game-singleton slices. Per [engine/06](features/engine/models/06-game-definition.md).
-public class PileCounterGameDefinition : GameDefinition
-{
-    private readonly Puzzle _puzzle;
-
-    public PileCounterGameDefinition(Puzzle puzzle) => _puzzle = puzzle;
+// The GameDefinition bundle.
+public sealed class PileCounterGameDefinition : GameDefinition {
+    public Puzzle Puzzle { get; }
+    public PileCounterGameDefinition(Puzzle puzzle) => Puzzle = puzzle;
 
     public override GameRulesDefinition           Rules                   => PileCounterRulesDefinition.Default;
-    public override IReadOnlyList<CardDefinition> CardCatalog             => _puzzle.Deck;
+    public override IReadOnlyList<CardDefinition> CardCatalog             => Puzzle.Deck;
     public override IEnumerable<ZoneDefinition>   SharedZones             =>
-        _puzzle.Targets.Select(target => new PileDefinition { Target = target });
+        Puzzle.Targets.Select(target => new PileDefinition { Target = target });
     public override PlayerDefinition              DefaultPlayerDefinition => SoloPlayerDefinition.Default;
 
-    public override IEnumerable<BaseState> GetInitialSlices()
-    {
+    public override IEnumerable<BaseState> GetInitialSlices() {
         yield return new LastMoveState(Move: null);
+        yield return new PileRefsState(Piles: Array.Empty<Ref<Zone>>());  // factory walk populates
         // PileState slices come from each PileDefinition.GetInitialSlices() at spawn.
-        // Framework slices (AvailableActionsState, EngineState, HistoryState) auto-seeded.
+        // MatchStateSlice seeded by StartMatchHandler → TransitionStateCommand →
+        // initial PilePlayingState (returned by Flow's bootstrap or by an
+        // ITurnFlow.Initial pattern; see engine/08).
     }
-
-    // Game-side helper for runtime + intent mapper to enumerate spawned pile refs.
-    // The factory walk spawns one Zone per SharedZones entry; we read them from
-    // the catalog via a dedicated index slice that PileCounterRulesRuntime maintains
-    // (or via OwnershipState scan filtered to the four PileDefinition entries).
-    public static IReadOnlyList<Ref<Zone>> PileRefsAt(IStateScope state)
-        => /* engine-side index slice; populated during Build walk */
-           throw new NotImplementedException("populated by Build walk index");
 }
 
 // Solo-player baseline — empty PerPlayerZones (Pile Counter has no per-player
 // state beyond the actor identity).
-public class SoloPlayerDefinition : PlayerDefinition
-{
+public sealed class SoloPlayerDefinition : PlayerDefinition {
     public static readonly SoloPlayerDefinition Default = new();
-
     public override IEnumerable<ZoneDefinition> PerPlayerZones => Array.Empty<ZoneDefinition>();
 }
 
-public class SoloPlayer : Player
-{
+public sealed class SoloPlayer : Player {
     public SoloPlayer(SoloPlayerDefinition def, IEntityVariableStorage storage) : base(def, storage) { }
 }
 
-public static class PileCounterBootstrap
-{
+public static class PileCounterBootstrap {
     // IGameFactory is DI-resolved; caller never sees VContainer.
-    // Per-game behaviors (handlers, mutators, GameRulesRuntime, IIntentMapper) are
-    // registered in PileCounterInstaller below.
-    public static GameEngine Create(IPuzzleFactory puzzleFactory, IGameFactory gameFactory)
-    {
+    public static GameEngine Create(IPuzzleFactory puzzleFactory, IGameFactory gameFactory) {
         var puzzle = puzzleFactory.Create();
 
         var engine = gameFactory.NewMatch()
-            .WithGame(new PileCounterGameDefinition(puzzle))    // bundle: Rules + zones + cards + GetInitialSlices()
-            .WithActors(new SoloActor(ActorId.Player1))         // entity-backed Player spawned at Build via DefaultPlayerDefinition
-            .WithSeed(puzzle.Seed)
+            .WithGame  (new PileCounterGameDefinition(puzzle))
+            .WithActors(new SoloActor(ActorId.Player1))
+            .WithSeed  (puzzle.Seed)
             .Build();
 
-        engine.StartMatch();   // dispatches StartMatchCommand → MatchStartedSignal → Lifecycle = Started
-
-        // Setup commands — runtime-driven setup is the recommended pattern (per
-        // engine.md §Match setup). PileCounterRulesRuntime's first `Evaluate` dispatches
-        // CreateCardMutation calls to spawn each card into its target pile per
-        // puzzle.Deal. After setup completes the runtime publishes the initial
-        // AvailableActions snapshot.
-
+        // After Build, engine.Session = NotStartedSession. StartMatch() flips
+        // it to InMatchSession and triggers the initial MatchState's OnEnter
+        // (which dispatches the CreateCardAction setup per puzzle.Deal).
+        engine.StartMatch(out _);
         return engine;
     }
 }
 
-// Separate file — registered once at app startup.
-public class PileCounterInstaller : IInstaller
-{
-    public void Install(IContainerBuilder builder)
-    {
+// Game-side DI installer.
+public sealed class PileCounterInstaller : IInstaller {
+    public void Install(IContainerBuilder builder) {
+        // Validators + handlers (per ADR-0010).
+        builder.Register<MoveCardValidator>        (Lifetime.Singleton).AsImplementedInterfaces();
         builder.Register<MoveCardHandler>          (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<PileCounterMutator>       (Lifetime.Singleton).AsImplementedInterfaces();
-        builder.Register<LastMoveMutator>          (Lifetime.Singleton).AsImplementedInterfaces();
+
+        // Game-authored mutators (single payload, fan-out registration).
+        builder.Register<AdjustSourceCounterMutator>(Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<AdjustDestCounterMutator>  (Lifetime.Singleton).AsImplementedInterfaces();
+        builder.Register<LastMoveMutator>           (Lifetime.Singleton).AsImplementedInterfaces();
+
+        // Runtime + turn flow.
+        builder.Register<PileCounterTurnFlow>      (Lifetime.Transient);
         builder.Register<GameRulesRuntime<PileCounterRulesDefinition>, PileCounterRulesRuntime>(Lifetime.Transient);
-        builder.Register<PileCounterIntentMapper>  (Lifetime.Singleton).AsImplementedInterfaces();
+
+        // Per-state view model registration (per ADR-0012 ViewModelRegistry).
+        builder.Register<PilePlayingViewModel>     (Lifetime.Transient).AsImplementedInterfaces();
+        // EndOfMatchViewModel registered separately (framework-shipped or game-shipped).
     }
 }
 ```
 
-Match construction is a two-layer split (locked in [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md)):
+Match construction is the two-layer split locked in [`engine/05-game-factory.md`](features/engine/models/05-game-factory.md):
 
-- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `IAvailableActions`, `ICommandPipeline`, `Store`, and `IGameFactory` plus framework mutators (entity-bridge, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`). Per [ADR-0006](decisions/0006-two-pipeline-architecture.md) there is no `IIntakeQueue` — the command queue is engine-private FIFO. The game's installer (`PileCounterInstaller` above) registers the handler, game-authored mutators, the runtime against its definition's closed generic (`GameRulesRuntime<PileCounterRulesDefinition> → PileCounterRulesRuntime`), and the intent mapper. Each runs once per app. See [`engine/05` § Registration contract](features/engine/models/05-game-factory.md).
-- **Per-match factory** — the bootstrap call site asks `IGameFactory` for a new game, supplying only per-match data: the `GameDefinition` bundle, actor catalog, RNG seed. VContainer never appears in this code.
+- **App-level installer** — the framework's `EngineInstaller` registers `IStateScope`, `ICommandPipeline`, `Store`, `IGameFactory`, framework validators (`SessionGate`, `MatchStateActionGate`), framework mutators (entity-bridge, `CardMapState`, `OwnershipState`, `CardVisibilityState`, `ZoneContentsState`, `MatchStateSlice`, `RequestsSlice`, `AnswersSlice`, `PendingEffectsSlice`, `HistoryState`, `EngineState`), framework handlers (`StartMatchHandler`, `EndMatchHandler`, `TransitionStateHandler`), `ITriggerPipeline`, `ITriggerSystem`, `IEffectPipeline`. Per-game `PileCounterInstaller` (above) appends. Each runs once per app.
+- **Per-match factory** — the bootstrap asks `IGameFactory` for a new game, supplying only per-match data: the `GameDefinition` bundle, actor catalog, RNG seed.
 
-The framework's `MoveCardMutation` `CompositeAction` handles the zone-move expansion (remove + rotate `CardRef` + insert) atomically; the game-side mutators (`PileCounterMutator` × 2, `LastMoveMutator`) update cached counters and the last-move memory in the same `ExecuteBatch`. After `Build` returns the engine is in `EngineLifecycle.NotStarted`; `engine.StartMatch()` opens it, and runtime-driven setup deals the cards. See [`presentation/01`](features/presentation/models/01-presentation-loop.md) for the presentation loop.
+`MoveCardComposite` (framework-shipped `CompositeMutation`) handles the zone-move expansion atomically; the game's three mutators update cached counters and last-move memory in the same `Store.Execute(MoveCardPayload)` fan-out. After `Build` returns, `engine.Session = NotStartedSession`; `engine.StartMatch()` flips it to `InMatchSession` and the initial `PilePlayingState`'s `OnEnter(scope)` dispatches the setup actions per `puzzle.Deal`.
 
 ---
 
 ## 10. Framework Decisions Surfaced From This Sketch
 
-These are decisions the Pile Counter sketch forced or confirmed. Each affects the framework, not just this game.
+These are decisions the Pile Counter sketch forces or confirms. Each affects the framework, not just this game.
 
-- **Generic primitive + rule-enforced constraint.** Framework ships generic `MoveCardCommand`; "top only" is enforced in `Validate`. No `MoveTopCardCommand` primitive.
-- **Validation belongs to the handler.** `ICommandHandler.Validate(cmd, state, out reason)`. The rule never switches on command types.
-- **`Validate` signature is Try-pattern.** `bool Validate(..., out string? reason)`.
-- **Rule holds zero game-affecting state.** `LastMove` lives in its own `LastMoveState` slice, written by a registered `Mutator<LastMoveState, SetLastMovePayload>`. Locked as contract.
-- **State mutators are payload-keyed, not command-keyed** (Scaffold State pattern). Handlers issue `Store.Execute(payload)` or `Store.ExecuteBatch(...)`; every `Mutator<TState, TPayload>` registered for that payload type runs and commits atomically. Handlers don't enumerate ancillary state slots.
-- **Framework `MoveCardMutation` (CompositeAction) handles zone moves.** Game-authored mutators handle game-side concerns (counter cache, last-move memory). The split is structural — see [`cards/01-card-model.md`](features/cards/models/01-card-model.md).
-- **Player input layer is three-tier:** `PlayerIntent` (UI) → `IIntentMapper` → `GameCommand` (engine).
-- **Two-pipeline architecture** ([ADR-0006](decisions/0006-two-pipeline-architecture.md)). Command pipeline is framework-FIFO with per-command primitives (`scope.Modify` / `Cancel` / `Replace` / `Dispatch`); effect pipeline (game-customizable; `oq-effect-pipeline`) is the forthcoming surface for "when does each effect start." The runtime does not own command-queue routing.
-- **Snapshot lives in an `AvailableActionsState` slice carrying `AvailableActionsSnapshot`.** Typed templates. The runtime writes through `IAvailableActions.Set` from inside `Evaluate` whenever it deems appropriate (typically when its own follow-ups exhaust). See [`engine/04`](features/engine/models/04-available-actions.md).
-- **`AffordanceMap` is game-specific** and lives in the UI/gateway layer. Computed from snapshot. Framework doesn't define it.
-- **Three rejection paths:** AvailableActions (UI prophylactic) / Engine lifecycle gate (framework, `NotStarted`/`Ended`) / `handler.Validate` (per-command legality, authoritative) / Before-fold `Cancel` (card-effect).
-- **`GameDefinition` bundle composition.** `PileCounterGameDefinition` consolidates Rules + CardCatalog + SharedZones + DefaultPlayerDefinition + game-singleton slices. Per-puzzle variation flows through the constructor. [`engine/06`](features/engine/models/06-game-definition.md).
-- **Match setup runs after StartMatch via runtime-driven setup commands.** The runtime's first `Evaluate` dispatches `CreateCardMutation` calls per `puzzle.Deal`. [`engine.md §Match setup`](features/engine/engine.md).
-- **Engine intake order (try-get):** lifecycle gate → `pipeline.Validate` → enqueue. `engine.Dispatch(GameAction action, out string? reason)` returns `bool`; matches `pipeline.Validate`'s shape.
-- **Rules layer is split into `GameRulesDefinition` (data) + `GameRulesRuntime<TDefinition>` (runtime).** Definition is `[SerializeField]` data; runtime constructor takes the definition + Scaffold `IStateScope` + `IAvailableActions` + any game-specific subsystems. Two-method contract (`FilterTriggers` + `Evaluate`); per-match factory uses container open-generic resolution ([`engine/02-game-rules-definition.md` §The two-type split](features/engine/models/02-game-rules-definition.md), [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md), [`engine/05`](features/engine/models/05-game-factory.md)).
-- **Definition / Instance layered on framework parents.** `CardDefinition` / `ZoneDefinition` / `PlayerDefinition` inherit from `DefinitionWithSlices`; `Card` / `Zone` / `Player` inherit from `InstanceWithSlices<TDef>`. `Definition` is `protected` on the instance side. Per the open-seams design pass.
+- **Generic primitive + rule-enforced constraint.** Framework ships generic `MoveCardAction`; "top only" is a Pile Counter constraint in `MoveCardValidator.Validate`. No `MoveTopCardAction` primitive.
+- **Validator/handler split.** Per [ADR-0010](decisions/0010-validator-handler-split.md). `ICommandValidator<MoveCardAction>` owns legality; `GameCommandHandler<MoveCardAction, MoveCardResult>` owns mutation dispatch. Property-injected `Store` on both bases.
+- **Single semantic payload + fan-out mutators** (per spike Q5 lock). One `MoveCardPayload` carries all the data; three mutators register against it and each writes one slice. `Store.Execute(payload)` fans out atomically. No `ExecuteBatch` of per-slice payloads.
+- **`CompositeMutation` for inline mutation clusters.** Framework-shipped `MoveCardComposite` rewrites `ZoneContentsState` and `CardMapState` via `scope.Execute(...)` — distinct from `scope.Dispatch(...)` (which routes through the engine drain). Per ADR-0013, `CompositeMutation` is **not** a `GameCommand` sibling.
+- **Match state is a first-class FSM concept.** Per [ADR-0009](decisions/0009-engine-as-fsm.md), `PilePlayingState : MatchState` carries the action-gate triad + lifecycle hooks; `runtime.Evaluate(action, result) → MatchState` is the FSM evaluator. Engine auto-dispatches `EndMatchCommand` on `EndOfMatchState`.
+- **Per-state ViewModel + `scope.Subscribe<T>`.** Per [ADR-0012](decisions/0012-presentation-per-state-view-models.md) + spike Q1 lock. The VM owns affordance projection (`Moves` observable) and intent-to-command translation (`Map`). No global `IIntentMapper`, no `ActionTemplate` wire form. Per-VM `CompositeDisposable` for subscription cleanup; framework doesn't call `Dispose` on the VM.
+- **Engine-orchestrated pipeline.** Per [ADR-0013](decisions/0013-engine-pipeline-orchestration.md). Engine pattern-matches command type and routes to validator chain / trigger fold / handler. Pile Counter has no triggers; the fold is a no-op pass-through. `runtime.FilterTriggers` retired; `StateBasedActions` retired (Magic-style; not a framework concept).
+- **Validator chain layering.** `SessionGate` + `MatchStateActionGate` (framework defaults) → game-shipped `MoveCardValidator` (per ADR-0010). `MatchStateActionGate` reads `PilePlayingState.Actions = [typeof(MoveCardAction)]` + `ActionsOpen = false` — rejects anything else.
+- **`GameDefinition` bundle composition.** `PileCounterGameDefinition` consolidates Rules + CardCatalog + SharedZones + DefaultPlayerDefinition + game-singleton slices (`LastMoveState`, `PileRefsState`). Per-puzzle variation flows through the constructor. Per [`engine/06`](features/engine/models/06-game-definition.md).
+- **Match setup via `OnEnter`.** The initial `MatchState`'s `OnEnter(scope)` dispatches the `CreateCardAction` list per `puzzle.Deal`. No `StartMatchHandler`-side setup logic. Per [`engine/07`](features/engine/models/07-match-state.md) banner.
+- **Data-only fields hard rule.** No `Func<>` / `Predicate<>` / delegates on any `GameCommand` / `CompositeMutation` / payload / slice. The "twice in a row" rule is computed from `LastMoveState` data, not captured in a closure. Required for replay round-trip.
+- **Match-end is engine-self-emitted.** No host orchestrator. `Evaluate` returns `EndOfMatchState`; engine auto-dispatches `EndMatchCommand`; `engine.Session = EndedSession(outcome)`; `SessionGate` rejects everything from then on. Per [`engine/01`](features/engine/models/01-game-engine.md) banner.
+- **Rematch is dispose-and-recreate.** Per ADR-0009 refresh. No `RestartMatchCommand`. `engine.Dispose()` + `gameFactory.NewMatch()...Build()` for a fresh instance.
 
 ---
 
-## 11. Open Questions From This Sketch
+## 11. Open Items From This Sketch
 
-Tracked alongside the sketch so they don't get lost. Numbers are stable; resolve in place.
+Most pre-cascade Qs were resolved during the spike Q-walk (2026-05-11). Remaining items, post-cascade:
 
-### Resolved (in subsequent docs)
+### Implementation-time picks (non-blocking)
 
-- ~~**Q1 — State pattern: stateless vs stateful rule.**~~ Resolved by [`engine/03 §Q1`](features/engine/models/03-game-rules-runtime.md). Services injected at construction; methods take only ephemeral data; state read through Scaffold `IStateScope.Get<TState>(...)`.
-- ~~**Q3 — `EndGameCommand` semantics.**~~ Resolved by the `oq-engine-match-lifecycle` design pass. Pile Counter dispatches the framework-owned `EndMatchCommand(MatchOutcome.Win(player))`; the framework handler emits `MatchEndedSignal` and flips `EngineState.Lifecycle` to `Ended`. Engine rejects subsequent dispatches via the lifecycle gate. See [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md).
-- ~~**Q8 — `IHandlerContext` shape.**~~ Resolved by [`effects/03-handler-context.md`](features/effects/models/03-handler-context.md). Three services on the context: concrete Scaffold `Store` (read + execute mutators), `IAvailableActions` (snapshot writes), `IDecisionResolver` (open/resolve decisions). No `Mutate` surface; handler writes via `ctx.Store.Execute(payload)` or `ctx.Store.ExecuteBatch(...)`. No `CurrentDecisionId` field; the decision id ≡ the action's `CommandId`.
-- ~~**Q9 — `IHandlerRegistry` shape.**~~ Resolved session-20260501-1132 Q1: registry is resolver-only (`ICommandHandler Resolve(GameCommand)`); validate/execute live on `ICommandPipeline`; game authors extend `CommandHandler<TCommand, TResult>`.
-- ~~**Q10 — `IntakeContext.Pending` type.**~~ `IntakeContext`, `Pending`, and `IIntakeQueue` all deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md). Command queue is engine-private FIFO with no runtime service.
-- ~~**Q13 — `FilterTriggers` default impl.**~~ `GameRulesRuntime<TDefinition>` ships a virtual identity default ([`engine/03-game-rules-runtime.md` §FilterTriggers](features/engine/models/03-game-rules-runtime.md)); games with no eligibility logic don't override it.
-- ~~**Q17 — `IGameStateProvider` shape.**~~ Folded away. The framework binds directly to Scaffold `IStateScope` (read) and concrete `Store` (read + execute mutators) — see [`effects/02-effect-scope.md` and `effects/03-handler-context.md`](features/effects/models/02-effect-scope.md). No invented provider type.
-- ~~**Q18 — Effect-side service symmetry.**~~ Resolved by [`effects/04`](features/effects/models/02-effect-scope.md): `IEffectScope` carries `IStateScope` + `Dispatch` + `Cancel`; `IHandlerContext` carries `Store` + `IAvailableActions` + `IDecisionResolver`.
-- ~~**Q19 — `PileRefsAt` index source.**~~ Open-seams pass surfaced this implicitly: needs an engine-side index slice (`PileIndexState` or similar) populated during the factory's Build walk. Captured in `bl-pile-refs-index` (TBD).
-
-### Deferred (need decisions, not blocked)
-
-- **Q2 — Action pipeline cleanup.** The handler-lookup → validate → execute → trigger-fold flow is scattered across multiple Models. Needs a dedicated doc that draws the full pipeline explicitly.
-- **Q4 — Snapshot revision tag.** Useful for the UI to detect "I have a stale snapshot." Add when a concrete need surfaces (e.g., async render).
-
-### Implementation details (non-blocking)
-
-- **Q5 — `AvailableActions` mutator implementation.** Framework-shipped — the `IAvailableActions` service writes the slot through an internal mutator ([`engine/04 §2`](features/engine/models/04-available-actions.md)). Confirm at engine implementation.
-- **Q6 — `IIntentMapper` final shape.** Now `Map(ActionTemplate, PlayerChoice) → GameCommand` (typed templates, [`engine/04 §3`](features/engine/models/04-available-actions.md)). `PlayerChoice` shape pin during implementation.
-- **Q7 — `IGameStore` final shape.** Sketched as a presentation-side wrapper exposing `State`, `OnStateChanged`, `SubmitIntent`. Final shape depends on the chosen state library.
-- ~~**Q11 — `IntakeResult.Reason`**~~ — `IntakeResult` deleted per [ADR-0006](decisions/0006-two-pipeline-architecture.md); rejection now flows through the try-get pattern (`bool Dispatch(GameAction, out string? reason)`). The reason remains a free-form string; structured enum would be a follow-up if a real game forces it.
-- **Q12 — Re-validation at dequeue.** Validate at intake plus a second time before handler runs (state may have changed). Currently OK as double-validate.
+- **Q1 — `MoveCardPayload` shape.** Two options surfaced in §9.5: single payload + fan-out with per-key filters in each mutator, OR split into `RemoveFromPilePayload` + `AddToPilePayload` (two payloads, each with a single keyed mutator). Both work. Pick during implementation; trivially refactorable later.
+- **Q2 — `EndOfMatchViewModel` shipping.** Framework-shipped (terminal VM rendering outcome + rematch surface) vs game-shipped (per-game terminal UI). Lean: framework ships a baseline; games override for richer end-of-match presentation. Pin when presentation work begins.
 
 ### Out of scope for Pile Counter (will surface in richer games)
 
-- **Q14 — Async decision affordances.** When an effect awaits player input (target picker, choice overlay), the affordance shape may need to express "the player must respond *here*" vs. "the player has free input." Pile Counter has no async; deferred.
-- **Q15 — Multiplayer / hidden info snapshots.** Different players see different affordances. Snapshot may need scoping per actor. Pile Counter is single-player; deferred.
-- **Q16 — Snapshot diffing.** For performance, the engine may compute snapshot deltas rather than full recomputes. Deferred.
+- **Async decision affordances.** Pile Counter has no `Request<TResponse>` traffic. Magic-style targeting, choose-one prompts, mulligan flows surface this when sample games grow.
+- **Multiplayer / hidden info snapshots.** Pile Counter is single-player. Different-player affordances + visibility filtering surface with multiplayer samples.
+- **Trigger ordering within fold.** Pile Counter has no triggers. Magic-style controller-choice replacement order surfaces in TCG-style samples.
+- **Per-effect undo / unwind.** Pile Counter has no undo. Effect-author unwind patterns (compensating actions) surface in games where mid-effect cancellation matters.
 
 ---
 
@@ -633,4 +633,4 @@ When designing or revisiting a framework piece, sketch its Pile Counter implemen
 
 Whenever the framework shape changes, update §9 in this doc *first*, then propagate to the affected feature Models. The sketch is the source of truth for what "actual game code" looks like; abstract framework docs follow from it.
 
-If a question opens during sketching, add it to §11 with a stable Q-number. Resolve in place when answered. This keeps the open list local to where the sketch lives.
+If a question opens during sketching, add it to §11. Resolve in place when answered. This keeps the open list local to where the sketch lives.
