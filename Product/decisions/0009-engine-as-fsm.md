@@ -11,6 +11,8 @@ Date: 2026-05-10 (drafted from `Product/spikes/archive/fsm-architecture.md` D1â€
 Context-docs: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`, new Models `engine/07-match-state.md`, `engine/08-turn-flow.md`, `engine/09-state-based-actions.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
+> **Refresh (2026-05-11) per spike Q-walk lock.** The FSM-decomposition triad `MatchState + ITurnFlow + ISBA` reduces to **`MatchState + ITurnFlow`**. SBA is a Magic-style game-specific pattern, not a framework primitive â€” the framework ships only the `Evaluate` hook on `GameRulesRuntime`; games that want SBA-style cross-cutting checks implement them inside their `Evaluate` override (any interface / shape they like). `engine/09-state-based-actions.md` archived; `StateBasedActions` abstract property on `GameRulesRuntime` retires; default `Evaluate` body simplifies (no SBA loop). D5 (SBAs on the runtime) is the part of this ADR that retires. **Trigger to revive:** if a non-MTG cross-cutting check pattern surfaces broadly across games.
+
 ## Context
 
 The engine's evaluation loop had quietly drifted toward "state evaluator" (tracked as the now-closed `oq-runtime-as-state-evaluator`):

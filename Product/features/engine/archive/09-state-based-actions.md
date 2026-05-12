@@ -1,11 +1,15 @@
 ---
 type: model
-status: settled
+status: archived
 references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, decisions/0009-engine-as-fsm.md]
-tags: [#engine, #sba, #fsm]
+tags: [#engine, #sba, #fsm, #archived]
 ---
 
 # State-Based Actions — model
+
+> **Archived 2026-05-11.** SBA is a Magic-the-Gathering–specific concept; not a framework primitive. Per the spike Q-walk lock, the framework ships only the `Evaluate` hook on `GameRulesRuntime` — games that want SBA-style cross-cutting state checks implement them inside their own `Evaluate` override (using whatever interface or pattern they want; `ISBA` is no longer a framework type). `StateBasedActions` field on `GameRulesRuntime` retires; default `Evaluate` body simplifies. ADR-0009's `MatchState + ITurnFlow + ISBA` triad reduces to `MatchState + ITurnFlow`. The original Model body below is preserved as a documented pattern that game authors can take or leave; framework consumers should NOT depend on these types existing.
+>
+> **Trigger to revive:** if a cross-cutting check pattern emerges that's broadly useful across multiple games (not just MTG-style), revisit promoting back to the framework.
 
 ## What it is
 

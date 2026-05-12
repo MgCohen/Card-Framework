@@ -7,7 +7,12 @@ tags: [#engine, #gamerules, #runtime, #fsm]
 
 # Game Rules Runtime — model
 
-> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** `FilterTriggers` retires from the runtime surface. Trigger eligibility moves entirely into `Trigger<T>.Validate(cmd, scope)` (see [`triggers/01`](features/triggers/models/01-trigger.md)). The runtime no longer participates in the trigger fold's filtering pass. The runtime's remaining contract method is `Evaluate(action, result) → MatchState`. All inline references to `FilterTriggers` in this Model — interface declaration, examples, the dedicated section, the rejection-paths table, the Q3 SBA-ordering discussion — should be read as describing the pre-cascade shape; the canonical post-cascade behavior is "trigger filtering happens inside `TriggerSystem` via each `Trigger<T>.Validate`."
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md) + spike Q-walk locks.** Two surface refinements:
+>
+> 1. **`FilterTriggers` retires.** Trigger eligibility moves entirely into `Trigger<T>.Validate(cmd, scope)` (see [`triggers/01`](features/triggers/models/01-trigger.md)). The runtime no longer participates in the trigger fold's filtering pass.
+> 2. **`StateBasedActions` retires; ISBA is not a framework concept.** SBA is a Magic-style game pattern, not a framework primitive. The `StateBasedActions { get; }` abstract property and the SBA-loop in the default `Evaluate` body retire; `engine/09-state-based-actions.md` archived. Games that want SBA-style cross-cutting state checks implement them inside their own `Evaluate` override using whatever interface / pattern they choose. The framework's offering reduces to: `Evaluate(action, result) → MatchState` is the *only* hook; default body is just the request-pause / pending-effects-pause guards + `current.ShouldExit` + `Flow.NextAfter` tail.
+>
+> The runtime's contract reduces to a **single virtual method** (`Evaluate`) plus the abstract `Flow : ITurnFlow` property. All inline references below to `FilterTriggers`, `StateBasedActions`, `ISBA`, the SBA-preempt loop, the rejection-paths table mention of "SBA preempts," the Q3 SBA-ordering discussion, and the example runtimes that wire up SBAs should be read as describing the pre-cascade shape; the canonical post-cascade body is the SBA-free composition above. ADR-0009's `MatchState + ITurnFlow + ISBA` triad framing reduces to `MatchState + ITurnFlow`.
 
 ## What it is
 
