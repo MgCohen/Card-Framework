@@ -6,7 +6,7 @@ tags: [#spike, #runtime, #lifecycle, #walkthrough]
 
 # Runtime Walkthrough — End-to-End Game Lifecycle
 
-> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q10` callouts.
+> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q8` callouts.
 
 ## Why this exists
 
@@ -179,8 +179,8 @@ sequenceDiagram
 
 - **Engine invokes the trigger fold.** Engine holds `ITriggerPipeline` and calls `RunBefore` / `RunAfter` around the handler. Trigger feature filters its own registry via per-trigger `Trigger<T>.Validate`; no upstream filter call.
 - **Single payload, multiple mutators.** Handler dispatches one semantic payload (`PlayCardPayload`); N mutators register against it (one per slice that reacts). `Store.Execute(payload)` fans out — each mutator writes its slice. Adding a slice that reacts = register one more mutator; handler unchanged.
-- **`CompositeAction`** is the alternative when several **distinct** mutation clusters need bundling. Runs inline within parent scope; no own envelope; each sub-item folds its own way.
-- **Effects fire through the engine drain only.** Trigger reactions push to `PendingEffectsSlice`; engine drains. Effects use `scope.Dispatch(GameCommand)` for everything (the single scope-level entry).
+- **`CompositeMutation`** is the alternative when a reusable cluster of mutations needs to expand inline (e.g., a shared "move card + record last-moved" cluster). It is **not** a `GameCommand` — lives outside the family. Reached via `scope.Execute(CompositeMutation)` rather than `scope.Dispatch(...)`. The composite's `Apply(scope)` invokes its sub-mutations directly in the current scope; no queue, no envelope, no fold.
+- **Effects fire through the engine drain only.** Trigger reactions push to `PendingEffectsSlice`; engine drains. Effects use `scope.Dispatch(GameCommand)` for commands and `scope.Execute(CompositeMutation)` for inline mutation clusters — two semantically distinct surfaces.
 
 **Slice updates:**
 
@@ -189,9 +189,7 @@ sequenceDiagram
 - `HistoryState`: 2 envelopes (`PlayCardAction`, `DrawCardAction`).
 - `MatchStateSlice.Current`: unchanged.
 
-**System touches:** *Presentation* (gesture → intent → command) → *Actions* (validators, handler, history) → *Triggers* (engine invokes fold; reactions push effects) → *Effects* (engine drains; effects dispatch their own commands through scope) → *Engine FSM* (Evaluate confirms no transition) → *State* (slices updated via fan-out; subscribers react at command boundaries).
-
-> ⚠ **Open Q1.** VM slice subscription contract. How does the VM know to refresh on `ZoneContentsState` change? `Bind(state, scope)` is the entry point, but the contract for "which slices does this VM observe" is informal. Lean: the VM declares its dependencies in `Bind` by calling `scope.Get<T>()` per slice; framework auto-subscribes via the scope. Pin when the first presentation Model lands implementation details.
+**System touches:** *Presentation* (gesture → intent → command) → *Actions* (validators, handler, history) → *Triggers* (engine invokes fold; reactions push effects) → *Effects* (engine drains; effects dispatch their own commands through scope) → *Engine FSM* (Evaluate confirms no transition) → *State* (slices updated via fan-out; subscribers react at command boundaries via `scope.Subscribe<T>(handler) → IDisposable`; VM owns disposal through its host MVVM toolkit's lifecycle).
 
 ---
 
@@ -215,7 +213,11 @@ sequenceDiagram
   Engine->>Effects: enqueue TargetingEffect (OnAfter trigger reaction)
   Engine->>Effect: Run(scope)
   Effect->>Engine: await scope.Dispatch(new TargetRequest(predicate, options))
-  Engine->>Slices: RequestsSlice.Open = TargetRequest (handler writes; no trigger fold for Request)
+  Engine->>Triggers: RunBefore(TargetRequest, scope)
+  Note over Triggers: OnBefore<TargetRequest> may redirect (replace target) or cancel (shroud / hexproof)
+  Engine->>Handler: execute (writes RequestsSlice.Open = TargetRequest)
+  Engine->>Triggers: RunAfter(TargetRequest, result, scope)
+  Note over Triggers: OnAfter<TargetRequest> may push "when-targeted" reactions
   Note over Engine: drain pauses (RequestsSlice non-empty)
   Engine-->>VM: RequestsSlice updated
   VM->>VM: enter request-mode; expose target affordances
@@ -223,7 +225,9 @@ sequenceDiagram
   Gateway->>VM: Map(TargetSelectedIntent)
   VM-->>Gateway: Response(requestId, targetCard)
   Gateway->>Engine: Dispatch(Response)
-  Engine->>Slices: AnswersSlice += answer · RequestsSlice.Open = null
+  Engine->>Triggers: RunBefore(Response, scope)
+  Engine->>Handler: execute (writes AnswersSlice += answer · clears RequestsSlice.Open)
+  Engine->>Triggers: RunAfter(Response, result, scope)
   Engine-->>Effect: await returns with typed Response
   Effect->>Engine: scope.Dispatch(DamageCardAction(target))
   Note over Engine: DamageCardAction runs full pipeline (validators, fold, handler, fold)
@@ -233,8 +237,9 @@ sequenceDiagram
 
 **Locked behavior:**
 
-- `Request<TResponse>` and `Response` are queued `GameCommand` siblings — they enter `engine.Dispatch` the same way every other command does. Engine routes them to the action pipeline's handler (writes `RequestsSlice` / `AnswersSlice`); no trigger fold for these siblings.
-- `SessionGate` always applies to Request/Response (lifecycle gate). Whether `MatchStateActionGate` and game-shipped validators apply depends on the deferred Request-inheritance question (Q2).
+- `Request<TResponse>` and `Response` are **siblings** of `GameAction` (not subtypes). All four `GameCommand` siblings flow through `engine.Dispatch` uniformly.
+- **Trigger fold runs for Request and Response.** `OnBefore<TargetRequest>` enables redirect / shroud / hexproof patterns; `OnAfter<TargetRequest>` enables "when-targeted" reactions; `OnBefore<Response>` can constrain the answer; `OnAfter<Response>` enables reactions on an answered request. Engine invokes the fold via `ITriggerPipeline.RunBefore` / `RunAfter` at the same step as for `GameAction`.
+- Validator chain applies (`SessionGate` always; `MatchStateActionGate` and game-shipped validators per the chain). Because Request/Response are siblings (not subtypes), `ICommandValidator<GameAction>` and `OnBefore<GameAction>` registrations do NOT accidentally match Requests.
 
 **Slice updates across the request flow:**
 
@@ -243,15 +248,13 @@ sequenceDiagram
 - `HistoryState`: `PlayCardAction` · `TargetRequest` · `Response` · `DamageCardAction` envelopes.
 - Plus whatever `DamageCardAction` mutates.
 
-**System touches:** *Effects* (orchestrates the multi-step flow via `await`) → *State* (`RequestsSlice` + `AnswersSlice` are the rendezvous) → *Presentation* (VM enters request-mode; affordances change shape mid-turn) → *Actions* (`Response` is a `GameCommand` sibling through the same `Dispatch`).
+**System touches:** *Effects* (orchestrates the multi-step flow via `await`) → *Triggers* (engine invokes fold on Request and Response) → *State* (`RequestsSlice` + `AnswersSlice` are the rendezvous) → *Presentation* (VM enters request-mode; affordances change shape mid-turn) → *Actions* (`Response` is a `GameCommand` sibling through the same `Dispatch`).
 
-> ⚠ **Open Q2.** Request / Response inheritance from `GameAction`. If `Request<T> : GameAction` and `Response : GameAction`, validators apply uniformly (including `MatchStateActionGate` and any game-shipped validators against the base type). If they're sibling-but-not-action, separate validation wiring. Decide at concrete handler-authoring time.
+> ⚠ **Open Q1.** Request cancellation semantics. Player decides not to target — clicks elsewhere or hits Escape. Does the VM dispatch a `CancelResponse`? Does that unwind the `TargetingEffect`? Does it also unwind the original `PlayCardAction` whose cost is already paid? Real game-design question that the framework needs an answer for.
 
-> ⚠ **Open Q3.** Request cancellation semantics. Player decides not to target — clicks elsewhere or hits Escape. Does the VM dispatch a `CancelResponse`? Does that unwind the `TargetingEffect`? Does it also unwind the original `PlayCardAction` whose cost is already paid? Real game-design question that the framework needs an answer for.
+> ⚠ **Open Q2.** Request timeout. Networked or async games might want "if the player doesn't respond in N seconds, auto-pick / cancel." The effect awaits forever today. No timeout primitive in the request system.
 
-> ⚠ **Open Q4.** Request timeout. Networked or async games might want "if the player doesn't respond in N seconds, auto-pick / cancel." The effect awaits forever today. No timeout primitive in the request system.
-
-> ⚠ **Open Q5.** Concurrent requests. Can two effects each open a request at once (e.g., simultaneous prompts to both players)? `RequestsSlice.Open` is singular. Implies serialization through the queue. Confirm or address — multi-player simultaneous decisions are a real card-game pattern (mulligans, response windows).
+> ⚠ **Open Q3.** Concurrent requests. Can two effects each open a request at once (e.g., simultaneous prompts to both players)? `RequestsSlice.Open` is singular. Implies serialization through the queue. Confirm or address — multi-player simultaneous decisions are a real card-game pattern (mulligans, response windows).
 
 ---
 
@@ -298,11 +301,11 @@ sequenceDiagram
 
 **System touches:** *Actions* (`EndTurnAction` handler) → *Engine FSM* (`Evaluate` returns new state-type) → *Engine* (`TransitionStateCommand` synthesis) → *State* (`MatchStateSlice` updated; `EnterCommands` fire) → *Presentation* (VM rebind via Registry).
 
-> ⚠ **Open Q6.** ISBA (state-based action) cadence. When do ISBAs run — on *entry* into a new state, *every drain tick* while in that state, or *both*? Card games often need "after every action, check if any creature has 0 HP and destroy it" — that's "every drain tick." Lean: every drain tick, before `Evaluate` returns.
+> ⚠ **Open Q4.** ISBA (state-based action) cadence. When do ISBAs run — on *entry* into a new state, *every drain tick* while in that state, or *both*? Card games often need "after every action, check if any creature has 0 HP and destroy it" — that's "every drain tick." Lean: every drain tick, before `Evaluate` returns.
 
-> ⚠ **Open Q7.** Transition-loop prevention. The engine dispatches `TransitionStateCommand`, which is itself a command — does *its* execution also call `Evaluate`? If yes, could we recurse? Implicit answer: `Evaluate(TransitionStateCommand, _)` must return the same state-type (no further transition). Should be an architectural invariant, stated.
+> ⚠ **Open Q5.** Transition-loop prevention. The engine dispatches `TransitionStateCommand`, which is itself a command — does *its* execution also call `Evaluate`? If yes, could we recurse? Implicit answer: `Evaluate(TransitionStateCommand, _)` must return the same state-type (no further transition). Should be an architectural invariant, stated.
 
-> ⚠ **Open Q8.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
+> ⚠ **Open Q6.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
 
 ---
 
@@ -338,54 +341,49 @@ sequenceDiagram
 
 **System touches:** *Engine FSM* (Evaluate returns terminal) → *Engine* (self-emits `EndMatchCommand`; flips session field) → *Presentation* (terminal VM).
 
-> ⚠ **Open Q9.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
+> ⚠ **Open Q7.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
 
-> ⚠ **Open Q10.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
+> ⚠ **Open Q8.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
 
 ---
 
 ## Open questions summary
 
-Ten unresolved Qs after the walk. Grouped by surface:
+Eight unresolved Qs after the walk so far. Grouped by surface:
 
 | Group | Q | Topic | Status |
 |---|---|---|---|
-| Presentation | **Q1** | VM slice subscription contract | Lean: declared by `Bind`-time `scope.Get<T>()` calls. |
-| Request flow | **Q2** | Request/Response inheritance from `GameAction` | Deferred to implementation time. |
-| Request flow | **Q3** | Cancellation semantics | Open. |
-| Request flow | **Q4** | Timeout primitive | Open. Likely deferred post-v1. |
-| Request flow | **Q5** | Concurrent requests | Open. `RequestsSlice.Open` is singular. |
-| Transitions | **Q6** | ISBA cadence | Lean: every drain tick before `Evaluate`. |
-| Transitions | **Q7** | Transition-loop prevention invariant | Lean: `Evaluate(TransitionStateCommand, _)` returns same state-type. |
-| Transitions | **Q8** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
-| End match | **Q9** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
-| End match | **Q10** | Rematch model | Lean: terminal; dispose. |
+| Request flow | **Q1** | Cancellation semantics | Open. |
+| Request flow | **Q2** | Timeout primitive | Open. Likely deferred post-v1. |
+| Request flow | **Q3** | Concurrent requests | Open. `RequestsSlice.Open` is singular. |
+| Transitions | **Q4** | ISBA cadence | Lean: every drain tick before `Evaluate`. |
+| Transitions | **Q5** | Transition-loop prevention invariant | Lean: `Evaluate(TransitionStateCommand, _)` returns same state-type. |
+| Transitions | **Q6** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
+| End match | **Q7** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
+| End match | **Q8** | Rematch model | Lean: terminal; dispose. |
 
 ## What this spike confirms
 
-The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing, single `Dispatch` surface), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), request system rendezvous through state, FSM evaluation, and per-state VM rebind all compose without contradiction.
+The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing on 4 `GameCommand` siblings, `scope.Dispatch` for commands + `scope.Execute` for inline mutation clusters), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), engine-invoked trigger fold across all four siblings, request system rendezvous through state, FSM evaluation, and per-state VM rebind via `scope.Subscribe<T>` all compose without contradiction.
 
-The ten remaining gaps are localized. Each is one of:
+The eight remaining gaps are localized. Each is one of:
 
-- **Boundary cases** — cancellation (Q3), timeout (Q4), concurrent requests (Q5).
-- **Timing / cadence** — ISBA cadence (Q6).
-- **Missing invariants** — transition-loop prevention (Q7).
-- **Missing hooks** — `OnExit` (Q8).
-- **Ownership** — match-end initiator (Q9), rematch model (Q10).
-- **Contract clarity** — VM subscription declaration (Q1), Request inheritance (Q2).
+- **Boundary cases** — cancellation (Q1), timeout (Q2), concurrent requests (Q3).
+- **Timing / cadence** — ISBA cadence (Q4).
+- **Missing invariants** — transition-loop prevention (Q5).
+- **Missing hooks** — `OnExit` (Q6).
+- **Ownership** — match-end initiator (Q7), rematch model (Q8).
 
-None of the remaining gaps invalidate the architecture. Most have a defensible lean. The two that want explicit decisions before vertical-slice work are **Q3 (cancellation)** and **Q5 (concurrent requests)** — both shape the request system's authoring story.
+None of the remaining gaps invalidate the architecture. Most have a defensible lean. The two that want explicit decisions before vertical-slice work are **Q1 (cancellation)** and **Q3 (concurrent requests)** — both shape the request system's authoring story.
 
 ## Next moves
 
-1. Walk Q1–Q10. Lock answers or punt with explicit deferrals.
+1. Walk Q1–Q8. Lock answers or punt with explicit deferrals.
 2. Cascade settled answers into the relevant Models:
-   - Q1 → presentation Models (`presentation/01-match-state-view-model.md`).
-   - Q2 → actions Models (Request/Response type hierarchy + validator chain).
-   - Q3 / Q4 / Q5 → effects Models (`effects/06-request-system.md`) + actions Models if cancellation rides a new sibling.
-   - Q6 → engine Models (`engine/09-state-based-actions.md` — cadence).
-   - Q7 / Q8 → engine Models (`engine/07-match-state.md` — invariants + exit hook).
-   - Q9 / Q10 → engine Models (`engine/01-game-engine.md` — session lifecycle).
+   - Q1 / Q2 / Q3 → effects Models (`effects/06-request-system.md`) + actions Models if cancellation rides a new sibling.
+   - Q4 → engine Models (`engine/09-state-based-actions.md` — cadence).
+   - Q5 / Q6 → engine Models (`engine/07-match-state.md` — invariants + exit hook).
+   - Q7 / Q8 → engine Models (`engine/01-game-engine.md` — session lifecycle).
 3. Re-do `support/samples/pile-counter.md` against the gap-filled architecture.
 4. Refresh `PLANS/pile-counter-vertical-slice.md` vocabulary.
 5. Execute the vertical slice.
