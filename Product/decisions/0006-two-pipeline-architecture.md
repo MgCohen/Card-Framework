@@ -11,6 +11,8 @@ Date: 2026-05-07
 Context-doc: Product/features/engine/models/03-game-rules-runtime.md, Product/features/engine/models/01-game-engine.md
 Proposal: session triggers+dispatch design pass (2026-05-07)
 
+> **Refresh (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The two-pipeline framing stands. The *orchestration* of those pipelines moves explicitly to `engine` (was implicitly distributed across `actions` and the runtime). Pipeline features become single-concern services consumed by the engine. The "command pipeline is framework-owned" rule still holds — just held by `engine`, not `actions`.
+
 ## Context
 
 A design pass on triggers + dispatch flow surfaced that the framework had been conflating two distinct schedulers:

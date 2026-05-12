@@ -11,6 +11,8 @@ Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D10â
 Context-docs: `Product/features/actions/models/03-command-handler.md`, new Model `Product/features/actions/models/06-command-validator.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
+> **Refresh (2026-05-11, same-day) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Validator chain is still authoritative. Scope refined: chain runs for `GameAction`, `Request`, `Response`; `GameSignal` and `CompositeAction` bypass (signals are post-handler facts; composites expand inline within parent scope). Framework intake validators (`SessionGate`, `MatchStateActionGate`) still register first. Chain invocation moves from `actions` pipeline to `engine` per the orchestration refactor.
+
 ## Context
 
 Two related shapes were tied together on the pre-ADR-0010 surface:

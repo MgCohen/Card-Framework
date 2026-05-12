@@ -11,6 +11,14 @@ Date: 2026-05-10 (drafted from `Product/spikes/archive/fsm-architecture.md` D1�
 Context-docs: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`, new Models `engine/07-match-state.md`, `engine/08-turn-flow.md`, `engine/09-state-based-actions.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
+> **Refresh (2026-05-11) per spike Q-walk locks.** Five refinements:
+>
+> 1. **ISBA retires from framework.** Triad `MatchState + ITurnFlow + ISBA` reduces to **`MatchState + ITurnFlow`**. SBA is a Magic-style game-specific pattern; framework ships only the `Evaluate` hook on `GameRulesRuntime`. `engine/09-state-based-actions.md` archived; `StateBasedActions` abstract property on `GameRulesRuntime` retires. D5 retires. **Trigger to revive:** if a non-MTG cross-cutting check pattern surfaces broadly.
+> 2. **Action-gate triad on `MatchState`.** `Actions` + new `ActionsOpen: bool` (default `true`). Open / locked / whitelist semantics — see [`engine/07`](Product/features/engine/models/07-match-state.md) banner.
+> 3. **Lifecycle hooks become methods.** `EnterCommands` virtual property → **`OnEnter(scope) → IReadOnlyList<GameAction>`** method. New **`OnExit(scope) → IReadOnlyList<GameAction>`** mirror. `ShouldExit` renames to **`IsCompleted(action, result, scope) → bool`** for ergonomic naming. Methods can read scope; output stays data-only.
+> 4. **Transition-loop prevention invariant.** Engine **does not call `runtime.Evaluate` after `TransitionStateCommand`**. State-transition recursion (via misbehaving `IsCompleted`) is structurally impossible. Engine enqueues `oldState.OnExit(scope)` before the transition; `TransitionStateHandler` enqueues `newState.OnEnter(scope)` after the slice write. Each enqueued command goes through its own Evaluate cycle.
+> 5. **Match-end auto-emit + framework-shipped `EndOfMatchState`.** Framework ships `EndOfMatchState(MatchOutcome Outcome) : MatchState` (`ActionsOpen = false`). When `Evaluate` returns `EndOfMatchState`, engine completes the transition and **auto-dispatches `EndMatchCommand(outcome)`** — no host orchestrator required. `EndMatchCommand`'s handler flips `engine.Session = EndedSession(outcome)`. `EndedSession` is terminal; rematch is dispose-and-recreate via `GameFactory.Build`. No `RestartMatchCommand`.
+
 ## Context
 
 The engine's evaluation loop had quietly drifted toward "state evaluator" (tracked as the now-closed `oq-runtime-as-state-evaluator`):
