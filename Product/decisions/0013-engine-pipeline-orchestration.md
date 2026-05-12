@@ -44,7 +44,7 @@ private void Execute(GameCommand cmd) {
         case GameAction action:
             var routed = triggerPipeline.RunBefore(action, scope);   // may modify/cancel/replace
             if (routed.Cancelled) return;
-            var result = actionPipeline.Execute(routed.Command);     // handler runs
+            var result = actionPipeline.Execute(routed.Command);
             triggerPipeline.RunAfter(routed.Command, result, scope);
             lastResult = result;
             break;
@@ -56,19 +56,23 @@ private void Execute(GameCommand cmd) {
             break;
 
         case Request<TResponse> req:
-            actionPipeline.Execute(req);   // handler writes RequestsSlice.Open
+            var routedR = triggerPipeline.RunBefore(req, scope);     // may redirect / cancel
+            if (routedR.Cancelled) return;
+            var resultR = actionPipeline.Execute(routedR.Command);   // writes RequestsSlice.Open
+            triggerPipeline.RunAfter(routedR.Command, resultR, scope);
             break;
 
         case Response resp:
-            actionPipeline.Execute(resp);  // handler writes AnswersSlice + clears RequestsSlice
+            var routedRS = triggerPipeline.RunBefore(resp, scope);   // may constrain the answer
+            if (routedRS.Cancelled) return;
+            var resultRS = actionPipeline.Execute(routedRS.Command); // writes AnswersSlice + clears
+            triggerPipeline.RunAfter(routedRS.Command, resultRS, scope);
             break;
-
-        case CompositeAction:
-            throw new InvalidOperationException(
-                "CompositeAction expands inline within parent scope; should never reach Dispatch");
     }
 }
 ```
+
+Switch is **exhaustive on `GameCommand`'s four siblings** — no exception case. `CompositeMutation` doesn't enter this switch (it's not a `GameCommand` — see §3 below).
 
 The concrete factoring (whether this is one `switch`, several methods, or a polymorphic `ICommandExecutor` strategy) is a code-time decision; the contract is that engine — not actions, not the runtime — owns the routing.
 
@@ -83,17 +87,23 @@ The concrete factoring (whether this is one `switch`, several methods, or a poly
 
 No feature holds a reference to another pipeline feature's concrete types. Engine consumes the three pipelines as interfaces.
 
-### 3. Single `Dispatch` surface — `scope.Emit` and `scope.Execute` retire
+### 3. `scope.Emit` retires; `scope.Dispatch(GameCommand)` is the single command-routing surface; `scope.Execute(CompositeMutation)` is a separate overload for inline mutation clusters
 
-`IEffectScope` exposes one method:
+`IEffectScope` exposes two surface methods:
 
 ```csharp
 public interface IEffectScope {
     Task<TResult> Dispatch<TResult>(GameCommand cmd) where TResult : CommandResult;
+    //                                              ↑ engine drain (queue, validate, fold, handle, envelope)
+
+    void Execute(CompositeMutation composite);
+    //   ↑ inline expansion in current scope; no envelope; no fold
 }
 ```
 
-`scope.Emit(signal)` and `scope.Execute(composite)` are removed. Effect bodies, handler bodies, trigger reactions — all dispatch through the same `scope.Dispatch(GameCommand)`. Engine routes by type.
+`scope.Emit(signal)` is removed — emit a signal via `scope.Dispatch(signal)`.
+
+`scope.Execute(GameAction)` / `scope.Execute(CompositeAction)` (the pre-cascade scope-level overloads for inline command runs) are removed — `scope.Execute` now takes the new `CompositeMutation` type (a state-mutation cluster that is NOT a `GameCommand`; see Per-type routing table below). Commands always route through `Dispatch`; mutation clusters through `Execute`.
 
 `engine.Dispatch(GameCommand)` (external entry) and `scope.Dispatch(GameCommand)` (inside-handler / inside-effect entry) take the same shape.
 
@@ -133,15 +143,52 @@ Slice-resident registry deferred until the broader "slice-linked services" patte
 |---|---|---|---|---|---|
 | `GameAction` | Yes (FIFO drain) | Yes | Before + After | Yes | Yes |
 | `GameSignal` | Yes | No | Before + After | No | Yes (fact-only) |
-| `Request<TResponse>` | Yes | Yes (`SessionGate`; chain TBD on inheritance — see Deferred) | No (deferred — see [`runtime-walkthrough`](spikes/runtime-walkthrough.md) Q8) | Yes (writes `RequestsSlice.Open`) | Yes |
-| `Response` | Yes | Yes (same as Request) | No (same) | Yes (writes `AnswersSlice` + clears `RequestsSlice`) | Yes |
-| `CompositeAction` | No (inline within parent scope) | No | No (sub-items fold individually) | No | No own envelope |
+| `Request<TResponse>` | Yes | Yes | Before + After | Yes (writes `RequestsSlice.Open`) | Yes |
+| `Response` | Yes | Yes | Before + After | Yes (writes `AnswersSlice` + clears `RequestsSlice`) | Yes |
+
+**`GameCommand` is a 4-sibling family.** All four are queued, all four route through `engine.Dispatch`, and engine's per-type switch is exhaustive across them.
+
+**Request / Response participate in the trigger fold.** Real targeting patterns require it — `OnBefore<TargetRequest>` for redirect / shroud, `OnAfter<TargetRequest>` for "when-targeted" reactions, `OnBefore<Response>` for answer constraints, `OnAfter<Response>` for reactions on an answered request.
+
+**Request / Response are siblings of `GameAction`, not subtypes.** Semantically Request/Response are framework-internal flow control, not gameplay actions. Inheritance would (i) overclaim "is-a gameplay action," (ii) cause `OnBefore<GameAction>` watchers to fire on every Request — unintended, and (iii) cause `ICommandValidator<GameAction>` registrations to apply to Requests — also unintended. Validators that genuinely want to apply across the whole family target `GameCommand` (the abstract base); type-specific validators / triggers target the specific sibling.
+
+### `CompositeMutation` — outside the `GameCommand` family
+
+A reusable cluster of state mutations that runs **inline** within the parent scope. Not a command. No queue, no validator chain, no trigger fold, no handler, no own envelope.
+
+```csharp
+public abstract record CompositeMutation {
+    public abstract void Apply(IEffectScope scope);
+}
+
+public sealed record MoveCardComposite(Ref<Card> Card, Ref<Zone> From, Ref<Zone> To)
+    : CompositeMutation {
+    public override void Apply(IEffectScope scope) {
+        scope.Execute(new RemoveFromZonePayload(Card, From));
+        scope.Execute(new AddToZonePayload(Card, To));
+        scope.Execute(new LastMovedPayload(Card, To));
+    }
+}
+```
+
+`IEffectScope` exposes two surface methods with semantically distinct call-sites:
+
+```csharp
+public interface IEffectScope {
+    Task<TResult> Dispatch<TResult>(GameCommand cmd) where TResult : CommandResult;
+    //                                              ↑ engine drain (queue, validate, fold, handle, envelope)
+
+    void Execute(CompositeMutation composite);
+    //   ↑ inline expansion in current scope; no envelope; no fold
+}
+```
+
+Pre-ADR-0013 framing had `CompositeAction : GameCommand` as a fifth sibling that "never reaches Dispatch" — an awkward exception inside the routing switch. Lifting composites out of the command family makes the switch exhaustive on four uniform siblings.
 
 ## Deferred for implementation time
 
-Three sub-questions don't need to settle in this ADR; tracked for code time.
+Two sub-questions don't need to settle in this ADR; tracked for code time.
 
-- **Request / Response inheritance from `GameAction`.** If `Request<T> : GameAction` and `Response : GameAction`, validators apply by default (uniform). If they're sibling-but-not-action, separate validation wiring. Decide when concrete handlers are first authored.
 - **Game-wide trigger eligibility predicates beyond `Trigger<T>.Validate`.** v1: per-trigger validation only. If scale or recurring authoring friction surfaces, introduce a central predicate registry. Track as `oq-trigger-eligibility-policy`.
 - **Trigger registry as a Store slice.** Migration when the slice-linked-services pattern formalizes. Track as `oq-trigger-registry-slice`.
 

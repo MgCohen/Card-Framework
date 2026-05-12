@@ -7,10 +7,11 @@ tags: [#triggers]
 
 # triggers — feature
 
-> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Two structural changes land in this feature:
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Three structural changes land in this feature:
 >
-> 1. **Engine holds `ITriggerPipeline`, not the action pipeline.** The fold is invoked from `engine`'s drain switch at the before-fold and after-fold points for `GameAction` and `GameSignal`. The action pipeline (single-concern under ADR-0013) no longer references triggers at runtime.
+> 1. **Engine holds `ITriggerPipeline`, not the action pipeline.** The fold is invoked from `engine`'s drain switch at the before-fold and after-fold points. The action pipeline (single-concern under ADR-0013) no longer references triggers at runtime.
 > 2. **`runtime.FilterTriggers` retires.** Eligibility moves fully into `Trigger<T>.Validate(cmd, scope)` (per-trigger). `TriggerSystem` internally walks its registry, calls `Validate` per candidate, and folds the passing ones. No upstream filter call.
+> 3. **Folds run for all 4 `GameCommand` siblings.** `GameAction`, `GameSignal`, **`Request<TResponse>`**, and **`Response`** all participate in the OnBefore/OnAfter fold — needed for real Magic-style patterns: `OnBefore<TargetRequest>` for redirect/shroud, `OnAfter<TargetRequest>` for "when-targeted" reactions, `OnBefore<Response>` to constrain answers, `OnAfter<Response>` for reactions on an answered request. The pre-cascade `CompositeAction` sibling retires; its replacement `CompositeMutation` lives outside the `GameCommand` family (reached via `scope.Execute`) and does not participate in the fold.
 >
 > Triggers feature still owns: `Trigger<T>`, `ITriggerSystem`, `ITriggerPipeline`, fold semantics, in-memory registry, register/unregister lifecycle via `AbilityDefinition`. Same `OnBefore<T>` / `OnAfter<T>` API is used at game install (most triggers) and at instance spawn/leave (per-card abilities) — one mechanism, varying timing; no "static vs dynamic" categories.
 

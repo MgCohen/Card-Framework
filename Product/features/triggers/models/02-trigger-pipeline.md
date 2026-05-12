@@ -9,7 +9,7 @@ tags: [#triggers, #pipeline, #fold, #model]
 
 > **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Two changes:
 >
-> 1. **Engine holds `ITriggerPipeline`**, not the action pipeline. The fold is invoked from the engine's drain switch (before-fold + after-fold for `GameAction`; both folds for `GameSignal`; bypassed for `Request` / `Response` / `CompositeAction`).
+> 1. **Engine holds `ITriggerPipeline`**, not the action pipeline. The fold is invoked from the engine's drain switch — before-fold + after-fold runs for **all 4 `GameCommand` siblings**: `GameAction`, `GameSignal`, `Request<TResponse>`, `Response`. (The pre-cascade `CompositeAction` sibling retires; its replacement `CompositeMutation` lives outside the `GameCommand` family and is reached via `scope.Execute` — it does not pass through the fold.)
 > 2. **No upstream `FilterTriggers` filter call.** `ITriggerPipeline.RunBefore` / `RunAfter` now own filtering internally — they walk the in-memory registry for type `T`, call each candidate's `Trigger<T>.Validate`, and fold the passing ones. The "candidate list filtered upstream" narrative below reflects the pre-cascade shape.
 >
 > Registry storage is in-memory in `TriggerSystem` for v1. Migration to a Store-resident slice deferred until the slice-linked-services pattern formalizes.

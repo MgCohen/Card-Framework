@@ -9,10 +9,11 @@ tags: [#engine, #evaluation-loop, #orchestrator, #fsm, #effects]
 
 > **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The engine is now the explicit **pipeline orchestrator**: its drain loop pattern-matches the `GameCommand`'s runtime type and routes to the right subsystem at the right step. Per-type routing table (full table in ADR-0013):
 >
-> - **`GameAction`** → validator chain → trigger before-fold (engine calls `ITriggerPipeline.RunBefore`) → handler → trigger after-fold (engine calls `ITriggerPipeline.RunAfter`) → `runtime.Evaluate`.
+> - **`GameAction`** → validator chain → trigger before-fold → handler → trigger after-fold → `runtime.Evaluate`.
 > - **`GameSignal`** → trigger folds only (no validator chain, no handler).
-> - **`Request<TResponse>`** / **`Response`** → validator chain → handler (writes `RequestsSlice` / `AnswersSlice`); no trigger fold.
-> - **`CompositeAction`** → inline expansion within parent scope; never reaches `Dispatch`.
+> - **`Request<TResponse>`** / **`Response`** → validator chain → trigger before-fold → handler (writes `RequestsSlice` / `AnswersSlice`) → trigger after-fold.
+>
+> **`GameCommand` is a 4-sibling family.** Request/Response are siblings of GameAction (not subtypes) and participate in the trigger fold (needed for redirect / shroud / "when-targeted" patterns). `CompositeMutation` (formerly `CompositeAction`) is **not** a `GameCommand` — it's a reusable inline mutation cluster reached via `scope.Execute(CompositeMutation)`. The engine's per-command-type switch is exhaustive on four siblings.
 >
 > Engine holds `ITriggerPipeline` (was held by `actions` pipeline). `runtime.FilterTriggers` retires — eligibility lives on `Trigger<T>.Validate`. The action pipeline becomes single-concern (validators + handlers + envelope), as do the trigger and effect pipelines.
 

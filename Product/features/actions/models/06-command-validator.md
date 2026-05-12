@@ -7,7 +7,7 @@ tags: [#actions, #model, #validator]
 
 # Command Validator — model
 
-> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The "uniform across the entire `GameCommand` family" claim below is refined: validator chain runs for `GameAction`, `Request<TResponse>`, `Response` (subject to the deferred Request-inheritance question). It bypasses for `GameSignal` (post-handler facts; no legality to gate) and `CompositeAction` (inline expansion within already-validated parent scope). Chain invocation moves from `actions` pipeline to `engine` per the orchestration refactor; framework defaults (`SessionGate`, `MatchStateActionGate`) still register first.
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The "uniform across the entire `GameCommand` family" claim below is refined: validator chain runs for `GameAction`, `Request<TResponse>`, `Response`. It bypasses for `GameSignal` (post-handler facts; no legality to gate). **`CompositeAction` is removed from the `GameCommand` family** (replaced by the out-of-family `CompositeMutation` reached via `scope.Execute`); never enters the chain. Request/Response are **siblings** of GameAction (not subtypes) — `ICommandValidator<GameAction>` registrations do NOT match Requests/Responses; validators that genuinely want to apply across the family target `ICommandValidator<GameCommand>`. Chain invocation moves from `actions` pipeline to `engine` per the orchestration refactor; framework defaults (`SessionGate`, `MatchStateActionGate`) still register first.
 
 ## What it is
 
