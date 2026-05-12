@@ -7,6 +7,8 @@ tags: [#effects, #model, #pending-effects, #drain, #fsm]
 
 # Pending Effects — model
 
+> **Amendment (2026-05-11) per spike Q-walk locks.** Drain-policy framing clarified: when `RequestsSlice.Open` is non-empty, what pauses is **state transitions** (default `Evaluate` returns `Current`), **not** the entire drain. The engine continues to process the GameCommand queue and drain `PendingEffectsSlice`. Effects awaiting requests park on their own `await scope.Dispatch(request)` calls; other effects and other commands proceed normally. This enables concurrent requests via `Task.WhenAll` for patterns like simultaneous mulligan, multi-actor response windows, parallel auctions. The narrative below referring to "drain pauses on open requests" should be read as "state-transitions pause."
+
 ## What it is
 
 `PendingEffectsSlice` is the framework-owned universal queue of effect instances awaiting drain. Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) (D15), every effect-firing path goes through this slice: cast handlers push when a spell goes "on the stack," trigger reactions push when an `OnAfter<T>` reaction wants to fire an effect, FSM-driven runs push when a `MatchState`'s `EnterCommands` include an effect launch. The engine drains it when its drain-policy composition allows; only the engine holds an `IEffectPipeline` reference and calls `Run` on dequeued instances.
