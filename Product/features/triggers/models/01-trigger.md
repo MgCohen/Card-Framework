@@ -7,6 +7,8 @@ tags: [#triggers, #reactions, #model]
 
 # Trigger — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** `Trigger<T>.Validate(cmd, scope)` is now THE eligibility surface — was previously paired with `GameRulesRuntime.FilterTriggers` (now retired). `TriggerSystem` iterates registered triggers, calls each one's `Validate`, and folds the passing ones. No central filter, no two-step process. Game-wide eligibility policies express through per-trigger `Validate` logic or a future predicate registry; v1 is per-trigger only. Same `ITriggerSystem.OnBefore<T>` / `.OnAfter<T>` API at game install and at per-instance `AbilityDefinition.Register`; no static-vs-dynamic distinction.
+
 ## What it is
 
 `Trigger<T>` is the **typed reaction class** game authors register to react to specific commands. It shares the same execution surface as `Effect` (`IEffectScope`), typed to the command shape it intercepts. `Validate(cmd, scope)` is the condition check (return `false` to skip); `Execute(cmd, scope)` is the reaction body. Triggers are registered through `ITriggerSystem` from `AbilityDefinition.Register`; per-instance data (`Self`, owner-specific captures) is closure-captured at registration. The fold mechanism that *runs* registered triggers lives in [`02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md); this Model owns the triggers themselves and how they get registered.

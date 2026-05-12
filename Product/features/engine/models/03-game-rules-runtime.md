@@ -7,6 +7,13 @@ tags: [#engine, #gamerules, #runtime, #fsm]
 
 # Game Rules Runtime — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md) + spike Q-walk locks.** Two surface refinements:
+>
+> 1. **`FilterTriggers` retires.** Trigger eligibility moves entirely into `Trigger<T>.Validate(cmd, scope)` (see [`triggers/01`](features/triggers/models/01-trigger.md)). The runtime no longer participates in the trigger fold's filtering pass.
+> 2. **`StateBasedActions` retires; ISBA is not a framework concept.** SBA is a Magic-style game pattern, not a framework primitive. The `StateBasedActions { get; }` abstract property and the SBA-loop in the default `Evaluate` body retire; `engine/09-state-based-actions.md` archived. Games that want SBA-style cross-cutting state checks implement them inside their own `Evaluate` override using whatever interface / pattern they choose. The framework's offering reduces to: `Evaluate(action, result) → MatchState` is the *only* hook; default body is just the request-pause / pending-effects-pause guards + `current.ShouldExit` + `Flow.NextAfter` tail.
+>
+> The runtime's contract reduces to a **single virtual method** (`Evaluate`) plus the abstract `Flow : ITurnFlow` property. All inline references below to `FilterTriggers`, `StateBasedActions`, `ISBA`, the SBA-preempt loop, the rejection-paths table mention of "SBA preempts," the Q3 SBA-ordering discussion, and the example runtimes that wire up SBAs should be read as describing the pre-cascade shape; the canonical post-cascade body is the SBA-free composition above. ADR-0009's `MatchState + ITurnFlow + ISBA` triad framing reduces to `MatchState + ITurnFlow`.
+
 ## What it is
 
 The behavior half of the rules-layer split. **`GameRulesRuntime<TDefinition>`** is the stateful runtime brain plugged into the engine — generic on its [`GameRulesDefinition`](features/engine/models/02-game-rules-definition.md) so concrete runtimes get a typed `Definition` without casting. Holds framework services (`IStateScope`), the immutable `Definition`, an [`ITurnFlow`](features/engine/models/08-turn-flow.md), and a registered list of [`ISBA`](features/engine/models/09-state-based-actions.md)s. DI-resolved per match via container open-generic resolution. Two contract methods today — `FilterTriggers` (which registered triggers are eligible) and `Evaluate` (returns the new `MatchState`) — both have sensible defaults so games override only what they need. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md) the runtime IS the FSM evaluator: `Evaluate` returns a `MatchState`; the engine routes transitions through `TransitionStateCommand`.

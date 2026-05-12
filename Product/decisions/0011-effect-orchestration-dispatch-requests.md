@@ -11,6 +11,16 @@ Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D13�
 Context-docs: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, new Models `effects/05-pending-effects.md`, `effects/06-request-system.md`, `Product/features/actions/models/01-command-pipeline.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
+> **Refresh (2026-05-11, same-day) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md) + spike Q-walk locks.** Five refinements:
+>
+> 1. **`scope.Emit` and `scope.Execute(composite)` retire.** `scope.Dispatch(GameCommand)` is the sole inside-handler / inside-effect entry for the command family. `scope.Execute(CompositeMutation)` is a separate overload for inline mutation clusters (`CompositeMutation` is out-of-family).
+> 2. **`GameCommand` family is 4 siblings** — `GameAction`, `GameSignal`, `Request<TResponse>`, `Response`. Pre-cascade `CompositeAction` retires (replaced by out-of-family `CompositeMutation`). Request/Response are siblings of `GameAction`, not subtypes. All four participate in the trigger fold.
+> 3. **Per-request cancellation locked.** `Request` base has `virtual bool AllowsCancellation => true`; `Response` base has `bool Cancelled { get; init; }`. Cancellation rides on the typed Response with `Cancelled = true` — no separate sibling, no `OperationCanceledException`. Effect code checks `response.Cancelled` after the await. Match-end cancels all open requests via this mechanism (resolves the `oq-effect-cancellation-on-match-end` follow-up). Engine pattern-matches type and routes (full table in ADR-0013).
+> 4. **Timeout deferred to post-v1; planned shape pinned.** `Request` will gain an optional `TimeSpan? Timeout` (data-only) when forced; framework `TimerService` schedules a default-response dispatch on expiry. Replay reproduces deterministically because the recorded `Response` envelope captures the cancellation. Tracked as `oq-request-timeout-primitive`.
+> 5. **Concurrent requests supported by `Task.WhenAll`; drain-pause clarified as state-transition-pause.** `RequestsSlice.Open` is a dictionary; multiple requests can be open simultaneously. Open requests pause **state transitions** (default `Evaluate` returns `Current`) but do **not** freeze the drain — effects park on their own awaits while other effects and commands proceed. Enables simultaneous mulligan, multi-actor response windows, parallel auctions.
+>
+> **D17 reaffirmed: all request / response / payload fields are data-only.** Pre-computed lists or resolver-id + serializable params; never `Func`/`Predicate`/delegate fields. Restated as a hard invariant in [`actions/01-command-pipeline.md`](Product/features/actions/models/01-command-pipeline.md) for breadth.
+
 ## Context
 
 After ADR-0009 (engine IS the FSM) and ADR-0010 (validator/handler split), five intertwined questions remained open at the effect-orchestration layer. The pre-ADR-0011 surface had:

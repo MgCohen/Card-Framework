@@ -7,6 +7,13 @@ tags: [#engine]
 
 # engine — feature
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** Engine becomes the explicit **pipeline orchestrator** — its drain pattern-matches `GameCommand` type and routes per the locked table in ADR-0013. Two surface changes propagate from there:
+>
+> - **Engine holds `ITriggerPipeline`** (was held by `actions` pipeline). Engine invokes `RunBefore` / `RunAfter` at the right step per type.
+> - **`runtime.FilterTriggers` retires.** Eligibility moves to `Trigger<T>.Validate`; `GameRulesRuntime` keeps only `Evaluate` as its contract method. Inline references to `FilterTriggers` (overview text, runtime row in the table, Model 03 index entry, the setup-trigger guard suggestion, the "Dispatch(GameAction) vs Dispatch(GameCommand)" framing at the §Constraints / Invariants section) reflect pre-cascade shape; the canonical post-cascade behavior is captured in ADR-0013.
+>
+> `engine.Dispatch` accepts `GameCommand` (not `GameAction`); `GameSignal` / `CompositeAction` / `Request` / `Response` all flow through the same surface, with engine pattern-matching for routing.
+
 ## What it is
 
 The framework's orchestrator. The engine owns the **`GameEngine` class** (drain a strict-FIFO queue, execute each `GameAction` through the command pipeline, ask the runtime for the next `MatchState`, single `Dispatch` entry point), pins the **rules-layer contract** (`GameRulesDefinition` + `GameRulesRuntime<TDefinition>` — pure data + stateful brain, paired via DI container open-generic resolution), holds the **FSM machinery** (`MatchState` + `MatchStateSlice` polymorphic wrapper, `ITurnFlow` for successor knowledge, `ISBA` for cross-cutting state-driven overrides, `TransitionStateCommand` for transitions through the normal pipeline), layers the **framework slice tier** (framework-owned auto-seeded; game-authored declared via `ISliceProvider`) over the underlying state primitive ([`state`](features/state/state.md)), constructs matches via the **`IGameFactory` two-layer split** (DI installation vs per-match `MatchSetup`), and owns the **session lifecycle** (typed sealed `SessionState` hierarchy on `engine.Session` field — `NotStartedSession` / `InMatchSession` / `EndedSession` — plus framework-required `StartMatchCommand` / `EndMatchCommand`). The **`GameDefinition`** bundle ties everything together — `Rules` + `SharedZones` + `CardCatalog` + `DefaultPlayerDefinition` + `GetInitialSlices()` — and the factory walks it at `Build`. Per [ADR-0009](Product/decisions/0009-engine-as-fsm.md), the engine IS the FSM — `runtime.Evaluate` returns a `MatchState` and the engine dispatches `TransitionStateCommand` on type changes.

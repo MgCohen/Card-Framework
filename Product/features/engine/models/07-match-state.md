@@ -7,6 +7,16 @@ tags: [#engine, #match-state, #fsm]
 
 # Match State — model
 
+> **Amendment (2026-05-11) per spike Q-walk locks.** Four refinements:
+>
+> 1. **Action-gate triad on `MatchState`.** `Actions: IReadOnlyList<Type>` (whitelist when active) + `ActionsOpen: bool` (default `true` — anything passes). `MatchStateActionGate` semantics: `ActionsOpen == true` → pass; `ActionsOpen == false` + command type ∈ `Actions` → pass; `ActionsOpen == false` + command type ∉ `Actions` → reject. Authoring patterns: default open (no override); locked state (`ActionsOpen = false`, empty `Actions`) for resolving / animating; whitelist (`ActionsOpen = false`, populated `Actions`) for normal phases.
+> 2. **Lifecycle hooks become methods.** `EnterCommands` (virtual property) → **`OnEnter(IStateScope scope) → IReadOnlyList<GameAction>`** (virtual method). New **`OnExit(IStateScope scope) → IReadOnlyList<GameAction>`** mirror. `ShouldExit` renames to **`IsCompleted(action, result, scope) → bool`** for ergonomic naming (predicate, not directive). Methods can read scope to compute their lists; output stays data-only (`IReadOnlyList<GameAction>`).
+> 3. **Engine drain for state transitions:**
+>    - On state-type change, engine enqueues `oldState.OnExit(scope)` commands **before** `TransitionStateCommand(newState)` (so exits drain while `oldState` is still current).
+>    - `TransitionStateHandler` writes `MatchStateSlice.Current = newState`, then enqueues `newState.OnEnter(scope)` commands (so entries drain while `newState` is current).
+>    - Engine does NOT call `runtime.Evaluate` after `TransitionStateCommand` (transition-loop prevention invariant).
+> 4. **Match end auto-emit.** Framework ships `EndOfMatchState(MatchOutcome Outcome) : MatchState` (`ActionsOpen = false`). When `Evaluate` returns `EndOfMatchState`, engine synthesizes the transition normally; after the transition handler completes, engine pattern-matches `MatchStateSlice.Current is EndOfMatchState` and auto-dispatches `EndMatchCommand(outcome)` — no host orchestrator required. `EndMatchCommand`'s handler flips `engine.Session = EndedSession(outcome)`. Games' `ITurnFlow.NextAfter` returns `EndOfMatchState(...)` when game logic decides the match is over. `EndedSession` is terminal — rematch is dispose-and-recreate via `GameFactory.Build`.
+
 ## What it is
 
 The framework's first-class concept of "what state is the match in." **`MatchState`** is an abstract record; concrete subclasses (game-authored) describe individual phases / decision modes / cleanup states. **`MatchStateSlice`** is the framework-owned slice wrapping the polymorphic current state. **`TransitionStateCommand`** is the framework-owned command the engine dispatches when `runtime.Evaluate` returns a state whose type differs from the current — every transition flows through the same pipeline as every other command.

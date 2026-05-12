@@ -7,6 +7,13 @@ tags: [#effects, #model, #scope, #dispatch]
 
 # Effect Scope — model
 
+> **Amendment (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** `IEffectScope` exposes **two surface methods** with semantically distinct call sites:
+>
+> - **`Dispatch<TResult>(GameCommand cmd)`** — routes through `engine.Dispatch` (queue, validate, fold, handle, envelope). Used for `GameAction`, `GameSignal`, `Request<TResponse>`, `Response` — the 4-sibling `GameCommand` family.
+> - **`Execute(CompositeMutation composite)`** — inline expansion in the current scope. `CompositeMutation` is **not** a `GameCommand` — it's a reusable cluster of state mutations that the engine doesn't queue, validate, or fold. The composite's `Apply(scope)` invokes its constituent mutations directly.
+>
+> Pre-cascade `scope.Emit(signal)` retires (use `scope.Dispatch(GameSignal)`). Pre-cascade `scope.Execute(GameAction)` / `scope.Execute(CompositeAction)` retire (composites are no longer `GameCommand` subtypes; the `Execute` overload now takes the new `CompositeMutation` type).
+
 ## What it is
 
 `IEffectScope` is the runtime surface an `IEffect` (per [`01-effect.md`](features/effects/models/01-effect.md)) sees inside `Run`. Read-only state access, **a single async `Dispatch<TResult>(GameCommand)` surface routing every kind in the 5-sibling `GameCommand` family**, modifier-entry construction, and the cancel/replace controls that participate in the trigger fold. Per [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md) D14, the previously action-only `Dispatch` becomes the canonical surface for `GameAction`, `CompositeAction`, `GameSignal`, `Request<TResponse>`, and `Response` — the router pattern-matches on the runtime type and returns the typed result for that kind.

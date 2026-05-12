@@ -7,6 +7,8 @@ tags: [#presentation, #view-model, #fsm, #intent, #model]
 
 # Match State View Model — model
 
+> **Amendment (2026-05-11).** The slice-subscription contract on the `scope` parameter of `Bind(state, scope)` is locked: **`scope.Subscribe<T>(handler) → IDisposable`** is the framework-provided primitive for reactive slice updates. The VM owns disposal — typically via `CompositeDisposable` or whatever the host MVVM toolkit's lifecycle pattern provides. The framework does not call `Dispose` on the VM; presenter / host MVVM layer owns VM lifetime. The pre-cascade auto-track via `scope.Get<T>()` framing is rejected (too much magic for a C# context). The richer `IObservable<T>` / reactive-property layer on top of `Subscribe<T>` is host-MVVM-dependent and tracked separately (`oq-view-model-host-shape`).
+
 ## What it is
 
 `MatchStateViewModel<TState>` is the **per-state polymorphic ViewModel**: a typed abstract class authored once per `MatchState` subtype, carrying `Bind(state, scope)` (read typed state + set up observables) and `Map(intent) → GameCommand` (translate gestures to commands). Per [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md), each match phase / decision mode / cleanup state has its own VM; the presenter subscribes to `MatchStateSlice` and rebinds the active VM on every state-type change via [`ViewModelRegistry`](features/presentation/models/02-view-model-registry.md).
