@@ -6,7 +6,7 @@ tags: [#spike, #runtime, #lifecycle, #walkthrough]
 
 # Runtime Walkthrough — End-to-End Game Lifecycle
 
-> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q7` callouts.
+> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q5` callouts.
 
 ## Why this exists
 
@@ -250,11 +250,18 @@ sequenceDiagram
 - `HistoryState`: `PlayCardAction` · `TargetRequest` · `Response` · `DamageCardAction` envelopes (or just `Response{Cancelled=true}` if the player cancelled).
 - Plus whatever `DamageCardAction` mutates (skipped if the player cancelled).
 
-**System touches:** *Effects* (orchestrates the multi-step flow via `await`; branches on `response.Cancelled`) → *Triggers* (engine invokes fold on Request and Response) → *State* (`RequestsSlice` + `AnswersSlice` are the rendezvous) → *Presentation* (VM enters request-mode; affordances change shape mid-turn; cancel affordance only when `AllowsCancellation = true`) → *Actions* (`Response` is a `GameCommand` sibling through the same `Dispatch`).
+**System touches:** *Effects* (orchestrates the multi-step flow via `await`; branches on `response.Cancelled`) → *Triggers* (engine invokes fold on Request and Response) → *State* (`RequestsSlice` + `AnswersSlice` are the rendezvous; `Open` is a dictionary supporting multiple parallel requests) → *Presentation* (VM enters request-mode; affordances change shape mid-turn; cancel affordance only when `AllowsCancellation = true`) → *Actions* (`Response` is a `GameCommand` sibling through the same `Dispatch`).
 
-> ⚠ **Open Q1.** Request timeout. Networked or async games might want "if the player doesn't respond in N seconds, auto-pick / cancel." The effect awaits forever today. No timeout primitive in the request system; if a game wants it, ship a timer service that dispatches `Cancelled = true` typed response after the deadline. Confirm this defer or design a framework primitive.
+**Concurrent requests work via `Task.WhenAll`.** Multiple effects can each open their own request and park independently; the engine's "pause on open requests" only pauses **state transitions** (default `Evaluate` returns `Current`) — drain itself proceeds. Patterns: simultaneous mulligan, multi-actor response windows, parallel auctions. Authoring shape:
 
-> ⚠ **Open Q2.** Concurrent requests. Can two effects each open a request at once (e.g., simultaneous prompts to both players)? `RequestsSlice.Open` is a dictionary keyed by `RequestId` (supports multiple open), but the default drain policy *pauses* on any non-empty `Open` — so requests serialize in practice. Multi-player simultaneous decisions (mulligans, response windows) are a real pattern; pin whether drain pauses per-actor or globally.
+```csharp
+var t1 = scope.Dispatch(new MulliganRequest(Player1, hand1));
+var t2 = scope.Dispatch(new MulliganRequest(Player2, hand2));
+await Task.WhenAll(t1, t2);
+// process both responses
+```
+
+**Timeout is deferred to post-v1.** Design direction pinned: `Request` will gain optional `TimeSpan? Timeout`; framework `TimerService` dispatches the default `Cancelled = true` typed response on expiry. Replay reproduces deterministically because the recorded response carries the cancellation. Until shipped, games can wire their own timer service against `RequestsSlice` and dispatch `Cancelled = true` responses.
 
 ---
 
@@ -301,11 +308,11 @@ sequenceDiagram
 
 **System touches:** *Actions* (`EndTurnAction` handler) → *Engine FSM* (`Evaluate` returns new state-type) → *Engine* (`TransitionStateCommand` synthesis) → *State* (`MatchStateSlice` updated; `EnterCommands` fire) → *Presentation* (VM rebind via Registry).
 
-> ⚠ **Open Q3.** ISBA (state-based action) cadence. When do ISBAs run — on *entry* into a new state, *every drain tick* while in that state, or *both*? Card games often need "after every action, check if any creature has 0 HP and destroy it" — that's "every drain tick." Lean: every drain tick, before `Evaluate` returns.
+> ⚠ **Open Q1.** ISBA (state-based action) cadence. When do ISBAs run — on *entry* into a new state, *every drain tick* while in that state, or *both*? Card games often need "after every action, check if any creature has 0 HP and destroy it" — that's "every drain tick." Lean: every drain tick, before `Evaluate` returns.
 
-> ⚠ **Open Q4.** Transition-loop prevention. The engine dispatches `TransitionStateCommand`, which is itself a command — does *its* execution also call `Evaluate`? If yes, could we recurse? Implicit answer: `Evaluate(TransitionStateCommand, _)` must return the same state-type (no further transition). Should be an architectural invariant, stated.
+> ⚠ **Open Q2.** Transition-loop prevention. The engine dispatches `TransitionStateCommand`, which is itself a command — does *its* execution also call `Evaluate`? If yes, could we recurse? Implicit answer: `Evaluate(TransitionStateCommand, _)` must return the same state-type (no further transition). Should be an architectural invariant, stated.
 
-> ⚠ **Open Q5.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
+> ⚠ **Open Q3.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
 
 ---
 
@@ -341,48 +348,44 @@ sequenceDiagram
 
 **System touches:** *Engine FSM* (Evaluate returns terminal) → *Engine* (self-emits `EndMatchCommand`; flips session field) → *Presentation* (terminal VM).
 
-> ⚠ **Open Q6.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
+> ⚠ **Open Q4.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
 
-> ⚠ **Open Q7.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
+> ⚠ **Open Q5.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
 
 ---
 
 ## Open questions summary
 
-Seven unresolved Qs after the walk so far. Grouped by surface:
+Five unresolved Qs after the walk so far. Grouped by surface:
 
 | Group | Q | Topic | Status |
 |---|---|---|---|
-| Request flow | **Q1** | Timeout primitive | Open. Likely deferred post-v1; can be game-shipped via a timer service that dispatches `Cancelled = true`. |
-| Request flow | **Q2** | Concurrent requests | Open. Drain pauses on any non-empty `RequestsSlice.Open`; per-actor vs global pause TBD. |
-| Transitions | **Q3** | ISBA cadence | Lean: every drain tick before `Evaluate`. |
-| Transitions | **Q4** | Transition-loop prevention invariant | Lean: `Evaluate(TransitionStateCommand, _)` returns same state-type. |
-| Transitions | **Q5** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
-| End match | **Q6** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
-| End match | **Q7** | Rematch model | Lean: terminal; dispose. |
+| Transitions | **Q1** | ISBA cadence | Lean: every drain tick before `Evaluate`. |
+| Transitions | **Q2** | Transition-loop prevention invariant | Lean: `Evaluate(TransitionStateCommand, _)` returns same state-type. |
+| Transitions | **Q3** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
+| End match | **Q4** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
+| End match | **Q5** | Rematch model | Lean: terminal; dispose. |
 
 ## What this spike confirms
 
-The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing on 4 `GameCommand` siblings, `scope.Dispatch` for commands + `scope.Execute` for inline mutation clusters), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), engine-invoked trigger fold across all four siblings, request system rendezvous through state with per-request cancellation policy + `Cancelled` flag on Response base, FSM evaluation, and per-state VM rebind via `scope.Subscribe<T>` all compose without contradiction.
+The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing on 4 `GameCommand` siblings, `scope.Dispatch` for commands + `scope.Execute` for inline mutation clusters), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), engine-invoked trigger fold across all four siblings, request system rendezvous through state with per-request cancellation policy + `Cancelled` flag on Response base + concurrent requests via `Task.WhenAll`, FSM evaluation, and per-state VM rebind via `scope.Subscribe<T>` all compose without contradiction.
 
-The seven remaining gaps are localized. Each is one of:
+The five remaining gaps are localized. Each is one of:
 
-- **Boundary cases** — timeout (Q1), concurrent requests (Q2).
-- **Timing / cadence** — ISBA cadence (Q3).
-- **Missing invariants** — transition-loop prevention (Q4).
-- **Missing hooks** — `OnExit` (Q5).
-- **Ownership** — match-end initiator (Q6), rematch model (Q7).
+- **Timing / cadence** — ISBA cadence (Q1).
+- **Missing invariants** — transition-loop prevention (Q2).
+- **Missing hooks** — `OnExit` (Q3).
+- **Ownership** — match-end initiator (Q4), rematch model (Q5).
 
-None of the remaining gaps invalidate the architecture. Most have a defensible lean. **Q2 (concurrent requests)** is the one that wants an explicit decision before vertical-slice work — multi-player simultaneous decisions shape the drain-pause policy.
+None of the remaining gaps invalidate the architecture. All have defensible leans.
 
 ## Next moves
 
-1. Walk Q1–Q7. Lock answers or punt with explicit deferrals.
+1. Walk Q1–Q5. Lock answers or punt with explicit deferrals.
 2. Cascade settled answers into the relevant Models:
-   - Q1 / Q2 → effects Models (`effects/06-request-system.md`) + drain policy.
-   - Q3 → engine Models (`engine/09-state-based-actions.md` — cadence).
-   - Q4 / Q5 → engine Models (`engine/07-match-state.md` — invariants + exit hook).
-   - Q6 / Q7 → engine Models (`engine/01-game-engine.md` — session lifecycle).
+   - Q1 → engine Models (`engine/09-state-based-actions.md` — cadence).
+   - Q2 / Q3 → engine Models (`engine/07-match-state.md` — invariants + exit hook).
+   - Q4 / Q5 → engine Models (`engine/01-game-engine.md` — session lifecycle).
 3. Re-do `support/samples/pile-counter.md` against the gap-filled architecture.
 4. Refresh `PLANS/pile-counter-vertical-slice.md` vocabulary.
 5. Execute the vertical slice.
