@@ -77,9 +77,9 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: first concrete implementation requires picking a shape.
   References: `Product/features/cards/models/01-card-model.md` § Resolution surfaces.
 
-- id: bl-pile-refs-index | kind: question | **Engine-side index slice for spawned per-game zone references** — `PileCounterGameDefinition.PileRefsAt(state)` (and its analog for any game with a fixed set of game-shared zones) needs an engine-side index slice (`PileIndexState` or similar generic shape — `Dict<TGameKey, Ref<Zone>>` or `IReadOnlyList<Ref<Zone>>`) populated during the factory's Build walk so the runtime and intent mapper can enumerate spawned zone refs without scanning `OwnershipState` or filtering by definition type. Open question: framework-provided generic index, game-side helper, or some intermediate. Surfaced by the PileCounter sample refresh (2026-05-06).
-  Trigger: first vertical-slice implementation needs concrete enumeration of game-shared zones spawned at Build.
-  References: `Product/support/samples/pile-counter.md` §9.6 + §11 Q19; `Product/features/engine/models/06-game-definition.md` § Build walk.
+- id: bl-pile-refs-index | kind: defer | **Engine-side index slice for spawned per-game zone references** — Pile Counter's specific need dissolved 2026-05-12 design pass (Q2 = A): the canonical pattern is `scope.GetAll<TState>()`, and both the win SBA and the playing VM enumerate via that. `PileCounterGameDefinition.PileRefsAt(state)` retires; `PileRefsState` slice retires. The broader question — whether the framework should ship a generic ordered-zone-refs index pattern for games where `GetAll` ordering or filter cost matters — stays open as a deferred design concern, but no current consumer forces it. If a richer game (multi-zone-type with overlapping `GetAll` results, or fixed turn-order zones where insertion-order isn't enough) surfaces, revisit. Provenance: PileCounter sample refresh (2026-05-06); Pile Counter slice design pass (2026-05-12).
+  Trigger: a second sample game with per-game-shared-zone enumeration needs where `scope.GetAll<TState>()` is insufficient (ordering, filtering, indexed lookup).
+  References: `Product/support/samples/pile-counter.md` §9.1 note + §11 Q19; `Product/features/engine/models/06-game-definition.md` § Build walk.
 
 ## Features yet to scaffold
 
@@ -140,7 +140,7 @@ Single ledger of loose ends — durable design questions, deferred work, and kno
   Trigger: first spatial-rules game (Stacklands-like) reaches design-pass.
   References: `Product/features/zones/models/01-zone-model.md` §Deferred (and the zone-shape provenance Q below the divider — formerly `zones/decisions/0001-zone-shape.md`, folded 2026-05-08).
 
-- id: bl-card-location-index | kind: defer | **Reverse-lookup index for card → zone** — derived aggregate slice (e.g., `CardLocationIndex` keyed by `CardRef → Zone`) that answers "what zone is this card in?" in O(1) instead of scanning all `ZoneContentsState` slices. Maintained atomically by the same mutators that write `ZoneContentsState`. Originally drafted into the cards Model during session-20260501-1602 but removed after audit found no current consumer.
+- id: bl-card-location-index | kind: defer | **Reverse-lookup index for card → zone** — derived aggregate slice (e.g., `CardLocationIndex` keyed by `CardRef → Zone`) that answers "what zone is this card in?" in O(1) instead of scanning all `ZoneContentsState` slices. Maintained atomically by the same mutators that write `ZoneContentsState`. Originally drafted into the cards Model during session-20260501-1602 but removed after audit found no current consumer. Pile Counter slice (2026-05-12 design pass Q3 = A) doesn't force the issue either — `DropCardIntent` carries `From: Ref<Zone>` directly from the gesture producer, so the VM's `Map` doesn't reverse-scan. The index stays deferred until a real consumer needs it at scale.
   Trigger: first reverse-lookup consumer surfaces (e.g., a Stacklands-style game's spatial query, a presentation feature that needs to render card-to-zone arrows, or any rule that needs frequent reverse lookup at scale).
   References: `Product/features/cards/models/01-card-model.md`, `Product/features/zones/models/01-zone-model.md` §Read API.
 
