@@ -6,7 +6,7 @@ tags: [#spike, #runtime, #lifecycle, #walkthrough]
 
 # Runtime Walkthrough — End-to-End Game Lifecycle
 
-> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q4` callouts.
+> **Status: draft / exploratory.** A temporal walk through a generic card-game session, from `GameFactory.Build` to `EndedSession`. Uses a concrete "play a card, draw a card, sometimes target" running example. Captures the locked runtime behavior inline; remaining open questions surface as `⚠ Q1`–`Q3` callouts.
 
 ## Why this exists
 
@@ -308,9 +308,7 @@ sequenceDiagram
 
 **System touches:** *Actions* (`EndTurnAction` handler) → *Engine FSM* (`Evaluate` returns new state-type) → *Engine* (`TransitionStateCommand` synthesis) → *State* (`MatchStateSlice` updated; `EnterCommands` fire) → *Presentation* (VM rebind via Registry).
 
-> ⚠ **Open Q1.** Transition-loop prevention. The engine dispatches `TransitionStateCommand`, which is itself a command — does *its* execution also call `Evaluate`? If yes, could we recurse? Implicit answer: `Evaluate(TransitionStateCommand, _)` must return the same state-type (no further transition). Should be an architectural invariant, stated.
-
-> ⚠ **Open Q2.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
+> ⚠ **Open Q1.** OnExit hook on `MatchState`. Entry side is already covered by `EnterCommands` (fires when state is entered). The mirror — `OnExit(oldState)` for cleanup signals / cancellation of pending effects when leaving a state — is not in the locked design. Lean: yes, add `ExitCommands` (or equivalent) so authors don't re-implement the pattern.
 
 ---
 
@@ -346,41 +344,39 @@ sequenceDiagram
 
 **System touches:** *Engine FSM* (Evaluate returns terminal) → *Engine* (self-emits `EndMatchCommand`; flips session field) → *Presentation* (terminal VM).
 
-> ⚠ **Open Q3.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
+> ⚠ **Open Q2.** Match-end initiator. Two paths: (a) `runtime.Evaluate` returns a terminal `MatchState` and the *host* listens and issues `EndMatchCommand`. (b) The engine itself issues `EndMatchCommand` after `Evaluate` returns terminal. (a) is host-driven; (b) is self-contained. Lean: (b) — the framework needs to work without a host orchestrator.
 
-> ⚠ **Open Q4.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
+> ⚠ **Open Q3.** Rematch model. Is `EndedSession` terminal-only (engine instance is single-use) or can a `RestartMatchCommand` flip `EndedSession` back to `NotStartedSession`? Either is defensible. Lean: terminal — match instance is single-use; host disposes and recreates for rematch.
 
 ---
 
 ## Open questions summary
 
-Four unresolved Qs after the walk so far. Grouped by surface:
+Three unresolved Qs after the walk so far. Grouped by surface:
 
 | Group | Q | Topic | Status |
 |---|---|---|---|
-| Transitions | **Q1** | Transition-loop prevention invariant | Lean: `Evaluate(TransitionStateCommand, _)` returns same state-type. |
-| Transitions | **Q2** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
-| End match | **Q3** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
-| End match | **Q4** | Rematch model | Lean: terminal; dispose. |
+| Transitions | **Q1** | OnExit hook on `MatchState` | Lean: add `ExitCommands` or equivalent. |
+| End match | **Q2** | Match-end initiator | Lean: engine self-emits `EndMatchCommand`. |
+| End match | **Q3** | Rematch model | Lean: terminal; dispose. |
 
 ## What this spike confirms
 
-The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing on 4 `GameCommand` siblings, `scope.Dispatch` for commands + `scope.Execute` for inline mutation clusters), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), engine-invoked trigger fold across all four siblings, request system rendezvous through state with per-request cancellation policy + `Cancelled` flag on Response base + concurrent requests via `Task.WhenAll`, FSM evaluation (single `Evaluate` hook on `GameRulesRuntime`; ISBA-style game-specific checks live inside game `Evaluate` overrides), and per-state VM rebind via `scope.Subscribe<T>` all compose without contradiction.
+The locked architecture handles every phase end-to-end **at a system-boundary level**. Engine orchestration (single drain, per-type routing on 4 `GameCommand` siblings with transition-loop prevention, `scope.Dispatch` for commands + `scope.Execute` for inline mutation clusters), validator chain authority, three-layer command execution (Effect → Handler → Mutator with fan-out), engine-invoked trigger fold across all four siblings, request system rendezvous through state with per-request cancellation policy + `Cancelled` flag on Response base + concurrent requests via `Task.WhenAll`, FSM evaluation (single `Evaluate` hook on `GameRulesRuntime`; ISBA-style game-specific checks live inside game `Evaluate` overrides), and per-state VM rebind via `scope.Subscribe<T>` all compose without contradiction.
 
-The four remaining gaps are localized. Each is one of:
+The three remaining gaps are localized. Each is one of:
 
-- **Missing invariants** — transition-loop prevention (Q1).
-- **Missing hooks** — `OnExit` (Q2).
-- **Ownership** — match-end initiator (Q3), rematch model (Q4).
+- **Missing hooks** — `OnExit` (Q1).
+- **Ownership** — match-end initiator (Q2), rematch model (Q3).
 
 None of the remaining gaps invalidate the architecture. All have defensible leans.
 
 ## Next moves
 
-1. Walk Q1–Q4. Lock answers or punt with explicit deferrals.
+1. Walk Q1–Q3. Lock answers or punt with explicit deferrals.
 2. Cascade settled answers into the relevant Models:
-   - Q1 / Q2 → engine Models (`engine/07-match-state.md` — invariants + exit hook).
-   - Q3 / Q4 → engine Models (`engine/01-game-engine.md` — session lifecycle).
+   - Q1 → engine Models (`engine/07-match-state.md` — exit hook).
+   - Q2 / Q3 → engine Models (`engine/01-game-engine.md` — session lifecycle).
 3. Re-do `support/samples/pile-counter.md` against the gap-filled architecture.
 4. Refresh `PLANS/pile-counter-vertical-slice.md` vocabulary.
 5. Execute the vertical slice.
