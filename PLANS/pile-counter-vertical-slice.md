@@ -10,9 +10,9 @@ The first end-to-end exercise of the settled framework. Implements [`Product/sup
 
 ## Locked decisions
 
-1. **D-PileRefs** — game-side singleton slice (`PileRefsState : BaseState` holding `IReadOnlyList<Ref<Zone>>`), declared by `PileCounterGameDefinition.GetInitialSlices()` with empty initial value. The factory's Build walk seeds it after spawning the four `PileDefinition` zones. Resolves [`bl-pile-refs-index`](../Product/ledgers/OPEN-ITEMS.md) as game-side; framework-generic shape deferred until a second consumer surfaces.
-2. **D-Presentation** — debug-only IMGUI runtime panel: button matrix for `Source → Destination` moves driven by `PilePlayingViewModel.Moves`, text readouts for top card / counter / target per pile, log lines for signals + rejections, "New puzzle" button. No drag-and-drop, no UI Toolkit. Wires the VM through a minimal presenter that observes `MatchStateSlice` + looks up `PilePlayingViewModel` via `ViewModelRegistry`.
-3. **D-Post-cascade-build** — slice builds **directly** against the post-cascade architecture (ADR-0009 / ADR-0010 / ADR-0011 / ADR-0013 all landed; ISBA retired from framework; lifecycle hooks are methods; engine auto-emits `EndMatchCommand` on `EndOfMatchState`). No intermediate phase that targets pre-cascade vocab.
+1. **D-Presentation** — debug-only IMGUI runtime panel: button matrix for `Source → Destination` moves driven by `PilePlayingViewModel.Moves`, text readouts for top card / counter / target per pile, log lines for signals + rejections, "New puzzle" button. No drag-and-drop, no UI Toolkit. Wires the VM through a minimal presenter that observes `MatchStateSlice` + looks up `PilePlayingViewModel` via `ViewModelRegistry`.
+2. **D-Post-cascade-build** — slice builds **directly** against the post-cascade architecture (ADR-0009 / ADR-0010 / ADR-0011 / ADR-0013 all landed; ISBA retired from framework; lifecycle hooks are methods; engine auto-emits `EndMatchCommand` on `EndOfMatchState`). No intermediate phase that targets pre-cascade vocab.
+3. **D-Enumeration** — per-pile enumeration uses `scope.GetAll<TState>()` (matches canonical `IStateScope` API in [`effects/02`](../Product/features/effects/models/02-effect-scope.md) line 78 + canonical Pile Counter VM example in [`presentation/01`](../Product/features/presentation/models/01-match-state-view-model.md)). No game-side `PileRefsState` singleton. If ordering stability becomes a concern in practice, add an explicit `Index` field to `PileState` as the cheap fallback. Reaffirmed via 2026-05-12 design-pass Q2 = A, second-pass.
 
 ## Phases
 
@@ -49,7 +49,7 @@ Build top-down, smallest first. Verify each layer compiles before the next.
 
 Mechanical translation of [pile-counter.md §9](../Product/support/samples/pile-counter.md). One file per concept; same names as the sketch.
 
-- **Slices.** `PileState(Counter, Target)`, `LastMoveState(Move?)`, `LastMove`, `PileRefsState(IReadOnlyList<Ref<Zone>>)` (per D-PileRefs).
+- **Slices.** `PileState(Counter, Target)`, `LastMoveState(Move?)`, `LastMove`. No `PileRefsState` — enumeration via `scope.GetAll<PileState>()` / `scope.GetAll<ZoneContentsState>()` per D-Enumeration.
 - **Variables.** `Vars.Number`.
 - **MatchStates.** `PilePlayingState(IActor Player)` with `Actions = [typeof(MoveCardAction)]` + `ActionsOpen = false` + `OnEnter` returning the setup `CreateCardAction` list per `puzzle.Deal` + `IsCompleted` returning true when all pile counters equal targets. `EndOfMatchState` is framework-shipped (used directly).
 - **Turn flow.** `PileCounterTurnFlow : ITurnFlow` — `PilePlayingState → EndOfMatchState(Win(Player))`.
@@ -61,7 +61,7 @@ Mechanical translation of [pile-counter.md §9](../Product/support/samples/pile-
 - **ViewModel.** `PilePlayingViewModel : MatchStateViewModel<PilePlayingState>` — uses `scope.Subscribe<ZoneContentsState>` + `scope.Subscribe<LastMoveState>` to recompute the `Moves` observable; `Map(PlayerIntent) → GameCommand` translates `MoveCardIntent` to `MoveCardAction`. `CompositeDisposable` for subscription cleanup.
 - **Rules.** `PileCounterRulesDefinition : GameRulesDefinition` (empty), `PileCounterRulesRuntime : GameRulesRuntime<PileCounterRulesDefinition>` — wires `Flow : PileCounterTurnFlow` + the solo player ref. No `Evaluate` override needed (default body suffices). No `FilterTriggers` (retired per ADR-0013). No `StateBasedActions` (retired per ADR-0009 refresh).
 - **Definitions.** `PileCounterCardDefinition : CardDefinition`, `PileDefinition : ZoneDefinition`, `SoloPlayerDefinition : PlayerDefinition`, `SoloPlayer : Player`.
-- **Bundle.** `PileCounterGameDefinition : GameDefinition` + `GetInitialSlices` yielding `LastMoveState(null)` and `PileRefsState(empty)`. Factory Build-walk populates `PileRefsState` after spawning the four piles.
+- **Bundle.** `PileCounterGameDefinition : GameDefinition` + `GetInitialSlices` yielding `LastMoveState(null)` only (framework slices auto-seeded; no `PileRefsState`). The factory's Build walk spawns the four `PileDefinition` zones from `SharedZones`; per-pile enumeration thereafter goes through `scope.GetAll<PileState>()`.
 - **Installer.** `PileCounterInstaller` registering validator, handler, mutators, runtime (open-generic), turn flow, view model (against `ViewModelRegistry`).
 - **Bootstrap.** `PileCounterBootstrap.Create(puzzleFactory, gameFactory)`.
 
