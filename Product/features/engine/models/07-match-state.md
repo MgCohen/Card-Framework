@@ -7,6 +7,11 @@ tags: [#engine, #match-state, #fsm]
 
 # Match State — model
 
+> **Amendment (2026-05-11) per spike Q-walk locks.** Two refinements:
+>
+> 1. **Action-gate triad on `MatchState`.** `Actions: IReadOnlyList<Type>` (whitelist when active) + `ActionsOpen: bool` (default `true` — anything passes). `MatchStateActionGate` semantics: `ActionsOpen == true` → pass; `ActionsOpen == false` + command type ∈ `Actions` → pass; `ActionsOpen == false` + command type ∉ `Actions` → reject. Authoring patterns: default open (no override); locked state (`ActionsOpen = false`, empty `Actions`) for resolving / animating; whitelist (`ActionsOpen = false`, populated `Actions`) for normal phases.
+> 2. **Transition-loop prevention invariant.** `TransitionStateCommand` is framework-internal flow control. The engine runs the validator chain + trigger folds + handler (which writes `MatchStateSlice.Current = newState`) but **skips `runtime.Evaluate` after a TransitionStateCommand**. State decisions for "what runs next" come from real commands that follow (each going through Evaluate normally); the new state's `EnterCommands` fire after the transition and each goes through its own Evaluate cycle. This prevents any `Evaluate → another Transition → Evaluate → …` recursion path, regardless of how a game's `ShouldExit` is written.
+
 ## What it is
 
 The framework's first-class concept of "what state is the match in." **`MatchState`** is an abstract record; concrete subclasses (game-authored) describe individual phases / decision modes / cleanup states. **`MatchStateSlice`** is the framework-owned slice wrapping the polymorphic current state. **`TransitionStateCommand`** is the framework-owned command the engine dispatches when `runtime.Evaluate` returns a state whose type differs from the current — every transition flows through the same pipeline as every other command.

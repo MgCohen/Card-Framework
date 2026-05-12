@@ -15,6 +15,8 @@ tags: [#engine, #evaluation-loop, #orchestrator, #fsm, #effects]
 >
 > **`GameCommand` is a 4-sibling family.** Request/Response are siblings of GameAction (not subtypes) and participate in the trigger fold (needed for redirect / shroud / "when-targeted" patterns). `CompositeMutation` (formerly `CompositeAction`) is **not** a `GameCommand` — it's a reusable inline mutation cluster reached via `scope.Execute(CompositeMutation)`. The engine's per-command-type switch is exhaustive on four siblings.
 >
+> **Transition-loop prevention:** `TransitionStateCommand` is a framework-internal special case — the engine runs validators + trigger folds + handler (which writes `MatchStateSlice.Current`) but **does not call `runtime.Evaluate` after** it. State changes don't require a follow-up Evaluate (there's nothing to "decide"); the next real command's Evaluate cycle drives subsequent transitions. The new state's `EnterCommands` still fire (each as a normal command that goes through Evaluate normally). This prevents any chance of an `Evaluate(TransitionStateCommand, _)` → another TransitionStateCommand → … recursion path, no matter how a game's `ShouldExit` is written.
+>
 > Engine holds `ITriggerPipeline` (was held by `actions` pipeline). `runtime.FilterTriggers` retires — eligibility lives on `Trigger<T>.Validate`. The action pipeline becomes single-concern (validators + handlers + envelope), as do the trigger and effect pipelines.
 
 ## What it is
