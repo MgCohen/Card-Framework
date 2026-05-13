@@ -1,0 +1,16 @@
+{
+    "name": "VerticalSlice.Sample",
+    "rootNamespace": "VerticalSlice.Sample",
+    "references": [
+        "VerticalSlice.Engine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
