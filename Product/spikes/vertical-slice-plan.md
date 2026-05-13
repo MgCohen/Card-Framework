@@ -87,7 +87,7 @@ Sample/VerticalSlice/                      ← pure C#, Unity-agnostic, own asmd
       HookPhase.cs                         // Before, After
       HookPriority.cs                      // Replacement, PreEffect, OnEffect, Reaction
     Stream/
-      WireEvent.cs                         // discriminated union
+      WireEvent.cs                         // BlockStart, BlockEnd, TagChange, EntityCreated
       EventLog.cs                          // append-only list, observable
   Mirror/
     MirrorWorld.cs                         // applies WireEvent to own dictionary state
@@ -124,9 +124,9 @@ Each phase ends with a runnable demo (console smoke test or scene). Each is a se
 ### Phase 1 — Engine core (no commands yet)
 
 **Deliverables:**
-- `TagKey<T>`, `TagRegistry` (slot allocator returns ascending indices)
-- `Entity` with `Get<T>(TagKey<T>)`, `Set<T>(TagKey<T>, T)`. `Set` emits via a callback (`World.OnTagChanged`) for the world to capture.
-- `World` with entity allocation (`Create<TEntity>()`), in-memory `EventLog`, and a "current block" stack (empty at this phase — writes outside any block append to a synthetic root block).
+- `TagKey<T>`, `TagRegistry` (slot allocator returns ascending indices).
+- `Entity` with `Get<T>(TagKey<T>)`, `Set<T>(TagKey<T>, T)`. `Set` uses `EqualityComparer<T>.Default` to skip no-op writes; emits a `TagChange` into the active block via a `World` callback.
+- `World` with entity allocation (`Create<TEntity>()` → monotonic id from 1; emits `EntityCreatedEvent` into the active block), in-memory `EventLog`, and a "current block" stack. Writes outside any block are auto-wrapped in a single-event `Block(BlockType.System)`.
 - `Card : Entity` with two manual properties (`Hp`, `DivineShield`) calling `Get`/`Set`.
 
 **Smoke test (Tests/EngineTests):**
@@ -165,14 +165,20 @@ Assert.That(c.Hp == 24);
 Assert.That(w.EventLog.Pattern() is [BlockStart, TagChange, BlockEnd]);
 ```
 
-### Phase 3 — Mirror + scrub
+### Phase 3 — Mirror + scrub (cursor-based reverse-apply)
 
 **Deliverables:**
 - `MirrorEntity` (id + dict of tag values).
-- `MirrorWorld.Apply(WireEvent)`:
-  - `BlockStart` / `BlockEnd` — push/pop a block-nesting counter for diagnostic only; mirror doesn't need block semantics for state correctness.
-  - `TagChange(id, key, prev, next)` — write into the mirror's dict.
-- `ScrubController.GoTo(int eventIndex)` — wipe mirror state, re-apply events 0..eventIndex.
+- `MirrorWorld` holds `_entities : Dictionary<int, MirrorEntity>` and `_cursor : int` (mirror state reflects "after applying events `0.._cursor-1`").
+- `Apply(WireEvent)` and `Unapply(WireEvent)`:
+  - `BlockStart` / `BlockEnd` — no-op for state correctness (optional nesting counter for diagnostic).
+  - `TagChange(id, key, prev, next)` — `Apply` writes `next`, `Unapply` writes `prev`.
+  - `EntityCreated(id)` — `Apply` instantiates `MirrorEntity`, `Unapply` removes from dict.
+- `ScrubController.GoTo(target, log)`:
+  ```csharp
+  while (_cursor < target) Apply(log[_cursor++]);
+  while (_cursor > target) Unapply(log[--_cursor]);
+  ```
 
 **Smoke test:**
 ```csharp
@@ -183,15 +189,16 @@ w.Execute(new DealDamage(source: null, target: c, amount: 6));   // 30 → 24
 w.Execute(new DealDamage(source: null, target: c, amount: 4));   // 24 → 20
 
 var mirror = new MirrorWorld();
-foreach (var e in w.EventLog) mirror.Apply(e);
+var scrub = new ScrubController(mirror, w.EventLog);
+
+scrub.GoTo(w.EventLog.Count);   // forward to head
 Assert.That(mirror.Get(c.Id, Tags.Hp) == 20);
 
-var scrub = new ScrubController(mirror, w.EventLog);
-scrub.GoTo(2);  // back to after the first DealDamage
+scrub.GoTo(2);                  // reverse-apply backward
 Assert.That(mirror.Get(c.Id, Tags.Hp) == 24);
 
-scrub.GoTo(w.EventLog.Count);  // forward to head
-Assert.That(mirror.Get(c.Id, Tags.Hp) == 20);
+scrub.GoTo(0);                  // reverse all the way
+Assert.That(mirror.Contains(c.Id) == false);   // entity removed
 ```
 
 ### Phase 4 — Sample effect (Fireball) + Divine Shield rule
@@ -241,14 +248,18 @@ Assert.That(tagChanges[0].Key == "divineShield");
 
 For each phase: types → commands → tests → confirm green → commit → move on. No skipping ahead.
 
-## Open questions to confirm during implementation (not blockers)
+## Locked decisions (Q&A walkthrough)
 
-- **UI flavor.** UI Toolkit vs. UGUI vs. IMGUI. Pick whichever matches the existing samples in the repo. I'll check on entry into Phase 5.
-- **Entity ID allocation.** Monotonic int from `World`. Will not survive process restart in this slice; persistence is a later concern.
-- **`Entity.Set` equality semantics.** Use `EqualityComparer<T>.Default`. Reference equality for reference types (matches the `TagKey<T>` reference-equality decision); value equality for value types. Document the gotcha.
-- **Block payload for `BlockStart`.** For the slice, serialize the command's runtime type name + a `Dictionary<string, object>` of its public properties. Source-gen comes later.
-- **Synthetic root block.** Tag writes that happen outside any `Execute` (the Phase 1 case, plus AC-2's manual edit) need somewhere to live. Either auto-wrap each in a `BlockStart/End` pair with a `SystemMutation` cause, or refuse. **Recommendation:** auto-wrap, so the wire is always well-formed; mark the block with `BlockType.System` so consumers can filter.
-- **Reset semantics on scrub-to-zero.** `ScrubController` rebuilds mirror state from scratch each call. Cheap at slice scale. If profiling later forces it, we can do reverse-replay on TagChange events using their `prev` field.
+The six open questions from the original plan were settled in a Q&A pass on the chat. Locks below are binding for the slice; revisit when their scope expands beyond the slice.
+
+| # | Decision | Notes |
+|---|---|---|
+| Q1 | **Entity ID = monotonic int from 1.** | `0` reserved for "no entity / null ref". IDs are not reused. Persistence and cross-process stability are deferred. |
+| Q2 | **`Entity.Set` equality skip uses `EqualityComparer<T>.Default`.** | Value equality for value types, reference equality for reference types. Documented gotcha: reference-typed tag values (e.g. immutable lists) must be reassigned to a new instance to register as a change. |
+| Q3 | **Tag writes outside `Execute` auto-wrap.** | Each `Set` outside an active block opens a single-event `Block(BlockType.System)`, emits the `TagChange`, closes. Wire invariant "every `TagChange` is inside a block" holds without exception. Optional batching sugar (`using world.OpenSystemBlock(...)`) deferred. |
+| Q4 | **`BlockStart` payload is a reflection-based dict.** | Walks the command's public properties: `{ type, props: { Source, Target, Amount, … } }`. Entity references stay as `Entity` instances for the slice (in-process mirror displays via `ToString`); we'll catch the "convert references to IDs" gotcha when wire-format spike runs. Payload is display-only — the mirror reconstructs state from `TagChange` events, not from `BlockStart` payloads. |
+| Q5 | **Mirror uses reverse-apply with a cursor.** | `ScrubController` moves the cursor; mirror walks forward via `Apply` (using `TagChange.Next`) or backward via `Unapply` (using `TagChange.Prev`). Requires adding **(Q5-i)** `EntityCreatedEvent(id)` to the wire alphabet — emitted by `World.Create<T>()` inside the active block (synthetic system block if none). Forward `Apply` instantiates a `MirrorEntity`; reverse `Unapply` removes it. Keeps the mirror exact at every cursor position. |
+| Q6 | **Unity UI uses IMGUI for the slice.** | Throwaway debug HUD; ugly is fine. Trivial to author, zero asset setup. Replace later if the slice grows into something demoable beyond the team. |
 
 ## What "done" looks like
 
