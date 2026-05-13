@@ -154,22 +154,16 @@ namespace VerticalSlice.UnityScene
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
-            // Event log
+            // Event log — only render events 0..cursor. A block whose body
+            // hasn't been re-applied yet (e.g. cursor sits between BlockStart
+            // and the first TagChange inside it) is hidden entirely, so its
+            // BlockStart and matching BlockEnd both disappear together. As the
+            // cursor advances past the first content event, the BlockStart
+            // pops back into view.
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(520));
             GUILayout.Label("EVENT LOG");
             _eventLogScroll = GUILayout.BeginScrollView(_eventLogScroll, GUILayout.Height(320));
-            int depth = 0;
-            for (int i = 0; i < _world.EventLog.Count; i++)
-            {
-                var ev = _world.EventLog[i];
-                if (ev is BlockEndEvent) depth = Math.Max(0, depth - 1);
-
-                string indent = new(' ', depth * 2);
-                string marker = i < _scrub.Cursor ? "▶" : "·";
-                GUILayout.Label($"{marker} {i:D3} {indent}{ev}");
-
-                if (ev is BlockStartEvent) depth++;
-            }
+            RenderEventLog();
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
@@ -183,5 +177,74 @@ namespace VerticalSlice.UnityScene
             bool b => b.ToString(),
             _ => v.ToString() ?? "null",
         };
+
+        // --- Event log rendering ---------------------------------------------
+
+        private void RenderEventLog()
+        {
+            var log = _world.EventLog;
+            int cursor = _scrub.Cursor;
+            var renderedStack = new System.Collections.Generic.Stack<bool>();
+            int depth = 0;
+
+            for (int i = 0; i < cursor; i++)
+            {
+                var ev = log[i];
+
+                if (ev is BlockStartEvent)
+                {
+                    bool hasAppliedContent = BlockHasAppliedContent(i, cursor);
+                    renderedStack.Push(hasAppliedContent);
+                    if (hasAppliedContent)
+                    {
+                        GUILayout.Label($"{i:D3} {new string(' ', depth * 2)}{ev}");
+                        depth++;
+                    }
+                    continue;
+                }
+
+                if (ev is BlockEndEvent)
+                {
+                    bool wasRendered = renderedStack.Count > 0 && renderedStack.Pop();
+                    if (wasRendered)
+                    {
+                        depth = Math.Max(0, depth - 1);
+                        GUILayout.Label($"{i:D3} {new string(' ', depth * 2)}{ev}");
+                    }
+                    continue;
+                }
+
+                // TagChange / EntityCreated
+                GUILayout.Label($"{i:D3} {new string(' ', depth * 2)}{ev}");
+            }
+        }
+
+        /// <summary>
+        /// Returns true if at least one TagChange or EntityCreated event
+        /// between the BlockStart at <paramref name="startIndex"/> and its
+        /// matching BlockEnd has been applied (index &lt; <paramref name="cursor"/>).
+        /// Nested BlockStart/BlockEnd pairs are skipped — only direct or
+        /// transitive content events count, so a chain of empty nested blocks
+        /// still collapses away together.
+        /// </summary>
+        private bool BlockHasAppliedContent(int startIndex, int cursor)
+        {
+            var log = _world.EventLog;
+            int depth = 0;
+            int scanEnd = Math.Min(log.Count, cursor);
+            for (int k = startIndex + 1; k < scanEnd; k++)
+            {
+                var ev = log[k];
+                if (ev is BlockStartEvent) { depth++; continue; }
+                if (ev is BlockEndEvent)
+                {
+                    if (depth == 0) return false;   // hit our own end
+                    depth--;
+                    continue;
+                }
+                return true;   // TagChange or EntityCreated inside the block
+            }
+            return false;
+        }
     }
 }
