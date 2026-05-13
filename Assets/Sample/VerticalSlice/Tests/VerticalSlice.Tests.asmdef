@@ -2,13 +2,16 @@
     "name": "VerticalSlice.Tests",
     "rootNamespace": "VerticalSlice.Tests",
     "references": [
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
         "VerticalSlice.Engine",
         "VerticalSlice.Mirror",
         "VerticalSlice.Sample"
     ],
-    "includePlatforms": [],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
