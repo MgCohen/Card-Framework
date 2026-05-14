@@ -11,6 +11,35 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**Vertical-slice extended walk — 17 architectural locks via design-pass session (2026-05-14).** Multi-session push on `claude/entity-based-architecture-pMNhU` reshaped the slice well past its original 5-phase AC-1..AC-7 scope. **10 commits** since `ffb9dee` (the original 5-phase batch); **71/71 EditMode tests pass** under Unity 6000.4.0f1 batch mode; six VerticalSlice DLLs compile clean. The spike [`spikes/vertical-slice-plan.md`](spikes/vertical-slice-plan.md) is now `concluded` — appended with [§What actually shipped](spikes/vertical-slice-plan.md#what-actually-shipped) (commit-by-commit walk, files inventory, AC-8/9/10 informal additions) and [§Architectural locks discovered post-plan](spikes/vertical-slice-plan.md#architectural-locks-discovered-post-plan) (P1–P17 + deferred-items list). The 17 locks at a glance:
+
+- **P1 ECS shape — single `Entity` type, no subclasses.** Card/Zone/Player are marker tags.
+- **P2 IEntity / Entity split + scope-typed access.** Effects/hooks see read-only; commands `Resolve(IEntity) → Entity` for writes.
+- **P3 Per-role services + scopes.** `EffectService`/`CommandService` on `GameEngine`; narrow `IEffectScope`/`ICommandScope`/`IHookScope`. World is pure substrate.
+- **P4 Wire alphabet — 6 concrete event classes, no shared Mutation supertype.** Pattern-match in Mirror.
+- **P5 `TagSet` vs `TagChange` split.** Fixes mirror init-value rewind bug; Unapply(TagSet) removes the key.
+- **P6 Block metadata.** Id + ParentId + Kind + Source + Outcome on BlockStart/End.
+- **P7 Effects + commands have NO BlockType declaration.** Kind comes from dispatch site.
+- **P8 `Effect<TPayload>` + Validate.** Payload bound at construction; Validate gates wire-emission; separate from Run.
+- **P9 `EffectService.Register<TCommand>(phase, priority, factory)` for hook effects.** One-call registration; phase/priority at call site (flagged for revisit).
+- **P10 Direct triggers via `CardEffectStore` + `scope.FireDirect`.** Per-entity, per-trigger-type effects; engine bridges translate broadcast → targeted dispatch. Per-card variation works without per-card subclasses.
+- **P11 Trigger payload types are sealed classes, not records.** Unity's .NET surface lacks `IsExternalInit`.
+- **P12 State-tags stay tags; triggered effects don't.** Permanent properties (DivineShield/Backlash/Armor) = bool/int tags; triggers (Deathrattle/Battlecry) = CardEffectStore entries. Source of truth is the store entry, not a flag.
+- **P13 Request is a peer to Effect/Command, not subordinate.** First-class for player decisions (Choose-One, target picking, mulligan).
+- **P14 Typed option wire events as building blocks; no labels on the wire.** `PickOption` (generic refs+value) + `CancelOption` + `Response`. Per-effect option subclasses (DamageOption/HealOption) explicitly rejected — server-side index→action mapping lives in `Request.Resolve`.
+- **P15 Sync model (no async/Task).** Effects + commands are synchronous; request open is fire-and-fork; chosen option's resolution runs top-level later. Async deferred; request type + wire alphabet carry over.
+- **P16 No auto-wrap on tag writes.** Bare TagSet/TagChange at top level OK; the "every write inside a Block(System)" invariant + `OpenSystemBlock`/`OpenTriggerBlock` retired.
+- **P17 `EffectService.RunResolution` — internal scope-without-block path.** Lets `RequestsService.Respond` give Resolve a scope without opening a wrapper block.
+
+**Branch state:** 10 commits ahead of `origin/main`. PR open: blocked on stale `gh` auth — prefilled body sits in chat history, manual PR or re-auth required. Sample card list: Fireball, HealingPotion, ShieldBreak, Backlash, Deathrattle (DamageAllEnemies + HealAllAllies as two distinct per-card deathrattles), Tactician (Choose-One). Tests: 71 cases across 14 fixtures (EngineTests, EffectTests, BlockMetadataTests, MirrorTests, MirrorInitValueTests, ScopeTests, DivineShieldTests, ArmorTests, HealTests, BacklashTests, DeathrattleTests, ZoneTests, PlayerTests, TacticianTests).
+
+**Next steps (in priority order per the user's earlier roadmap, none committed):**
+1. Draggable cards UI — replaces IMGUI with uGUI / UI Toolkit; cards as visual draggable elements; drop into a zone triggers MoveCard.
+2. Pile Counter sample plan — adapt to the slice's vocabulary (or treat as a separate sample using the same engine).
+3. Eventual: async dispatch (pre-play target picking, mulligan, mid-effect choices), modifier-as-entity, definition layer, label tables for option display.
+
+The slice's architecture shape is stable enough to inform downstream work as its own spike → model → ADR chain when those land. **Slice is "live reference," not "frozen artifact" — but the design pass is complete for now.**
+
 **Pile Counter slice — Q2 reaffirmation + sample re-refresh + plan revert (2026-05-12 second-pass).** PR #143 closed; rebuilt the cascade-tail work against current main after discovering significant divergence (ADR-0013 landed, ADR-0009 amended, PR #141 shipped a parallel plan refresh, my own PR #142 sample turned stale). Three pieces landed together: (1) **`PLANS/pile-counter-vertical-slice.md`** — D-PileRefs lock retracted (Q2 = A reaffirmed); replaced with D-Enumeration pointing at `scope.GetAll<TState>()` as the canonical API on [`effects/02:78`](features/effects/models/02-effect-scope.md); Phase 2 Slices + Bundle bullets cleared of `PileRefsState`. (2) **`support/samples/pile-counter.md` §9 full re-refresh** against ADR-0013 + ADR-0009 amendment: `PileGameOverState` retires in favor of framework-shipped `EndOfMatchState(MatchOutcome)`; `PileCounterWinSBA` retires — win check moves to `PilePlayingState.IsCompleted`; `EnterCommands` (property) → `OnEnter(scope)` (method); `ShouldExit` → `IsCompleted`; action-gate triad (`Actions` + `ActionsOpen`) added; transition-loop prevention invariant called out; `MoveCardMutation : CompositeAction` → `MoveCardComposite : CompositeMutation` (out-of-`GameCommand`-family per ADR-0013); handler uses `Scope.Execute(MoveCardComposite)` + `Store.ExecuteBatch` pattern; 4-sibling `GameCommand` family; `runtime.FilterTriggers` retired; engine auto-emits `EndMatchCommand` on `EndOfMatchState`. §6 + §7 + §10 + §11 refreshed to match. (3) **`Product/ledgers/OPEN-ITEMS.md` sweep** — `bl-pile-refs-index` softened from `kind: question` to `kind: defer` with Q2-reaffirmation note; `bl-card-location-index` note added confirming Q3 = A means Pile Counter doesn't force the index either. **Q1 = E intent survives** (terminal state drives session close) but wiring is now data-driven via the framework-shipped `EndOfMatchState` instead of game-authored `EnterCommands`.
 
 **Prior history of this thread (now superseded by the above):**
