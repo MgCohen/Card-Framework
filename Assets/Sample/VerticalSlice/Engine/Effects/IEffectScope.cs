@@ -41,6 +41,16 @@ namespace VerticalSlice.Engine.Effects
         /// </summary>
         void FireDirect<TTrigger>(IEntity entity, TTrigger trigger) where TTrigger : class;
 
+        /// <summary>
+        /// Open a player-decision request. Emits a Request-kind block on
+        /// the wire (one OptionEvent per option declared); the request
+        /// sits in the engine's RequestsService.Open dictionary until a
+        /// Response dispatches. Effects that open a request typically
+        /// return immediately (synchronous model) — the chosen option's
+        /// resolution runs later, top-level.
+        /// </summary>
+        void OpenRequest(Request request);
+
         IEntity? Get(int entityId);
         IEnumerable<IEntity> All();
         IEnumerable<IEntity> Where(TagKey<bool> marker);

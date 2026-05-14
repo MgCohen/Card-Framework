@@ -29,6 +29,7 @@ namespace VerticalSlice.Engine.Pipeline
     {
         private readonly World _world;
         private readonly CommandService _commands;
+        private RequestsService? _requests;   // bound by GameEngine
         public CardEffectStore CardEffects { get; }
 
         public EffectService(World world, CommandService commands, CardEffectStore cardEffects)
@@ -38,9 +39,24 @@ namespace VerticalSlice.Engine.Pipeline
             CardEffects = cardEffects;
         }
 
+        internal void BindRequests(RequestsService requests) => _requests = requests;
+
+        /// <summary>
+        /// Run a resolution body that needs a scope but should NOT open
+        /// its own block. Used by <c>RequestsService.Respond</c> so the
+        /// commands / effects dispatched by a request's resolution
+        /// appear as top-level on the wire, not wrapped in a
+        /// "RequestResolution" wrapper.
+        /// </summary>
+        internal void RunResolution(System.Action<IEffectScope> body)
+        {
+            var scope = new EffectScope(_world, _commands, CardEffects, this, _requests!);
+            body(scope);
+        }
+
         public void Run(Effect effect)
         {
-            var scope = new EffectScope(_world, _commands, CardEffects, this);
+            var scope = new EffectScope(_world, _commands, CardEffects, this, _requests!);
 
             // Validate is a separate step — short-circuits before any wire
             // event is emitted. "Did the effect run" == "did we get past
@@ -96,14 +112,16 @@ namespace VerticalSlice.Engine.Pipeline
             private readonly CommandService _commands;
             private readonly CardEffectStore _cardEffects;
             private readonly EffectService _effects;
+            private readonly RequestsService _requests;
 
             public EffectScope(World w, CommandService c, CardEffectStore cardEffects,
-                               EffectService effects)
+                               EffectService effects, RequestsService requests)
             {
                 _world = w;
                 _commands = c;
                 _cardEffects = cardEffects;
                 _effects = effects;
+                _requests = requests;
             }
 
             public void Execute(Command command) => _commands.Execute(command);
@@ -116,6 +134,8 @@ namespace VerticalSlice.Engine.Pipeline
                 var effect = _cardEffects.Build(entity, trigger);
                 if (effect != null) _effects.Run(effect);
             }
+
+            public void OpenRequest(Request request) => _requests.OpenRequestInternal(request);
 
             public IEntity? Get(int id) => _world.Get(id);
             public IEnumerable<IEntity> All() => _world.All();

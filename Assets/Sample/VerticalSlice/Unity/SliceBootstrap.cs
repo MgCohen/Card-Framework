@@ -151,7 +151,41 @@ namespace VerticalSlice.UnityScene
                 AfterCommandIssued();
             }
 
+            if (GUILayout.Button("Cast Tactician", GUILayout.Width(130))
+                && _caster != null && _target != null)
+            {
+                _engine.Effects.Run(new Tactician(_caster, _target));
+                AfterCommandIssued();
+            }
+
             GUILayout.EndHorizontal();
+
+            // --- Open requests (Choose-One pickers) ------------------------
+            if (_engine.Requests.Open.Count > 0)
+            {
+                GUILayout.BeginVertical(GUI.skin.box);
+                GUILayout.Label("OPEN REQUESTS");
+                // Snapshot so a Respond inside the loop doesn't mutate-mid-iterate.
+                var openSnapshot = _engine.Requests.Open.ToList();
+                foreach (var kvp in openSnapshot)
+                {
+                    var req = kvp.Value;
+                    GUILayout.Label($"#{kvp.Key} {req.Name}");
+                    GUILayout.BeginHorizontal();
+                    foreach (var opt in req.Options)
+                    {
+                        var label = OptionButtonLabel(opt);
+                        var width = opt is CancelOptionEvent ? 90 : 220;
+                        if (GUILayout.Button(label, GUILayout.Width(width)))
+                        {
+                            _engine.Requests.Respond(kvp.Key, opt.Index);
+                            AfterCommandIssued();
+                        }
+                    }
+                    GUILayout.EndHorizontal();
+                }
+                GUILayout.EndVertical();
+            }
 
             // --- Target toggles + tunables ----------------------------------
             if (_target != null)
@@ -338,6 +372,21 @@ namespace VerticalSlice.UnityScene
             null => "null",
             bool b => b.ToString(),
             _ => v.ToString() ?? "null",
+        };
+
+        // Generic debug-friendly button text for an option wire event.
+        // Labels live on the client (here); the wire carries pure data
+        // (refs + value). For real games the client would use richer UI
+        // and look up display strings from a content table.
+        private static string OptionButtonLabel(OptionEvent opt) => opt switch
+        {
+            CancelOptionEvent => "Cancel",
+            PickOptionEvent pick =>
+                $"Pick {pick.Index}" +
+                (pick.SourceId.HasValue ? $"  src=#{pick.SourceId.Value}" : "") +
+                (pick.TargetId.HasValue ? $"  tgt=#{pick.TargetId.Value}" : "") +
+                (pick.Value.HasValue   ? $"  val={pick.Value.Value}"     : ""),
+            _ => $"Option {opt.Index}",
         };
 
         // --- Event log rendering -------------------------------------------------

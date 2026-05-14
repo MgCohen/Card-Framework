@@ -17,5 +17,6 @@ namespace VerticalSlice.Engine.Stream
     {
         Effect,    // EffectService.Run opened this
         Command,   // CommandService.Execute opened this
+        Request,   // RequestsService.Open opened this (options block)
     }
 }
