@@ -25,5 +25,18 @@ namespace VerticalSlice.Sample
         /// <summary>All cards in the world.</summary>
         public static IEnumerable<Entity> Cards(this World world)
             => world.Where(Tags.IsCard);
+
+        /// <summary>All players in the world.</summary>
+        public static IEnumerable<Entity> Players(this World world)
+            => world.Where(Tags.IsPlayer);
+
+        /// <summary>All cards owned by <paramref name="player"/>.</summary>
+        public static IEnumerable<Entity> CardsOwnedBy(this World world, IEntity player)
+            => world.All().Where(e => e.IsCard() && e.OwnerId() == player.Id);
+
+        /// <summary>All cards <i>not</i> owned by <paramref name="player"/>
+        /// (the "enemy cards" view, useful for AOE effects).</summary>
+        public static IEnumerable<Entity> CardsNotOwnedBy(this World world, IEntity player)
+            => world.All().Where(e => e.IsCard() && e.OwnerId() != 0 && e.OwnerId() != player.Id);
     }
 }

@@ -27,8 +27,12 @@ namespace VerticalSlice.UnityScene
         private MirrorWorld _mirror = null!;
         private ScrubController _scrub = null!;
 
-        private Entity? _caster;
-        private Entity? _target;
+        private Entity? _p1;
+        private Entity? _p2;
+        private Entity? _caster;     // P1
+        private Entity? _ally1;      // P1 — passive minion to demo Deathrattle AOE
+        private Entity? _target;     // P2
+        private Entity? _ally2;      // P2 — passive minion
         private Entity? _hand;
         private Entity? _battlefield;
         private Entity? _graveyard;
@@ -49,30 +53,48 @@ namespace VerticalSlice.UnityScene
             DivineShieldRule.Register(_engine.Commands);
             ArmorRule.Register(_engine.Commands);
             BacklashRule.Register(_engine.Commands);
+            DeathrattleRule.Register(_engine.Commands);
 
-            // No more "OpenSystemBlock" wrapper — bare TagSet/TagChange
-            // events at the top of the log are fine. Setup is just a flat
-            // sequence of EntityCreated + TagSet events; no enclosing scope.
+            // Setup is just a flat sequence of EntityCreated + TagSet events;
+            // no enclosing scope. Order: players → zones → cards (with owner
+            // + zone references resolved at the end).
 
-            // Zones first so we can SetZone on cards as we create them.
-            _hand       = _engine.World.Create(); _hand.MarkAsZone("Hand");
-            _battlefield= _engine.World.Create(); _battlefield.MarkAsZone("Battlefield");
-            _graveyard  = _engine.World.Create(); _graveyard.MarkAsZone("Graveyard");
+            _p1 = _engine.World.Create(); _p1.MarkAsPlayer("P1");
+            _p2 = _engine.World.Create(); _p2.MarkAsPlayer("P2");
 
+            _hand        = _engine.World.Create(); _hand.MarkAsZone("Hand");
+            _battlefield = _engine.World.Create(); _battlefield.MarkAsZone("Battlefield");
+            _graveyard   = _engine.World.Create(); _graveyard.MarkAsGraveyard();
+
+            // P1's cards
             _caster = _engine.World.Create();
             _caster.MarkAsCard();
-            _caster.SetHp(30);
-            _caster.SetMaxHp(30);
-            _caster.SetAttack(2);
+            _caster.SetCardName("Caster");
+            _caster.SetHp(30); _caster.SetMaxHp(30); _caster.SetAttack(2);
+            _caster.SetOwner(_p1);
             _caster.SetZone(_battlefield);
 
+            _ally1 = _engine.World.Create();
+            _ally1.MarkAsCard();
+            _ally1.SetCardName("Ally-P1");
+            _ally1.SetHp(10); _ally1.SetMaxHp(10);
+            _ally1.SetOwner(_p1);
+            _ally1.SetZone(_battlefield);
+
+            // P2's cards
             _target = _engine.World.Create();
             _target.MarkAsCard();
-            _target.SetHp(30);
-            _target.SetMaxHp(30);
-            _target.SetAttack(0);
-            _target.SetArmor(0);
+            _target.SetCardName("Target");
+            _target.SetHp(30); _target.SetMaxHp(30); _target.SetAttack(0); _target.SetArmor(0);
+            _target.SetOwner(_p2);
             _target.SetZone(_battlefield);
+
+            _ally2 = _engine.World.Create();
+            _ally2.MarkAsCard();
+            _ally2.SetCardName("Ally-P2");
+            _ally2.SetHp(10); _ally2.SetMaxHp(10);
+            _ally2.SetOwner(_p2);
+            _ally2.SetZone(_battlefield);
 
             _mirror = new MirrorWorld();
             _scrub = new ScrubController(_mirror, _engine.World.Log.Events);
@@ -161,6 +183,14 @@ namespace VerticalSlice.UnityScene
                     _caster.SetBacklash(newBl);
                     AfterCommandIssued();
                 }
+                GUILayout.Space(20);
+                var dr = _caster.HasDeathrattle();
+                var newDr = GUILayout.Toggle(dr, "Deathrattle on Caster (2 dmg to all enemies when it dies)");
+                if (newDr != dr)
+                {
+                    _caster.SetHasDeathrattle(newDr);
+                    AfterCommandIssued();
+                }
                 GUILayout.EndHorizontal();
             }
 
@@ -207,22 +237,30 @@ namespace VerticalSlice.UnityScene
             GUILayout.BeginHorizontal();
 
             // Primary
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(300));
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(320));
             GUILayout.Label("PRIMARY STATE (engine)");
             _primaryScroll = GUILayout.BeginScrollView(_primaryScroll, GUILayout.Height(320));
             foreach (var kvp in _engine.World.Entities)
             {
                 var ent = kvp.Value;
-                var kind = ent.IsCard() ? "card" : ent.IsZone() ? "zone" : "";
-                GUILayout.Label($"#{ent.Id} {kind}".TrimEnd());
-                if (ent.Has(Tags.ZoneName))     GUILayout.Label($"  name         = {ent.ZoneName()}");
-                if (ent.Has(Tags.Hp))           GUILayout.Label($"  hp           = {ent.Hp()}");
-                if (ent.Has(Tags.MaxHp))        GUILayout.Label($"  maxHp        = {ent.MaxHp()}");
-                if (ent.Has(Tags.Attack))       GUILayout.Label($"  attack       = {ent.Attack()}");
-                if (ent.Has(Tags.Armor))        GUILayout.Label($"  armor        = {ent.Armor()}");
-                if (ent.Has(Tags.DivineShield)) GUILayout.Label($"  divineShield = {ent.DivineShield()}");
-                if (ent.Has(Tags.Backlash))     GUILayout.Label($"  backlash     = {ent.Backlash()}");
-                if (ent.Has(Tags.Zone))         GUILayout.Label($"  zone         = #{ent.ZoneId()}");
+                var kind = ent.IsCard() ? "card"
+                         : ent.IsZone() ? (ent.IsGraveyard() ? "graveyard" : "zone")
+                         : ent.IsPlayer() ? "player"
+                         : "";
+                var label = !string.IsNullOrEmpty(ent.CardName()) ? ent.CardName()
+                          : !string.IsNullOrEmpty(ent.PlayerName()) ? ent.PlayerName()
+                          : !string.IsNullOrEmpty(ent.ZoneName()) ? ent.ZoneName()
+                          : "";
+                GUILayout.Label($"#{ent.Id} [{kind}] {label}".TrimEnd());
+                if (ent.Has(Tags.Owner))          GUILayout.Label($"  owner        = #{ent.OwnerId()}");
+                if (ent.Has(Tags.Hp))             GUILayout.Label($"  hp           = {ent.Hp()}");
+                if (ent.Has(Tags.MaxHp))          GUILayout.Label($"  maxHp        = {ent.MaxHp()}");
+                if (ent.Has(Tags.Attack))         GUILayout.Label($"  attack       = {ent.Attack()}");
+                if (ent.Has(Tags.Armor))          GUILayout.Label($"  armor        = {ent.Armor()}");
+                if (ent.Has(Tags.DivineShield))   GUILayout.Label($"  divineShield = {ent.DivineShield()}");
+                if (ent.Has(Tags.Backlash))       GUILayout.Label($"  backlash     = {ent.Backlash()}");
+                if (ent.Has(Tags.HasDeathrattle)) GUILayout.Label($"  deathrattle  = {ent.HasDeathrattle()}");
+                if (ent.Has(Tags.Zone))           GUILayout.Label($"  zone         = #{ent.ZoneId()}");
                 GUILayout.Space(4);
             }
             GUILayout.EndScrollView();
@@ -256,11 +294,12 @@ namespace VerticalSlice.UnityScene
             // --- Zones panel (full width below the main row) -------------
             GUILayout.Space(8);
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("ZONES (cards grouped by Zone tag — derived from flat ECS storage via query)");
+            GUILayout.Label("ZONES (cards grouped by Zone tag, owners shown by Owner tag — derived from flat ECS storage via query)");
             _zonesScroll = GUILayout.BeginScrollView(_zonesScroll, GUILayout.Height(180));
             foreach (var zone in _engine.World.Zones())
             {
-                GUILayout.Label($"#{zone.Id} {zone.ZoneName()}");
+                var zoneKind = zone.IsGraveyard() ? "graveyard" : "zone";
+                GUILayout.Label($"#{zone.Id} [{zoneKind}] {zone.ZoneName()}");
                 var cardsInZone = _engine.World.CardsIn(zone).ToList();
                 if (cardsInZone.Count == 0)
                 {
@@ -269,9 +308,15 @@ namespace VerticalSlice.UnityScene
                 else
                 {
                     foreach (var c in cardsInZone)
-                        GUILayout.Label($"    #{c.Id}  hp={c.Hp()}  armor={c.Armor()}" +
-                                        (c.DivineShield() ? "  shield" : "") +
-                                        (c.Backlash() ? "  backlash" : ""));
+                    {
+                        var owner = _engine.World.Get(c.OwnerId());
+                        var ownerLabel = owner?.PlayerName() ?? "?";
+                        var flags = new System.Text.StringBuilder();
+                        if (c.DivineShield())   flags.Append("  shield");
+                        if (c.Backlash())       flags.Append("  backlash");
+                        if (c.HasDeathrattle()) flags.Append("  deathrattle");
+                        GUILayout.Label($"    #{c.Id} {c.CardName()} (owner={ownerLabel})  hp={c.Hp()}  armor={c.Armor()}{flags}");
+                    }
                 }
                 GUILayout.Space(2);
             }
