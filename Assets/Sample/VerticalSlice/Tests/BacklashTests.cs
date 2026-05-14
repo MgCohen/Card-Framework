@@ -17,14 +17,14 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            caster.SetHp(30); caster.SetMaxHp(30);
-            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetHealth(30); caster.SetMaxHealth(30);
+            target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));   // 6 from Fireball
-            Assert.That(caster.Hp(), Is.EqualTo(29));   // 1 backlash
+            Assert.That(target.Health(), Is.EqualTo(24));   // 6 from Fireball
+            Assert.That(caster.Health(), Is.EqualTo(29));   // 1 backlash
         }
 
         [Test]
@@ -35,8 +35,8 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            caster.SetHp(30); caster.SetMaxHp(30);
-            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetHealth(30); caster.SetMaxHealth(30);
+            target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
             int checkpoint = eng.World.Log.Count;
@@ -67,14 +67,14 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            caster.SetHp(30); caster.SetMaxHp(30);
-            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetHealth(30); caster.SetMaxHealth(30);
+            target.SetHealth(30); target.SetMaxHealth(30);
             // caster.Backlash stays false.
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(caster.Hp(), Is.EqualTo(30));   // untouched
+            Assert.That(caster.Health(), Is.EqualTo(30));   // untouched
             var hasBacklashBlock = eng.World.Log.Events.Skip(checkpoint)
                 .OfType<BlockStartEvent>().Any(b => b.Name == "Backlash");
             Assert.That(hasBacklashBlock, Is.False);
@@ -88,8 +88,8 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            caster.SetHp(30); caster.SetMaxHp(30);
-            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetHealth(30); caster.SetMaxHealth(30);
+            target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
             // target.Backlash stays false → retaliation's source has no Backlash tag.
 
@@ -110,16 +110,16 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            caster.SetHp(30); caster.SetMaxHp(30);
-            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetHealth(30); caster.SetMaxHealth(30);
+            target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
             target.SetDivineShield(true);
 
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(30));
+            Assert.That(target.Health(), Is.EqualTo(30));
             Assert.That(target.DivineShield(), Is.False);
-            Assert.That(caster.Hp(), Is.EqualTo(30),
+            Assert.That(caster.Health(), Is.EqualTo(30),
                 "Backlash must skip when the original damage was zeroed.");
         }
     }

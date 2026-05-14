@@ -15,6 +15,11 @@ namespace VerticalSlice.Tests
     /// different deathrattle effects — proven here by attaching
     /// <see cref="DamageAllEnemies"/> to one card and
     /// <see cref="HealAllAllies"/> to another.
+    ///
+    /// AOE filter: DamageAllEnemies targets enemy hero + enemy minions on
+    /// a battlefield zone. HealAllAllies targets friendly minions on a
+    /// battlefield zone (skip dying self). The board fixture uses
+    /// MarkAsMinion + MarkAsBattlefield so the in-play filter fires.
     /// </summary>
     public class DeathrattleTests
     {
@@ -27,26 +32,29 @@ namespace VerticalSlice.Tests
             DeathrattleBridge.Register(eng.Commands);
 
             var p1 = eng.World.Create(); p1.MarkAsPlayer("P1");
-            var p2 = eng.World.Create(); p2.MarkAsPlayer("P2");
+            p1.SetHealth(30); p1.SetMaxHealth(30);
 
-            var bf = eng.World.Create(); bf.MarkAsZone("Battlefield");
+            var p2 = eng.World.Create(); p2.MarkAsPlayer("P2");
+            p2.SetHealth(30); p2.SetMaxHealth(30);
+
+            var bf = eng.World.Create(); bf.MarkAsBattlefield("Battlefield");
             var grave = eng.World.Create(); grave.MarkAsGraveyard();
 
             var caster = eng.World.Create();
-            caster.MarkAsCard(); caster.SetCardName("CasterP1");
-            caster.SetHp(30); caster.SetMaxHp(30); caster.SetOwner(p1); caster.SetZone(bf);
+            caster.MarkAsMinion("CasterP1");
+            caster.SetHealth(30); caster.SetMaxHealth(30); caster.SetOwner(p1); caster.SetZone(bf);
 
             var allyP1 = eng.World.Create();
-            allyP1.MarkAsCard(); allyP1.SetCardName("AllyP1");
-            allyP1.SetHp(10); allyP1.SetMaxHp(10); allyP1.SetOwner(p1); allyP1.SetZone(bf);
+            allyP1.MarkAsMinion("AllyP1");
+            allyP1.SetHealth(10); allyP1.SetMaxHealth(10); allyP1.SetOwner(p1); allyP1.SetZone(bf);
 
             var target = eng.World.Create();
-            target.MarkAsCard(); target.SetCardName("TargetP2");
-            target.SetHp(30); target.SetMaxHp(30); target.SetOwner(p2); target.SetZone(bf);
+            target.MarkAsMinion("TargetP2");
+            target.SetHealth(30); target.SetMaxHealth(30); target.SetOwner(p2); target.SetZone(bf);
 
             var allyP2 = eng.World.Create();
-            allyP2.MarkAsCard(); allyP2.SetCardName("AllyP2");
-            allyP2.SetHp(10); allyP2.SetMaxHp(10); allyP2.SetOwner(p2); allyP2.SetZone(bf);
+            allyP2.MarkAsMinion("AllyP2");
+            allyP2.SetHealth(10); allyP2.SetMaxHealth(10); allyP2.SetOwner(p2); allyP2.SetZone(bf);
 
             return (eng, p1, p2, bf, grave, caster, allyP1, target, allyP2);
         }
@@ -60,11 +68,13 @@ namespace VerticalSlice.Tests
 
             b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
 
-            // P2's cards took 2 damage each:
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(28));
-            Assert.That(b.allyP2.Hp(),   Is.EqualTo(8));
-            // P1's other card untouched:
-            Assert.That(b.allyP1.Hp(),   Is.EqualTo(10));
+            // Enemy hero + every enemy minion on the battlefield take 2:
+            Assert.That(b.p2.Health(),       Is.EqualTo(28));
+            Assert.That(b.targetP2.Health(), Is.EqualTo(28));
+            Assert.That(b.allyP2.Health(),   Is.EqualTo(8));
+            // Friendly side untouched:
+            Assert.That(b.p1.Health(),       Is.EqualTo(30));
+            Assert.That(b.allyP1.Health(),   Is.EqualTo(10));
         }
 
         [Test]
@@ -75,32 +85,33 @@ namespace VerticalSlice.Tests
             // for — attaching a totally different effect to a different card
             // requires no new C# subclass, no new bridge, no rule changes.
             var b = BuildBoard();
-            b.allyP1.SetHp(7);   // hurt so the heal is observable
             b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
                 t => new HealAllAllies(t));
 
             b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
 
-            // P1's other card (caster) gets +3 hp (capped at MaxHp):
-            Assert.That(b.casterP1.Hp(), Is.EqualTo(30));   // already at max
-            // The dying card is excluded from the heal (no point):
-            Assert.That(b.allyP1.Hp(),   Is.EqualTo(7));
-            // P2's cards untouched:
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
-            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+            // CasterP1 (friendly minion on battlefield) heals 3 — already at max.
+            Assert.That(b.casterP1.Health(), Is.EqualTo(30));
+            // Dying minion excluded from the heal:
+            Assert.That(b.allyP1.Health(),   Is.EqualTo(10));
+            // Friendly hero is NOT a minion — HealAllAllies skips it.
+            Assert.That(b.p1.Health(),       Is.EqualTo(30));
+            // Enemy minions untouched:
+            Assert.That(b.targetP2.Health(), Is.EqualTo(30));
+            Assert.That(b.allyP2.Health(),   Is.EqualTo(10));
         }
 
         [Test]
         public void Deathrattle_HealAllAllies_HealsBelowMax()
         {
             var b = BuildBoard();
-            b.casterP1.SetHp(20);   // hurt
+            b.casterP1.SetHealth(20);   // hurt
             b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
                 t => new HealAllAllies(t));
 
             b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
 
-            Assert.That(b.casterP1.Hp(), Is.EqualTo(23));   // 20 + 3
+            Assert.That(b.casterP1.Health(), Is.EqualTo(23));   // 20 + 3
         }
 
         [Test]
@@ -112,9 +123,9 @@ namespace VerticalSlice.Tests
 
             b.eng.Commands.Execute(new MoveCard(b.targetP2, b.graveyard));
 
-            Assert.That(b.casterP1.Hp(), Is.EqualTo(30));
-            Assert.That(b.allyP1.Hp(),   Is.EqualTo(10));
-            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+            Assert.That(b.casterP1.Health(), Is.EqualTo(30));
+            Assert.That(b.allyP1.Health(),   Is.EqualTo(10));
+            Assert.That(b.allyP2.Health(),   Is.EqualTo(10));
         }
 
         [Test]
@@ -127,8 +138,9 @@ namespace VerticalSlice.Tests
 
             b.eng.Commands.Execute(new MoveCard(b.casterP1, hand));
 
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
-            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+            Assert.That(b.p2.Health(),       Is.EqualTo(30));
+            Assert.That(b.targetP2.Health(), Is.EqualTo(30));
+            Assert.That(b.allyP2.Health(),   Is.EqualTo(10));
         }
 
         [Test]
@@ -139,7 +151,8 @@ namespace VerticalSlice.Tests
             //     → Command(DealDamage)... × N
             // No "DeathrattleBridge" wire block — the bridge is a plain bus
             // subscription, not an Effect. Per the design we chose to keep
-            // the wire clean of plumbing.
+            // the wire clean of plumbing. Three DealDamage children: enemy
+            // hero + two enemy minions.
             var b = BuildBoard();
             b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
@@ -153,7 +166,7 @@ namespace VerticalSlice.Tests
                               .ToList();
             Assert.That(blockNames, Is.EqualTo(new[]
             {
-                "MoveCard", "DamageAllEnemies", "DealDamage", "DealDamage",
+                "MoveCard", "DamageAllEnemies", "DealDamage", "DealDamage", "DealDamage",
             }));
         }
 
@@ -170,10 +183,11 @@ namespace VerticalSlice.Tests
 
             b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
 
-            // Target absorbed; ally took it.
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
+            // Target absorbed; hero + other minion still took 2.
+            Assert.That(b.targetP2.Health(),       Is.EqualTo(30));
             Assert.That(b.targetP2.DivineShield(), Is.False);
-            Assert.That(b.allyP2.Hp(), Is.EqualTo(8));
+            Assert.That(b.allyP2.Health(),         Is.EqualTo(8));
+            Assert.That(b.p2.Health(),             Is.EqualTo(28));
         }
     }
 }

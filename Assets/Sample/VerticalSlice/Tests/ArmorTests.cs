@@ -17,12 +17,12 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetArmor(2);
 
             eng.Effects.Run(new Fireball(caster, target));   // 6 − 2 = 4
 
-            Assert.That(target.Hp(), Is.EqualTo(26));
+            Assert.That(target.Health(), Is.EqualTo(26));
             Assert.That(target.Armor(), Is.EqualTo(2));   // permanent
         }
 
@@ -34,17 +34,17 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetArmor(99);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(30));
-            // Amount floored to 0 → DealDamage.Apply early-returns → no Hp event.
+            Assert.That(target.Health(), Is.EqualTo(30));
+            // Amount floored to 0 → DealDamage.Apply early-returns → no Health event.
             var added = eng.World.Log.Events.Skip(checkpoint).ToList();
-            Assert.That(added.OfType<TagChangeEvent>().Any(e => e.Key == "hp"), Is.False);
-            Assert.That(added.OfType<TagSetEvent>().Any(e => e.Key == "hp"), Is.False);
+            Assert.That(added.OfType<TagChangeEvent>().Any(e => e.Key == "health"), Is.False);
+            Assert.That(added.OfType<TagSetEvent>().Any(e => e.Key == "health"), Is.False);
         }
 
         [Test]
@@ -55,11 +55,11 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
 
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
         }
 
         [Test]
@@ -71,13 +71,13 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetArmor(2);
             target.SetDivineShield(true);
 
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(30));
+            Assert.That(target.Health(), Is.EqualTo(30));
             Assert.That(target.DivineShield(), Is.False);
             Assert.That(target.Armor(), Is.EqualTo(2));
         }
@@ -91,14 +91,14 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetArmor(2);
             target.SetDivineShield(true);
 
             eng.Effects.Run(new Fireball(caster, target));   // shield absorbs
             eng.Effects.Run(new Fireball(caster, target));   // 6 − 2 = 4 dmg
 
-            Assert.That(target.Hp(), Is.EqualTo(26));
+            Assert.That(target.Health(), Is.EqualTo(26));
         }
     }
 }

@@ -1,13 +1,15 @@
 #nullable enable
-using System.Linq;
+using System.Collections.Generic;
 using VerticalSlice.Engine.Effects;
+using VerticalSlice.Engine.Entities;
 
 namespace VerticalSlice.Sample
 {
     /// <summary>
-    /// Sample deathrattle: heals every friendly card by 3. Friendly =
-    /// same owner as the dying card. Skips the dying card itself (it's
-    /// going to the graveyard; healing it doesn't matter).
+    /// Sample deathrattle: heals every friendly minion on a battlefield zone
+    /// by 3. Skips the dying minion itself (already heading to graveyard;
+    /// healing it doesn't matter). Cards in hand and the friendly hero
+    /// are not affected — keeps the effect focused on the visible board.
     ///
     /// Demonstrates per-card distinct deathrattles — paired with
     /// <see cref="DamageAllEnemies"/>, two different cards can have
@@ -23,11 +25,18 @@ namespace VerticalSlice.Sample
         public override void Run(IEffectScope scope)
         {
             int srcOwner = Trigger.Source.OwnerId();
-            var allies = scope.Where(Tags.IsCard)
-                              .Where(c => c.OwnerId() == srcOwner && c.Id != Trigger.Source.Id)
-                              .ToList();
-            foreach (var ally in allies)
-                scope.Execute(new Heal(Trigger.Source, ally, HealAmount));
+            var targets = new List<IEntity>();
+            foreach (var e in scope.All())
+            {
+                if (!e.IsMinion()) continue;
+                if (e.OwnerId() != srcOwner) continue;
+                if (e.Id == Trigger.Source.Id) continue;   // skip dying self
+                var zone = scope.Get(e.ZoneId());
+                if (zone != null && zone.IsBattlefield())
+                    targets.Add(e);
+            }
+            foreach (var t in targets)
+                scope.Execute(new Heal(Trigger.Source, t, HealAmount));
         }
     }
 }

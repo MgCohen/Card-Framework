@@ -12,7 +12,8 @@ namespace VerticalSlice.Sample
     /// Payload carries <see cref="IEntity"/> references — wire-stable and
     /// safe for the read-only hook surface. <see cref="Apply"/> resolves
     /// to the mutable <see cref="Entity"/> via <see cref="ICommandScope"/>
-    /// to write the Hp tag.
+    /// to write the Health tag. Targets can be heroes or minions —
+    /// anything with the Health tag.
     /// </summary>
     public sealed class DealDamage : Command
     {
@@ -32,7 +33,7 @@ namespace VerticalSlice.Sample
             if (Amount <= 0) return;
             var target = scope.Resolve(Target);
             if (target == null) return;
-            target.SetHp(target.Hp() - Amount);
+            target.SetHealth(target.Health() - Amount);
         }
     }
 }

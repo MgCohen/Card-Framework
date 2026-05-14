@@ -21,7 +21,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);
+            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             eng.Effects.Run(new Tactician(caster, target));
 
@@ -39,14 +39,14 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);
+            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             eng.Effects.Run(new Tactician(caster, target));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 0);
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
             Assert.That(eng.Requests.Open, Is.Empty);
         }
 
@@ -56,14 +56,14 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetMaxHp(30); target.SetHp(20);
+            target.SetMaxHealth(30); target.SetHealth(20);
 
             eng.Effects.Run(new Tactician(caster, target));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 1);
 
-            Assert.That(target.Hp(), Is.EqualTo(26));   // 20 + 6
+            Assert.That(target.Health(), Is.EqualTo(26));   // 20 + 6
             Assert.That(eng.Requests.Open, Is.Empty);
         }
 
@@ -73,14 +73,14 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetMaxHp(30); target.SetHp(30);
+            target.SetMaxHealth(30); target.SetHealth(30);
 
             eng.Effects.Run(new Tactician(caster, target));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 2);   // cancel
 
-            Assert.That(target.Hp(), Is.EqualTo(30));
+            Assert.That(target.Health(), Is.EqualTo(30));
             Assert.That(eng.Requests.Open, Is.Empty);
         }
 
@@ -89,7 +89,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);
+            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Tactician(caster, target));
@@ -131,7 +131,7 @@ namespace VerticalSlice.Tests
             // no labels, just data.
             var eng = new GameEngine();
             var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);
+            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Tactician(caster, target));

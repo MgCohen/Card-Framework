@@ -14,12 +14,12 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetMaxHp(30);
-            target.SetHp(20);
+            target.SetMaxHealth(30);
+            target.SetHealth(20);
 
-            eng.Effects.Run(new HealingPotion(null, target));
+            eng.Effects.Run(new HealingTouch(null, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(28));   // 20 + 8
         }
 
         [Test]
@@ -27,32 +27,32 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetMaxHp(30);
-            target.SetHp(28);
+            target.SetMaxHealth(30);
+            target.SetHealth(28);
 
-            eng.Effects.Run(new HealingPotion(null, target));
+            eng.Effects.Run(new HealingTouch(null, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(30));   // 28+4 capped at 30
+            Assert.That(target.Health(), Is.EqualTo(30));   // 28+8 capped at 30
         }
 
         [Test]
-        public void Heal_AtFullHp_EmitsNoHpTagEvent()
+        public void Heal_AtFullHealth_EmitsNoHealthTagEvent()
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetMaxHp(30);
-            target.SetHp(30);
+            target.SetMaxHealth(30);
+            target.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new HealingPotion(null, target));
+            eng.Effects.Run(new HealingTouch(null, target));
 
             var added = eng.World.Log.Events.Skip(checkpoint).ToList();
-            // Two blocks open (HealingPotion + Heal) even when Apply is a no-op.
+            // Two blocks open (HealingTouch + Heal) even when Apply is a no-op.
             Assert.That(added.OfType<BlockStartEvent>().Count(), Is.EqualTo(2));
             Assert.That(added.OfType<BlockEndEvent>().Count(), Is.EqualTo(2));
-            // But no Hp-change event.
-            Assert.That(added.OfType<TagChangeEvent>().Any(e => e.Key == "hp"), Is.False);
-            Assert.That(added.OfType<TagSetEvent>().Any(e => e.Key == "hp"), Is.False);
+            // But no health-change event.
+            Assert.That(added.OfType<TagChangeEvent>().Any(e => e.Key == "health"), Is.False);
+            Assert.That(added.OfType<TagSetEvent>().Any(e => e.Key == "health"), Is.False);
         }
 
         [Test]
@@ -65,14 +65,14 @@ namespace VerticalSlice.Tests
             ArmorRule.Register(eng.Effects);
 
             var target = eng.World.Create();
-            target.SetMaxHp(30);
-            target.SetHp(20);
+            target.SetMaxHealth(30);
+            target.SetHealth(20);
             target.SetDivineShield(true);
             target.SetArmor(99);
 
-            eng.Effects.Run(new HealingPotion(null, target));
+            eng.Effects.Run(new HealingTouch(null, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(28));   // 20 + 8
             Assert.That(target.DivineShield(), Is.True);
             Assert.That(target.Armor(), Is.EqualTo(99));
         }

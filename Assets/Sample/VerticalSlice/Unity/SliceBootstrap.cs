@@ -11,15 +11,17 @@ using VerticalSlice.Sample;
 namespace VerticalSlice.UnityScene
 {
     /// <summary>
-    /// Slice bootstrap. Drop on any GameObject in a scene and Play. Three
-    /// IMGUI panels render: Primary state (engine), Mirror state (rebuilt
-    /// from the wire stream), Event log. The slider scrubs the mirror
-    /// through the log without touching the primary.
+    /// Slice bootstrap. Drop on any GameObject in a scene and Play.
     ///
-    /// Wires the new shape: <c>GameEngine</c> with <c>Effects</c> and
-    /// <c>Commands</c> services, hooks subscribed via <c>Commands.Subscribe</c>,
-    /// effects fired via <c>Effects.Run</c>. No more entity subclasses —
-    /// caster/target are plain <see cref="Entity"/> with marker tags.
+    /// Hearthstone-shaped: Jaina (Mage) vs Garrosh (Warrior) heroes,
+    /// each with their own Hand/Battlefield/Graveyard zones. Spells live
+    /// as card entities in the hand (IsSpell marker, Cost tag). Casting a
+    /// spell button moves the card from Hand → Graveyard and runs the
+    /// effect — the same flow real HS uses.
+    ///
+    /// Stats follow real card values: Chillwind Yeti 4/5, Bloodfen Raptor
+    /// 3/2, Abomination 4/4 (Deathrattle), Fireball 6 dmg / Healing Touch
+    /// 8 heal. Tomb Tender is invented (1/3, Deathrattle: heal allies).
     /// </summary>
     public class SliceBootstrap : MonoBehaviour
     {
@@ -27,15 +29,29 @@ namespace VerticalSlice.UnityScene
         private MirrorWorld _mirror = null!;
         private ScrubController _scrub = null!;
 
-        private Entity? _p1;
-        private Entity? _p2;
-        private Entity? _caster;     // P1
-        private Entity? _ally1;      // P1 — passive minion to demo Deathrattle AOE
-        private Entity? _target;     // P2
-        private Entity? _ally2;      // P2 — passive minion
-        private Entity? _hand;
-        private Entity? _battlefield;
-        private Entity? _graveyard;
+        // Heroes — players ARE the heroes in this slice.
+        private Entity? _jaina;
+        private Entity? _garrosh;
+
+        // Jaina's side.
+        private Entity? _jainaHand;
+        private Entity? _jainaBattlefield;
+        private Entity? _jainaGraveyard;
+        private Entity? _abomination;     // P1 minion — Deathrattle (AOE damage)
+        private Entity? _tombTender;      // P1 minion — Deathrattle (AOE heal)
+        private Entity? _spiteImp;        // P1 minion — Backlash
+        private Entity? _jainaFireball;
+        private Entity? _jainaHealingTouch;
+
+        // Garrosh's side.
+        private Entity? _garroshHand;
+        private Entity? _garroshBattlefield;
+        private Entity? _garroshGraveyard;
+        private Entity? _yeti;            // P2 minion — vanilla 4/5
+        private Entity? _raptor;          // P2 minion — vanilla 3/2
+        private Entity? _argentSquire;    // P2 minion — Divine Shield
+        private Entity? _garroshFireball;
+        private Entity? _garroshHealingTouch;
 
         private Vector2 _eventLogScroll;
         private Vector2 _primaryScroll;
@@ -51,61 +67,53 @@ namespace VerticalSlice.UnityScene
         {
             _engine = new GameEngine();
 
-            // Hook effects (global rules) — Effect<DealDamage> shape with
-            // Register(...) on each rule. Phase/priority lives at the
-            // registration call site, not on the rule class.
             DivineShieldRule.Register(_engine.Effects);
             ArmorRule.Register(_engine.Effects);
             BacklashRule.Register(_engine.Effects);
-
-            // Bridge: translates broadcast MoveCard→graveyard into direct
-            // Deathrattle trigger on the dying card. Per-card deathrattle
-            // EFFECT is what's specific; the bridge is uniform.
             DeathrattleBridge.Register(_engine.Commands);
 
-            _p1 = _engine.World.Create(); _p1.MarkAsPlayer("P1");
-            _p2 = _engine.World.Create(); _p2.MarkAsPlayer("P2");
+            // --- Heroes (player + health stats) -----------------------------
+            _jaina = _engine.World.Create();
+            _jaina.MarkAsPlayer("Jaina");
+            _jaina.SetHealth(30); _jaina.SetMaxHealth(30); _jaina.SetArmor(0);
 
-            _hand        = _engine.World.Create(); _hand.MarkAsZone("Hand");
-            _battlefield = _engine.World.Create(); _battlefield.MarkAsZone("Battlefield");
-            _graveyard   = _engine.World.Create(); _graveyard.MarkAsGraveyard();
+            _garrosh = _engine.World.Create();
+            _garrosh.MarkAsPlayer("Garrosh");
+            // Warrior class: 30 HP + 5 starting armor. Demos ArmorRule
+            // intrinsically — Fireball at Garrosh hits 5 armor first.
+            _garrosh.SetHealth(30); _garrosh.SetMaxHealth(30); _garrosh.SetArmor(5);
 
-            // P1's cards
-            _caster = _engine.World.Create();
-            _caster.MarkAsCard();
-            _caster.SetCardName("Caster");
-            _caster.SetHp(30); _caster.SetMaxHp(30); _caster.SetAttack(2);
-            _caster.SetOwner(_p1);
-            _caster.SetZone(_battlefield);
-            // Caster's deathrattle: damage all enemies.
-            _engine.CardEffects.Set<Deathrattle>(_caster,
-                t => new DamageAllEnemies(t));
+            // --- Per-player zones -------------------------------------------
+            _jainaHand        = MakeZone("Hand",        _jaina);
+            _jainaBattlefield = MakeBattlefield("Battlefield", _jaina);
+            _jainaGraveyard   = MakeGraveyard("Graveyard", _jaina);
 
-            _ally1 = _engine.World.Create();
-            _ally1.MarkAsCard();
-            _ally1.SetCardName("Ally-P1");
-            _ally1.SetHp(10); _ally1.SetMaxHp(10);
-            _ally1.SetOwner(_p1);
-            _ally1.SetZone(_battlefield);
-            // Ally-P1's deathrattle: heal all allies. Different behavior on a
-            // different card via the same machinery — no subclass per card.
-            _engine.CardEffects.Set<Deathrattle>(_ally1,
-                t => new HealAllAllies(t));
+            _garroshHand        = MakeZone("Hand",        _garrosh);
+            _garroshBattlefield = MakeBattlefield("Battlefield", _garrosh);
+            _garroshGraveyard   = MakeGraveyard("Graveyard", _garrosh);
 
-            // P2's cards — no deathrattles attached.
-            _target = _engine.World.Create();
-            _target.MarkAsCard();
-            _target.SetCardName("Target");
-            _target.SetHp(30); _target.SetMaxHp(30); _target.SetAttack(0); _target.SetArmor(0);
-            _target.SetOwner(_p2);
-            _target.SetZone(_battlefield);
+            // --- Jaina's minions — Deathrattle x2 + Backlash ----------------
+            _abomination = MakeMinion("Abomination", cost: 5, atk: 4, hp: 4, owner: _jaina, zone: _jainaBattlefield);
+            _engine.CardEffects.Set<Deathrattle>(_abomination, t => new DamageAllEnemies(t));
 
-            _ally2 = _engine.World.Create();
-            _ally2.MarkAsCard();
-            _ally2.SetCardName("Ally-P2");
-            _ally2.SetHp(10); _ally2.SetMaxHp(10);
-            _ally2.SetOwner(_p2);
-            _ally2.SetZone(_battlefield);
+            _tombTender = MakeMinion("Tomb Tender", cost: 2, atk: 1, hp: 3, owner: _jaina, zone: _jainaBattlefield);
+            _engine.CardEffects.Set<Deathrattle>(_tombTender, t => new HealAllAllies(t));
+
+            _spiteImp = MakeMinion("Spite Imp", cost: 3, atk: 2, hp: 3, owner: _jaina, zone: _jainaBattlefield);
+            _spiteImp.SetBacklash(true);   // intrinsic — Backlash bakes in at spawn
+
+            // --- Garrosh's minions — vanilla x2 + Divine Shield -------------
+            _yeti   = MakeMinion("Chillwind Yeti",   cost: 4, atk: 4, hp: 5, owner: _garrosh, zone: _garroshBattlefield);
+            _raptor = MakeMinion("Bloodfen Raptor",  cost: 2, atk: 3, hp: 2, owner: _garrosh, zone: _garroshBattlefield);
+
+            _argentSquire = MakeMinion("Argent Squire", cost: 1, atk: 1, hp: 1, owner: _garrosh, zone: _garroshBattlefield);
+            _argentSquire.SetDivineShield(true);   // intrinsic Divine Shield
+
+            // --- Spells in hand (one set per player) ------------------------
+            _jainaFireball     = MakeSpell("Fireball",      cost: 4, owner: _jaina,   zone: _jainaHand);
+            _jainaHealingTouch = MakeSpell("Healing Touch", cost: 3, owner: _jaina,   zone: _jainaHand);
+            _garroshFireball     = MakeSpell("Fireball",      cost: 4, owner: _garrosh, zone: _garroshHand);
+            _garroshHealingTouch = MakeSpell("Healing Touch", cost: 3, owner: _garrosh, zone: _garroshHand);
 
             _mirror = new MirrorWorld();
             _scrub = new ScrubController(_mirror, _engine.World.Log.Events);
@@ -115,6 +123,70 @@ namespace VerticalSlice.UnityScene
             _scrub.GoTo(_sliderPos);
         }
 
+        // --- Setup helpers ---------------------------------------------------
+
+        private Entity MakeZone(string name, Entity owner)
+        {
+            var z = _engine.World.Create();
+            z.MarkAsZone(name);
+            z.SetOwner(owner);
+            return z;
+        }
+
+        private Entity MakeBattlefield(string name, Entity owner)
+        {
+            var z = _engine.World.Create();
+            z.MarkAsBattlefield(name);
+            z.SetOwner(owner);
+            return z;
+        }
+
+        private Entity MakeGraveyard(string name, Entity owner)
+        {
+            var z = _engine.World.Create();
+            z.MarkAsGraveyard(name);
+            z.SetOwner(owner);
+            return z;
+        }
+
+        private Entity MakeMinion(string name, int cost, int atk, int hp, Entity owner, Entity zone)
+        {
+            var m = _engine.World.Create();
+            m.MarkAsMinion(name);
+            m.SetCost(cost); m.SetAttack(atk); m.SetHealth(hp); m.SetMaxHealth(hp);
+            m.SetOwner(owner); m.SetZone(zone);
+            return m;
+        }
+
+        private Entity MakeSpell(string name, int cost, Entity owner, Entity zone)
+        {
+            var s = _engine.World.Create();
+            s.MarkAsSpell(name);
+            s.SetCost(cost);
+            s.SetOwner(owner); s.SetZone(zone);
+            return s;
+        }
+
+        // Move the spell card to its owner's graveyard, then run the effect.
+        // Matches HS spell-cast flow: pay (skipped), card → graveyard, effect resolves.
+        private void CastFireball(Entity caster, Entity spellCard, IEntity? target)
+        {
+            if (target == null) return;
+            var graveyard = caster == _jaina ? _jainaGraveyard! : _garroshGraveyard!;
+            _engine.Commands.Execute(new MoveCard(spellCard, graveyard));
+            _engine.Effects.Run(new Fireball(caster, target));
+            AfterCommandIssued();
+        }
+
+        private void CastHealingTouch(Entity caster, Entity spellCard, IEntity? target)
+        {
+            if (target == null) return;
+            var graveyard = caster == _jaina ? _jainaGraveyard! : _garroshGraveyard!;
+            _engine.Commands.Execute(new MoveCard(spellCard, graveyard));
+            _engine.Effects.Run(new HealingTouch(caster, target));
+            AfterCommandIssued();
+        }
+
         private void AfterCommandIssued()
         {
             _sliderTracksHead = true;
@@ -122,50 +194,76 @@ namespace VerticalSlice.UnityScene
             _scrub.GoTo(_sliderPos);
         }
 
+        // --- GUI -------------------------------------------------------------
+
         private void OnGUI()
         {
             GUILayout.BeginVertical();
 
             // --- Controls ----------------------------------------------------
             GUILayout.BeginHorizontal();
-
             if (GUILayout.Button("Reset", GUILayout.Width(80))) Setup();
-
-            if (GUILayout.Button("Cast Fireball", GUILayout.Width(120))
-                && _caster != null && _target != null)
-            {
-                _engine.Effects.Run(new Fireball(_caster, _target));
-                AfterCommandIssued();
-            }
-
-            if (GUILayout.Button("Cast Healing Potion", GUILayout.Width(150))
-                && _caster != null && _target != null)
-            {
-                _engine.Effects.Run(new HealingPotion(_caster, _target));
-                AfterCommandIssued();
-            }
-
-            if (GUILayout.Button("Target HP = 25", GUILayout.Width(120)) && _target != null)
-            {
-                _target.SetHp(25);
-                AfterCommandIssued();
-            }
-
-            if (GUILayout.Button("Cast Tactician", GUILayout.Width(130))
-                && _caster != null && _target != null)
-            {
-                _engine.Effects.Run(new Tactician(_caster, _target));
-                AfterCommandIssued();
-            }
-
             GUILayout.EndHorizontal();
+
+            // Jaina's actions.
+            if (_jaina != null && _jainaFireball != null && _jainaHealingTouch != null
+                && _garrosh != null && _argentSquire != null && _spiteImp != null && _yeti != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Jaina casts:", GUILayout.Width(90));
+                if (_jainaFireball.ZoneId() == _jainaHand?.Id)
+                {
+                    // Garrosh has 5 armor → Fireball does 1 net dmg (demos ArmorRule).
+                    if (GUILayout.Button("Fireball → Garrosh", GUILayout.Width(160)))
+                        CastFireball(_jaina, _jainaFireball, _garrosh);
+                    // Argent Squire has DS → fully absorbed (demos DivineShieldRule).
+                    if (GUILayout.Button("Fireball → Argent Squire", GUILayout.Width(190)))
+                        CastFireball(_jaina, _jainaFireball, _argentSquire);
+                }
+                if (_jainaHealingTouch.ZoneId() == _jainaHand?.Id)
+                {
+                    if (GUILayout.Button("Healing Touch → Spite Imp", GUILayout.Width(200)))
+                        CastHealingTouch(_jaina, _jainaHealingTouch, _spiteImp);
+                }
+                // Tactician sourced from Spite Imp → picking damage triggers
+                // Backlash (Yeti deals 1 back to Spite Imp). Demos BacklashRule
+                // without needing an attack action.
+                if (GUILayout.Button("Tactician → Yeti  (Spite Imp)", GUILayout.Width(220)))
+                {
+                    _engine.Effects.Run(new Tactician(_spiteImp, _yeti));
+                    AfterCommandIssued();
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            // Garrosh's actions.
+            if (_garrosh != null && _garroshFireball != null && _garroshHealingTouch != null
+                && _jaina != null && _abomination != null && _yeti != null && _spiteImp != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Garrosh casts:", GUILayout.Width(110));
+                if (_garroshFireball.ZoneId() == _garroshHand?.Id)
+                {
+                    if (GUILayout.Button("Fireball → Jaina", GUILayout.Width(140)))
+                        CastFireball(_garrosh, _garroshFireball, _jaina);
+                    if (GUILayout.Button("Fireball → Abomination", GUILayout.Width(180)))
+                        CastFireball(_garrosh, _garroshFireball, _abomination);
+                    if (GUILayout.Button("Fireball → Spite Imp", GUILayout.Width(170)))
+                        CastFireball(_garrosh, _garroshFireball, _spiteImp);
+                }
+                if (_garroshHealingTouch.ZoneId() == _garroshHand?.Id)
+                {
+                    if (GUILayout.Button("Healing Touch → Yeti", GUILayout.Width(170)))
+                        CastHealingTouch(_garrosh, _garroshHealingTouch, _yeti);
+                }
+                GUILayout.EndHorizontal();
+            }
 
             // --- Open requests (Choose-One pickers) ------------------------
             if (_engine.Requests.Open.Count > 0)
             {
                 GUILayout.BeginVertical(GUI.skin.box);
                 GUILayout.Label("OPEN REQUESTS");
-                // Snapshot so a Respond inside the loop doesn't mutate-mid-iterate.
                 var openSnapshot = _engine.Requests.Open.ToList();
                 foreach (var kvp in openSnapshot)
                 {
@@ -187,79 +285,18 @@ namespace VerticalSlice.UnityScene
                 GUILayout.EndVertical();
             }
 
-            // --- Target toggles + tunables ----------------------------------
-            if (_target != null)
-            {
-                GUILayout.BeginHorizontal();
-
-                var ds = _target.DivineShield();
-                var newDs = GUILayout.Toggle(ds, "Divine Shield on Target");
-                if (newDs != ds)
-                {
-                    _target.SetDivineShield(newDs);
-                    AfterCommandIssued();
-                }
-
-                GUILayout.Space(20);
-                var armor = _target.Armor();
-                GUILayout.Label($"Target Armor: {armor}", GUILayout.Width(120));
-                if (GUILayout.Button("-", GUILayout.Width(30)) && armor > 0)
-                {
-                    _target.SetArmor(armor - 1);
-                    AfterCommandIssued();
-                }
-                if (GUILayout.Button("+", GUILayout.Width(30)))
-                {
-                    _target.SetArmor(armor + 1);
-                    AfterCommandIssued();
-                }
-
-                GUILayout.EndHorizontal();
-            }
-
-            // --- Caster toggles (trigger demo) ------------------------------
-            if (_caster != null)
-            {
-                GUILayout.BeginHorizontal();
-                var bl = _caster.Backlash();
-                var newBl = GUILayout.Toggle(bl, "Backlash on Caster (1 dmg back when it deals damage)");
-                if (newBl != bl)
-                {
-                    _caster.SetBacklash(newBl);
-                    AfterCommandIssued();
-                }
-                GUILayout.EndHorizontal();
-            }
-
-            // --- Deathrattle info (attached per-card at setup) --------------
-            GUILayout.Label("Deathrattles (per-card via CardEffectStore):");
-            GUILayout.Label("  Caster  → DamageAllEnemies   (move Caster to Graveyard to fire)");
-            GUILayout.Label("  Ally-P1 → HealAllAllies      (move Ally-P1 to Graveyard to fire)");
-
-            // --- Zone movement buttons --------------------------------------
-            if (_caster != null && _target != null
-                && _hand != null && _battlefield != null && _graveyard != null)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Move Caster:", GUILayout.Width(100));
-                if (GUILayout.Button("→ Hand", GUILayout.Width(80)))
-                    { _engine.Commands.Execute(new MoveCard(_caster, _hand)); AfterCommandIssued(); }
-                if (GUILayout.Button("→ Battlefield", GUILayout.Width(110)))
-                    { _engine.Commands.Execute(new MoveCard(_caster, _battlefield)); AfterCommandIssued(); }
-                if (GUILayout.Button("→ Graveyard", GUILayout.Width(100)))
-                    { _engine.Commands.Execute(new MoveCard(_caster, _graveyard)); AfterCommandIssued(); }
-                GUILayout.EndHorizontal();
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Move Target:", GUILayout.Width(100));
-                if (GUILayout.Button("→ Hand", GUILayout.Width(80)))
-                    { _engine.Commands.Execute(new MoveCard(_target, _hand)); AfterCommandIssued(); }
-                if (GUILayout.Button("→ Battlefield", GUILayout.Width(110)))
-                    { _engine.Commands.Execute(new MoveCard(_target, _battlefield)); AfterCommandIssued(); }
-                if (GUILayout.Button("→ Graveyard", GUILayout.Width(100)))
-                    { _engine.Commands.Execute(new MoveCard(_target, _graveyard)); AfterCommandIssued(); }
-                GUILayout.EndHorizontal();
-            }
+            // --- Move-to-graveyard (deathrattle demo) -----------------------
+            // Only deathrattle-bearing minions have a graveyard button — the
+            // demo value is the trigger fire, not the move itself.
+            GUILayout.Label("Send a deathrattle-bearing minion to the graveyard to fire its on-death effect:");
+            GUILayout.BeginHorizontal();
+            if (_abomination != null && _jainaGraveyard != null
+                && GUILayout.Button("Abomination → Graveyard  (DR: damage all enemies)", GUILayout.Width(360)))
+                { _engine.Commands.Execute(new MoveCard(_abomination, _jainaGraveyard)); AfterCommandIssued(); }
+            if (_tombTender != null && _jainaGraveyard != null
+                && GUILayout.Button("Tomb Tender → Graveyard  (DR: heal all allies)", GUILayout.Width(330)))
+                { _engine.Commands.Execute(new MoveCard(_tombTender, _jainaGraveyard)); AfterCommandIssued(); }
+            GUILayout.EndHorizontal();
 
             // --- Scrub slider -----------------------------------------------
             GUILayout.Space(8);
@@ -279,15 +316,18 @@ namespace VerticalSlice.UnityScene
             GUILayout.BeginHorizontal();
 
             // Primary
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(320));
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(360));
             GUILayout.Label("PRIMARY STATE (engine)");
             _primaryScroll = GUILayout.BeginScrollView(_primaryScroll, GUILayout.Height(320));
             foreach (var kvp in _engine.World.Entities)
             {
                 var ent = kvp.Value;
-                var kind = ent.IsCard() ? "card"
-                         : ent.IsZone() ? (ent.IsGraveyard() ? "graveyard" : "zone")
-                         : ent.IsPlayer() ? "player"
+                var kind = ent.IsMinion() ? "minion"
+                         : ent.IsSpell() ? "spell"
+                         : ent.IsCard() ? "card"
+                         : ent.IsZone() ? (ent.IsGraveyard() ? "graveyard"
+                                          : ent.IsBattlefield() ? "battlefield" : "zone")
+                         : ent.IsPlayer() ? "hero"
                          : "";
                 var label = !string.IsNullOrEmpty(ent.CardName()) ? ent.CardName()
                           : !string.IsNullOrEmpty(ent.PlayerName()) ? ent.PlayerName()
@@ -295,8 +335,9 @@ namespace VerticalSlice.UnityScene
                           : "";
                 GUILayout.Label($"#{ent.Id} [{kind}] {label}".TrimEnd());
                 if (ent.Has(Tags.Owner))          GUILayout.Label($"  owner        = #{ent.OwnerId()}");
-                if (ent.Has(Tags.Hp))             GUILayout.Label($"  hp           = {ent.Hp()}");
-                if (ent.Has(Tags.MaxHp))          GUILayout.Label($"  maxHp        = {ent.MaxHp()}");
+                if (ent.Has(Tags.Cost))           GUILayout.Label($"  cost         = {ent.Cost()}");
+                if (ent.Has(Tags.Health))         GUILayout.Label($"  health       = {ent.Health()}");
+                if (ent.Has(Tags.MaxHealth))      GUILayout.Label($"  maxHealth    = {ent.MaxHealth()}");
                 if (ent.Has(Tags.Attack))         GUILayout.Label($"  attack       = {ent.Attack()}");
                 if (ent.Has(Tags.Armor))          GUILayout.Label($"  armor        = {ent.Armor()}");
                 if (ent.Has(Tags.DivineShield))   GUILayout.Label($"  divineShield = {ent.DivineShield()}");
@@ -316,7 +357,7 @@ namespace VerticalSlice.UnityScene
                 var ent = kvp.Value;
                 GUILayout.Label($"#{ent.Id}");
                 foreach (var t in ent.Tags)
-                    GUILayout.Label($"  {t.Key,-12} = {Stringify(t.Value)}");
+                    GUILayout.Label($"  {t.Key,-14} = {Stringify(t.Value)}");
                 GUILayout.Space(4);
             }
             GUILayout.EndScrollView();
@@ -332,39 +373,53 @@ namespace VerticalSlice.UnityScene
 
             GUILayout.EndHorizontal();
 
-            // --- Zones panel (full width below the main row) -------------
+            // --- Per-player zones panel -------------------------------------
             GUILayout.Space(8);
             GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("ZONES (cards grouped by Zone tag, owners shown by Owner tag — derived from flat ECS storage via query)");
-            _zonesScroll = GUILayout.BeginScrollView(_zonesScroll, GUILayout.Height(180));
-            foreach (var zone in _engine.World.Zones())
-            {
-                var zoneKind = zone.IsGraveyard() ? "graveyard" : "zone";
-                GUILayout.Label($"#{zone.Id} [{zoneKind}] {zone.ZoneName()}");
-                var cardsInZone = _engine.World.CardsIn(zone).ToList();
-                if (cardsInZone.Count == 0)
-                {
-                    GUILayout.Label("    (empty)");
-                }
-                else
-                {
-                    foreach (var c in cardsInZone)
-                    {
-                        var owner = _engine.World.Get(c.OwnerId());
-                        var ownerLabel = owner?.PlayerName() ?? "?";
-                        var flags = new System.Text.StringBuilder();
-                        if (c.DivineShield()) flags.Append("  shield");
-                        if (c.Backlash())     flags.Append("  backlash");
-                        if (_engine.CardEffects.Has<Deathrattle>(c)) flags.Append("  deathrattle");
-                        GUILayout.Label($"    #{c.Id} {c.CardName()} (owner={ownerLabel})  hp={c.Hp()}  armor={c.Armor()}{flags}");
-                    }
-                }
-                GUILayout.Space(2);
-            }
+            GUILayout.Label("BOARD (per-player zones — Hand / Battlefield / Graveyard)");
+            _zonesScroll = GUILayout.BeginScrollView(_zonesScroll, GUILayout.Height(260));
+            RenderPlayerSection(_jaina);
+            GUILayout.Space(6);
+            RenderPlayerSection(_garrosh);
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
             GUILayout.EndVertical();
+        }
+
+        private void RenderPlayerSection(Entity? player)
+        {
+            if (player == null) return;
+            GUILayout.Label($"━━ {player.PlayerName()}  (HP {player.Health()}/{player.MaxHealth()}, Armor {player.Armor()})  #{player.Id}");
+            foreach (var zone in _engine.World.Zones().Where(z => z.OwnerId() == player.Id)
+                                                      .OrderBy(z => z.IsBattlefield() ? 0
+                                                                  : z.IsGraveyard()   ? 2 : 1))
+            {
+                var zoneKind = zone.IsBattlefield() ? "battlefield"
+                             : zone.IsGraveyard()   ? "graveyard"
+                             : "zone";
+                GUILayout.Label($"  {zone.ZoneName()} [{zoneKind}]  #{zone.Id}");
+                var cardsInZone = _engine.World.CardsIn(zone).ToList();
+                if (cardsInZone.Count == 0)
+                {
+                    GUILayout.Label("      (empty)");
+                    continue;
+                }
+                foreach (var c in cardsInZone)
+                {
+                    var flags = new System.Text.StringBuilder();
+                    if (c.DivineShield()) flags.Append("  shield");
+                    if (c.Backlash())     flags.Append("  backlash");
+                    if (_engine.CardEffects.Has<Deathrattle>(c)) flags.Append("  deathrattle");
+
+                    string body = c.IsMinion()
+                        ? $"[{c.Cost()}] {c.CardName(),-18} (Minion)  {c.Attack()}/{c.Health()}{flags}"
+                        : c.IsSpell()
+                            ? $"[{c.Cost()}] {c.CardName(),-18} (Spell)"
+                            : $"[{c.Cost()}] {c.CardName(),-18}";
+                    GUILayout.Label($"      #{c.Id} {body}");
+                }
+            }
         }
 
         private static string Stringify(object? v) => v switch
@@ -374,10 +429,6 @@ namespace VerticalSlice.UnityScene
             _ => v.ToString() ?? "null",
         };
 
-        // Generic debug-friendly button text for an option wire event.
-        // Labels live on the client (here); the wire carries pure data
-        // (refs + value). For real games the client would use richer UI
-        // and look up display strings from a content table.
         private static string OptionButtonLabel(OptionEvent opt) => opt switch
         {
             CancelOptionEvent => "Cancel",
@@ -389,7 +440,7 @@ namespace VerticalSlice.UnityScene
             _ => $"Option {opt.Index}",
         };
 
-        // --- Event log rendering -------------------------------------------------
+        // --- Event log rendering -------------------------------------------
 
         private void RenderEventLog()
         {
@@ -425,7 +476,6 @@ namespace VerticalSlice.UnityScene
                     continue;
                 }
 
-                // Leaf event (TagSet, TagChange, EntityCreated, EntityDestroyed)
                 GUILayout.Label($"{i:D3} {new string(' ', depth * 2)}{ev}");
             }
         }
@@ -445,7 +495,7 @@ namespace VerticalSlice.UnityScene
                     depth--;
                     continue;
                 }
-                return true;   // any leaf event counts as "applied content"
+                return true;
             }
             return false;
         }

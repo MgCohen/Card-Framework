@@ -22,13 +22,13 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
 
             IEntity? read = null;
             eng.Effects.Run(new InspectEffect(target, e => read = e));
 
             Assert.That(read, Is.Not.Null);
-            Assert.That(read!.Get(Tags.Hp), Is.EqualTo(30));
+            Assert.That(read!.Get(Tags.Health), Is.EqualTo(30));
         }
 
         [Test]
@@ -38,11 +38,11 @@ namespace VerticalSlice.Tests
             // ICommandScope.Resolve upgrades it to mutable Entity for writes.
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
 
             eng.Commands.Execute(new DealDamage(null, target, 6));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
         }
 
         [Test]
@@ -55,14 +55,14 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.Effects);
 
-            var caster = eng.World.Create(); caster.SetHp(30); caster.SetMaxHp(30);
-            var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);
+            var caster = eng.World.Create(); caster.SetHealth(30); caster.SetMaxHealth(30);
+            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
             eng.Effects.Run(new Fireball(caster, target));
 
             // Backlash effect ran via scope.Run — caster took 1 retaliation damage.
-            Assert.That(caster.Hp(), Is.EqualTo(29));
+            Assert.That(caster.Health(), Is.EqualTo(29));
         }
 
         // --- Helper effect for testing ---------------------------------------

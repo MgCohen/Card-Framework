@@ -14,7 +14,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHp(30);
+            var target = eng.World.Create(); target.SetHealth(30);
             int checkpoint = eng.World.Log.Count;
 
             eng.Effects.Run(new Fireball(caster, target));
@@ -49,12 +49,12 @@ namespace VerticalSlice.Tests
         public void Execute_OpensBlock_AndAppliesMutation()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHp(30);
+            var target = eng.World.Create(); target.SetHealth(30);
             int checkpoint = eng.World.Log.Count;
 
             eng.Commands.Execute(new DealDamage(null, target, 6));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
             var added = eng.World.Log.Events.Skip(checkpoint).ToList();
             Assert.That(added[0], Is.TypeOf<BlockStartEvent>());
             Assert.That(((BlockStartEvent)added[0]).Name, Is.EqualTo("DealDamage"));
@@ -66,7 +66,7 @@ namespace VerticalSlice.Tests
         public void HookFiresInBeforeAndAfterPhases()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHp(30);
+            var target = eng.World.Create(); target.SetHealth(30);
 
             bool beforeFired = false, afterFired = false;
             eng.Commands.Subscribe<DealDamage>(HookPhase.Before, HookPriority.OnEffect,
@@ -78,14 +78,14 @@ namespace VerticalSlice.Tests
 
             Assert.That(beforeFired, Is.True);
             Assert.That(afterFired, Is.True);
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
         }
 
         [Test]
         public void Hook_BeforeReplacement_RunsBeforeApply()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHp(30);
+            var target = eng.World.Create(); target.SetHealth(30);
 
             // Replacement-band hook zeroes Amount before Apply runs.
             eng.Commands.Subscribe<DealDamage>(HookPhase.Before, HookPriority.Replacement,
@@ -93,7 +93,7 @@ namespace VerticalSlice.Tests
 
             eng.Commands.Execute(new DealDamage(null, target, 6));
 
-            Assert.That(target.Hp(), Is.EqualTo(30),
+            Assert.That(target.Health(), Is.EqualTo(30),
                 "Replacement-band Before hook must mutate Amount before Apply.");
         }
     }

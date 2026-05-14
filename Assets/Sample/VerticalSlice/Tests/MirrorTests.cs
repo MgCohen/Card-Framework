@@ -14,7 +14,7 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
 
             eng.Effects.Run(new Fireball(caster, target));
 
@@ -22,7 +22,7 @@ namespace VerticalSlice.Tests
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
             scrub.GoTo(eng.World.Log.Count);
 
-            Assert.That(mirror.Get(target.Id)!.Tags["hp"], Is.EqualTo(24));
+            Assert.That(mirror.Get(target.Id)!.Tags["health"], Is.EqualTo(24));
         }
 
         [Test]
@@ -30,14 +30,14 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             eng.Commands.Execute(new DealDamage(null, target, 6));   // 30 → 24
             eng.Commands.Execute(new DealDamage(null, target, 4));   // 24 → 20
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
             scrub.GoTo(eng.World.Log.Count);
-            Assert.That(mirror.Get(target.Id)!.Tags["hp"], Is.EqualTo(20));
+            Assert.That(mirror.Get(target.Id)!.Tags["health"], Is.EqualTo(20));
 
             // Step back one TagChange (the 24 → 20 inside the second DealDamage block).
             // We need to scrub back past that change but before the second BlockEnd.
@@ -56,7 +56,7 @@ namespace VerticalSlice.Tests
             Assert.That(secondDealStart, Is.GreaterThan(0));
 
             scrub.GoTo(secondDealStart);
-            Assert.That(mirror.Get(target.Id)!.Tags["hp"], Is.EqualTo(24));
+            Assert.That(mirror.Get(target.Id)!.Tags["health"], Is.EqualTo(24));
         }
 
         [Test]
@@ -64,7 +64,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             eng.Commands.Execute(new DealDamage(null, target, 6));
 
             var mirror = new MirrorWorld();
@@ -81,7 +81,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             eng.Commands.Execute(new DealDamage(null, target, 6));   // 24
 
             int head = eng.World.Log.Count;
@@ -89,13 +89,13 @@ namespace VerticalSlice.Tests
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
 
             scrub.GoTo(head);
-            Assert.That(mirror.Get(target.Id)!.Tags["hp"], Is.EqualTo(24));
+            Assert.That(mirror.Get(target.Id)!.Tags["health"], Is.EqualTo(24));
 
             scrub.GoTo(0);
             Assert.That(mirror.Contains(target.Id), Is.False);
 
             scrub.GoTo(head);
-            Assert.That(mirror.Get(target.Id)!.Tags["hp"], Is.EqualTo(24));
+            Assert.That(mirror.Get(target.Id)!.Tags["health"], Is.EqualTo(24));
         }
     }
 }

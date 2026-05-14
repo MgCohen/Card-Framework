@@ -8,9 +8,9 @@ namespace VerticalSlice.Sample
     /// <summary>
     /// Primitive heal command — dual of <see cref="DealDamage"/>.
     /// Mutable <see cref="Amount"/> so future Replacement-band hooks could
-    /// buff/nerf incoming heals. Apply clamps to <c>Tags.MaxHp</c>; healing
-    /// past the cap is equality-skipped by <c>Entity.Set</c> (no spurious
-    /// TagChange).
+    /// buff/nerf incoming heals. Apply clamps to <c>Tags.MaxHealth</c>;
+    /// healing past the cap is equality-skipped by <c>Entity.Set</c> (no
+    /// spurious TagChange).
     /// </summary>
     public sealed class Heal : Command
     {
@@ -30,8 +30,8 @@ namespace VerticalSlice.Sample
             if (Amount <= 0) return;
             var target = scope.Resolve(Target);
             if (target == null) return;
-            var newHp = Math.Min(target.MaxHp(), target.Hp() + Amount);
-            target.SetHp(newHp);
+            var newHealth = Math.Min(target.MaxHealth(), target.Health() + Amount);
+            target.SetHealth(newHealth);
         }
     }
 }

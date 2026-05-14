@@ -33,23 +33,30 @@ You should see three IMGUI panels:
 
 Above the panels:
 
-- **Reset** — recreates the two entities (regenerates the entire event log).
-- **Cast Fireball** — `engine.Effects.Run(new Fireball(caster, target))`.
-  Opens a `BlockStart("Fireball")`, which contains a nested
-  `BlockStart("DealDamage")`, which contains the Hp `TagChange`.
-- **Cast Healing Potion** — `engine.Effects.Run(new HealingPotion(...))`.
-- **Target HP = 25** — direct tag write. Emits a single `TagChange` event
-  at the top of the log (no enclosing scope — bare mutations are fine).
-- **Divine Shield on Target** — toggle. With it on, casting Fireball runs
-  the Shield's Replacement-band hook, which fires a `ShieldBreak` effect
-  (visible in the log as a nested block) and zeroes the damage.
-- **Target Armor +/-** — tunable. Armor reduces incoming damage; runs after
-  Shield's Replacement band.
-- **Backlash on Caster** — toggle. After+Reaction hook on `DealDamage` runs
-  the `Backlash` effect, which retaliates 1 damage. Visible in the log as
-  a `Backlash` block nested inside the original `DealDamage` block.
+- **Reset** — rebuilds the whole world (regenerates the entire event log).
+- **Jaina casts: Fireball → Garrosh** — Garrosh has 5 starting armor, so
+  `ArmorRule` reduces 6 dmg to 1 net dmg. Demos the Armor hook.
+- **Jaina casts: Fireball → Argent Squire** — Squire has intrinsic Divine
+  Shield, so `DivineShieldRule` zeroes the damage and fires a `ShieldBreak`
+  effect (nested block). Demos the DS hook.
+- **Jaina casts: Healing Touch → Spite Imp** — heals 8, clamped at MaxHealth.
+- **Jaina casts: Tactician → Yeti  (Spite Imp)** — Choose-One request. Spite
+  Imp is the source; picking the damage option runs `DealDamage(SpiteImp,
+  Yeti, 6)`, which triggers `BacklashRule` (Yeti deals 1 back to Spite Imp).
+- **Garrosh casts: Fireball → Spite Imp** — straight 6 dmg, no rule fires
+  (Garrosh is the source; he has no Backlash). Spite Imp goes to -3 HP.
+- **Abomination → Graveyard** — sends Abomination to its owner's graveyard.
+  The `DeathrattleBridge` fires `DamageAllEnemies` (2 dmg to enemy hero +
+  every enemy minion on a battlefield zone).
+- **Tomb Tender → Graveyard** — fires `HealAllAllies` (3 heal to every
+  friendly minion on a battlefield zone, skipping the dying minion).
 - **Scrub slider** — drag left to rewind, right to fast-forward. Primary is
   unaffected by scrubbing.
+
+Each rule has a dedicated showcase minion / hero: Garrosh (Armor), Argent
+Squire (Divine Shield), Spite Imp (Backlash), Abomination + Tomb Tender
+(Deathrattle). Toggles for these properties were removed — the abilities
+are intrinsic to specific entities now.
 
 ## Wire alphabet
 
@@ -95,7 +102,7 @@ public sealed class DealDamage : Command {
     public IEntity Source, Target; public int Amount;
     public override void Apply(ICommandScope scope) {
         var t = scope.Resolve(Target);
-        t?.SetHp(t.Hp() - Amount);
+        t?.SetHealth(t.Health() - Amount);
     }
 }
 

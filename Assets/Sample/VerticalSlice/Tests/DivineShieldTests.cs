@@ -17,14 +17,14 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetDivineShield(true);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(caster, target));
 
             Assert.That(target.DivineShield(), Is.False);
-            Assert.That(target.Hp(), Is.EqualTo(30));
+            Assert.That(target.Health(), Is.EqualTo(30));
 
             // The shield-break write should have flowed through ShieldBreak →
             // BreakDivineShield → TagChange.
@@ -48,11 +48,11 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
 
             eng.Effects.Run(new Fireball(caster, target));
 
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
         }
 
         [Test]
@@ -63,14 +63,14 @@ namespace VerticalSlice.Tests
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
-            target.SetHp(30);
+            target.SetHealth(30);
             target.SetDivineShield(true);
 
             eng.Effects.Run(new Fireball(caster, target));   // shield absorbs
             eng.Effects.Run(new Fireball(caster, target));   // damage lands
 
             Assert.That(target.DivineShield(), Is.False);
-            Assert.That(target.Hp(), Is.EqualTo(24));
+            Assert.That(target.Health(), Is.EqualTo(24));
         }
     }
 }

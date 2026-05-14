@@ -19,18 +19,18 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var e = eng.World.Create();
-            e.SetHp(30);   // first write — emits TagSet
+            e.SetHealth(30);   // first write — emits TagSet
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
             scrub.GoTo(eng.World.Log.Count);
 
-            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("hp"), Is.True);
-            Assert.That(mirror.Get(e.Id)!.Tags["hp"], Is.EqualTo(30));
+            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("health"), Is.True);
+            Assert.That(mirror.Get(e.Id)!.Tags["health"], Is.EqualTo(30));
 
             // Rewind past the TagSet — the key must be REMOVED, not set to 0.
             scrub.GoTo(1);   // only the EntityCreated applied
-            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("hp"), Is.False,
+            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("health"), Is.False,
                 "After unapplying TagSet, the key must be absent — distinguishable " +
                 "from 'set to default(int) = 0'.");
         }
@@ -43,17 +43,17 @@ namespace VerticalSlice.Tests
             // matters because some code reads .Has(key) to check existence.
             var eng = new GameEngine();
             var e = eng.World.Create();
-            e.SetHp(0);    // explicitly set to default(int) — emits TagSet
+            e.SetHealth(0);    // explicitly set to default(int) — emits TagSet
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
             scrub.GoTo(eng.World.Log.Count);
 
-            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("hp"), Is.True,
+            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("health"), Is.True,
                 "After applying TagSet(value=0), key must be present.");
 
             scrub.GoTo(1);   // unapply the TagSet
-            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("hp"), Is.False,
+            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("health"), Is.False,
                 "After unapplying TagSet, key must be absent regardless of value=0.");
         }
 
@@ -64,25 +64,25 @@ namespace VerticalSlice.Tests
             // Rewind one step at a time; check intermediate values restore.
             var eng = new GameEngine();
             var e = eng.World.Create();
-            e.SetHp(30);
-            e.SetHp(25);
-            e.SetHp(10);
+            e.SetHealth(30);
+            e.SetHealth(25);
+            e.SetHealth(10);
 
             int head = eng.World.Log.Count;
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
 
             scrub.GoTo(head);
-            Assert.That(mirror.Get(e.Id)!.Tags["hp"], Is.EqualTo(10));
+            Assert.That(mirror.Get(e.Id)!.Tags["health"], Is.EqualTo(10));
 
             scrub.GoTo(head - 1);   // unapply the 25→10 TagChange
-            Assert.That(mirror.Get(e.Id)!.Tags["hp"], Is.EqualTo(25));
+            Assert.That(mirror.Get(e.Id)!.Tags["health"], Is.EqualTo(25));
 
             scrub.GoTo(head - 2);   // unapply the 30→25 TagChange
-            Assert.That(mirror.Get(e.Id)!.Tags["hp"], Is.EqualTo(30));
+            Assert.That(mirror.Get(e.Id)!.Tags["health"], Is.EqualTo(30));
 
             scrub.GoTo(head - 3);   // unapply the initial TagSet — key removed
-            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("hp"), Is.False);
+            Assert.That(mirror.Get(e.Id)!.Tags.ContainsKey("health"), Is.False);
         }
     }
 }

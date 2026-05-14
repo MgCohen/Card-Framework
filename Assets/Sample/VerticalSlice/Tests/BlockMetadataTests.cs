@@ -22,7 +22,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(null, t));
@@ -45,7 +45,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(null, t));
@@ -67,7 +67,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(null, t));
@@ -93,7 +93,7 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var caster = eng.World.Create();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(caster, t));
@@ -118,7 +118,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             // Fireball with null source
@@ -135,7 +135,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(null, t));
@@ -157,7 +157,7 @@ namespace VerticalSlice.Tests
         {
             var eng = new GameEngine();
             var t = eng.World.Create();
-            t.SetHp(30);
+            t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Effects.Run(new Fireball(null, t));

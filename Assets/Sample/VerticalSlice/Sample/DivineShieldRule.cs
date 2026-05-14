@@ -13,7 +13,7 @@ namespace VerticalSlice.Sample
     /// </code>
     /// Validate gates the firing entirely — no wire block emitted if the
     /// target has no shield or amount is already zero. When it does run,
-    /// it zeroes Amount (so the Hp write equality-skips) and fires a
+    /// it zeroes Amount (so the Health write equality-skips) and fires a
     /// <see cref="ShieldBreak"/> effect that consumes the shield via a
     /// proper command.
     /// </summary>
