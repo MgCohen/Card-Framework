@@ -22,6 +22,13 @@ namespace VerticalSlice.Engine.Hooks
     {
         void Run(Effect effect);
 
+        /// <summary>
+        /// Fire a direct trigger on a specific entity. Used by engine
+        /// bridges subscribed at the bus that translate broadcast events
+        /// into targeted per-card direct triggers (e.g., MoveCard→Deathrattle).
+        /// </summary>
+        void FireDirect<TTrigger>(IEntity entity, TTrigger trigger) where TTrigger : class;
+
         IEntity? Get(int entityId);
         IEnumerable<IEntity> All();
         IEnumerable<IEntity> Where(TagKey<bool> marker);

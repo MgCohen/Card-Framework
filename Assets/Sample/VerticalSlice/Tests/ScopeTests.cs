@@ -53,7 +53,7 @@ namespace VerticalSlice.Tests
             // path works. (The "no Execute" property is enforced at compile
             // time; this test covers the positive case.)
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create(); caster.SetHp(30); caster.SetMaxHp(30);
             var target = eng.World.Create(); target.SetHp(30); target.SetMaxHp(30);

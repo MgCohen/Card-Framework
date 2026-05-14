@@ -29,7 +29,8 @@ namespace VerticalSlice.Sample
         public static int    Armor         (this IEntity e) => e.Get(Tags.Armor);
         public static bool   DivineShield  (this IEntity e) => e.Has(Tags.DivineShield) && e.Get(Tags.DivineShield);
         public static bool   Backlash      (this IEntity e) => e.Has(Tags.Backlash) && e.Get(Tags.Backlash);
-        public static bool   HasDeathrattle(this IEntity e) => e.Has(Tags.HasDeathrattle) && e.Get(Tags.HasDeathrattle);
+        // No HasDeathrattle accessor — deathrattle is a direct-trigger
+        // attachment, not a tag. Query via CardEffectStore if needed.
 
         // --- References & names (read) ---------------------------------------
 
@@ -51,7 +52,6 @@ namespace VerticalSlice.Sample
         public static void SetArmor         (this Entity e, int v)    => e.Set(Tags.Armor, v);
         public static void SetDivineShield  (this Entity e, bool v)   => e.Set(Tags.DivineShield, v);
         public static void SetBacklash      (this Entity e, bool v)   => e.Set(Tags.Backlash, v);
-        public static void SetHasDeathrattle(this Entity e, bool v)   => e.Set(Tags.HasDeathrattle, v);
         public static void SetCardName      (this Entity e, string v) => e.Set(Tags.CardName, v);
 
         // --- Kind markers (write — Entity required) --------------------------

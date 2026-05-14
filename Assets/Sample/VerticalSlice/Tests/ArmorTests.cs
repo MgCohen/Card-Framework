@@ -13,7 +13,7 @@ namespace VerticalSlice.Tests
         public void Armor_ReducesDamage()
         {
             var eng = new GameEngine();
-            ArmorRule.Register(eng.Commands);
+            ArmorRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -30,7 +30,7 @@ namespace VerticalSlice.Tests
         public void Armor_FloorsAtZero_NoHpChange()
         {
             var eng = new GameEngine();
-            ArmorRule.Register(eng.Commands);
+            ArmorRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -51,7 +51,7 @@ namespace VerticalSlice.Tests
         public void ZeroArmor_PassesThrough()
         {
             var eng = new GameEngine();
-            ArmorRule.Register(eng.Commands);
+            ArmorRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -66,8 +66,8 @@ namespace VerticalSlice.Tests
         public void ShieldRunsBeforeArmor_ShieldEatsHit_ArmorUntouched()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Commands);
-            ArmorRule.Register(eng.Commands);
+            DivineShieldRule.Register(eng.Effects);
+            ArmorRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -86,8 +86,8 @@ namespace VerticalSlice.Tests
         public void Armor_StacksWithSecondShot_AfterShieldBroken()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Commands);
-            ArmorRule.Register(eng.Commands);
+            DivineShieldRule.Register(eng.Effects);
+            ArmorRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();

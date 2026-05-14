@@ -13,7 +13,7 @@ namespace VerticalSlice.Tests
         public void Backlash_DealingDamage_RetaliatesOneBack()
         {
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -31,7 +31,7 @@ namespace VerticalSlice.Tests
         public void Backlash_OpensNestedBlock_NamedBacklash()
         {
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -48,10 +48,14 @@ namespace VerticalSlice.Tests
                                 .ToList();
 
             // Expected nesting:
-            //   Fireball → DealDamage → Backlash → DealDamage
+            //   Fireball → DealDamage → BacklashRule → Backlash → DealDamage
+            // The BacklashRule block is the rule itself firing (Effect<DealDamage>);
+            // inside it the Backlash effect fires; inside that the retaliation
+            // DealDamage. Honest causal chain — each level says why the next
+            // happened.
             Assert.That(blockNames, Is.EqualTo(new[]
             {
-                "Fireball", "DealDamage", "Backlash", "DealDamage",
+                "Fireball", "DealDamage", "BacklashRule", "Backlash", "DealDamage",
             }));
         }
 
@@ -59,7 +63,7 @@ namespace VerticalSlice.Tests
         public void Backlash_OnlyFiresWhenSourceHasTag()
         {
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -80,7 +84,7 @@ namespace VerticalSlice.Tests
         public void Backlash_DoesNotRecurse_TargetWithoutTagDoesNotChain()
         {
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -101,8 +105,8 @@ namespace VerticalSlice.Tests
         public void Backlash_DoesNotFire_WhenDamageWasZeroed()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Commands);
-            BacklashRule.Register(eng.Commands);
+            DivineShieldRule.Register(eng.Effects);
+            BacklashRule.Register(eng.Effects);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();

@@ -9,22 +9,22 @@ using VerticalSlice.Sample;
 namespace VerticalSlice.Tests
 {
     /// <summary>
-    /// Deathrattle = MoveCard's After+Reaction trigger. Fires only when the
-    /// moved card has the HasDeathrattle tag AND the destination zone is
-    /// tagged IsGraveyard. Body deals 2 damage to all enemy cards (cards
-    /// owned by a different player than the source).
+    /// Deathrattle as a direct trigger: per-card attached effect, looked
+    /// up via CardEffectStore when the engine bridge detects a card
+    /// moving into a graveyard zone. Different cards can have totally
+    /// different deathrattle effects — proven here by attaching
+    /// <see cref="DamageAllEnemies"/> to one card and
+    /// <see cref="HealAllAllies"/> to another.
     /// </summary>
     public class DeathrattleTests
     {
-        // --- Helper: minimal multi-player setup -------------------------------
-
         private (GameEngine eng, Entity p1, Entity p2,
                  Entity battlefield, Entity graveyard,
                  Entity casterP1, Entity allyP1,
                  Entity targetP2, Entity allyP2) BuildBoard()
         {
             var eng = new GameEngine();
-            DeathrattleRule.Register(eng.Commands);
+            DeathrattleBridge.Register(eng.Commands);
 
             var p1 = eng.World.Create(); p1.MarkAsPlayer("P1");
             var p2 = eng.World.Create(); p2.MarkAsPlayer("P2");
@@ -52,27 +52,97 @@ namespace VerticalSlice.Tests
         }
 
         [Test]
-        public void Deathrattle_MoveToGraveyard_DamagesAllEnemies_NotAllies()
+        public void Deathrattle_DamageAllEnemies_FiresOnGraveyardMove()
         {
             var b = BuildBoard();
-            b.casterP1.SetHasDeathrattle(true);
+            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+                t => new DamageAllEnemies(t));
 
             b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
 
-            // P2's cards take 2 damage each
+            // P2's cards took 2 damage each:
             Assert.That(b.targetP2.Hp(), Is.EqualTo(28));
-            Assert.That(b.allyP2.Hp(), Is.EqualTo(8));
-            // P1's cards untouched
-            Assert.That(b.allyP1.Hp(), Is.EqualTo(10));
-            // Source's HP untouched (we don't damage the dying card itself)
-            Assert.That(b.casterP1.Hp(), Is.EqualTo(30));
+            Assert.That(b.allyP2.Hp(),   Is.EqualTo(8));
+            // P1's other card untouched:
+            Assert.That(b.allyP1.Hp(),   Is.EqualTo(10));
         }
 
         [Test]
-        public void Deathrattle_OpensNestedBlock_NamedDeathrattle_WithFanOut()
+        public void Deathrattle_HealAllAllies_FiresOnSameTrigger_DifferentEffect()
+        {
+            // Same bridge / same trigger / different card → different effect.
+            // This is the "per-card variation" the whole CardEffectStore exists
+            // for — attaching a totally different effect to a different card
+            // requires no new C# subclass, no new bridge, no rule changes.
+            var b = BuildBoard();
+            b.allyP1.SetHp(7);   // hurt so the heal is observable
+            b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
+                t => new HealAllAllies(t));
+
+            b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
+
+            // P1's other card (caster) gets +3 hp (capped at MaxHp):
+            Assert.That(b.casterP1.Hp(), Is.EqualTo(30));   // already at max
+            // The dying card is excluded from the heal (no point):
+            Assert.That(b.allyP1.Hp(),   Is.EqualTo(7));
+            // P2's cards untouched:
+            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
+            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+        }
+
+        [Test]
+        public void Deathrattle_HealAllAllies_HealsBelowMax()
         {
             var b = BuildBoard();
-            b.casterP1.SetHasDeathrattle(true);
+            b.casterP1.SetHp(20);   // hurt
+            b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
+                t => new HealAllAllies(t));
+
+            b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
+
+            Assert.That(b.casterP1.Hp(), Is.EqualTo(23));   // 20 + 3
+        }
+
+        [Test]
+        public void Deathrattle_DoesNotFire_WhenCardHasNoEffectAttached()
+        {
+            // Target has no deathrattle in the store → bridge is a no-op
+            // for this card. No retaliation, no heal, no effect.
+            var b = BuildBoard();
+
+            b.eng.Commands.Execute(new MoveCard(b.targetP2, b.graveyard));
+
+            Assert.That(b.casterP1.Hp(), Is.EqualTo(30));
+            Assert.That(b.allyP1.Hp(),   Is.EqualTo(10));
+            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+        }
+
+        [Test]
+        public void Deathrattle_DoesNotFire_OnNonGraveyardMove()
+        {
+            var b = BuildBoard();
+            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+                t => new DamageAllEnemies(t));
+            var hand = b.eng.World.Create(); hand.MarkAsZone("Hand");
+
+            b.eng.Commands.Execute(new MoveCard(b.casterP1, hand));
+
+            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
+            Assert.That(b.allyP2.Hp(),   Is.EqualTo(10));
+        }
+
+        [Test]
+        public void Deathrattle_NestedBlock_AppearsInLog()
+        {
+            // Wire shape on a damage-all-enemies deathrattle:
+            //   Command(MoveCard) → Effect(DamageAllEnemies)
+            //     → Command(DealDamage)... × N
+            // No "DeathrattleBridge" wire block — the bridge is a plain bus
+            // subscription, not an Effect. Per the design we chose to keep
+            // the wire clean of plumbing.
+            var b = BuildBoard();
+            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+                t => new DamageAllEnemies(t));
 
             int checkpoint = b.eng.World.Log.Count;
             b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
@@ -81,73 +151,29 @@ namespace VerticalSlice.Tests
                               .OfType<BlockStartEvent>()
                               .Select(bs => bs.Name)
                               .ToList();
-
-            // Expected nesting:
-            //   MoveCard → Deathrattle → DealDamage (enemy 1) → DealDamage (enemy 2)
             Assert.That(blockNames, Is.EqualTo(new[]
             {
-                "MoveCard", "Deathrattle", "DealDamage", "DealDamage",
+                "MoveCard", "DamageAllEnemies", "DealDamage", "DealDamage",
             }));
-        }
-
-        [Test]
-        public void Deathrattle_DoesNotFire_WhenCardLacksTag()
-        {
-            var b = BuildBoard();
-            // No SetHasDeathrattle on caster.
-
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
-
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
-            Assert.That(b.allyP2.Hp(), Is.EqualTo(10));
-        }
-
-        [Test]
-        public void Deathrattle_DoesNotFire_OnNonGraveyardMove()
-        {
-            // Card has Deathrattle but moves to a non-graveyard zone.
-            var b = BuildBoard();
-            b.casterP1.SetHasDeathrattle(true);
-            var hand = b.eng.World.Create(); hand.MarkAsZone("Hand");
-
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, hand));
-
-            Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
-            Assert.That(b.allyP2.Hp(), Is.EqualTo(10));
         }
 
         [Test]
         public void Deathrattle_RoutesThroughDealDamage_TriggersDivineShield()
         {
-            // Even though the damage source is a deathrattle, it goes through
-            // DealDamage like any other damage. Hooks attached to DealDamage
-            // (Shield, Armor) fire normally.
+            // Deathrattle's damage goes through DealDamage like any other
+            // damage. Hooks attached to DealDamage (Shield) fire normally.
             var b = BuildBoard();
-            DivineShieldRule.Register(b.eng.Commands);
-            b.casterP1.SetHasDeathrattle(true);
+            DivineShieldRule.Register(b.eng.Effects);
+            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+                t => new DamageAllEnemies(t));
             b.targetP2.SetDivineShield(true);
 
             b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
 
-            // Target's shield absorbs the deathrattle hit; ally still takes it.
+            // Target absorbed; ally took it.
             Assert.That(b.targetP2.Hp(), Is.EqualTo(30));
             Assert.That(b.targetP2.DivineShield(), Is.False);
             Assert.That(b.allyP2.Hp(), Is.EqualTo(8));
-        }
-
-        [Test]
-        public void Deathrattle_OnlyDamagesEnemies_RegardlessOfOwnership()
-        {
-            // P2 dies — only P1's cards should be hit (the "enemy" perspective
-            // flips). Caster's deathrattle hits P2; target's deathrattle hits P1.
-            var b = BuildBoard();
-            b.targetP2.SetHasDeathrattle(true);
-
-            b.eng.Commands.Execute(new MoveCard(b.targetP2, b.graveyard));
-
-            Assert.That(b.casterP1.Hp(), Is.EqualTo(28));
-            Assert.That(b.allyP1.Hp(), Is.EqualTo(8));
-            Assert.That(b.allyP2.Hp(), Is.EqualTo(10));
         }
     }
 }

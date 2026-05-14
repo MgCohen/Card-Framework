@@ -61,8 +61,8 @@ namespace VerticalSlice.Tests
             // Shield + Armor hooks attach to DealDamage. Heal is a different
             // command type → bus dispatches by exact type → hooks don't fire.
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Commands);
-            ArmorRule.Register(eng.Commands);
+            DivineShieldRule.Register(eng.Effects);
+            ArmorRule.Register(eng.Effects);
 
             var target = eng.World.Create();
             target.SetMaxHp(30);

@@ -29,7 +29,10 @@ namespace VerticalSlice.Sample
         // Card flags
         public static readonly TagKey<bool>   DivineShield   = new("divineShield");
         public static readonly TagKey<bool>   Backlash       = new("backlash");
-        public static readonly TagKey<bool>   HasDeathrattle = new("hasDeathrattle");
+        // Note: there is no "hasDeathrattle" tag. Deathrattle is a direct
+        // trigger attached via CardEffectStore — the presence of an
+        // attached effect IS the source of truth. Avoids the previous
+        // tag-vs-handler sync bug.
 
         // Names
         public static readonly TagKey<string> ZoneName       = new("zoneName");

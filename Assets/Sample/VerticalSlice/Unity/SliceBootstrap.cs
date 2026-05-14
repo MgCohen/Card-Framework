@@ -50,14 +50,18 @@ namespace VerticalSlice.UnityScene
         private void Setup()
         {
             _engine = new GameEngine();
-            DivineShieldRule.Register(_engine.Commands);
-            ArmorRule.Register(_engine.Commands);
-            BacklashRule.Register(_engine.Commands);
-            DeathrattleRule.Register(_engine.Commands);
 
-            // Setup is just a flat sequence of EntityCreated + TagSet events;
-            // no enclosing scope. Order: players → zones → cards (with owner
-            // + zone references resolved at the end).
+            // Hook effects (global rules) — Effect<DealDamage> shape with
+            // Register(...) on each rule. Phase/priority lives at the
+            // registration call site, not on the rule class.
+            DivineShieldRule.Register(_engine.Effects);
+            ArmorRule.Register(_engine.Effects);
+            BacklashRule.Register(_engine.Effects);
+
+            // Bridge: translates broadcast MoveCard→graveyard into direct
+            // Deathrattle trigger on the dying card. Per-card deathrattle
+            // EFFECT is what's specific; the bridge is uniform.
+            DeathrattleBridge.Register(_engine.Commands);
 
             _p1 = _engine.World.Create(); _p1.MarkAsPlayer("P1");
             _p2 = _engine.World.Create(); _p2.MarkAsPlayer("P2");
@@ -73,6 +77,9 @@ namespace VerticalSlice.UnityScene
             _caster.SetHp(30); _caster.SetMaxHp(30); _caster.SetAttack(2);
             _caster.SetOwner(_p1);
             _caster.SetZone(_battlefield);
+            // Caster's deathrattle: damage all enemies.
+            _engine.CardEffects.Set<Deathrattle>(_caster,
+                t => new DamageAllEnemies(t));
 
             _ally1 = _engine.World.Create();
             _ally1.MarkAsCard();
@@ -80,8 +87,12 @@ namespace VerticalSlice.UnityScene
             _ally1.SetHp(10); _ally1.SetMaxHp(10);
             _ally1.SetOwner(_p1);
             _ally1.SetZone(_battlefield);
+            // Ally-P1's deathrattle: heal all allies. Different behavior on a
+            // different card via the same machinery — no subclass per card.
+            _engine.CardEffects.Set<Deathrattle>(_ally1,
+                t => new HealAllAllies(t));
 
-            // P2's cards
+            // P2's cards — no deathrattles attached.
             _target = _engine.World.Create();
             _target.MarkAsCard();
             _target.SetCardName("Target");
@@ -183,16 +194,13 @@ namespace VerticalSlice.UnityScene
                     _caster.SetBacklash(newBl);
                     AfterCommandIssued();
                 }
-                GUILayout.Space(20);
-                var dr = _caster.HasDeathrattle();
-                var newDr = GUILayout.Toggle(dr, "Deathrattle on Caster (2 dmg to all enemies when it dies)");
-                if (newDr != dr)
-                {
-                    _caster.SetHasDeathrattle(newDr);
-                    AfterCommandIssued();
-                }
                 GUILayout.EndHorizontal();
             }
+
+            // --- Deathrattle info (attached per-card at setup) --------------
+            GUILayout.Label("Deathrattles (per-card via CardEffectStore):");
+            GUILayout.Label("  Caster  → DamageAllEnemies   (move Caster to Graveyard to fire)");
+            GUILayout.Label("  Ally-P1 → HealAllAllies      (move Ally-P1 to Graveyard to fire)");
 
             // --- Zone movement buttons --------------------------------------
             if (_caster != null && _target != null
@@ -259,7 +267,6 @@ namespace VerticalSlice.UnityScene
                 if (ent.Has(Tags.Armor))          GUILayout.Label($"  armor        = {ent.Armor()}");
                 if (ent.Has(Tags.DivineShield))   GUILayout.Label($"  divineShield = {ent.DivineShield()}");
                 if (ent.Has(Tags.Backlash))       GUILayout.Label($"  backlash     = {ent.Backlash()}");
-                if (ent.Has(Tags.HasDeathrattle)) GUILayout.Label($"  deathrattle  = {ent.HasDeathrattle()}");
                 if (ent.Has(Tags.Zone))           GUILayout.Label($"  zone         = #{ent.ZoneId()}");
                 GUILayout.Space(4);
             }
@@ -312,9 +319,9 @@ namespace VerticalSlice.UnityScene
                         var owner = _engine.World.Get(c.OwnerId());
                         var ownerLabel = owner?.PlayerName() ?? "?";
                         var flags = new System.Text.StringBuilder();
-                        if (c.DivineShield())   flags.Append("  shield");
-                        if (c.Backlash())       flags.Append("  backlash");
-                        if (c.HasDeathrattle()) flags.Append("  deathrattle");
+                        if (c.DivineShield()) flags.Append("  shield");
+                        if (c.Backlash())     flags.Append("  backlash");
+                        if (_engine.CardEffects.Has<Deathrattle>(c)) flags.Append("  deathrattle");
                         GUILayout.Label($"    #{c.Id} {c.CardName()} (owner={ownerLabel})  hp={c.Hp()}  armor={c.Armor()}{flags}");
                     }
                 }

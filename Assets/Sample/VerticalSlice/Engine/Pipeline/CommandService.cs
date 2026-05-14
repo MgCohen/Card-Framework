@@ -84,6 +84,14 @@ namespace VerticalSlice.Engine.Pipeline
             public HookScope(World w, EffectService e) { _world = w; _effects = e; }
 
             public void Run(Effects.Effect effect) => _effects.Run(effect);
+
+            public void FireDirect<TTrigger>(IEntity entity, TTrigger trigger)
+                where TTrigger : class
+            {
+                var effect = _effects.CardEffects.Build(entity, trigger);
+                if (effect != null) _effects.Run(effect);
+            }
+
             public IEntity? Get(int id) => _world.Get(id);
             public IEnumerable<IEntity> All() => _world.All();
             public IEnumerable<IEntity> Where(TagKey<bool> marker) => _world.Where(marker);

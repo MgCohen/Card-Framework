@@ -1,37 +1,38 @@
 #nullable enable
+using VerticalSlice.Engine.Effects;
 using VerticalSlice.Engine.Pipeline;
 
 namespace VerticalSlice.Sample
 {
     /// <summary>
-    /// Divine Shield. Before+Replacement on <see cref="DealDamage"/>: if the
-    /// target has Shield, zero the incoming Amount and fire a
-    /// <see cref="ShieldBreak"/> effect that flips the shield off. The Hp
-    /// write becomes a no-op via the equality-skip guard in <c>Entity.Set</c>.
-    ///
-    /// The hook does two things:
-    /// <list type="bullet">
-    /// <item>Mutates <c>cmd.Amount</c> directly (allowed — cmd is passed by
-    /// reference; mutating in-flight payload is the Replacement-band
-    /// pattern).</item>
-    /// <item>Runs <see cref="ShieldBreak"/> via <c>scope.Run</c> — the
-    /// "consume self" state change rides through Effect → Command and
-    /// records a clean Block in the wire instead of a stray tag write.</item>
-    /// </list>
+    /// Divine Shield as an <see cref="Effect{DealDamage}"/>. Subscribed
+    /// at Before+Replacement via <c>EffectService.Register</c>:
+    /// <code>
+    /// effects.Register&lt;DealDamage&gt;(HookPhase.Before, HookPriority.Replacement,
+    ///     cmd =&gt; new DivineShieldRule(cmd));
+    /// </code>
+    /// Validate gates the firing entirely — no wire block emitted if the
+    /// target has no shield or amount is already zero. When it does run,
+    /// it zeroes Amount (so the Hp write equality-skips) and fires a
+    /// <see cref="ShieldBreak"/> effect that consumes the shield via a
+    /// proper command.
     /// </summary>
-    public static class DivineShieldRule
+    public sealed class DivineShieldRule : Effect<DealDamage>
     {
-        public static void Register(CommandService commands)
-        {
-            commands.Subscribe<DealDamage>(HookPhase.Before, HookPriority.Replacement,
-                (cmd, scope) =>
-                {
-                    if (cmd.Amount <= 0) return;
-                    if (!cmd.Target.DivineShield()) return;
+        public DivineShieldRule(DealDamage cmd) : base(cmd) { }
 
-                    cmd.Amount = 0;
-                    scope.Run(new ShieldBreak(cmd.Target));
-                });
+        public override bool Validate(IEffectScope scope)
+            => Trigger.Amount > 0 && Trigger.Target.DivineShield();
+
+        public override void Run(IEffectScope scope)
+        {
+            Trigger.Amount = 0;
+            scope.Run(new ShieldBreak(Trigger.Target));
         }
+
+        public static void Register(EffectService effects)
+            => effects.Register<DealDamage>(
+                HookPhase.Before, HookPriority.Replacement,
+                cmd => new DivineShieldRule(cmd));
     }
 }

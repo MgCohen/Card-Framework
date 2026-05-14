@@ -8,17 +8,38 @@ namespace VerticalSlice.Engine.Effects
 {
     /// <summary>
     /// What an <see cref="Effect"/> sees inside its <see cref="Effect.Run"/>
-    /// body. Read-only access to entities (<see cref="IEntity"/>); the only
-    /// mutation path is <see cref="Execute"/>, which dispatches a command
-    /// that opens its own block and goes through Before/Apply/After hooks.
+    /// body. Read access to entities, the ability to dispatch primitive
+    /// commands via <see cref="Execute"/>, and the ability to fire a
+    /// direct trigger on a specific entity via <see cref="FireDirect"/>.
     ///
-    /// <b>No Run, no entity.Set, no Subscribe</b> — the surface is exactly
-    /// "issue commands and read state for branching." Effects compose other
-    /// effects via the trigger system, not through this scope.
+    /// <b>No entity.Set, no Subscribe</b> — the surface is "issue commands,
+    /// fire direct triggers, read state for branching." Effects compose
+    /// other effects through Execute (commands) or FireDirect (the
+    /// engine's direct-trigger pathway); they don't reach the bus directly.
     /// </summary>
     public interface IEffectScope
     {
         void Execute(Command command);
+
+        /// <summary>
+        /// Run a sub-effect inline. Used by rule-effects (DivineShield
+        /// fires <c>ShieldBreak</c>, etc.) and effect composition in
+        /// general. The sub-effect goes through the same Validate/Run/
+        /// block pipeline as a top-level dispatch.
+        /// </summary>
+        void Run(Effect effect);
+
+        /// <summary>
+        /// Fire a direct trigger on a specific entity. Engine looks up the
+        /// entity's effect for <typeparamref name="TTrigger"/> (registered
+        /// via the card-effect store) and runs it with the supplied
+        /// payload. No-op if the entity has no effect for that trigger.
+        ///
+        /// Used by engine bridges that translate broadcast events into
+        /// targeted dispatches — e.g. "MoveCard.dest=graveyard" calls
+        /// <c>scope.FireDirect(card, new Deathrattle(card))</c>.
+        /// </summary>
+        void FireDirect<TTrigger>(IEntity entity, TTrigger trigger) where TTrigger : class;
 
         IEntity? Get(int entityId);
         IEnumerable<IEntity> All();
