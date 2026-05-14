@@ -10,119 +10,103 @@ namespace VerticalSlice.Tests
     public class EngineTests
     {
         [Test]
-        public void EntityCreation_AssignsMonotonicIds_StartingAt1()
+        public void Create_AssignsMonotonicIds_StartingAt1()
         {
             var w = new World();
-            var a = w.Create<Card>();
-            var b = w.Create<Card>();
-
+            var a = w.Create();
+            var b = w.Create();
             Assert.That(a.Id, Is.EqualTo(1));
             Assert.That(b.Id, Is.EqualTo(2));
         }
 
         [Test]
-        public void EntityCreation_WrapsInSystemBlock()
+        public void Create_EmitsEntityCreatedEvent()
         {
             var w = new World();
-            w.Create<Card>();
-
-            var events = w.EventLog.Events;
-            Assert.That(events.Count, Is.EqualTo(3));
-            Assert.That(events[0], Is.InstanceOf<BlockStartEvent>());
-            Assert.That(((BlockStartEvent)events[0]).Type, Is.SameAs(BlockType.System));
-            Assert.That(events[1], Is.InstanceOf<EntityCreatedEvent>());
-            Assert.That(events[2], Is.InstanceOf<BlockEndEvent>());
+            w.Create();
+            var ev = w.Log.Events.Single();
+            Assert.That(ev, Is.TypeOf<EntityCreatedEvent>());
+            Assert.That(((EntityCreatedEvent)ev).EntityId, Is.EqualTo(1));
         }
 
         [Test]
-        public void TagSet_OutsideExecute_AutoWrapsInSystemBlock()
+        public void FirstWrite_EmitsTagSet_NotTagChange()
         {
             var w = new World();
-            var c = w.Create<Card>();
-            var before = w.EventLog.Count;
+            var e = w.Create();
+            int checkpoint = w.Log.Count;
 
-            c.Hp = 30;
+            e.SetHp(30);
 
-            var added = w.EventLog.Events.Skip(before).ToList();
-            Assert.That(added[0], Is.InstanceOf<BlockStartEvent>());
-            Assert.That(((BlockStartEvent)added[0]).Type, Is.SameAs(BlockType.System));
-            Assert.That(added[1], Is.InstanceOf<TagChangeEvent>());
-            Assert.That(added[2], Is.InstanceOf<BlockEndEvent>());
-
-            var tc = (TagChangeEvent)added[1];
-            Assert.That(tc.Key, Is.EqualTo("hp"));
-            Assert.That(tc.Prev, Is.EqualTo(0));
-            Assert.That(tc.Next, Is.EqualTo(30));
+            var ev = w.Log.Events.Skip(checkpoint).Single();
+            Assert.That(ev, Is.TypeOf<TagSetEvent>());
+            var ts = (TagSetEvent)ev;
+            Assert.That(ts.EntityId, Is.EqualTo(e.Id));
+            Assert.That(ts.Key, Is.EqualTo("hp"));
+            Assert.That(ts.Value, Is.EqualTo(30));
         }
 
         [Test]
-        public void TagSet_NoOp_DoesNotEmit()
+        public void SecondWrite_EmitsTagChange_WithPrevAndNext()
         {
             var w = new World();
-            var c = w.Create<Card>();
-            c.Hp = 30;
-            var checkpoint = w.EventLog.Count;
+            var e = w.Create();
+            e.SetHp(30);
+            int checkpoint = w.Log.Count;
 
-            c.Hp = 30;
+            e.SetHp(25);
 
-            Assert.That(w.EventLog.Count, Is.EqualTo(checkpoint));
+            var ev = w.Log.Events.Skip(checkpoint).Single();
+            Assert.That(ev, Is.TypeOf<TagChangeEvent>());
+            var tc = (TagChangeEvent)ev;
+            Assert.That(tc.Prev, Is.EqualTo(30));
+            Assert.That(tc.Next, Is.EqualTo(25));
         }
 
         [Test]
-        public void Execute_OpensTypedBlock_AndEmitsTagChangesInside()
+        public void NoOpWrite_EmitsNothing()
         {
             var w = new World();
-            var c = w.Create<Card>();
-            c.Hp = 30;
-            var checkpoint = w.EventLog.Count;
+            var e = w.Create();
+            e.SetHp(30);
+            int checkpoint = w.Log.Count;
 
-            w.Execute(new DealDamage(source: null, target: c, amount: 6));
+            e.SetHp(30);   // same value
 
-            var added = w.EventLog.Events.Skip(checkpoint).ToList();
-            Assert.That(added[0], Is.InstanceOf<BlockStartEvent>());
-            Assert.That(((BlockStartEvent)added[0]).Type, Is.SameAs(BlockType.Power));
-            Assert.That(((BlockStartEvent)added[0]).CommandTypeName, Is.EqualTo("DealDamage"));
-            Assert.That(added.OfType<TagChangeEvent>().Count(), Is.EqualTo(1));
-            Assert.That(added[^1], Is.InstanceOf<BlockEndEvent>());
-
-            Assert.That(c.Hp, Is.EqualTo(24));
+            Assert.That(w.Log.Count, Is.EqualTo(checkpoint),
+                "Equality-skip must prevent any event for a no-op write.");
         }
 
         [Test]
-        public void Hooks_BeforeAndAfter_BothFire()
+        public void Destroy_EmitsEntityDestroyed_AndStopsTagEvents()
         {
             var w = new World();
-            var c = w.Create<Card>();
-            c.Hp = 30;
+            var e = w.Create();
+            e.SetHp(30);
+            int checkpoint = w.Log.Count;
 
-            bool beforeFired = false, afterFired = false;
-            w.Hooks.Subscribe<DealDamage>(HookPhase.Before, HookPriority.OnEffect,
-                _ => beforeFired = true);
-            w.Hooks.Subscribe<DealDamage>(HookPhase.After, HookPriority.Reaction,
-                _ => afterFired = true);
+            w.Destroy(e);
 
-            w.Execute(new DealDamage(null, c, 6));
+            var ev = w.Log.Events.Skip(checkpoint).Single();
+            Assert.That(ev, Is.TypeOf<EntityDestroyedEvent>());
+            Assert.That(w.Get(e.Id), Is.Null);
 
-            Assert.That(beforeFired, Is.True);
-            Assert.That(afterFired, Is.True);
+            int afterDestroy = w.Log.Count;
+            e.SetHp(99);
+            Assert.That(w.Log.Count, Is.EqualTo(afterDestroy),
+                "Detached entity must not emit further wire events.");
         }
 
         [Test]
-        public void Hooks_Replacement_RunsBeforeOnEffect()
+        public void WhereMarker_FiltersByTag()
         {
             var w = new World();
-            var c = w.Create<Card>();
-            c.Hp = 30;
+            var card = w.Create(); card.MarkAsCard();
+            w.Create();   // no marker
 
-            var order = new System.Collections.Generic.List<string>();
-            w.Hooks.Subscribe<DealDamage>(HookPhase.Before, HookPriority.OnEffect,
-                _ => order.Add("OnEffect"));
-            w.Hooks.Subscribe<DealDamage>(HookPhase.Before, HookPriority.Replacement,
-                _ => order.Add("Replacement"));
-
-            w.Execute(new DealDamage(null, c, 6));
-
-            Assert.That(order, Is.EqualTo(new[] { "Replacement", "OnEffect" }));
+            var cards = w.Where(Tags.IsCard).ToList();
+            Assert.That(cards, Has.Count.EqualTo(1));
+            Assert.That(cards[0].Id, Is.EqualTo(card.Id));
         }
     }
 }

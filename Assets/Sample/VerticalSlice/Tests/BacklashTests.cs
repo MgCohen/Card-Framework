@@ -1,0 +1,122 @@
+#nullable enable
+using System.Linq;
+using NUnit.Framework;
+using VerticalSlice.Engine.Pipeline;
+using VerticalSlice.Engine.Stream;
+using VerticalSlice.Sample;
+
+namespace VerticalSlice.Tests
+{
+    public class BacklashTests
+    {
+        [Test]
+        public void Backlash_DealingDamage_RetaliatesOneBack()
+        {
+            var eng = new GameEngine();
+            BacklashRule.Register(eng.Commands);
+
+            var caster = eng.World.Create();
+            var target = eng.World.Create();
+            caster.SetHp(30); caster.SetMaxHp(30);
+            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetBacklash(true);
+
+            eng.Effects.Run(new Fireball(caster, target));
+
+            Assert.That(target.Hp(), Is.EqualTo(24));   // 6 from Fireball
+            Assert.That(caster.Hp(), Is.EqualTo(29));   // 1 backlash
+        }
+
+        [Test]
+        public void Backlash_OpensNestedBlock_NamedBacklash()
+        {
+            var eng = new GameEngine();
+            BacklashRule.Register(eng.Commands);
+
+            var caster = eng.World.Create();
+            var target = eng.World.Create();
+            caster.SetHp(30); caster.SetMaxHp(30);
+            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetBacklash(true);
+
+            int checkpoint = eng.World.Log.Count;
+            eng.Effects.Run(new Fireball(caster, target));
+
+            var blockNames = eng.World.Log.Events.Skip(checkpoint)
+                                .OfType<BlockStartEvent>()
+                                .Select(b => b.Name)
+                                .ToList();
+
+            // Expected nesting:
+            //   Fireball → DealDamage → Backlash → DealDamage
+            Assert.That(blockNames, Is.EqualTo(new[]
+            {
+                "Fireball", "DealDamage", "Backlash", "DealDamage",
+            }));
+        }
+
+        [Test]
+        public void Backlash_OnlyFiresWhenSourceHasTag()
+        {
+            var eng = new GameEngine();
+            BacklashRule.Register(eng.Commands);
+
+            var caster = eng.World.Create();
+            var target = eng.World.Create();
+            caster.SetHp(30); caster.SetMaxHp(30);
+            target.SetHp(30); target.SetMaxHp(30);
+            // caster.Backlash stays false.
+
+            int checkpoint = eng.World.Log.Count;
+            eng.Effects.Run(new Fireball(caster, target));
+
+            Assert.That(caster.Hp(), Is.EqualTo(30));   // untouched
+            var hasBacklashBlock = eng.World.Log.Events.Skip(checkpoint)
+                .OfType<BlockStartEvent>().Any(b => b.Name == "Backlash");
+            Assert.That(hasBacklashBlock, Is.False);
+        }
+
+        [Test]
+        public void Backlash_DoesNotRecurse_TargetWithoutTagDoesNotChain()
+        {
+            var eng = new GameEngine();
+            BacklashRule.Register(eng.Commands);
+
+            var caster = eng.World.Create();
+            var target = eng.World.Create();
+            caster.SetHp(30); caster.SetMaxHp(30);
+            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetBacklash(true);
+            // target.Backlash stays false → retaliation's source has no Backlash tag.
+
+            int checkpoint = eng.World.Log.Count;
+            eng.Effects.Run(new Fireball(caster, target));
+
+            var triggers = eng.World.Log.Events.Skip(checkpoint)
+                .OfType<BlockStartEvent>().Where(b => b.Name == "Backlash").ToList();
+            Assert.That(triggers.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void Backlash_DoesNotFire_WhenDamageWasZeroed()
+        {
+            var eng = new GameEngine();
+            DivineShieldRule.Register(eng.Commands);
+            BacklashRule.Register(eng.Commands);
+
+            var caster = eng.World.Create();
+            var target = eng.World.Create();
+            caster.SetHp(30); caster.SetMaxHp(30);
+            target.SetHp(30); target.SetMaxHp(30);
+            caster.SetBacklash(true);
+            target.SetDivineShield(true);
+
+            eng.Effects.Run(new Fireball(caster, target));
+
+            Assert.That(target.Hp(), Is.EqualTo(30));
+            Assert.That(target.DivineShield(), Is.False);
+            Assert.That(caster.Hp(), Is.EqualTo(30),
+                "Backlash must skip when the original damage was zeroed.");
+        }
+    }
+}

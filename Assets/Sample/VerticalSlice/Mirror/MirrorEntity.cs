@@ -4,23 +4,18 @@ using System.Collections.Generic;
 namespace VerticalSlice.Mirror
 {
     /// <summary>
-    /// Mirror-side projection of an entity. No behaviour — just an id,
-    /// a type name (for display), and a tag dictionary keyed by wire-name.
-    /// The mirror reconstructs entities from the wire stream alone; it
-    /// never references the primary <c>World</c>'s <c>Entity</c> types.
+    /// Mirror-side projection of an entity. No type name — there are no
+    /// entity subclasses on the primary side either; "kind" is just a tag.
+    /// The mirror reconstructs entities from the wire stream; it never
+    /// references the primary <c>Entity</c> type.
     /// </summary>
     public sealed class MirrorEntity
     {
         public int Id { get; }
-        public string TypeName { get; }
         public Dictionary<string, object?> Tags { get; } = new();
 
-        public MirrorEntity(int id, string typeName)
-        {
-            Id = id;
-            TypeName = typeName;
-        }
+        public MirrorEntity(int id) { Id = id; }
 
-        public override string ToString() => $"{TypeName}#{Id}";
+        public override string ToString() => $"#{Id}";
     }
 }

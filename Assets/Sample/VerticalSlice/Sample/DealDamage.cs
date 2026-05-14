@@ -1,34 +1,38 @@
 #nullable enable
 using VerticalSlice.Engine.Commands;
 using VerticalSlice.Engine.Entities;
-using VerticalSlice.Engine.Pipeline;
 
 namespace VerticalSlice.Sample
 {
     /// <summary>
-    /// Semantic damage command. <c>Amount</c> is mutable so
-    /// Replacement-band hooks can zero or modify it before Apply runs.
+    /// Primitive damage command. <see cref="Amount"/> is mutable so
+    /// Replacement-band Before hooks (DivineShield, Armor) can zero or
+    /// reduce it before <see cref="Apply"/> runs.
+    ///
+    /// Payload carries <see cref="IEntity"/> references — wire-stable and
+    /// safe for the read-only hook surface. <see cref="Apply"/> resolves
+    /// to the mutable <see cref="Entity"/> via <see cref="ICommandScope"/>
+    /// to write the Hp tag.
     /// </summary>
     public sealed class DealDamage : Command
     {
-        public Entity? Source { get; set; }
-        public Entity Target { get; set; }
+        public IEntity? Source { get; set; }
+        public IEntity Target { get; set; }
         public int Amount { get; set; }
 
-        public DealDamage(Entity? source, Entity target, int amount)
+        public DealDamage(IEntity? source, IEntity target, int amount)
         {
             Source = source;
             Target = target;
             Amount = amount;
         }
 
-        public override BlockType BlockType => BlockType.Power;
-
-        public override void Apply(World world)
+        public override void Apply(ICommandScope scope)
         {
             if (Amount <= 0) return;
-            var currentHp = Target.Get(Tags.Hp);
-            Target.Set(Tags.Hp, currentHp - Amount);
+            var target = scope.Resolve(Target);
+            if (target == null) return;
+            target.SetHp(target.Hp() - Amount);
         }
     }
 }

@@ -1,20 +1,24 @@
 #nullable enable
-using VerticalSlice.Engine.Pipeline;
-
 namespace VerticalSlice.Engine.Commands
 {
     /// <summary>
-    /// Abstract base for every state-changing operation. Each command
-    /// declares the <see cref="BlockType"/> it opens; <c>Apply</c> is
-    /// where the actual tag writes happen.
+    /// A primitive write operation: <c>DealDamage</c>, <c>Heal</c>,
+    /// <c>MoveCard</c>. Mutates state via its payload entities (resolved
+    /// to mutable <c>Entity</c> through <see cref="ICommandScope"/>) — no
+    /// command-on-command dispatch from inside <see cref="Apply"/>.
     ///
-    /// Command public properties are walked by reflection at
-    /// <c>BlockStart</c> emission time to capture the wire payload —
-    /// keep them simple (primitives, Entity refs, value records).
+    /// Commands are the surface that hooks attach to:
+    /// <c>commands.Subscribe&lt;DealDamage&gt;(After, Reaction, …)</c>.
+    /// Authors do not manage scope open/close — <c>CommandService.Execute</c>
+    /// wraps <see cref="Apply"/> in a Block on the wire and fires Before /
+    /// After hooks around it.
+    ///
+    /// Command public properties are walked by reflection at BlockStart
+    /// emission time to capture the wire payload — keep them simple
+    /// (primitives, IEntity refs, value records).
     /// </summary>
     public abstract class Command
     {
-        public abstract BlockType BlockType { get; }
-        public abstract void Apply(World world);
+        public abstract void Apply(ICommandScope scope);
     }
 }

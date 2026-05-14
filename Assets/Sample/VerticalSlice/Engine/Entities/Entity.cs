@@ -6,52 +6,60 @@ using VerticalSlice.Engine.Tags;
 namespace VerticalSlice.Engine.Entities
 {
     /// <summary>
-    /// The single base type for everything that participates in the game
-    /// state — cards, modifiers, zones, players, matches.
+    /// The single concrete entity type. Every game thing — card, zone,
+    /// player, modifier, anything — is an Entity. Identity comes from
+    /// <see cref="Id"/>; "kind" comes from tags (<c>Tags.IsCard</c>,
+    /// <c>Tags.IsZone</c>, …); state comes from tag values.
     ///
-    /// Storage is a sparse <c>(slot → boxed value)</c> dictionary keyed by
-    /// <see cref="TagKey.Slot"/>. Boxing is acceptable at slice scale.
+    /// Sparse-dict storage keyed by <see cref="TagKey.Slot"/>. Missing
+    /// keys return <c>default(T)</c> from <see cref="Get{T}"/>; to
+    /// distinguish "never set" from "set to default" use <see cref="Has"/>.
+    /// The wire alphabet uses <c>TagSetEvent</c> for first-write-of-a-key
+    /// and <c>TagChangeEvent</c> for subsequent writes — that's how the
+    /// mirror knows whether to remove the key on Unapply or write back the
+    /// previous value.
     ///
-    /// Equality of values uses <c>EqualityComparer&lt;T&gt;.Default</c>:
-    /// value equality for value types, reference equality for reference
-    /// types. Reference-typed tag values (lists, dicts) must be reassigned
-    /// to a new instance to register as a change — mutating in place will
-    /// be a silent no-op.
+    /// Mutation goes through <see cref="Set{T}"/>. The owning <c>World</c>
+    /// subscribes to internal <see cref="TagSet"/> / <see cref="TagChanged"/>
+    /// events to emit wire events. Authors writing inside an
+    /// <c>ICommandScope</c> reach Entity through <c>scope.Resolve(...)</c>;
+    /// authors inside an <c>IEffectScope</c> only see <see cref="IEntity"/>.
     /// </summary>
-    public abstract class Entity
+    public sealed class Entity : IEntity
     {
         public int Id { get; internal set; }
-        private readonly Dictionary<int, object?> _slots = new();
 
-        /// <summary>
-        /// Fires after a tag value actually changed (the equality-skip
-        /// has already cleared no-op writes). Internal — only the
-        /// <c>World</c> subscribes, so the call sites are bounded.
-        /// </summary>
-        internal event Action<Entity, TagKey, object?, object?>? TagChanged;
+        private readonly Dictionary<int, object?> _slots = new();
 
         public T Get<T>(TagKey<T> key)
         {
-            if (_slots.TryGetValue(key.Slot, out var raw) && raw is T t)
-                return t;
+            if (_slots.TryGetValue(key.Slot, out var raw) && raw is T typed)
+                return typed;
             return default!;
         }
 
-        public bool Has(TagKey key) => _slots.ContainsKey(key.Slot);
+        public bool Has<T>(TagKey<T> key) => _slots.ContainsKey(key.Slot);
 
         public void Set<T>(TagKey<T> key, T value)
         {
-            T prev = default!;
-            if (_slots.TryGetValue(key.Slot, out var raw) && raw is T existing)
-                prev = existing;
-
-            if (EqualityComparer<T>.Default.Equals(prev, value))
-                return;
-
-            _slots[key.Slot] = value;
-            TagChanged?.Invoke(this, key, prev, value);
+            if (_slots.TryGetValue(key.Slot, out var raw))
+            {
+                var prev = raw is T t ? t : default!;
+                if (EqualityComparer<T>.Default.Equals(prev, value)) return;   // no-op
+                _slots[key.Slot] = value;
+                TagChanged?.Invoke(this, key, prev!, value!);
+            }
+            else
+            {
+                _slots[key.Slot] = value;
+                TagSet?.Invoke(this, key, value!);
+            }
         }
 
-        public override string ToString() => $"{GetType().Name}#{Id}";
+        public override string ToString() => $"Entity#{Id}";
+
+        // Subscribed by World only. Internal so authors can't bypass the wire.
+        internal event Action<Entity, TagKey, object>? TagSet;
+        internal event Action<Entity, TagKey, object, object>? TagChanged;
     }
 }

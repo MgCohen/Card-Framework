@@ -1,8 +1,6 @@
 #nullable enable
-using System;
 using System.Collections.Generic;
-using System.Reflection;
-using VerticalSlice.Engine.Commands;
+using System.Linq;
 using VerticalSlice.Engine.Entities;
 using VerticalSlice.Engine.Stream;
 using VerticalSlice.Engine.Tags;
@@ -10,115 +8,73 @@ using VerticalSlice.Engine.Tags;
 namespace VerticalSlice.Engine.Pipeline
 {
     /// <summary>
-    /// The engine. Owns the entity registry, the event log, the hook bus,
-    /// and the current-block stack. Every state change is caused by a
-    /// <see cref="Command"/> passed to <see cref="Execute"/> — or by a
-    /// direct tag write, which gets auto-wrapped in a one-event
-    /// <c>BlockType.System</c> block.
+    /// Pure substrate. Owns the entity store, the event log, the
+    /// monotonic id counter. <b>No verbs.</b> Effect/command dispatch lives
+    /// on dedicated services (<c>EffectService</c>, <c>CommandService</c>);
+    /// hook subscription lives on <c>CommandService</c>.
+    ///
+    /// World is intentionally a god-free zone: anyone with a reference can
+    /// read entities and the log, but nothing on this surface can mutate
+    /// state, fire effects, or dispatch commands. Authors writing inside
+    /// effects/commands/hooks reach scoped views (<c>IEffectScope</c>,
+    /// <c>ICommandScope</c>, <c>IHookScope</c>) that the services hand them.
     /// </summary>
     public sealed class World
     {
-        public EventLog EventLog { get; } = new();
-        public SignalBus Hooks { get; } = new();
+        public EventLog Log { get; } = new();
 
-        private int _nextId = 1;
-        private readonly Stack<Block> _blockStack = new();
         private readonly Dictionary<int, Entity> _entities = new();
-
-        private static readonly IReadOnlyDictionary<string, object?> EmptyPayload
-            = new Dictionary<string, object?>();
+        private int _nextId = 1;
 
         public IReadOnlyDictionary<int, Entity> Entities => _entities;
-        public int CurrentBlockDepth => _blockStack.Count;
-
-        // --- Entity allocation ------------------------------------------------
-
-        public TEntity Create<TEntity>() where TEntity : Entity, new()
-        {
-            var entity = new TEntity();
-            entity.Id = _nextId++;
-            entity.TagChanged += OnEntityTagChanged;
-            _entities[entity.Id] = entity;
-
-            EnsureBlockOpen(() =>
-                EventLog.Append(new EntityCreatedEvent(entity.Id, typeof(TEntity).Name)));
-
-            return entity;
-        }
-
-        // --- Command pipeline -------------------------------------------------
-
-        public void Execute(Command cmd)
-        {
-            var block = new Block(
-                cmd.BlockType,
-                cmd,
-                _blockStack.Count > 0 ? _blockStack.Peek() : null);
-            _blockStack.Push(block);
-            EventLog.Append(new BlockStartEvent(cmd.BlockType, cmd.GetType().Name, CapturePayload(cmd)));
-
-            try
-            {
-                Hooks.Fire(cmd, HookPhase.Before);
-                cmd.Apply(this);
-                Hooks.Fire(cmd, HookPhase.After);
-            }
-            finally
-            {
-                EventLog.Append(new BlockEndEvent(cmd.BlockType));
-                _blockStack.Pop();
-            }
-        }
-
-        // --- Tag change routing -----------------------------------------------
-
-        private void OnEntityTagChanged(Entity entity, TagKey key, object? prev, object? next)
-        {
-            EnsureBlockOpen(() =>
-                EventLog.Append(new TagChangeEvent(entity.Id, key.Name, prev, next)));
-        }
-
-        // --- Block discipline -------------------------------------------------
 
         /// <summary>
-        /// If a block is already open, run <paramref name="emit"/> inside it.
-        /// Otherwise wrap with a synthetic <c>BlockType.System</c> block so
-        /// the wire invariant "every TagChange is inside a block" holds.
+        /// Allocate a new entity, register its tag-mutation events to the
+        /// log, and emit <see cref="EntityCreatedEvent"/>. Setup-phase
+        /// callers use this directly; mid-game allocation typically goes
+        /// through a <c>Command</c> that calls into the world via its scope.
         /// </summary>
-        private void EnsureBlockOpen(Action emit)
+        public Entity Create()
         {
-            if (_blockStack.Count > 0)
-            {
-                emit();
-                return;
-            }
-
-            var sys = new Block(BlockType.System, null, null);
-            _blockStack.Push(sys);
-            EventLog.Append(new BlockStartEvent(BlockType.System, null, EmptyPayload));
-            try { emit(); }
-            finally
-            {
-                EventLog.Append(new BlockEndEvent(BlockType.System));
-                _blockStack.Pop();
-            }
+            var e = new Entity { Id = _nextId++ };
+            e.TagSet += OnTagSet;
+            e.TagChanged += OnTagChanged;
+            _entities[e.Id] = e;
+            Log.Append(new EntityCreatedEvent(e.Id));
+            return e;
         }
 
-        // --- Payload capture --------------------------------------------------
-
-        private static IReadOnlyDictionary<string, object?> CapturePayload(Command cmd)
+        /// <summary>
+        /// Removes an entity and emits <see cref="EntityDestroyedEvent"/>.
+        /// Tag events from this entity will no longer flow.
+        /// </summary>
+        public void Destroy(Entity entity)
         {
-            var dict = new Dictionary<string, object?>();
-            var props = cmd.GetType()
-                           .GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            foreach (var p in props)
-            {
-                if (p.Name == nameof(Command.BlockType)) continue;
-                if (!p.CanRead) continue;
-                try { dict[p.Name] = p.GetValue(cmd); }
-                catch { dict[p.Name] = "<unreadable>"; }
-            }
-            return dict;
+            if (!_entities.Remove(entity.Id)) return;
+            entity.TagSet -= OnTagSet;
+            entity.TagChanged -= OnTagChanged;
+            Log.Append(new EntityDestroyedEvent(entity.Id));
         }
+
+        public Entity? Get(int id) => _entities.TryGetValue(id, out var e) ? e : null;
+
+        /// <summary>
+        /// All entities, mutable. Used by <c>ICommandScope</c> for queries.
+        /// Effects receive the <see cref="IEntity"/>-typed view via their scope.
+        /// </summary>
+        public IEnumerable<Entity> All() => _entities.Values;
+
+        /// <summary>
+        /// Filter by a marker tag (entity has the tag set to a truthy value).
+        /// E.g. <c>world.Where(Tags.IsCard)</c> → all entities tagged as cards.
+        /// </summary>
+        public IEnumerable<Entity> Where(TagKey<bool> marker)
+            => _entities.Values.Where(e => e.Has(marker) && e.Get(marker));
+
+        private void OnTagSet(Entity e, TagKey key, object value)
+            => Log.Append(new TagSetEvent(e.Id, key.Name, value));
+
+        private void OnTagChanged(Entity e, TagKey key, object prev, object next)
+            => Log.Append(new TagChangeEvent(e.Id, key.Name, prev, next));
     }
 }
