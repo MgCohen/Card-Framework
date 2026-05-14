@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Linq;
 using UnityEngine;
 using VerticalSlice.Engine.Entities;
 using VerticalSlice.Engine.Pipeline;
@@ -28,10 +29,14 @@ namespace VerticalSlice.UnityScene
 
         private Entity? _caster;
         private Entity? _target;
+        private Entity? _hand;
+        private Entity? _battlefield;
+        private Entity? _graveyard;
 
         private Vector2 _eventLogScroll;
         private Vector2 _primaryScroll;
         private Vector2 _mirrorScroll;
+        private Vector2 _zonesScroll;
 
         private int _sliderPos;
         private bool _sliderTracksHead = true;
@@ -48,11 +53,18 @@ namespace VerticalSlice.UnityScene
             // No more "OpenSystemBlock" wrapper — bare TagSet/TagChange
             // events at the top of the log are fine. Setup is just a flat
             // sequence of EntityCreated + TagSet events; no enclosing scope.
+
+            // Zones first so we can SetZone on cards as we create them.
+            _hand       = _engine.World.Create(); _hand.MarkAsZone("Hand");
+            _battlefield= _engine.World.Create(); _battlefield.MarkAsZone("Battlefield");
+            _graveyard  = _engine.World.Create(); _graveyard.MarkAsZone("Graveyard");
+
             _caster = _engine.World.Create();
             _caster.MarkAsCard();
             _caster.SetHp(30);
             _caster.SetMaxHp(30);
             _caster.SetAttack(2);
+            _caster.SetZone(_battlefield);
 
             _target = _engine.World.Create();
             _target.MarkAsCard();
@@ -60,6 +72,7 @@ namespace VerticalSlice.UnityScene
             _target.SetMaxHp(30);
             _target.SetAttack(0);
             _target.SetArmor(0);
+            _target.SetZone(_battlefield);
 
             _mirror = new MirrorWorld();
             _scrub = new ScrubController(_mirror, _engine.World.Log.Events);
@@ -151,6 +164,31 @@ namespace VerticalSlice.UnityScene
                 GUILayout.EndHorizontal();
             }
 
+            // --- Zone movement buttons --------------------------------------
+            if (_caster != null && _target != null
+                && _hand != null && _battlefield != null && _graveyard != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Move Caster:", GUILayout.Width(100));
+                if (GUILayout.Button("→ Hand", GUILayout.Width(80)))
+                    { _engine.Commands.Execute(new MoveCard(_caster, _hand)); AfterCommandIssued(); }
+                if (GUILayout.Button("→ Battlefield", GUILayout.Width(110)))
+                    { _engine.Commands.Execute(new MoveCard(_caster, _battlefield)); AfterCommandIssued(); }
+                if (GUILayout.Button("→ Graveyard", GUILayout.Width(100)))
+                    { _engine.Commands.Execute(new MoveCard(_caster, _graveyard)); AfterCommandIssued(); }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Move Target:", GUILayout.Width(100));
+                if (GUILayout.Button("→ Hand", GUILayout.Width(80)))
+                    { _engine.Commands.Execute(new MoveCard(_target, _hand)); AfterCommandIssued(); }
+                if (GUILayout.Button("→ Battlefield", GUILayout.Width(110)))
+                    { _engine.Commands.Execute(new MoveCard(_target, _battlefield)); AfterCommandIssued(); }
+                if (GUILayout.Button("→ Graveyard", GUILayout.Width(100)))
+                    { _engine.Commands.Execute(new MoveCard(_target, _graveyard)); AfterCommandIssued(); }
+                GUILayout.EndHorizontal();
+            }
+
             // --- Scrub slider -----------------------------------------------
             GUILayout.Space(8);
             GUILayout.Label($"Scrub: event {_sliderPos} of {_engine.World.Log.Count}" +
@@ -175,13 +213,16 @@ namespace VerticalSlice.UnityScene
             foreach (var kvp in _engine.World.Entities)
             {
                 var ent = kvp.Value;
-                GUILayout.Label($"#{ent.Id} {(ent.IsCard() ? "card" : "")}".TrimEnd());
+                var kind = ent.IsCard() ? "card" : ent.IsZone() ? "zone" : "";
+                GUILayout.Label($"#{ent.Id} {kind}".TrimEnd());
+                if (ent.Has(Tags.ZoneName))     GUILayout.Label($"  name         = {ent.ZoneName()}");
                 if (ent.Has(Tags.Hp))           GUILayout.Label($"  hp           = {ent.Hp()}");
                 if (ent.Has(Tags.MaxHp))        GUILayout.Label($"  maxHp        = {ent.MaxHp()}");
                 if (ent.Has(Tags.Attack))       GUILayout.Label($"  attack       = {ent.Attack()}");
                 if (ent.Has(Tags.Armor))        GUILayout.Label($"  armor        = {ent.Armor()}");
                 if (ent.Has(Tags.DivineShield)) GUILayout.Label($"  divineShield = {ent.DivineShield()}");
                 if (ent.Has(Tags.Backlash))     GUILayout.Label($"  backlash     = {ent.Backlash()}");
+                if (ent.Has(Tags.Zone))         GUILayout.Label($"  zone         = #{ent.ZoneId()}");
                 GUILayout.Space(4);
             }
             GUILayout.EndScrollView();
@@ -211,6 +252,32 @@ namespace VerticalSlice.UnityScene
             GUILayout.EndVertical();
 
             GUILayout.EndHorizontal();
+
+            // --- Zones panel (full width below the main row) -------------
+            GUILayout.Space(8);
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("ZONES (cards grouped by Zone tag — derived from flat ECS storage via query)");
+            _zonesScroll = GUILayout.BeginScrollView(_zonesScroll, GUILayout.Height(180));
+            foreach (var zone in _engine.World.Zones())
+            {
+                GUILayout.Label($"#{zone.Id} {zone.ZoneName()}");
+                var cardsInZone = _engine.World.CardsIn(zone).ToList();
+                if (cardsInZone.Count == 0)
+                {
+                    GUILayout.Label("    (empty)");
+                }
+                else
+                {
+                    foreach (var c in cardsInZone)
+                        GUILayout.Label($"    #{c.Id}  hp={c.Hp()}  armor={c.Armor()}" +
+                                        (c.DivineShield() ? "  shield" : "") +
+                                        (c.Backlash() ? "  backlash" : ""));
+                }
+                GUILayout.Space(2);
+            }
+            GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+
             GUILayout.EndVertical();
         }
 
