@@ -1,5 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
+using VerticalSlice.Engine.Entities;
 
 namespace VerticalSlice.Engine.Stream
 {
@@ -7,22 +8,21 @@ namespace VerticalSlice.Engine.Stream
     /// The slice's wire alphabet — six concrete event kinds, no shared
     /// "Mutation" supertype:
     /// <list type="bullet">
-    /// <item><see cref="BlockStartEvent"/> — opens a named scope; payload
-    /// captures the runnable's reflected properties.</item>
-    /// <item><see cref="BlockEndEvent"/> — closes the most-recent unclosed
-    /// block (LIFO).</item>
-    /// <item><see cref="EntityCreatedEvent"/> — entity allocated.</item>
-    /// <item><see cref="EntityDestroyedEvent"/> — entity removed.</item>
+    /// <item><see cref="BlockStartEvent"/> — opens a named scope. Carries a
+    /// monotonic <see cref="BlockStartEvent.Id"/>, a <see cref="BlockKind"/>
+    /// (set by the dispatch site, not declared on the runnable type), an
+    /// optional <see cref="BlockStartEvent.Source"/> entity (provenance),
+    /// and a reflection-captured payload of the runnable's properties.</item>
+    /// <item><see cref="BlockEndEvent"/> — closes a block, carrying the
+    /// matching <see cref="BlockEndEvent.Id"/> and the
+    /// <see cref="BlockOutcome"/>.</item>
+    /// <item><see cref="EntityCreatedEvent"/> / <see cref="EntityDestroyedEvent"/></item>
     /// <item><see cref="TagSetEvent"/> — first write of a tag key on an
-    /// entity. Apply: write the value, mirror entity now <i>has</i> the key.
-    /// Unapply: <b>remove the key entirely</b> (this is what fixes the
-    /// init-value rewind bug).</item>
-    /// <item><see cref="TagChangeEvent"/> — subsequent write of an
-    /// already-set key. Apply: write Next. Unapply: write Prev.</item>
+    /// entity. Apply: write key=value. Unapply: <b>remove the key
+    /// entirely</b> — fixes init-value rewind.</item>
+    /// <item><see cref="TagChangeEvent"/> — subsequent write. Apply:
+    /// write Next. Unapply: write Prev.</item>
     /// </list>
-    /// Block kind (Play / Trigger / System / etc.) is not in the wire —
-    /// it's recoverable from the BlockStart's <see cref="BlockStartEvent.Name"/>
-    /// via a runtime registry if needed. Most consumers don't care.
     /// </summary>
     public abstract class WireEvent
     {
@@ -31,23 +31,50 @@ namespace VerticalSlice.Engine.Stream
 
     public sealed class BlockStartEvent : WireEvent
     {
+        public long Id { get; }
+        public long? ParentId { get; }
+        public BlockKind BlockKind { get; }
         public string Name { get; }
+        public IEntity? Source { get; }
         public IReadOnlyDictionary<string, object?> Payload { get; }
 
-        public BlockStartEvent(string name, IReadOnlyDictionary<string, object?> payload)
+        public BlockStartEvent(long id, long? parentId, BlockKind blockKind,
+                               string name, IEntity? source,
+                               IReadOnlyDictionary<string, object?> payload)
         {
+            Id = id;
+            ParentId = parentId;
+            BlockKind = blockKind;
             Name = name;
+            Source = source;
             Payload = payload;
         }
 
         public override string Kind => "BlockStart";
-        public override string ToString() => $"BlockStart({Name})";
+        public override string ToString()
+        {
+            var src = Source != null ? $", src=#{Source.Id}" : "";
+            var parent = ParentId.HasValue ? $", parent=#{ParentId.Value}" : "";
+            return $"BlockStart[{Id}] {BlockKind}({Name}{src}{parent})";
+        }
     }
 
     public sealed class BlockEndEvent : WireEvent
     {
+        public long Id { get; }
+        public BlockOutcome Outcome { get; }
+
+        public BlockEndEvent(long id, BlockOutcome outcome)
+        {
+            Id = id;
+            Outcome = outcome;
+        }
+
         public override string Kind => "BlockEnd";
-        public override string ToString() => "BlockEnd";
+        public override string ToString()
+            => Outcome == BlockOutcome.Completed
+                ? $"BlockEnd[{Id}]"
+                : $"BlockEnd[{Id}] {Outcome}";
     }
 
     public sealed class EntityCreatedEvent : WireEvent

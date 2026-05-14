@@ -57,25 +57,37 @@ Six concrete event types, no shared "Mutation" base class:
 
 | Event | When | Apply | Unapply |
 |---|---|---|---|
-| `BlockStartEvent(name, payload)` | An effect or command starts running | (no-op for state) | (no-op for state) |
-| `BlockEndEvent` | Same, ending | (no-op) | (no-op) |
+| `BlockStartEvent(id, parentId, kind, name, source, payload)` | An effect or command starts running | (no-op for state) | (no-op for state) |
+| `BlockEndEvent(id, outcome)` | Same, ending | (no-op) | (no-op) |
 | `EntityCreatedEvent(id)` | `world.Create()` | add to dict | remove from dict |
 | `EntityDestroyedEvent(id)` | `world.Destroy(e)` | remove | add (empty) |
 | `TagSetEvent(id, key, value)` | First write of a key on an entity | write key=value | **remove key** (this is the init-value rewind fix) |
 | `TagChangeEvent(id, key, prev, next)` | Subsequent write | write key=next | write key=prev |
 
-Block "kind" (Effect / Command / Trigger / etc.) is not a wire-level enum —
-the BlockStart's `Name` is just `runnable.GetType().Name`. Tooling that wants
-to categorize can do so by registering names.
+Block metadata:
+- **`id`** — monotonic block id assigned at open time. `BlockEndEvent.Id`
+  matches the `BlockStartEvent.Id` of the block being closed.
+- **`parentId`** — id of the enclosing open block (null at top level).
+  Gives an explicit causal chain without scanning positionally.
+- **`kind`** — `Effect` (opened by `EffectService.Run`) or `Command`
+  (opened by `CommandService.Execute`). Set by the dispatch site; not
+  declared on the runnable type.
+- **`name`** — `runnable.GetType().Name` (e.g. `"Fireball"`,
+  `"DealDamage"`).
+- **`source`** — convention-based extraction: if the runnable has a
+  public `Source` property of `IEntity` type, it's captured here;
+  otherwise null. Provenance for animation routing.
+- **`outcome`** — `Completed` on normal exit, `Errored` on exception
+  escape, `Cancelled` reserved for future request/timeout work.
 
 ## Authoring shape
 
 ```csharp
 // Effects compose commands. Receive read-only IEffectScope.
 public sealed class Fireball : Effect {
-    public IEntity Caster, Target;
+    public IEntity Source, Target;
     public override void Run(IEffectScope scope)
-        => scope.Execute(new DealDamage(Caster, Target, 6));
+        => scope.Execute(new DealDamage(Source, Target, 6));
 }
 
 // Commands mutate state. Receive ICommandScope (resolves IEntity → mutable Entity).

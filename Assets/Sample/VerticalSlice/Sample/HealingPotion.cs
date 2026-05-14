@@ -14,18 +14,18 @@ namespace VerticalSlice.Sample
     {
         public const int Amount = 4;
 
-        public IEntity? Caster { get; }
+        public IEntity? Source { get; }
         public IEntity Target { get; }
 
-        public HealingPotion(IEntity? caster, IEntity target)
+        public HealingPotion(IEntity? source, IEntity target)
         {
-            Caster = caster;
+            Source = source;
             Target = target;
         }
 
         public override void Run(IEffectScope scope)
         {
-            scope.Execute(new Heal(Caster, Target, Amount));
+            scope.Execute(new Heal(Source, Target, Amount));
         }
     }
 }

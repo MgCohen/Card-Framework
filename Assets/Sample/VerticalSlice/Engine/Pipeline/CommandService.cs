@@ -34,8 +34,12 @@ namespace VerticalSlice.Engine.Pipeline
 
         public void Execute(Command command)
         {
+            var (id, parentId) = _world.OpenBlock();
             _world.Log.Append(new BlockStartEvent(
-                command.GetType().Name, PayloadCapture.Of(command)));
+                id, parentId, BlockKind.Command, command.GetType().Name,
+                PayloadCapture.ExtractSource(command),
+                PayloadCapture.Of(command)));
+            var outcome = BlockOutcome.Completed;
             try
             {
                 var hookScope = new HookScope(_world, _effects!);
@@ -43,9 +47,15 @@ namespace VerticalSlice.Engine.Pipeline
                 command.Apply(new CommandScope(_world));
                 _hooks.Fire(command, HookPhase.After, hookScope);
             }
+            catch
+            {
+                outcome = BlockOutcome.Errored;
+                throw;
+            }
             finally
             {
-                _world.Log.Append(new BlockEndEvent());
+                var closingId = _world.CloseBlock();
+                _world.Log.Append(new BlockEndEvent(closingId, outcome));
             }
         }
 

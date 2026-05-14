@@ -26,7 +26,26 @@ namespace VerticalSlice.Engine.Pipeline
         private readonly Dictionary<int, Entity> _entities = new();
         private int _nextId = 1;
 
+        // Block-id allocator + open-block stack. Shared by EffectService and
+        // CommandService so block ids are globally monotonic and parent ids
+        // correctly point at whichever block is currently open above us.
+        private long _nextBlockId = 1;
+        private readonly Stack<long> _blockStack = new();
+
         public IReadOnlyDictionary<int, Entity> Entities => _entities;
+        public long? CurrentBlockId => _blockStack.Count > 0 ? _blockStack.Peek() : null;
+
+        // --- Block tracking (called by services on dispatch) ----------------
+
+        internal (long id, long? parentId) OpenBlock()
+        {
+            long? parent = _blockStack.Count > 0 ? _blockStack.Peek() : null;
+            long id = _nextBlockId++;
+            _blockStack.Push(id);
+            return (id, parent);
+        }
+
+        internal long CloseBlock() => _blockStack.Pop();
 
         /// <summary>
         /// Allocate a new entity, register its tag-mutation events to the

@@ -39,9 +39,9 @@ namespace VerticalSlice.Tests
             var fireballStart = eng.World.Log.Events.Skip(checkpoint)
                                                .OfType<BlockStartEvent>()
                                                .First(b => b.Name == "Fireball");
-            Assert.That(fireballStart.Payload.ContainsKey("Caster"), Is.True);
+            Assert.That(fireballStart.Payload.ContainsKey("Source"), Is.True);
             Assert.That(fireballStart.Payload.ContainsKey("Target"), Is.True);
-            Assert.That(fireballStart.Payload["Caster"], Is.SameAs(caster));
+            Assert.That(fireballStart.Payload["Source"], Is.SameAs(caster));
             Assert.That(fireballStart.Payload["Target"], Is.SameAs(target));
         }
 

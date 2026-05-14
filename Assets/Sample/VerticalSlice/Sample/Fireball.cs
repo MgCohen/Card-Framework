@@ -16,18 +16,18 @@ namespace VerticalSlice.Sample
     {
         public const int Damage = 6;
 
-        public IEntity? Caster { get; }
+        public IEntity? Source { get; }
         public IEntity Target { get; }
 
-        public Fireball(IEntity? caster, IEntity target)
+        public Fireball(IEntity? source, IEntity target)
         {
-            Caster = caster;
+            Source = source;
             Target = target;
         }
 
         public override void Run(IEffectScope scope)
         {
-            scope.Execute(new DealDamage(Caster, Target, Damage));
+            scope.Execute(new DealDamage(Source, Target, Damage));
         }
     }
 }

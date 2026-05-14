@@ -33,15 +33,25 @@ namespace VerticalSlice.Engine.Pipeline
 
         public void Run(Effect effect)
         {
+            var (id, parentId) = _world.OpenBlock();
             _world.Log.Append(new BlockStartEvent(
-                effect.GetType().Name, PayloadCapture.Of(effect)));
+                id, parentId, BlockKind.Effect, effect.GetType().Name,
+                PayloadCapture.ExtractSource(effect),
+                PayloadCapture.Of(effect)));
+            var outcome = BlockOutcome.Completed;
             try
             {
                 effect.Run(new EffectScope(_world, _commands));
             }
+            catch
+            {
+                outcome = BlockOutcome.Errored;
+                throw;
+            }
             finally
             {
-                _world.Log.Append(new BlockEndEvent());
+                var closingId = _world.CloseBlock();
+                _world.Log.Append(new BlockEndEvent(closingId, outcome));
             }
         }
 
