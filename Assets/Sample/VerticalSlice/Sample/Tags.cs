@@ -5,61 +5,61 @@ using VerticalSlice.Engine.Tags;
 namespace VerticalSlice.Sample
 {
     /// <summary>
-    /// All sample tags. Wire keys are explicit strings (no implicit
-    /// derivation from C# names) so renaming the C# field doesn't break
-    /// the wire format.
+    /// All sample tags. Slots are author-assigned at declaration —
+    /// analyzer-checked unique. Slot ranges are an organizational
+    /// convention:
+    /// <list type="bullet">
+    /// <item>1-19 — kind markers</item>
+    /// <item>20-39 — stats</item>
+    /// <item>40-59 — plain ability flags</item>
+    /// <item>60-79 — names</item>
+    /// <item>80-99 — entity-id refs</item>
+    /// <item>100+ — Pattern B keywords (declared via <c>[TagSlot]</c> on
+    /// the keyword class itself, not here)</item>
+    /// </list>
     ///
-    /// Hearthstone vocabulary: Health/MaxHealth/Attack/Armor on heroes
-    /// and minions; abilities (DivineShield/Backlash) as bool flags;
-    /// Deathrattle is NOT a tag — it's a CardEffectStore entry.
-    ///
-    /// "Kind markers" (<see cref="IsCard"/>, <see cref="IsMinion"/>, etc.)
-    /// are bool tags — entity-as-card is just a marker tag, not a C#
-    /// subclass. Entities can carry multiple markers (e.g. a card AND
-    /// a minion, since IsCard is the umbrella for any card-class entity).
+    /// <para>Wire keys remain explicit strings — renaming the C# field
+    /// doesn't break the wire format. The Name→Slot wire migration is a
+    /// deferred follow-up spike.</para>
     /// </summary>
     public static class Tags
     {
-        // Kind markers — what is this entity?
-        // Card umbrella + sub-kinds (minion / spell).
-        public static readonly TagKey<bool>   IsCard         = new("isCard");
-        public static readonly TagKey<bool>   IsMinion       = new("isMinion");
-        public static readonly TagKey<bool>   IsSpell        = new("isSpell");
-        public static readonly TagKey<bool>   IsZone         = new("isZone");
-        public static readonly TagKey<bool>   IsPlayer       = new("isPlayer");   // player IS the hero in this slice
-        public static readonly TagKey<bool>   IsBattlefield  = new("isBattlefield");
-        public static readonly TagKey<bool>   IsGraveyard    = new("isGraveyard");
+        // --- Kind markers (1-19) -----------------------------------------
+        public static readonly TagKey<bool>   IsCard         = new( 1, "isCard");
+        public static readonly TagKey<bool>   IsMinion       = new( 2, "isMinion");
+        public static readonly TagKey<bool>   IsSpell        = new( 3, "isSpell");
+        public static readonly TagKey<bool>   IsZone         = new( 4, "isZone");
+        public static readonly TagKey<bool>   IsPlayer       = new( 5, "isPlayer");
+        public static readonly TagKey<bool>   IsBattlefield  = new( 6, "isBattlefield");
+        public static readonly TagKey<bool>   IsGraveyard    = new( 7, "isGraveyard");
 
-        // Character stats (heroes + minions both carry these)
-        public static readonly TagKey<int>    Health         = new("health");
-        public static readonly TagKey<int>    MaxHealth      = new("maxHealth");
-        public static readonly TagKey<int>    Attack         = new("attack");
-        public static readonly TagKey<int>    Armor          = new("armor");
+        // --- Stats (20-39) -----------------------------------------------
+        public static readonly TagKey<int>    Health         = new(20, "health");
+        public static readonly TagKey<int>    MaxHealth      = new(21, "maxHealth");
+        public static readonly TagKey<int>    Attack         = new(22, "attack");
+        public static readonly TagKey<int>    Armor          = new(23, "armor");
+        public static readonly TagKey<int>    Cost           = new(24, "cost");
 
-        // Card stats
-        public static readonly TagKey<int>    Cost           = new("cost");        // mana cost (cosmetic — no economy yet)
+        // --- Plain ability flags (40-59) ---------------------------------
+        // Pattern A bool tags that don't double as event payload classes.
+        // For "keyword + payload" abilities (Deathrattle, future Poison),
+        // see Pattern B — the keyword class itself carries [TagSlot].
+        public static readonly TagKey<bool>   DivineShield   = new(40, "divineShield");
+        public static readonly TagKey<bool>   Backlash       = new(41, "backlash");
 
-        // Ability flags
-        public static readonly TagKey<bool>   DivineShield   = new("divineShield");
-        public static readonly TagKey<bool>   Backlash       = new("backlash");
-        // Note: there is no "hasDeathrattle" tag. Deathrattle is a direct
-        // trigger attached via CardEffectStore — the presence of an
-        // attached effect IS the source of truth.
+        // --- Names (60-79) -----------------------------------------------
+        public static readonly TagKey<string> ZoneName       = new(60, "zoneName");
+        public static readonly TagKey<string> PlayerName     = new(61, "playerName");
+        public static readonly TagKey<string> CardName       = new(62, "cardName");
 
-        // Names
-        public static readonly TagKey<string> ZoneName       = new("zoneName");
-        public static readonly TagKey<string> PlayerName     = new("playerName");
-        public static readonly TagKey<string> CardName       = new("cardName");
-
-        // References (entity id pointers — flat ECS)
-        public static readonly TagKey<int>    Zone           = new("zone");      // card → containing zone
-        public static readonly TagKey<int>    Owner          = new("owner");     // card → owning player
+        // --- References / entity-id pointers (80-99) ---------------------
+        public static readonly TagKey<int>    Zone           = new(80, "zone");      // card → containing zone
+        public static readonly TagKey<int>    Owner          = new(81, "owner");     // card → owning player
 
         /// <summary>
-        /// Register the slice's tag indices on an <see cref="EntityStore"/>.
-        /// Call once at engine setup, before any entities are created (or
-        /// keep in mind that retroactive registration starts the index
-        /// empty — backfill isn't built yet).
+        /// Register the slice's tag indices on an <see cref="EntityStore"/>,
+        /// plus the Pattern B keyword types this slice uses. Call once at
+        /// engine setup, before any entities are created.
         ///
         /// <para>Marker indices: kind tags + zone-kind tags. Anything we
         /// routinely ask "show me all X" about. Plain ability flags
@@ -69,9 +69,14 @@ namespace VerticalSlice.Sample
         /// <para>Value indices: owner + zone — the two reference-tag
         /// pivots ("entities owned by P1", "entities in zone Z") that
         /// queries compound against most often.</para>
+        ///
+        /// <para>Pattern B: registers Deathrattle's synthesized
+        /// <c>TagKey&lt;bool&gt;</c> + indexes it so
+        /// <c>store.With(Tag&lt;Deathrattle&gt;.Key)</c> works.</para>
         /// </summary>
         public static void RegisterIndices(EntityStore store)
         {
+            // Pattern A markers
             store.IndexMarker(IsCard);
             store.IndexMarker(IsMinion);
             store.IndexMarker(IsSpell);
@@ -80,8 +85,14 @@ namespace VerticalSlice.Sample
             store.IndexMarker(IsBattlefield);
             store.IndexMarker(IsGraveyard);
 
+            // Pattern A value indices
             store.IndexBy(Owner);
             store.IndexBy(Zone);
+
+            // Pattern B keywords — register the type (synthesizes the
+            // TagKey<bool> at the declared slot), then index it for
+            // world.With queries.
+            store.IndexMarker((TagKey<bool>)Tag<Deathrattle>.Key);
         }
     }
 }

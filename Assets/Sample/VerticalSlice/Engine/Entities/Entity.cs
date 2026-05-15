@@ -56,12 +56,41 @@ namespace VerticalSlice.Engine.Entities
             }
         }
 
+        /// <summary>
+        /// Three-state clear — strips the slot entirely. Distinct from
+        /// <c>Set(key, default)</c> ("silenced"): after Remove,
+        /// <see cref="Has"/> returns false. Emits
+        /// <c>TagRemovedEvent</c> on the wire; mirror unapply restores
+        /// the previous value at the slot.
+        /// </summary>
+        public void Remove<T>(TagKey<T> key)
+        {
+            if (!_slots.TryGetValue(key.Slot, out var raw)) return;
+            _slots.Remove(key.Slot);
+            TagRemoved?.Invoke(this, key, raw!);
+        }
+
+        // --- Pattern B sugar (type-keyed; routes through Tag<TTag>.Key) ----
+
+        public void Set<TTag>(bool value) where TTag : class, ITagKey<bool>
+            => Set((TagKey<bool>)Tag<TTag>.Key, value);
+
+        public bool Has<TTag>() where TTag : class, ITagKey<bool>
+            => Has((TagKey<bool>)Tag<TTag>.Key);
+
+        public bool Get<TTag>() where TTag : class, ITagKey<bool>
+            => Get((TagKey<bool>)Tag<TTag>.Key);
+
+        public void Remove<TTag>() where TTag : class, ITagKey<bool>
+            => Remove((TagKey<bool>)Tag<TTag>.Key);
+
         public override string ToString() => $"Entity#{Id}";
 
         // Subscribed by EntityStore only. Internal so authors can't bypass
         // the wire.
         internal event Action<Entity, TagKey, object>? TagSet;
         internal event Action<Entity, TagKey, object, object>? TagChanged;
+        internal event Action<Entity, TagKey, object>? TagRemoved;
 
         // --- Internal accessors for EntityStore + EntityQuery -------------
         // The store needs slot-keyed reads (untyped) for index maintenance

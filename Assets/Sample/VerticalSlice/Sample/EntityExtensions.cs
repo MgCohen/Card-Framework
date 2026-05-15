@@ -1,5 +1,8 @@
 #nullable enable
+using System;
+using VerticalSlice.Engine.Effects;
 using VerticalSlice.Engine.Entities;
+using VerticalSlice.Engine.Pipeline;
 
 namespace VerticalSlice.Sample
 {
@@ -116,5 +119,28 @@ namespace VerticalSlice.Sample
 
         /// <summary>Assign a card or zone to a player.</summary>
         public static void SetOwner         (this Entity e, IEntity player) => e.Set(Tags.Owner, player.Id);
+
+        // --- Keyword attachment (Pattern B helpers) ----------------------
+
+        /// <summary>
+        /// Mark a card as having a Deathrattle and bind the effect that
+        /// fires when it dies. Two side effects in one idiom:
+        /// <list type="bullet">
+        /// <item>Sets the <see cref="Deathrattle"/> tag on the card so
+        /// <c>card.Has&lt;Deathrattle&gt;()</c> and
+        /// <c>store.With(Tag&lt;Deathrattle&gt;.Key)</c> see it.</item>
+        /// <item>Registers the per-card factory on
+        /// <see cref="EffectStore.SetDirect{TTrigger}"/> so
+        /// DeathrattleBridge can fire it.</item>
+        /// </list>
+        /// Both must hold for the bridge to fire — tag is the gate,
+        /// factory is the body.
+        /// </summary>
+        public static void AttachDeathrattle(this Entity card, EffectStore store,
+                                             Func<Deathrattle, Effect> factory)
+        {
+            card.Set<Deathrattle>(true);
+            store.SetDirect<Deathrattle>(card, factory);
+        }
     }
 }

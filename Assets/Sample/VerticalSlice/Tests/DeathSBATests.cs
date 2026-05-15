@@ -132,7 +132,7 @@ namespace VerticalSlice.Tests
             abomination.MarkAsMinion("Abomination");
             abomination.SetOwner(b.p1); abomination.SetZone(b.p1Bf);
             abomination.SetHealth(4); abomination.SetMaxHealth(4); abomination.SetAttack(4);
-            b.eng.EffectStore.SetDirect<Deathrattle>(abomination, t => new DamageAllEnemies(t));
+            abomination.AttachDeathrattle(b.eng.EffectStore, t => new DamageAllEnemies(t));
 
             var raptor = b.eng.EntityStore.Create();
             raptor.MarkAsMinion("Raptor");

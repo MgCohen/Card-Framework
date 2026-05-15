@@ -21,5 +21,10 @@ namespace VerticalSlice.Engine.Entities
         int Id { get; }
         T Get<T>(TagKey<T> key);
         bool Has<T>(TagKey<T> key);
+
+        // --- Pattern B reads — write happens through Entity ---------------
+
+        bool Has<TTag>() where TTag : class, ITagKey<bool>;
+        bool Get<TTag>() where TTag : class, ITagKey<bool>;
     }
 }

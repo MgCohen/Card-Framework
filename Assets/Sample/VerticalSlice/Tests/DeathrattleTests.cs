@@ -64,8 +64,7 @@ namespace VerticalSlice.Tests
         public void Deathrattle_DamageAllEnemies_FiresOnGraveyardMove()
         {
             var b = BuildBoard();
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
-                t => new DamageAllEnemies(t));
+            b.casterP1.AttachDeathrattle(b.eng.EffectStore, t => new DamageAllEnemies(t));
 
             b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));
 
@@ -86,8 +85,7 @@ namespace VerticalSlice.Tests
             // for — attaching a totally different effect to a different card
             // requires no new C# subclass, no new bridge, no rule changes.
             var b = BuildBoard();
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.allyP1,
-                t => new HealAllAllies(t));
+            b.allyP1.AttachDeathrattle(b.eng.EffectStore, t => new HealAllAllies(t));
 
             b.eng.Enqueue(new MoveCard(b.allyP1, b.graveyard));
 
@@ -107,8 +105,7 @@ namespace VerticalSlice.Tests
         {
             var b = BuildBoard();
             b.casterP1.SetHealth(20);   // hurt
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.allyP1,
-                t => new HealAllAllies(t));
+            b.allyP1.AttachDeathrattle(b.eng.EffectStore, t => new HealAllAllies(t));
 
             b.eng.Enqueue(new MoveCard(b.allyP1, b.graveyard));
 
@@ -133,8 +130,7 @@ namespace VerticalSlice.Tests
         public void Deathrattle_DoesNotFire_OnNonGraveyardMove()
         {
             var b = BuildBoard();
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
-                t => new DamageAllEnemies(t));
+            b.casterP1.AttachDeathrattle(b.eng.EffectStore, t => new DamageAllEnemies(t));
             var hand = b.eng.EntityStore.Create(); hand.MarkAsZone("Hand");
 
             b.eng.Enqueue(new MoveCard(b.casterP1, hand));
@@ -156,8 +152,7 @@ namespace VerticalSlice.Tests
             // level of nesting between the trigger and the per-card effect.
             // Three DealDamage children: enemy hero + two enemy minions.
             var b = BuildBoard();
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
-                t => new DamageAllEnemies(t));
+            b.casterP1.AttachDeathrattle(b.eng.EffectStore, t => new DamageAllEnemies(t));
 
             int checkpoint = b.eng.World.Log.Count;
             b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));
@@ -179,8 +174,7 @@ namespace VerticalSlice.Tests
             // damage. Hooks attached to DealDamage (Shield) fire normally.
             var b = BuildBoard();
             DivineShieldRule.Register(b.eng.EffectStore);
-            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
-                t => new DamageAllEnemies(t));
+            b.casterP1.AttachDeathrattle(b.eng.EffectStore, t => new DamageAllEnemies(t));
             b.targetP2.SetDivineShield(true);
 
             b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));

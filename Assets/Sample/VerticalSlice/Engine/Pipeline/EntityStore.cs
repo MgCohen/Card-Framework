@@ -74,6 +74,7 @@ namespace VerticalSlice.Engine.Pipeline
             var e = new Entity { Id = _nextId++ };
             e.TagSet     += OnTagSet;
             e.TagChanged += OnTagChanged;
+            e.TagRemoved += OnTagRemoved;
             _entities[e.Id] = e;
             _log.Append(new EntityCreatedEvent(e.Id));
             return e;
@@ -90,6 +91,7 @@ namespace VerticalSlice.Engine.Pipeline
             _index.OnEntityDestroyed(entity.Id, entity.SnapshotSlots());
             entity.TagSet     -= OnTagSet;
             entity.TagChanged -= OnTagChanged;
+            entity.TagRemoved -= OnTagRemoved;
             _log.Append(new EntityDestroyedEvent(entity.Id));
         }
 
@@ -137,6 +139,12 @@ namespace VerticalSlice.Engine.Pipeline
         {
             _log.Append(new TagChangeEvent(e.Id, key.Name, prev, next));
             _index.OnTagChanged(e.Id, key.Slot, prev, next);
+        }
+
+        private void OnTagRemoved(Entity e, TagKey key, object prev)
+        {
+            _log.Append(new TagRemovedEvent(e.Id, key.Name, prev));
+            _index.OnTagRemoved(e.Id, key.Slot, prev);
         }
     }
 }

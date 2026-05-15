@@ -51,6 +51,12 @@ namespace VerticalSlice.Mirror
                     if (_entities.TryGetValue(tc.EntityId, out var chgEnt))
                         chgEnt.Tags[tc.Key] = tc.Next;
                     break;
+                case TagRemovedEvent tr:
+                    // Apply: strip the slot entirely. Distinct from
+                    // TagChange-to-default — "silenced" vs "removed".
+                    if (_entities.TryGetValue(tr.EntityId, out var remEnt))
+                        remEnt.Tags.Remove(tr.Key);
+                    break;
                 // BlockStart / BlockEnd — no-op for state.
             }
         }
@@ -79,6 +85,12 @@ namespace VerticalSlice.Mirror
                 case TagChangeEvent tc:
                     if (_entities.TryGetValue(tc.EntityId, out var chgEnt))
                         chgEnt.Tags[tc.Key] = tc.Prev;
+                    break;
+                case TagRemovedEvent tr:
+                    // Reverse of remove: restore the previous value at the
+                    // slot.
+                    if (_entities.TryGetValue(tr.EntityId, out var remEnt))
+                        remEnt.Tags[tr.Key] = tr.Prev;
                     break;
                 // BlockStart / BlockEnd — no-op.
             }

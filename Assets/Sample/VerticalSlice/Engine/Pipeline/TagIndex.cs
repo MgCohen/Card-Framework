@@ -69,6 +69,15 @@ namespace VerticalSlice.Engine.Pipeline
             }
         }
 
+        public void OnTagRemoved(int entityId, int slot, object prev)
+        {
+            if (_marker.TryGetValue(slot, out var mset))
+                mset.Remove(entityId);
+            if (_byValue.TryGetValue(slot, out var byValue)
+                && byValue.TryGetValue(prev, out var vset))
+                vset.Remove(entityId);
+        }
+
         public void OnEntityDestroyed(int entityId, IEnumerable<KeyValuePair<int, object?>> slots)
         {
             foreach (var kv in slots)

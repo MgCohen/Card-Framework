@@ -21,7 +21,8 @@ namespace VerticalSlice.Sample
 
         public override bool Validate(IEffectScope scope)
             => Trigger.Destination.IsGraveyard()
-            && scope.HasDirect<Deathrattle>(Trigger.Card);
+            && Trigger.Card.Has<Deathrattle>()                  // tag = gate
+            && scope.HasDirect<Deathrattle>(Trigger.Card);      // factory = body
 
         public override void Run(IEffectScope scope)
             => scope.FireDirect(Trigger.Card, new Deathrattle(Trigger.Card));

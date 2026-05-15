@@ -97,10 +97,10 @@ namespace VerticalSlice.UnityScene
 
             // --- Jaina's minions — Deathrattle x2 + Backlash ----------------
             _abomination = MakeMinion("Abomination", cost: 5, atk: 4, hp: 4, owner: _jaina, zone: _jainaBattlefield);
-            _engine.EffectStore.SetDirect<Deathrattle>(_abomination, t => new DamageAllEnemies(t));
+            _abomination.AttachDeathrattle(_engine.EffectStore, t => new DamageAllEnemies(t));
 
             _tombTender = MakeMinion("Tomb Tender", cost: 2, atk: 1, hp: 3, owner: _jaina, zone: _jainaBattlefield);
-            _engine.EffectStore.SetDirect<Deathrattle>(_tombTender, t => new HealAllAllies(t));
+            _tombTender.AttachDeathrattle(_engine.EffectStore, t => new HealAllAllies(t));
 
             _spiteImp = MakeMinion("Spite Imp", cost: 3, atk: 2, hp: 3, owner: _jaina, zone: _jainaBattlefield);
             _spiteImp.SetBacklash(true);   // intrinsic — Backlash bakes in at spawn

@@ -129,4 +129,31 @@ namespace VerticalSlice.Engine.Stream
         public override string ToString()
             => $"TagChange(#{EntityId}, {Key}, {Prev} -> {Next})";
     }
+
+    /// <summary>
+    /// Tag removal — third state alongside <see cref="TagSetEvent"/> (first
+    /// write) and <see cref="TagChangeEvent"/> (subsequent write). Emitted
+    /// when <c>Entity.Remove&lt;T&gt;</c> clears the slot entirely.
+    /// "Silenced" (<c>Set(false)</c>) is distinct from "removed"
+    /// (<c>Remove</c>) — the former leaves the slot present at value
+    /// false, the latter strips the slot. Mirror Unapply restores the
+    /// previous value at the slot.
+    /// </summary>
+    public sealed class TagRemovedEvent : WireEvent
+    {
+        public int EntityId { get; }
+        public string Key { get; }
+        public object? Prev { get; }
+
+        public TagRemovedEvent(int entityId, string key, object? prev)
+        {
+            EntityId = entityId;
+            Key = key;
+            Prev = prev;
+        }
+
+        public override string Kind => "TagRemoved";
+        public override string ToString()
+            => $"TagRemoved(#{EntityId}, {Key}, prev={Prev})";
+    }
 }
