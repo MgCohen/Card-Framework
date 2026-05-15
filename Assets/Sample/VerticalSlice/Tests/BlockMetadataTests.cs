@@ -71,7 +71,7 @@ namespace VerticalSlice.Tests
 
             int checkpoint = eng.World.Log.Count;
             eng.Stack.Push(new StackFrame(new Fireball(null, t)));
-            eng.Commands.Execute(new DealDamage(null, t, 1));
+            eng.Enqueue(new DealDamage(null, t, 1));
 
             var starts = eng.World.Log.Events.Skip(checkpoint)
                           .OfType<BlockStartEvent>().ToList();

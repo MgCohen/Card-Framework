@@ -67,10 +67,10 @@ namespace VerticalSlice.UnityScene
         {
             _engine = new GameEngine();
 
-            DivineShieldRule.Register(_engine.Effects);
-            ArmorRule.Register(_engine.Effects);
-            BacklashRule.Register(_engine.Effects);
-            DeathrattleBridge.Register(_engine.Commands);
+            DivineShieldRule.Register(_engine.EffectStore);
+            ArmorRule.Register(_engine.EffectStore);
+            BacklashRule.Register(_engine.EffectStore);
+            DeathrattleBridge.Register(_engine.EffectStore);
             DeathSBA.Register(_engine);   // SBA: any 0-HP minion on a battlefield → graveyard
 
             // --- Heroes (player + health stats) -----------------------------
@@ -95,10 +95,10 @@ namespace VerticalSlice.UnityScene
 
             // --- Jaina's minions — Deathrattle x2 + Backlash ----------------
             _abomination = MakeMinion("Abomination", cost: 5, atk: 4, hp: 4, owner: _jaina, zone: _jainaBattlefield);
-            _engine.CardEffects.Set<Deathrattle>(_abomination, t => new DamageAllEnemies(t));
+            _engine.EffectStore.SetDirect<Deathrattle>(_abomination, t => new DamageAllEnemies(t));
 
             _tombTender = MakeMinion("Tomb Tender", cost: 2, atk: 1, hp: 3, owner: _jaina, zone: _jainaBattlefield);
-            _engine.CardEffects.Set<Deathrattle>(_tombTender, t => new HealAllAllies(t));
+            _engine.EffectStore.SetDirect<Deathrattle>(_tombTender, t => new HealAllAllies(t));
 
             _spiteImp = MakeMinion("Spite Imp", cost: 3, atk: 2, hp: 3, owner: _jaina, zone: _jainaBattlefield);
             _spiteImp.SetBacklash(true);   // intrinsic — Backlash bakes in at spawn
@@ -119,15 +119,16 @@ namespace VerticalSlice.UnityScene
             // Attach OnCast factories — what each spell card does when its
             // PlayCard frame resolves off the stack. Each player gets their
             // own card instance, so each instance carries its own factory.
-            _engine.CardEffects.Set<OnCast>(_jainaFireball,       cast => new Fireball(cast.Caster, cast.Target));
-            _engine.CardEffects.Set<OnCast>(_jainaHealingTouch,   cast => new HealingTouch(cast.Caster, cast.Target));
-            _engine.CardEffects.Set<OnCast>(_garroshFireball,     cast => new Fireball(cast.Caster, cast.Target));
-            _engine.CardEffects.Set<OnCast>(_garroshHealingTouch, cast => new HealingTouch(cast.Caster, cast.Target));
+            _engine.EffectStore.SetDirect<OnCast>(_jainaFireball,       cast => new Fireball(cast.Caster, cast.Target));
+            _engine.EffectStore.SetDirect<OnCast>(_jainaHealingTouch,   cast => new HealingTouch(cast.Caster, cast.Target));
+            _engine.EffectStore.SetDirect<OnCast>(_garroshFireball,     cast => new Fireball(cast.Caster, cast.Target));
+            _engine.EffectStore.SetDirect<OnCast>(_garroshHealingTouch, cast => new HealingTouch(cast.Caster, cast.Target));
 
             // Cast cleanup — the stack fires OnCastResolved when a frame
-            // with a SourceCard resolves. The pump is mid-Evaluate when
-            // this fires, so IsPumping=true → Commands.Execute → RunInline →
-            // wire shows a top-level MoveCard sibling of the effect's block.
+            // with a SourceCard resolves. We're mid-resolution inside the
+            // pump; Commands.Execute runs the MoveCard inline at the
+            // current wire depth, showing up as a sibling of the effect
+            // block that just closed.
             _engine.Stack.OnCastResolved = card =>
             {
                 var grave = _engine.World.All().FirstOrDefault(
@@ -196,7 +197,7 @@ namespace VerticalSlice.UnityScene
         private void Cast(Entity caster, Entity spellCard, IEntity? target)
         {
             if (target == null) return;
-            _engine.Commands.Execute(new PlayCard(spellCard, caster, target));
+            _engine.Enqueue(new PlayCard(spellCard, caster, target));
             AfterCommandIssued();
         }
 
@@ -408,7 +409,7 @@ namespace VerticalSlice.UnityScene
                     var flags = new System.Text.StringBuilder();
                     if (c.DivineShield()) flags.Append("  shield");
                     if (c.Backlash())     flags.Append("  backlash");
-                    if (_engine.CardEffects.Has<Deathrattle>(c)) flags.Append("  deathrattle");
+                    if (_engine.EffectStore.HasDirect<Deathrattle>(c)) flags.Append("  deathrattle");
 
                     string body = c.IsMinion()
                         ? $"[{c.Cost()}] {c.CardName(),-18} (Minion)  {c.Attack()}/{c.Health()}{flags}"

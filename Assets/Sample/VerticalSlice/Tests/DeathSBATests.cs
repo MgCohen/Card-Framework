@@ -20,7 +20,7 @@ namespace VerticalSlice.Tests
                  Entity p2Bf, Entity p2Grave) BuildBoard(bool withDeathrattles = false)
         {
             var eng = new GameEngine();
-            DeathrattleBridge.Register(eng.Commands);
+            DeathrattleBridge.Register(eng.EffectStore);
             DeathSBA.Register(eng);
 
             var p1 = eng.World.Create(); p1.MarkAsPlayer("P1"); p1.SetHealth(30); p1.SetMaxHealth(30);
@@ -72,7 +72,7 @@ namespace VerticalSlice.Tests
             // top-level dispatch. Use Fireball with Amount-zero edge: skip,
             // and just dispatch a trivial command instead.
             var bystander = b.eng.World.Create(); bystander.MarkAsCard();
-            b.eng.Commands.Execute(new MoveCard(bystander, b.p1Bf));
+            b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(p1Minion.ZoneId(), Is.EqualTo(b.p1Grave.Id));
             Assert.That(p2Minion.ZoneId(), Is.EqualTo(b.p2Grave.Id));
@@ -88,7 +88,7 @@ namespace VerticalSlice.Tests
 
             // Trigger a drain pass via any top-level dispatch.
             var bystander = b.eng.World.Create(); bystander.MarkAsCard();
-            b.eng.Commands.Execute(new MoveCard(bystander, b.p1Bf));
+            b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(alive.ZoneId(), Is.EqualTo(b.p1Bf.Id),
                 "Living minions stay on the battlefield.");
@@ -106,7 +106,7 @@ namespace VerticalSlice.Tests
             corpse.SetHealth(0); corpse.SetMaxHealth(5);
 
             var bystander = b.eng.World.Create(); bystander.MarkAsCard();
-            b.eng.Commands.Execute(new MoveCard(bystander, b.p1Bf));
+            b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(corpse.ZoneId(), Is.EqualTo(b.p1Grave.Id));
         }
@@ -125,13 +125,13 @@ namespace VerticalSlice.Tests
             // - Pass 2 SBA: MoveCard(Raptor → P2 graveyard). No more deaths.
             // - Pass 3 SBA: silent. Drain quiesces.
             var b = BuildBoard();
-            ArmorRule.Register(b.eng.Effects);   // for the armor-absorbs check
+            ArmorRule.Register(b.eng.EffectStore);   // for the armor-absorbs check
 
             var abomination = b.eng.World.Create();
             abomination.MarkAsMinion("Abomination");
             abomination.SetOwner(b.p1); abomination.SetZone(b.p1Bf);
             abomination.SetHealth(4); abomination.SetMaxHealth(4); abomination.SetAttack(4);
-            b.eng.CardEffects.Set<Deathrattle>(abomination, t => new DamageAllEnemies(t));
+            b.eng.EffectStore.SetDirect<Deathrattle>(abomination, t => new DamageAllEnemies(t));
 
             var raptor = b.eng.World.Create();
             raptor.MarkAsMinion("Raptor");

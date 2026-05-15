@@ -19,7 +19,7 @@ namespace VerticalSlice.Tests
             var card = eng.World.Create();          card.MarkAsCard();
             card.SetZone(hand);
 
-            eng.Commands.Execute(new MoveCard(card, battlefield));
+            eng.Enqueue(new MoveCard(card, battlefield));
 
             Assert.That(card.ZoneId(), Is.EqualTo(battlefield.Id));
         }
@@ -35,7 +35,7 @@ namespace VerticalSlice.Tests
             // NOTE: card has no Zone tag yet — has never been placed.
 
             int checkpoint = eng.World.Log.Count;
-            eng.Commands.Execute(new MoveCard(card, hand));
+            eng.Enqueue(new MoveCard(card, hand));
 
             var zoneEvent = eng.World.Log.Events.Skip(checkpoint)
                               .OfType<TagSetEvent>()
@@ -53,7 +53,7 @@ namespace VerticalSlice.Tests
             card.SetZone(hand);   // first placement (TagSet)
 
             int checkpoint = eng.World.Log.Count;
-            eng.Commands.Execute(new MoveCard(card, battlefield));
+            eng.Enqueue(new MoveCard(card, battlefield));
 
             var zoneEvent = eng.World.Log.Events.Skip(checkpoint)
                               .OfType<TagChangeEvent>()
@@ -93,8 +93,8 @@ namespace VerticalSlice.Tests
 
             var card = eng.World.Create(); card.MarkAsCard();
             card.SetZone(hand);
-            eng.Commands.Execute(new MoveCard(card, battlefield));
-            eng.Commands.Execute(new MoveCard(card, graveyard));
+            eng.Enqueue(new MoveCard(card, battlefield));
+            eng.Enqueue(new MoveCard(card, graveyard));
 
             int head = eng.World.Log.Count;
             var mirror = new MirrorWorld();

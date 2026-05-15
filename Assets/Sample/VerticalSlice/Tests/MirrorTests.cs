@@ -31,8 +31,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var target = eng.World.Create();
             target.SetHealth(30);
-            eng.Commands.Execute(new DealDamage(null, target, 6));   // 30 → 24
-            eng.Commands.Execute(new DealDamage(null, target, 4));   // 24 → 20
+            eng.Enqueue(new DealDamage(null, target, 6));   // 30 → 24
+            eng.Enqueue(new DealDamage(null, target, 4));   // 24 → 20
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
@@ -65,7 +65,7 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var target = eng.World.Create();
             target.SetHealth(30);
-            eng.Commands.Execute(new DealDamage(null, target, 6));
+            eng.Enqueue(new DealDamage(null, target, 6));
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);
@@ -82,7 +82,7 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             var target = eng.World.Create();
             target.SetHealth(30);
-            eng.Commands.Execute(new DealDamage(null, target, 6));   // 24
+            eng.Enqueue(new DealDamage(null, target, 6));   // 24
 
             int head = eng.World.Log.Count;
             var mirror = new MirrorWorld();

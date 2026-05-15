@@ -42,6 +42,15 @@ namespace VerticalSlice.Engine.Effects
         void FireDirect<TTrigger>(IEntity entity, TTrigger trigger) where TTrigger : class;
 
         /// <summary>
+        /// Test whether <paramref name="entity"/> has a registered factory
+        /// for <typeparamref name="TTrigger"/> without firing it. Used by
+        /// hook effects that translate broadcast events into direct
+        /// triggers (e.g. <c>DeathrattleBridge</c>) — letting them gate
+        /// in <c>Validate</c> so no wire block opens for a no-op fire.
+        /// </summary>
+        bool HasDirect<TTrigger>(IEntity entity) where TTrigger : class;
+
+        /// <summary>
         /// Open a player-decision request. Emits a Request-kind block on
         /// the wire (one OptionEvent per option declared); the request
         /// sits in the engine's RequestsService.Open dictionary until a

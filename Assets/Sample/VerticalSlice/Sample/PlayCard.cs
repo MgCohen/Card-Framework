@@ -15,7 +15,7 @@ namespace VerticalSlice.Sample
     /// <para>Flow:
     /// <list type="number">
     /// <item>Look up the card's <see cref="OnCast"/> effect via the
-    /// <see cref="ICommandScope.CardEffects"/> store. If none is
+    /// <see cref="ICommandScope.EffectStore"/> (BuildDirect). If none is
     /// registered, the card isn't castable — Apply bails. (Authoring
     /// validation belongs upstream of dispatch.)</item>
     /// <item>Move the card to limbo (zone = 0) — it leaves the hand
@@ -52,7 +52,7 @@ namespace VerticalSlice.Sample
             // Build the cast effect from the card's attached OnCast factory.
             // If the card has no OnCast registered, it's not castable — silent
             // no-op for now. Real authoring would validate upstream.
-            var effect = scope.CardEffects.Build(card, new OnCast(Caster, Target));
+            var effect = scope.EffectStore.BuildDirect(card, new OnCast(Caster, Target));
             if (effect == null) return;
 
             // Card leaves hand → limbo (zone = 0). Stack.OnCastResolved moves

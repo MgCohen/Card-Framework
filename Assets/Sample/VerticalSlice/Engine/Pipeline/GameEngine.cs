@@ -1,39 +1,38 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using VerticalSlice.Engine.Commands;
 
 namespace VerticalSlice.Engine.Pipeline
 {
     /// <summary>
-    /// Composition root + main loop. Two collections plus an evaluate step:
+    /// Composition root + orchestrator. Owns four primitives:
     ///
     /// <list type="bullet">
-    /// <item><b>Pipeline</b> (<c>Queue&lt;Command&gt;</c>) — strict FIFO.
-    /// External commands land here: player input via
-    /// <see cref="CommandService.Execute"/>, system commands. Drained one
-    /// at a time by the pump.</item>
-    /// <item><b>Stack</b> (<see cref="Stack"/>) — LIFO of effects. <b>The
-    /// stack owns its own policy and resolution mechanics</b>; the engine
-    /// just calls <see cref="Stack.TryResolveOne"/> between pipeline
-    /// commands and asks "take over if you want." Default = HS-style
-    /// auto-resolve. Games swap in subclasses for MTG-style priority
-    /// gates, etc.</item>
-    /// <item><b>SBAs</b> — state-based actions that yield commands.
-    /// Emissions run inline inside <see cref="Evaluate"/> so cleanup
-    /// stays atomic with the triggering work.</item>
+    /// <item><b>Pipeline</b> — FIFO of external arrivals. Player input /
+    /// system events enter via <see cref="Enqueue"/>.</item>
+    /// <item><b>Stack</b> (<see cref="Stack"/>) — LIFO of effects awaiting
+    /// resolution. Owns its own policy + resolution via
+    /// <see cref="Stack.ResolveNextAsync"/>; engine just awaits.</item>
+    /// <item><b>EffectStore</b> (<see cref="EffectStore"/>) — single
+    /// registry for hook subscriptions (command-typed) and direct
+    /// triggers (entity-keyed). <c>CommandService</c> reads hook subs
+    /// from it during dispatch; <c>FireDirect</c> reads direct factories
+    /// from it; <c>PlayCard</c>-style commands look up OnCast factories
+    /// from it.</item>
+    /// <item><b>SBAs</b> — state-based actions. Run inline inside
+    /// <see cref="EvaluateAsync"/>.</item>
     /// </list>
     ///
-    /// The pump loop is simple: take one pipeline command, run it inline,
-    /// evaluate. Evaluate itself loops: SBAs apply, then ask the stack
-    /// to resolve one. When evaluate stabilizes, return to the pump; when
-    /// the pipeline drains and the stack is at rest, the engine idles.
+    /// <para>Pump loop: dequeue a command, run it, evaluate (SBAs +
+    /// stack), repeat until both pipeline and stack rest. Every step is
+    /// awaitable.</para>
     ///
-    /// External code only enters via <see cref="CommandService.Execute"/>
-    /// or <see cref="Stack.Push"/> — no <c>Effects.Run</c> equivalent.
-    /// Effects only run by being popped from the stack (or by being
-    /// inline-run via <c>scope.Run</c> / <c>IHookScope.Run</c> from
-    /// within a resolving frame).
+    /// <para><b>Two surfaces, not one.</b> External callers use
+    /// <see cref="Enqueue"/>; code inside the engine (effects, hooks, the
+    /// pump itself) calls <see cref="CommandService.Execute"/>. The
+    /// pipeline is for arrivals; <c>Execute</c> is for execution.</para>
     /// </summary>
     public sealed class GameEngine
     {
@@ -41,13 +40,11 @@ namespace VerticalSlice.Engine.Pipeline
         public CommandService Commands { get; }
         public EffectService Effects { get; }
         public RequestsService Requests { get; }
-        public CardEffectStore CardEffects { get; }
+        public EffectStore EffectStore { get; }
 
         /// <summary>
-        /// The effect stack. Games may swap this for a subclass at
-        /// bootstrap to change policy / resolution semantics
-        /// (e.g. MTG-style priority gating). Replace before any pump
-        /// activity.
+        /// The effect stack. Games may swap this at bootstrap to change
+        /// policy / resolution semantics.
         /// </summary>
         public Stack Stack { get; set; }
 
@@ -55,124 +52,80 @@ namespace VerticalSlice.Engine.Pipeline
         private readonly List<ISBA> _sbas = new();
         private bool _pumping;
 
-        /// <summary>True while a pump frame is active. Re-entrant pushes
-        /// (from inside Apply / Effect.Run / hooks) skip the pump kick;
-        /// the outer loop picks up the new work.</summary>
         public bool IsPumping => _pumping;
 
         public GameEngine()
         {
             World = new World();
-            CardEffects = new CardEffectStore();
+            EffectStore = new EffectStore();
             Commands = new CommandService(World);
-            Effects = new EffectService(World, Commands, CardEffects);
+            Effects = new EffectService(World, Commands);
             Requests = new RequestsService(World, Effects);
             Stack = new Stack(this);
             Commands.BindEffects(Effects);
-            Effects.BindRequests(Requests);
+            Commands.BindStore(EffectStore);
             Commands.BindEngine(this);
+            Effects.BindStore(EffectStore);
+            Effects.BindRequests(Requests);
             Effects.BindEngine(this);
         }
 
         public void RegisterSBA(ISBA sba) => _sbas.Add(sba);
 
-        // --- Pump entry points -----------------------------------------------
+        // --- External entry --------------------------------------------------
 
-        /// <summary>
-        /// Pipeline enqueue + pump kick. Called by
-        /// <see cref="CommandService.Execute"/> when invoked from outside
-        /// any active pump frame.
-        /// </summary>
-        internal void EnqueuePipeline(Command cmd)
+        public void Enqueue(Command command)
         {
-            _pipeline.Enqueue(cmd);
+            _pipeline.Enqueue(command);
             Kick();
         }
 
-        /// <summary>
-        /// Start the pump loop if not already running. Idempotent — a
-        /// re-entrant call (already pumping) returns immediately; the
-        /// active loop will pick up whatever was just enqueued / pushed.
-        /// </summary>
         internal void Kick()
         {
             if (_pumping) return;
-            RunPump(null);
+            var task = RunPumpAsync();
+            if (task.IsCompleted) task.GetAwaiter().GetResult();
         }
 
-        /// <summary>
-        /// Run a body inside a pump frame. If the engine is already
-        /// pumping, just executes <paramref name="body"/> inline (re-entrant
-        /// scope.Execute / Run will route correctly because IsPumping is
-        /// already true). Otherwise opens a fresh frame: runs the body,
-        /// then drains pipeline + evaluates until the world is at rest.
-        /// Used by <see cref="EffectService.RunResolution"/> so a request
-        /// response's body executes as one cohesive resolution.
-        /// </summary>
-        internal void EnterPumpFrame(Action body)
-        {
-            if (_pumping) { body(); return; }
-            RunPump(body);
-        }
+        // --- Pump ------------------------------------------------------------
 
-        private void RunPump(Action? initialBody)
+        private async Task RunPumpAsync()
         {
             _pumping = true;
             try
             {
-                initialBody?.Invoke();
-                Evaluate();
+                await EvaluateAsync();
                 while (_pipeline.Count > 0)
                 {
                     var cmd = _pipeline.Dequeue();
-                    Commands.RunInline(cmd);
-                    Evaluate();
+                    Commands.Execute(cmd);
+                    await EvaluateAsync();
                 }
             }
             finally { _pumping = false; }
         }
 
-        // --- Evaluate --------------------------------------------------------
-
-        /// <summary>
-        /// The world-stabilization step. Run after every pipeline command
-        /// and at the start of every fresh pump frame. Loops:
-        /// <list type="number">
-        /// <item>Every registered SBA evaluates; each yielded command runs
-        /// inline (sibling top-level wire block — death cleanup, etc.).</item>
-        /// <item>Ask the stack: take over if you want. The stack decides
-        /// policy + resolution internally (<see cref="Stack.TryResolveOne"/>).
-        /// </item>
-        /// </list>
-        /// Re-loops until a pass produces no progress. SBA cascades + stack
-        /// chains converge in one Evaluate call.
-        /// </summary>
-        internal void Evaluate()
+        private async Task EvaluateAsync()
         {
             while (true)
             {
                 bool progress = false;
 
-                // 1. SBAs — cleanup commands run inline (atomic with the
-                //    triggering work; not interleaved with player input).
                 if (_sbas.Count > 0)
                 {
                     var scope = Effects.NewScope();
                     foreach (var sba in _sbas)
                     {
-                        // Materialize so the SBA sees a stable snapshot
-                        // before we start running commands that mutate state.
                         var emissions = new List<Command>(sba.Evaluate(scope));
                         foreach (var cmd in emissions)
                         {
-                            Commands.RunInline(cmd);
+                            Commands.Execute(cmd);
                             progress = true;
                         }
                     }
                 }
 
-                // 2. Stack — engine just asks; stack owns policy + execution.
-                if (Stack.TryResolveOne()) progress = true;
+                if (await Stack.ResolveNextAsync()) progress = true;
 
                 if (!progress) break;
             }

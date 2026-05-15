@@ -33,9 +33,14 @@ namespace VerticalSlice.Sample
         public override void Run(IEffectScope scope)
             => scope.Run(new Backlash(Trigger.Target, Trigger.Source!));
 
-        public static void Register(EffectService effects)
-            => effects.Register<DealDamage>(
-                HookPhase.After, HookPriority.Reaction,
+        public static void Register(EffectStore store)
+            => store.Subscribe<DealDamage>(
+                new HookConfig
+                {
+                    Phase = HookPhase.After,
+                    Priority = HookPriority.Reaction,
+                    Source = nameof(BacklashRule),
+                },
                 cmd => new BacklashRule(cmd));
     }
 }

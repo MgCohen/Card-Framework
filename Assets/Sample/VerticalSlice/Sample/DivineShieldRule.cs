@@ -30,9 +30,14 @@ namespace VerticalSlice.Sample
             scope.Run(new ShieldBreak(Trigger.Target));
         }
 
-        public static void Register(EffectService effects)
-            => effects.Register<DealDamage>(
-                HookPhase.Before, HookPriority.Replacement,
+        public static void Register(EffectStore store)
+            => store.Subscribe<DealDamage>(
+                new HookConfig
+                {
+                    Phase = HookPhase.Before,
+                    Priority = HookPriority.Replacement,
+                    Source = nameof(DivineShieldRule),
+                },
                 cmd => new DivineShieldRule(cmd));
     }
 }

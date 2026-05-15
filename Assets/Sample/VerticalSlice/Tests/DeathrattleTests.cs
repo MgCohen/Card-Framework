@@ -29,7 +29,7 @@ namespace VerticalSlice.Tests
                  Entity targetP2, Entity allyP2) BuildBoard()
         {
             var eng = new GameEngine();
-            DeathrattleBridge.Register(eng.Commands);
+            DeathrattleBridge.Register(eng.EffectStore);
 
             var p1 = eng.World.Create(); p1.MarkAsPlayer("P1");
             p1.SetHealth(30); p1.SetMaxHealth(30);
@@ -63,10 +63,10 @@ namespace VerticalSlice.Tests
         public void Deathrattle_DamageAllEnemies_FiresOnGraveyardMove()
         {
             var b = BuildBoard();
-            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
 
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));
 
             // Enemy hero + every enemy minion on the battlefield take 2:
             Assert.That(b.p2.Health(),       Is.EqualTo(28));
@@ -85,10 +85,10 @@ namespace VerticalSlice.Tests
             // for — attaching a totally different effect to a different card
             // requires no new C# subclass, no new bridge, no rule changes.
             var b = BuildBoard();
-            b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.allyP1,
                 t => new HealAllAllies(t));
 
-            b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.allyP1, b.graveyard));
 
             // CasterP1 (friendly minion on battlefield) heals 3 — already at max.
             Assert.That(b.casterP1.Health(), Is.EqualTo(30));
@@ -106,10 +106,10 @@ namespace VerticalSlice.Tests
         {
             var b = BuildBoard();
             b.casterP1.SetHealth(20);   // hurt
-            b.eng.CardEffects.Set<Deathrattle>(b.allyP1,
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.allyP1,
                 t => new HealAllAllies(t));
 
-            b.eng.Commands.Execute(new MoveCard(b.allyP1, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.allyP1, b.graveyard));
 
             Assert.That(b.casterP1.Health(), Is.EqualTo(23));   // 20 + 3
         }
@@ -121,7 +121,7 @@ namespace VerticalSlice.Tests
             // for this card. No retaliation, no heal, no effect.
             var b = BuildBoard();
 
-            b.eng.Commands.Execute(new MoveCard(b.targetP2, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.targetP2, b.graveyard));
 
             Assert.That(b.casterP1.Health(), Is.EqualTo(30));
             Assert.That(b.allyP1.Health(),   Is.EqualTo(10));
@@ -132,11 +132,11 @@ namespace VerticalSlice.Tests
         public void Deathrattle_DoesNotFire_OnNonGraveyardMove()
         {
             var b = BuildBoard();
-            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
             var hand = b.eng.World.Create(); hand.MarkAsZone("Hand");
 
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, hand));
+            b.eng.Enqueue(new MoveCard(b.casterP1, hand));
 
             Assert.That(b.p2.Health(),       Is.EqualTo(30));
             Assert.That(b.targetP2.Health(), Is.EqualTo(30));
@@ -147,18 +147,19 @@ namespace VerticalSlice.Tests
         public void Deathrattle_NestedBlock_AppearsInLog()
         {
             // Wire shape on a damage-all-enemies deathrattle:
-            //   Command(MoveCard) → Effect(DamageAllEnemies)
-            //     → Command(DealDamage)... × N
-            // No "DeathrattleBridge" wire block — the bridge is a plain bus
-            // subscription, not an Effect. Per the design we chose to keep
-            // the wire clean of plumbing. Three DealDamage children: enemy
-            // hero + two enemy minions.
+            //   Command(MoveCard) → Effect(DeathrattleBridge)
+            //     → Effect(DamageAllEnemies)
+            //       → Command(DealDamage) × N
+            // DeathrattleBridge is now a normal Effect<MoveCard> hook (After/
+            // Reaction), so it opens its own block on the wire — one extra
+            // level of nesting between the trigger and the per-card effect.
+            // Three DealDamage children: enemy hero + two enemy minions.
             var b = BuildBoard();
-            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
 
             int checkpoint = b.eng.World.Log.Count;
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));
 
             var blockNames = b.eng.World.Log.Events.Skip(checkpoint)
                               .OfType<BlockStartEvent>()
@@ -166,7 +167,7 @@ namespace VerticalSlice.Tests
                               .ToList();
             Assert.That(blockNames, Is.EqualTo(new[]
             {
-                "MoveCard", "DamageAllEnemies", "DealDamage", "DealDamage", "DealDamage",
+                "MoveCard", "DeathrattleBridge", "DamageAllEnemies", "DealDamage", "DealDamage", "DealDamage",
             }));
         }
 
@@ -176,12 +177,12 @@ namespace VerticalSlice.Tests
             // Deathrattle's damage goes through DealDamage like any other
             // damage. Hooks attached to DealDamage (Shield) fire normally.
             var b = BuildBoard();
-            DivineShieldRule.Register(b.eng.Effects);
-            b.eng.CardEffects.Set<Deathrattle>(b.casterP1,
+            DivineShieldRule.Register(b.eng.EffectStore);
+            b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
             b.targetP2.SetDivineShield(true);
 
-            b.eng.Commands.Execute(new MoveCard(b.casterP1, b.graveyard));
+            b.eng.Enqueue(new MoveCard(b.casterP1, b.graveyard));
 
             // Target absorbed; hero + other minion still took 2.
             Assert.That(b.targetP2.Health(),       Is.EqualTo(30));

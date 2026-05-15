@@ -23,9 +23,14 @@ namespace VerticalSlice.Sample
         public override void Run(IEffectScope scope)
             => Trigger.Amount = Math.Max(0, Trigger.Amount - Trigger.Target.Armor());
 
-        public static void Register(EffectService effects)
-            => effects.Register<DealDamage>(
-                HookPhase.Before, HookPriority.PreEffect,
+        public static void Register(EffectStore store)
+            => store.Subscribe<DealDamage>(
+                new HookConfig
+                {
+                    Phase = HookPhase.Before,
+                    Priority = HookPriority.PreEffect,
+                    Source = nameof(ArmorRule),
+                },
                 cmd => new ArmorRule(cmd));
     }
 }

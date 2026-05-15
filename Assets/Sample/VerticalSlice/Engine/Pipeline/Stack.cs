@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Threading.Tasks;
 using VerticalSlice.Engine.Effects;
 using VerticalSlice.Engine.Entities;
 using SysStack = System.Collections.Generic.Stack<VerticalSlice.Engine.Pipeline.StackFrame>;
@@ -12,26 +13,26 @@ namespace VerticalSlice.Engine.Pipeline
     /// scheduled reactions from After-phase hooks. Commands never touch
     /// the stack; only effects live here.
     ///
-    /// The stack owns its own policy + resolution. The engine doesn't
-    /// know when or how the stack resolves — it just calls
-    /// <see cref="TryResolveOne"/> between pipeline commands and asks
-    /// "take over if you want." Default class (this one) ships HS-style:
-    /// any non-empty stack auto-resolves, popping one frame at a time
-    /// through <see cref="Resolve"/>. Games swap in a subclass to change
-    /// behaviour — override <see cref="ShouldResolve"/> to gate (MTG's
-    /// "both players passed priority"), override <see cref="Resolve"/> to
-    /// customize what happens on a pop.
+    /// <para><b>The stack owns its own policy + resolution.</b> The engine
+    /// only knows two things about us: "do you have work?" (via the gate
+    /// check inside <see cref="ResolveNextAsync"/>) and "let me know when
+    /// you're done" (the returned Task). The engine never pops, never
+    /// inspects frames, never decides when we resolve. We do.</para>
     ///
-    /// For async resolution (animation pauses, network round-trips, etc.),
-    /// subclass <see cref="AsyncStack"/> instead — it wires up the "gate
-    /// while async work is in flight + kick the engine when done"
-    /// lifecycle so subclasses only implement <c>ResolveAsync</c>. Note
-    /// that for "wait for player input" the right tool is
+    /// <para>Default class ships HS-style: any non-empty stack auto-resolves,
+    /// popping one frame at a time. Games swap in a subclass to change
+    /// behaviour — override <see cref="ShouldResolve"/> to gate (MTG's
+    /// "both players passed priority"), override <see cref="ResolveAsync"/>
+    /// to customize what happens on a pop. For animations / network /
+    /// other real async, <see cref="ResolveAsync"/> can await — the engine
+    /// pump awaits us back, no flag-juggling needed.</para>
+    ///
+    /// <para>For "wait for player input" the right tool is
     /// <see cref="Effects.IEffectScope.OpenRequest"/>, not async — the
     /// player response arrives as a pipeline command and resumes the
-    /// pump naturally.
+    /// pump naturally.</para>
     ///
-    /// Replace via <c>engine.Stack = new MyStack(engine);</c> at bootstrap.
+    /// <para>Replace via <c>engine.Stack = new MyStack(engine);</c> at bootstrap.</para>
     /// </summary>
     public class Stack
     {
@@ -47,10 +48,12 @@ namespace VerticalSlice.Engine.Pipeline
         public StackFrame Peek() => _frames.Peek();
 
         /// <summary>
-        /// Add an effect to the top of the stack. Kicks the engine pump —
-        /// if this push came from outside any active pump frame, the pump
-        /// starts and the resolve loop will call <see cref="TryResolveOne"/>
-        /// after its first SBA pass.
+        /// Add an effect to the top of the stack. Kicks the engine — if
+        /// pushed from inside an active pump cycle (a hook firing during
+        /// Apply, a sub-effect inside a resolving frame) Kick is a no-op
+        /// because the pump is already running. If pushed from outside
+        /// (e.g. a test pushing a frame directly), Kick starts the pump
+        /// so the frame actually resolves.
         /// </summary>
         public void Push(StackFrame frame)
         {
@@ -79,19 +82,23 @@ namespace VerticalSlice.Engine.Pipeline
         /// <summary>
         /// Resolve a popped frame. Default: run the effect inline through
         /// the engine's effect service, then fire <see cref="OnCastResolved"/>
-        /// if the frame carries a source card. Override to weave in extra
-        /// wire emissions, post-resolve checks, etc.
+        /// if the frame carries a source card. Synchronous — returns a
+        /// completed Task. Override to await real async work (animations,
+        /// network, etc.). The engine pump awaits this Task before moving
+        /// on, so no flag-juggling is needed: the stack reports busy by
+        /// simply not completing the Task yet.
         /// </summary>
-        protected virtual void Resolve(StackFrame frame)
+        protected virtual Task ResolveAsync(StackFrame frame)
         {
             RunEffect(frame.Effect, frame.ParentBlockId);
             if (frame.SourceCard != null)
                 OnCastResolved?.Invoke(frame.SourceCard);
+            return Task.CompletedTask;
         }
 
         /// <summary>
         /// Run an effect through the engine's effect service. Available
-        /// to subclasses overriding <see cref="Resolve"/> from another
+        /// to subclasses overriding <see cref="ResolveAsync"/> from another
         /// assembly — engine internals stay internal; this is the
         /// controlled path.
         /// </summary>
@@ -101,17 +108,21 @@ namespace VerticalSlice.Engine.Pipeline
         // --- Engine orchestration -------------------------------------------
 
         /// <summary>
-        /// Engine calls this between pipeline commands. The stack decides
-        /// (via <see cref="ShouldResolve"/>) whether to pop, and how (via
-        /// <see cref="Resolve"/>) to handle the popped frame. Returns
-        /// true if work happened — caller (engine Evaluate loop) uses
-        /// that to decide whether to re-evaluate or move on.
+        /// Engine asks the stack to resolve one frame, if it wants to.
+        /// We check our own policy (<see cref="ShouldResolve"/>), pop, and
+        /// await <see cref="ResolveAsync"/>. Returns a Task that completes
+        /// when the resolution is done; the Task's result tells the engine
+        /// whether progress was made (true = a frame resolved). Engine
+        /// uses that to decide whether to keep evaluating.
+        ///
+        /// <para>If we have no work right now, the returned Task completes
+        /// immediately with false — engine moves on.</para>
         /// </summary>
-        internal bool TryResolveOne()
+        internal async Task<bool> ResolveNextAsync()
         {
             if (!ShouldResolve()) return false;
             var frame = _frames.Pop();
-            Resolve(frame);
+            await ResolveAsync(frame);
             return true;
         }
     }

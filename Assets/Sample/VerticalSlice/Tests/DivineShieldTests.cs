@@ -13,7 +13,7 @@ namespace VerticalSlice.Tests
         public void Shield_Prevents_FullDamage_AndBreaks()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Effects);
+            DivineShieldRule.Register(eng.EffectStore);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -44,7 +44,7 @@ namespace VerticalSlice.Tests
         public void NoShield_DamageApplies()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Effects);
+            DivineShieldRule.Register(eng.EffectStore);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();
@@ -59,7 +59,7 @@ namespace VerticalSlice.Tests
         public void SecondShot_AfterShieldBroke_AppliesDamage()
         {
             var eng = new GameEngine();
-            DivineShieldRule.Register(eng.Effects);
+            DivineShieldRule.Register(eng.EffectStore);
 
             var caster = eng.World.Create();
             var target = eng.World.Create();

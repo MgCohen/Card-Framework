@@ -40,7 +40,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             target.SetHealth(30);
 
-            eng.Commands.Execute(new DealDamage(null, target, 6));
+            eng.Enqueue(new DealDamage(null, target, 6));
 
             Assert.That(target.Health(), Is.EqualTo(24));
         }
@@ -53,7 +53,7 @@ namespace VerticalSlice.Tests
             // path works. (The "no Execute" property is enforced at compile
             // time; this test covers the positive case.)
             var eng = new GameEngine();
-            BacklashRule.Register(eng.Effects);
+            BacklashRule.Register(eng.EffectStore);
 
             var caster = eng.World.Create(); caster.SetHealth(30); caster.SetMaxHealth(30);
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
