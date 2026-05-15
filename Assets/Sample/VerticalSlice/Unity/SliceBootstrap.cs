@@ -71,6 +71,7 @@ namespace VerticalSlice.UnityScene
             ArmorRule.Register(_engine.Effects);
             BacklashRule.Register(_engine.Effects);
             DeathrattleBridge.Register(_engine.Commands);
+            DeathSBA.Register(_engine);   // SBA: any 0-HP minion on a battlefield → graveyard
 
             // --- Heroes (player + health stats) -----------------------------
             _jaina = _engine.World.Create();
@@ -114,6 +115,25 @@ namespace VerticalSlice.UnityScene
             _jainaHealingTouch = MakeSpell("Healing Touch", cost: 3, owner: _jaina,   zone: _jainaHand);
             _garroshFireball     = MakeSpell("Fireball",      cost: 4, owner: _garrosh, zone: _garroshHand);
             _garroshHealingTouch = MakeSpell("Healing Touch", cost: 3, owner: _garrosh, zone: _garroshHand);
+
+            // Attach OnCast factories — what each spell card does when its
+            // PlayCard frame resolves off the stack. Each player gets their
+            // own card instance, so each instance carries its own factory.
+            _engine.CardEffects.Set<OnCast>(_jainaFireball,       cast => new Fireball(cast.Caster, cast.Target));
+            _engine.CardEffects.Set<OnCast>(_jainaHealingTouch,   cast => new HealingTouch(cast.Caster, cast.Target));
+            _engine.CardEffects.Set<OnCast>(_garroshFireball,     cast => new Fireball(cast.Caster, cast.Target));
+            _engine.CardEffects.Set<OnCast>(_garroshHealingTouch, cast => new HealingTouch(cast.Caster, cast.Target));
+
+            // Cast cleanup — the stack fires OnCastResolved when a frame
+            // with a SourceCard resolves. The pump is mid-Evaluate when
+            // this fires, so IsPumping=true → Commands.Execute → RunInline →
+            // wire shows a top-level MoveCard sibling of the effect's block.
+            _engine.Stack.OnCastResolved = card =>
+            {
+                var grave = _engine.World.All().FirstOrDefault(
+                    z => z.IsGraveyard() && z.OwnerId() == card.OwnerId());
+                if (grave != null) _engine.Commands.Execute(new MoveCard(card, grave));
+            };
 
             _mirror = new MirrorWorld();
             _scrub = new ScrubController(_mirror, _engine.World.Log.Events);
@@ -167,23 +187,16 @@ namespace VerticalSlice.UnityScene
             return s;
         }
 
-        // Move the spell card to its owner's graveyard, then run the effect.
-        // Matches HS spell-cast flow: pay (skipped), card → graveyard, effect resolves.
-        private void CastFireball(Entity caster, Entity spellCard, IEntity? target)
+        // Player drops a card onto a target. We don't run the effect here —
+        // we dispatch a PlayCard command. PlayCard.Apply moves the card to
+        // limbo and pushes the OnCast-resolved effect onto the engine stack;
+        // the engine's pump pops it next, the effect resolves, and
+        // OnCastResolved (set in Setup) moves the card to graveyard.
+        // Single click → one pipeline command → full cascade through stack.
+        private void Cast(Entity caster, Entity spellCard, IEntity? target)
         {
             if (target == null) return;
-            var graveyard = caster == _jaina ? _jainaGraveyard! : _garroshGraveyard!;
-            _engine.Commands.Execute(new MoveCard(spellCard, graveyard));
-            _engine.Effects.Run(new Fireball(caster, target));
-            AfterCommandIssued();
-        }
-
-        private void CastHealingTouch(Entity caster, Entity spellCard, IEntity? target)
-        {
-            if (target == null) return;
-            var graveyard = caster == _jaina ? _jainaGraveyard! : _garroshGraveyard!;
-            _engine.Commands.Execute(new MoveCard(spellCard, graveyard));
-            _engine.Effects.Run(new HealingTouch(caster, target));
+            _engine.Commands.Execute(new PlayCard(spellCard, caster, target));
             AfterCommandIssued();
         }
 
@@ -207,7 +220,7 @@ namespace VerticalSlice.UnityScene
 
             // Jaina's actions.
             if (_jaina != null && _jainaFireball != null && _jainaHealingTouch != null
-                && _garrosh != null && _argentSquire != null && _spiteImp != null && _yeti != null)
+                && _garrosh != null && _argentSquire != null && _spiteImp != null)
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("Jaina casts:", GUILayout.Width(90));
@@ -215,23 +228,15 @@ namespace VerticalSlice.UnityScene
                 {
                     // Garrosh has 5 armor → Fireball does 1 net dmg (demos ArmorRule).
                     if (GUILayout.Button("Fireball → Garrosh", GUILayout.Width(160)))
-                        CastFireball(_jaina, _jainaFireball, _garrosh);
+                        Cast(_jaina, _jainaFireball, _garrosh);
                     // Argent Squire has DS → fully absorbed (demos DivineShieldRule).
                     if (GUILayout.Button("Fireball → Argent Squire", GUILayout.Width(190)))
-                        CastFireball(_jaina, _jainaFireball, _argentSquire);
+                        Cast(_jaina, _jainaFireball, _argentSquire);
                 }
                 if (_jainaHealingTouch.ZoneId() == _jainaHand?.Id)
                 {
                     if (GUILayout.Button("Healing Touch → Spite Imp", GUILayout.Width(200)))
-                        CastHealingTouch(_jaina, _jainaHealingTouch, _spiteImp);
-                }
-                // Tactician sourced from Spite Imp → picking damage triggers
-                // Backlash (Yeti deals 1 back to Spite Imp). Demos BacklashRule
-                // without needing an attack action.
-                if (GUILayout.Button("Tactician → Yeti  (Spite Imp)", GUILayout.Width(220)))
-                {
-                    _engine.Effects.Run(new Tactician(_spiteImp, _yeti));
-                    AfterCommandIssued();
+                        Cast(_jaina, _jainaHealingTouch, _spiteImp);
                 }
                 GUILayout.EndHorizontal();
             }
@@ -245,16 +250,16 @@ namespace VerticalSlice.UnityScene
                 if (_garroshFireball.ZoneId() == _garroshHand?.Id)
                 {
                     if (GUILayout.Button("Fireball → Jaina", GUILayout.Width(140)))
-                        CastFireball(_garrosh, _garroshFireball, _jaina);
+                        Cast(_garrosh, _garroshFireball, _jaina);
                     if (GUILayout.Button("Fireball → Abomination", GUILayout.Width(180)))
-                        CastFireball(_garrosh, _garroshFireball, _abomination);
+                        Cast(_garrosh, _garroshFireball, _abomination);
                     if (GUILayout.Button("Fireball → Spite Imp", GUILayout.Width(170)))
-                        CastFireball(_garrosh, _garroshFireball, _spiteImp);
+                        Cast(_garrosh, _garroshFireball, _spiteImp);
                 }
                 if (_garroshHealingTouch.ZoneId() == _garroshHand?.Id)
                 {
                     if (GUILayout.Button("Healing Touch → Yeti", GUILayout.Width(170)))
-                        CastHealingTouch(_garrosh, _garroshHealingTouch, _yeti);
+                        Cast(_garrosh, _garroshHealingTouch, _yeti);
                 }
                 GUILayout.EndHorizontal();
             }
@@ -285,18 +290,11 @@ namespace VerticalSlice.UnityScene
                 GUILayout.EndVertical();
             }
 
-            // --- Move-to-graveyard (deathrattle demo) -----------------------
-            // Only deathrattle-bearing minions have a graveyard button — the
-            // demo value is the trigger fire, not the move itself.
-            GUILayout.Label("Send a deathrattle-bearing minion to the graveyard to fire its on-death effect:");
-            GUILayout.BeginHorizontal();
-            if (_abomination != null && _jainaGraveyard != null
-                && GUILayout.Button("Abomination → Graveyard  (DR: damage all enemies)", GUILayout.Width(360)))
-                { _engine.Commands.Execute(new MoveCard(_abomination, _jainaGraveyard)); AfterCommandIssued(); }
-            if (_tombTender != null && _jainaGraveyard != null
-                && GUILayout.Button("Tomb Tender → Graveyard  (DR: heal all allies)", GUILayout.Width(330)))
-                { _engine.Commands.Execute(new MoveCard(_tombTender, _jainaGraveyard)); AfterCommandIssued(); }
-            GUILayout.EndHorizontal();
+            // Deaths now flow through DeathSBA — minions hit 0 HP and
+            // move to their owner's graveyard automatically after the
+            // top-level cast resolves. Cast Garrosh's Fireball at
+            // Abomination (6 dmg, 4 HP) to see the cascade live.
+            GUILayout.Label("Deaths happen via damage now — DeathSBA moves 0-HP minions to the graveyard, and the DeathrattleBridge fires attached on-death effects in the same drain pass.");
 
             // --- Scrub slider -----------------------------------------------
             GUILayout.Space(8);

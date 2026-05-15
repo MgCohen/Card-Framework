@@ -25,7 +25,7 @@ namespace VerticalSlice.Tests
             target.SetHealth(30);
 
             IEntity? read = null;
-            eng.Effects.Run(new InspectEffect(target, e => read = e));
+            eng.Stack.Push(new StackFrame(new InspectEffect(target, e => read = e)));
 
             Assert.That(read, Is.Not.Null);
             Assert.That(read!.Get(Tags.Health), Is.EqualTo(30));
@@ -59,7 +59,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             // Backlash effect ran via scope.Run — caster took 1 retaliation damage.
             Assert.That(caster.Health(), Is.EqualTo(29));

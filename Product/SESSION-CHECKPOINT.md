@@ -11,6 +11,87 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**Slice main-loop reshape — pipeline + effect stack split, SBAs, cast flow through commands (2026-05-15).** Multi-conversation design pass on `claude/entity-based-architecture-pMNhU` rewrote the slice's dispatch core around the user's mental model: "pipeline = FIFO commands; stack = LIFO effects; engine just orchestrates timing." Branch is **uncommitted** at session end pending an in-editor test run — files inventory below.
+
+The architectural moves:
+
+- **Two distinct collections, not one.** `Queue<Command>` pipeline + `Stack<StackFrame>` effect stack — separate primitives with their own semantics. The old single `Queue<Action>` from the earlier drain refactor is gone. Commands never touch the stack; effects never queue in the pipeline.
+- **External entry is commands only.** No external `Effects.Run` anymore. Player input → `engine.Commands.Execute(cmd)`. Effects only enter the engine by being pushed onto the stack from inside a command's Apply (or via After-phase hook `Schedule`). The engine pops + resolves from the stack — there's no other path to running an effect.
+- **`PlayCard` command + `OnCast` trigger payload.** Spell cards register an `OnCast` factory in `CardEffectStore` (same machinery as `Deathrattle`). `PlayCard.Apply` looks up the factory, builds the effect, moves the card to limbo (`zone=0`), and pushes `StackFrame(effect, sourceCard=card)` onto the stack. After resolve, the stack's `OnCastResolved` hook fires; the slice's bootstrap moves the spell card to its owner's graveyard. Hand → limbo → graveyard, no boilerplate per spell.
+- **Stack owns its own policy + resolution.** `ShouldResolve` (when to pop) and `Resolve` (how to resolve a frame) are `protected virtual` on `Stack`. `OnCastResolved` is a stack-level hook. Engine only calls `Stack.TryResolveOne()` and reports progress — it doesn't know what happened inside. Games swap via `engine.Stack = new MyStack(engine)` at bootstrap.
+- **`AsyncStack` base** added as a sibling for subclasses that need real `Task`-based async (animation pauses, network round-trips, MTG-style priority). Engine API stays sync; async lives entirely inside the subclass via gated `ShouldResolve` + auto-`Kick` on completion. The base seals `Resolve`, calls `ResolveAsync` as fire-and-forget, fires `OnCastResolved` after the Task completes, kicks the engine to resume. Note: "wait for player input" stays a Request-pattern job — open + return + player response arrives as a pipeline command. The P15 sync lock holds for the engine's public API.
+- **State-based actions (`ISBA`)** introduced. Pure functions over `World` yielding commands. Evaluate loop's contract: SBA emissions run inline (atomic cleanup, not interleaved with future player input), then ask Stack to resolve one, loop until stable. `DeathSBA` (slice's first SBA) moves 0-HP minions from battlefield to owner's graveyard. Death cascades, deathrattle chains all converge through this loop.
+- **Reaction split.** `IHookScope` exposes both `Run`/`FireDirect` (inline, Before-phase replacement style — DivineShield zeroing Amount before Apply) and `Schedule`/`ScheduleDirect` (stack, After-phase reaction style — Backlash, Deathrattle). `EffectService.Register<TCommand>(phase, ...)` auto-branches on phase. Reactions become wire-level siblings of the triggering command, with `parentBlockId` threaded onto their `BlockStart` for causal traceability (via new `World.OpenBlock(parentOverride)`).
+- **`ICommandScope` extended** with `CardEffects` + `Stack` properties so a command's `Apply` body can look up card-attached effects and push onto the stack — needed for `PlayCard.Apply`. Hooks/effects still use their respective scopes (`IHookScope` / `IEffectScope`).
+- **`CardEffectStore.Build` promoted to public** (was internal) for cross-assembly Sample-side commands to look up attached factories.
+
+**Pump loop (final shape):**
+
+```csharp
+private void RunPump(Action? initialBody) {
+    _pumping = true;
+    try {
+        initialBody?.Invoke();          // EnterPumpFrame body (RunResolution path)
+        Evaluate();                     // first stabilization
+        while (_pipeline.Count > 0) {
+            Commands.RunInline(_pipeline.Dequeue());
+            Evaluate();                 // SBAs + stack between every command
+        }
+    } finally { _pumping = false; }
+}
+
+internal void Evaluate() {
+    while (true) {
+        bool progress = false;
+        // 1. SBAs — emissions run inline (sibling top-level wire blocks)
+        foreach (var sba in _sbas)
+            foreach (var cmd in sba.Evaluate(Effects.NewScope())) {
+                Commands.RunInline(cmd); progress = true;
+            }
+        // 2. Stack — engine just asks; stack owns the rest
+        if (Stack.TryResolveOne()) progress = true;
+        if (!progress) break;
+    }
+}
+```
+
+**Files (uncommitted):** ~30 touched. New: `Engine/Pipeline/{Stack, StackFrame, AsyncStack, ISBA}.cs`, `Sample/{DeathSBA, OnCast, PlayCard}.cs`, `Tests/DeathSBATests.cs`. Modified: `GameEngine`, `CommandService`, `EffectService`, `World`, `ICommandScope`, `IHookScope`, `CardEffectStore`, `DeathrattleBridge`, `Fireball` (doc), `SliceBootstrap` (cast buttons → PlayCard, OnCastResolved wired), 9 test files (mechanical `Effects.Run` → `Stack.Push`).
+
+**Test verification status:** Linear block-name ordering preserved in all existing tests — After-phase reactions appear at the right *linear* position even as stack siblings instead of nested children. No test logic rewritten beyond the mechanical `Effects.Run` → `Stack.Push` migration. Tracing through the major cases (Backlash nesting, Deathrattle nesting, BlockMetadata ParentId, BlockMetadata LIFO close ordering, Tactician request-response flow, DeathSBA cascade) says everything stays green. **Last batch run blocked by Unity editor lock; needs in-editor Test Runner pass before commit to confirm.**
+
+**Architecture diagram:**
+
+```
+external                              external
+Commands.Execute(cmd)                 Stack.Push(StackFrame)
+      ↓                                   ↓
+  Pipeline (FIFO)                     Stack (LIFO)
+      ↓                                   ↓
+RunPump → Dequeue → RunInline       Stack.TryResolveOne
+      ↓                                   ↓
+   Evaluate ← ─────────────────────  Stack.Resolve → RunEffect (inline)
+      ↓                                   ↓
+   SBAs → emit cmds inline           OnCastResolved (post-resolve hook)
+   Stack.TryResolveOne (loop)
+   Until stable
+```
+
+**Next session — pick one:**
+1. **In-editor test run** to confirm green, then commit.
+2. **Concrete MTG-priority Stack subclass** — exercise the `AsyncStack` pattern with real game logic; sketched in docs only right now.
+3. **Draggable cards UI** — replace IMGUI bootstrap with uGUI / UI Toolkit.
+4. **Pile Counter sample** — adapt to slice vocabulary as a separate sample using the same engine.
+5. **`general/ARCHITECTURE.md` rewrite** — promote to "current locked architecture" anchored by ADRs + the slice's now-stable shape.
+
+The 17 architectural locks from the prior session all still hold; this session adds (informally):
+
+- **P18 Pipeline + Stack as separate primitives.** Pipeline = FIFO commands; Stack = LIFO effects. Commands never touch the stack; effects never queue in pipeline. Both reachable externally (Commands.Execute pushes pipeline; Stack.Push pushes stack); only commands are the player-input entry, only stack is the effect-resolution path.
+- **P19 Stack owns policy + resolution.** Engine asks `Stack.TryResolveOne()` and reports progress; `ShouldResolve` / `Resolve` / `OnCastResolved` are stack-level concerns. Games swap stacks by subclassing.
+- **P20 SBA contract.** `ISBA.Evaluate(IEffectScope scope) → IEnumerable<Command>`. Pure read; yields commands; engine runs them inline in the SBA pass of `Evaluate`. SBAs apply en masse per pass; stack pops one per pass; loop until stable.
+- **P21 PlayCard + OnCast pattern.** Casts are `PlayCard` commands (state mutation) that push the card's registered `OnCast` effect onto the stack. The act of playing doesn't execute the effect — the engine does, by popping the stack.
+- **P22 After-phase reactions = stack pushes; Before-phase = inline.** `IHookScope.Schedule`/`ScheduleDirect` for After; `Run`/`FireDirect` for Before. Captured `parentBlockId` threads causality across stack siblings on the wire.
+- **P23 Engine API stays sync; async is opt-in via `AsyncStack`.** P15 sync lock holds for `Commands.Execute` / `Stack.Push` / `IEffectScope` / etc. Async lives only inside Stack subclasses for real Task-based work (animation, network) — not for "wait for player input" (Request pattern still owns that).
+
 **Vertical-slice extended walk — 17 architectural locks via design-pass session (2026-05-14).** Multi-session push on `claude/entity-based-architecture-pMNhU` reshaped the slice well past its original 5-phase AC-1..AC-7 scope. **10 commits** since `ffb9dee` (the original 5-phase batch); **71/71 EditMode tests pass** under Unity 6000.4.0f1 batch mode; six VerticalSlice DLLs compile clean. The spike [`spikes/vertical-slice-plan.md`](spikes/vertical-slice-plan.md) is now `concluded` — appended with [§What actually shipped](spikes/vertical-slice-plan.md#what-actually-shipped) (commit-by-commit walk, files inventory, AC-8/9/10 informal additions) and [§Architectural locks discovered post-plan](spikes/vertical-slice-plan.md#architectural-locks-discovered-post-plan) (P1–P17 + deferred-items list). The 17 locks at a glance:
 
 - **P1 ECS shape — single `Entity` type, no subclasses.** Card/Zone/Player are marker tags.
@@ -122,7 +203,11 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Pile-counter vertical-slice prep — all docs aligned with current main; ready for execution.** All cascade-tail work landed: FSM-arch cascade (ADRs 0009–0012) complete; ADR-0013 (engine-driven pipeline orchestration) landed; ADR-0009 amended (ISBA retires from framework, `OnEnter`/`OnExit`/`IsCompleted` lifecycle, `EndOfMatchState` framework-shipped, transition-loop prevention, action-gate triad, engine auto-emits `EndMatchCommand`); sample §9 + plan + OPEN-ITEMS all aligned with the amended Models; Q1=E (spirit) / Q2=A (reaffirmed) / Q3=A (DropCardIntent shape) all reflected. Plan execution-ready: 6 phases / 6 working days total. **Next thread: execute Phase 0** — Browse `C:\Unity\Scaffold\Assets\Packages\` for required `com.scaffold.*` packages; cross-check against `C:\Unity\Gear-Engine\Packages\manifest.json` for canonical wiring; pull into `Packages/manifest.json`; set up asmdefs + bootstrap GameObject + VContainer scope.
+**Slice main-loop reshape — uncommitted, awaiting in-editor test pass.** This session's work (engine pipeline + effect stack split, SBAs, PlayCard/OnCast, AsyncStack base, reaction split, Stack ownership of policy/resolution) sits as 20 modified + 8 new files on `claude/entity-based-architecture-pMNhU`. Trace through the major test paths says everything stays green, but the Unity Editor was held open across sessions so batch tests couldn't run. **Next thread: open Test Runner → EditMode → Run All**; if green, commit as one logical unit (suggested title in [§commit-ready summary](#commit-ready-summary) below); if red, fix forward.
+
+After commit, the natural next step is concrete exercise of the `AsyncStack` pattern (a working MTG-priority subclass, or animation-pause demo) — currently sketched in docs only. UI work (draggable cards) and the Pile Counter sample remain queued behind that.
+
+The broader Product workflow (FSM-arch ADRs 0009–0013, Pile Counter sample, vertical-slice plan) is unchanged from prior sessions; see prior entries below for that thread.
 
 Cascade summary (for reference):
 
@@ -155,11 +240,33 @@ Closed today: `oq-runtime-as-state-evaluator`, `oq-fsm-game-state`, `oq-session-
 
 ---
 
+## Commit shape
+
+Saved as one logical unit covering the whole reshape:
+
+> **slice: engine pipeline + effect stack split — SBAs, PlayCard/OnCast, AsyncStack base**
+>
+> Reshape the slice's main loop around two distinct collections (pipeline = FIFO commands, stack = LIFO effects) per the design-pass conclusion that the prior single Queue<Action> conflated them.
+>
+> External entry is commands only — no more engine.Effects.Run. PlayCard.Apply moves the card to limbo and pushes its registered OnCast effect onto the stack; engine pops and resolves. Stack.OnCastResolved fires after the cast resolves; bootstrap moves the spell card to its owner's graveyard.
+>
+> Stack owns its own policy + resolution (ShouldResolve / Resolve / OnCastResolved are stack-level concerns). Engine's Evaluate just runs SBAs, then asks Stack.TryResolveOne(), loops until stable. AsyncStack base added for game subclasses that need real Task-based async (animation, network) — engine API stays sync per P15.
+>
+> ISBA introduced; DeathSBA moves 0-HP minions from battlefield to owner's graveyard, handling death cascades through the loop.
+>
+> Reaction split: IHookScope.Schedule / ScheduleDirect push to stack with captured parentBlockId for causal wire threading; Run / FireDirect stay inline for Before-phase replacement. EffectService.Register<T>(phase, ...) auto-branches.
+>
+> Files: ~30 touched. New: Stack, StackFrame, AsyncStack, ISBA in Engine/Pipeline; DeathSBA, OnCast, PlayCard in Sample; DeathSBATests. Modified: GameEngine, CommandService, EffectService, World, ICommandScope, IHookScope, CardEffectStore (Build public), DeathrattleBridge, Fireball (doc), SliceBootstrap, 9 test files (Effects.Run → Stack.Push).
+>
+> All architectural locks P1–P17 hold; this session adds P18–P23 (informally — see SESSION-CHECKPOINT.md).
+
+---
+
 ## 📝 Scratch (ephemerals)
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-*Scratch is empty — domain-modeling thread closed; locked decisions landed in the canonical Models.*
+*Scratch is empty — design pass landed in code; next session opens with the in-editor test run.*
 
 ---
 

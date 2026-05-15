@@ -21,7 +21,12 @@ namespace VerticalSlice.Sample
                 (cmd, scope) =>
                 {
                     if (!cmd.Destination.IsGraveyard()) return;
-                    scope.FireDirect(cmd.Card, new Deathrattle(cmd.Card));
+                    // After-phase reaction → schedules on the engine stack
+                    // so the deathrattle resolves as its own top-level frame
+                    // (sibling of MoveCard), not nested inside MoveCard's
+                    // wire block. ParentId on the deathrattle's BlockStart
+                    // still threads back to MoveCard for causal traceability.
+                    scope.ScheduleDirect(cmd.Card, new Deathrattle(cmd.Card));
                 });
         }
     }

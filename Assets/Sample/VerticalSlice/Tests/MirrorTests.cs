@@ -16,7 +16,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             target.SetHealth(30);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             var mirror = new MirrorWorld();
             var scrub = new ScrubController(mirror, eng.World.Log.Events);

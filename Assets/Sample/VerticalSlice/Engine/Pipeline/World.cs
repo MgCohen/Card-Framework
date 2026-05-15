@@ -37,9 +37,19 @@ namespace VerticalSlice.Engine.Pipeline
 
         // --- Block tracking (called by services on dispatch) ----------------
 
-        internal (long id, long? parentId) OpenBlock()
+        /// <summary>
+        /// Open a block. By default the parent id comes from the current
+        /// open-block stack (so nested dispatches form a tree). An optional
+        /// <paramref name="parentOverride"/> lets stack-scheduled reactions
+        /// thread their causal parent on the wire even though they resolve
+        /// at depth-0 (sibling of the triggering frame) — the triggering
+        /// block id is captured at <c>Schedule</c> time and passed through
+        /// here when the reaction eventually resolves.
+        /// </summary>
+        internal (long id, long? parentId) OpenBlock(long? parentOverride = null)
         {
-            long? parent = _blockStack.Count > 0 ? _blockStack.Peek() : null;
+            long? parent = parentOverride
+                ?? (_blockStack.Count > 0 ? _blockStack.Peek() : null);
             long id = _nextBlockId++;
             _blockStack.Push(id);
             return (id, parent);

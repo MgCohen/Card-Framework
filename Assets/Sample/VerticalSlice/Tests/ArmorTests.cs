@@ -20,7 +20,7 @@ namespace VerticalSlice.Tests
             target.SetHealth(30);
             target.SetArmor(2);
 
-            eng.Effects.Run(new Fireball(caster, target));   // 6 − 2 = 4
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));   // 6 − 2 = 4
 
             Assert.That(target.Health(), Is.EqualTo(26));
             Assert.That(target.Armor(), Is.EqualTo(2));   // permanent
@@ -38,7 +38,7 @@ namespace VerticalSlice.Tests
             target.SetArmor(99);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(target.Health(), Is.EqualTo(30));
             // Amount floored to 0 → DealDamage.Apply early-returns → no Health event.
@@ -57,7 +57,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             target.SetHealth(30);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(target.Health(), Is.EqualTo(24));
         }
@@ -75,7 +75,7 @@ namespace VerticalSlice.Tests
             target.SetArmor(2);
             target.SetDivineShield(true);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(target.Health(), Is.EqualTo(30));
             Assert.That(target.DivineShield(), Is.False);
@@ -95,8 +95,8 @@ namespace VerticalSlice.Tests
             target.SetArmor(2);
             target.SetDivineShield(true);
 
-            eng.Effects.Run(new Fireball(caster, target));   // shield absorbs
-            eng.Effects.Run(new Fireball(caster, target));   // 6 − 2 = 4 dmg
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));   // shield absorbs
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));   // 6 − 2 = 4 dmg
 
             Assert.That(target.Health(), Is.EqualTo(26));
         }

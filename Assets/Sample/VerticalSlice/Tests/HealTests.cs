@@ -17,7 +17,7 @@ namespace VerticalSlice.Tests
             target.SetMaxHealth(30);
             target.SetHealth(20);
 
-            eng.Effects.Run(new HealingTouch(null, target));
+            eng.Stack.Push(new StackFrame(new HealingTouch(null, target)));
 
             Assert.That(target.Health(), Is.EqualTo(28));   // 20 + 8
         }
@@ -30,7 +30,7 @@ namespace VerticalSlice.Tests
             target.SetMaxHealth(30);
             target.SetHealth(28);
 
-            eng.Effects.Run(new HealingTouch(null, target));
+            eng.Stack.Push(new StackFrame(new HealingTouch(null, target)));
 
             Assert.That(target.Health(), Is.EqualTo(30));   // 28+8 capped at 30
         }
@@ -44,7 +44,7 @@ namespace VerticalSlice.Tests
             target.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new HealingTouch(null, target));
+            eng.Stack.Push(new StackFrame(new HealingTouch(null, target)));
 
             var added = eng.World.Log.Events.Skip(checkpoint).ToList();
             // Two blocks open (HealingTouch + Heal) even when Apply is a no-op.
@@ -70,7 +70,7 @@ namespace VerticalSlice.Tests
             target.SetDivineShield(true);
             target.SetArmor(99);
 
-            eng.Effects.Run(new HealingTouch(null, target));
+            eng.Stack.Push(new StackFrame(new HealingTouch(null, target)));
 
             Assert.That(target.Health(), Is.EqualTo(28));   // 20 + 8
             Assert.That(target.DivineShield(), Is.True);

@@ -25,8 +25,8 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(null, t));
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
 
             var ids = eng.World.Log.Events.Skip(checkpoint)
                         .OfType<BlockStartEvent>()
@@ -48,7 +48,7 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
 
             var starts = eng.World.Log.Events.Skip(checkpoint)
                           .OfType<BlockStartEvent>().ToList();
@@ -70,7 +70,7 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
             eng.Commands.Execute(new DealDamage(null, t, 1));
 
             var starts = eng.World.Log.Events.Skip(checkpoint)
@@ -96,7 +96,7 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(caster, t));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, t)));
 
             var fireballStart = eng.World.Log.Events.Skip(checkpoint)
                                  .OfType<BlockStartEvent>()
@@ -122,7 +122,7 @@ namespace VerticalSlice.Tests
 
             int checkpoint = eng.World.Log.Count;
             // Fireball with null source
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
 
             var fireballStart = eng.World.Log.Events.Skip(checkpoint)
                                  .OfType<BlockStartEvent>()
@@ -138,7 +138,7 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
 
             var added = eng.World.Log.Events.Skip(checkpoint).ToList();
             var starts = added.OfType<BlockStartEvent>().ToList();
@@ -160,7 +160,7 @@ namespace VerticalSlice.Tests
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(null, t));
+            eng.Stack.Push(new StackFrame(new Fireball(null, t)));
 
             var ends = eng.World.Log.Events.Skip(checkpoint)
                          .OfType<BlockEndEvent>().ToList();
@@ -174,7 +174,7 @@ namespace VerticalSlice.Tests
 
             int checkpoint = eng.World.Log.Count;
             Assert.Throws<InvalidOperationException>(() =>
-                eng.Effects.Run(new ThrowingEffect()));
+                eng.Stack.Push(new StackFrame(new ThrowingEffect())));
 
             var ends = eng.World.Log.Events.Skip(checkpoint)
                          .OfType<BlockEndEvent>().ToList();

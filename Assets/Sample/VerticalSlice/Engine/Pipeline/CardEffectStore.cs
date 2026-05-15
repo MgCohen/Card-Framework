@@ -38,11 +38,17 @@ namespace VerticalSlice.Engine.Pipeline
         /// Build and return the effect attached to <paramref name="card"/>
         /// for trigger <typeparamref name="TTrigger"/>, bound to
         /// <paramref name="trigger"/>. Returns null if no such effect.
-        /// Engine code (via <c>IEffectScope.FireDirect</c>) runs the
-        /// returned effect through the scope so it gets the standard
-        /// block-open / Validate / Run / block-close pipeline.
+        /// Used by:
+        /// <list type="bullet">
+        /// <item>Engine bridges (via <c>IEffectScope.FireDirect</c> /
+        /// <c>IHookScope.ScheduleDirect</c>) — fire triggered effects
+        /// attached to a card on death / move / etc.</item>
+        /// <item>Game-side commands (e.g. <c>PlayCard.Apply</c>) that
+        /// look up the card's <c>OnCast</c> factory and push the result
+        /// onto the engine stack.</item>
+        /// </list>
         /// </summary>
-        internal Effect? Build<TTrigger>(IEntity card, TTrigger trigger)
+        public Effect? Build<TTrigger>(IEntity card, TTrigger trigger)
             where TTrigger : class
         {
             if (_factories.TryGetValue((card.Id, typeof(TTrigger)), out var raw)

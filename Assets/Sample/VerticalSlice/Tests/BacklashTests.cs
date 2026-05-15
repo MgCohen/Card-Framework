@@ -21,7 +21,7 @@ namespace VerticalSlice.Tests
             target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(target.Health(), Is.EqualTo(24));   // 6 from Fireball
             Assert.That(caster.Health(), Is.EqualTo(29));   // 1 backlash
@@ -40,7 +40,7 @@ namespace VerticalSlice.Tests
             caster.SetBacklash(true);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             var blockNames = eng.World.Log.Events.Skip(checkpoint)
                                 .OfType<BlockStartEvent>()
@@ -72,7 +72,7 @@ namespace VerticalSlice.Tests
             // caster.Backlash stays false.
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(caster.Health(), Is.EqualTo(30));   // untouched
             var hasBacklashBlock = eng.World.Log.Events.Skip(checkpoint)
@@ -94,7 +94,7 @@ namespace VerticalSlice.Tests
             // target.Backlash stays false → retaliation's source has no Backlash tag.
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             var triggers = eng.World.Log.Events.Skip(checkpoint)
                 .OfType<BlockStartEvent>().Where(b => b.Name == "Backlash").ToList();
@@ -115,7 +115,7 @@ namespace VerticalSlice.Tests
             caster.SetBacklash(true);
             target.SetDivineShield(true);
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             Assert.That(target.Health(), Is.EqualTo(30));
             Assert.That(target.DivineShield(), Is.False);

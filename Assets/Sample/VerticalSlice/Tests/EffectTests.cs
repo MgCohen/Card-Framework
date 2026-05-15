@@ -17,7 +17,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create(); target.SetHealth(30);
             int checkpoint = eng.World.Log.Count;
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             var blockStarts = eng.World.Log.Events.Skip(checkpoint)
                                           .OfType<BlockStartEvent>().ToList();
@@ -34,7 +34,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             int checkpoint = eng.World.Log.Count;
 
-            eng.Effects.Run(new Fireball(caster, target));
+            eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
 
             var fireballStart = eng.World.Log.Events.Skip(checkpoint)
                                                .OfType<BlockStartEvent>()

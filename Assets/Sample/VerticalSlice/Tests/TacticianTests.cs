@@ -23,7 +23,7 @@ namespace VerticalSlice.Tests
             var caster = eng.World.Create();
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
 
             Assert.That(eng.Requests.Open.Count, Is.EqualTo(1));
             var req = eng.Requests.Open.Single().Value;
@@ -41,7 +41,7 @@ namespace VerticalSlice.Tests
             var caster = eng.World.Create();
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 0);
@@ -58,7 +58,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             target.SetMaxHealth(30); target.SetHealth(20);
 
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 1);
@@ -75,7 +75,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create();
             target.SetMaxHealth(30); target.SetHealth(30);
 
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
             var reqId = eng.Requests.Open.Single().Key;
 
             eng.Requests.Respond(reqId, picked: 2);   // cancel
@@ -92,7 +92,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
             var reqId = eng.Requests.Open.Single().Key;
             eng.Requests.Respond(reqId, picked: 0);
 
@@ -134,7 +134,7 @@ namespace VerticalSlice.Tests
             var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
-            eng.Effects.Run(new Tactician(caster, target));
+            eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
 
             var pick0 = eng.World.Log.Events.Skip(checkpoint)
                           .OfType<PickOptionEvent>().First();
