@@ -15,8 +15,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             caster.SetHealth(30); caster.SetMaxHealth(30);
             target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
@@ -33,8 +33,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             caster.SetHealth(30); caster.SetMaxHealth(30);
             target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
@@ -65,8 +65,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             caster.SetHealth(30); caster.SetMaxHealth(30);
             target.SetHealth(30); target.SetMaxHealth(30);
             // caster.Backlash stays false.
@@ -86,8 +86,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             caster.SetHealth(30); caster.SetMaxHealth(30);
             target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
@@ -108,8 +108,8 @@ namespace VerticalSlice.Tests
             DivineShieldRule.Register(eng.EffectStore);
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             caster.SetHealth(30); caster.SetMaxHealth(30);
             target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);

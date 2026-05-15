@@ -12,8 +12,8 @@ namespace VerticalSlice.Tests
         public void Mirror_ReplaysToHead_MatchesPrimary()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
 
             eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
@@ -29,7 +29,7 @@ namespace VerticalSlice.Tests
         public void Mirror_ReverseApply_RestoresPriorValue()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
             eng.Enqueue(new DealDamage(null, target, 6));   // 30 → 24
             eng.Enqueue(new DealDamage(null, target, 4));   // 24 → 20
@@ -63,7 +63,7 @@ namespace VerticalSlice.Tests
         public void Mirror_ReverseToZero_RemovesEntity()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
             eng.Enqueue(new DealDamage(null, target, 6));
 
@@ -80,7 +80,7 @@ namespace VerticalSlice.Tests
         public void Mirror_RoundTrip_ForwardBackForward_MatchesEachTime()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
             eng.Enqueue(new DealDamage(null, target, 6));   // 24
 

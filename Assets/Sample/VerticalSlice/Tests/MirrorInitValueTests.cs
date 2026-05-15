@@ -18,7 +18,7 @@ namespace VerticalSlice.Tests
         public void Mirror_RewindPastFirstWrite_RemovesKeyEntirely()
         {
             var eng = new GameEngine();
-            var e = eng.World.Create();
+            var e = eng.EntityStore.Create();
             e.SetHealth(30);   // first write — emits TagSet
 
             var mirror = new MirrorWorld();
@@ -42,7 +42,7 @@ namespace VerticalSlice.Tests
             // different. With nullable references this would matter; with int it
             // matters because some code reads .Has(key) to check existence.
             var eng = new GameEngine();
-            var e = eng.World.Create();
+            var e = eng.EntityStore.Create();
             e.SetHealth(0);    // explicitly set to default(int) — emits TagSet
 
             var mirror = new MirrorWorld();
@@ -63,7 +63,7 @@ namespace VerticalSlice.Tests
             // First write 30 (TagSet), then 25 (TagChange), then 10 (TagChange).
             // Rewind one step at a time; check intermediate values restore.
             var eng = new GameEngine();
-            var e = eng.World.Create();
+            var e = eng.EntityStore.Create();
             e.SetHealth(30);
             e.SetHealth(25);
             e.SetHealth(10);

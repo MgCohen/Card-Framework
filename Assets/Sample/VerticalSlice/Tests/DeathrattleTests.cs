@@ -29,30 +29,31 @@ namespace VerticalSlice.Tests
                  Entity targetP2, Entity allyP2) BuildBoard()
         {
             var eng = new GameEngine();
+            Tags.RegisterIndices(eng.EntityStore);
             DeathrattleBridge.Register(eng.EffectStore);
 
-            var p1 = eng.World.Create(); p1.MarkAsPlayer("P1");
+            var p1 = eng.EntityStore.Create(); p1.MarkAsPlayer("P1");
             p1.SetHealth(30); p1.SetMaxHealth(30);
 
-            var p2 = eng.World.Create(); p2.MarkAsPlayer("P2");
+            var p2 = eng.EntityStore.Create(); p2.MarkAsPlayer("P2");
             p2.SetHealth(30); p2.SetMaxHealth(30);
 
-            var bf = eng.World.Create(); bf.MarkAsBattlefield("Battlefield");
-            var grave = eng.World.Create(); grave.MarkAsGraveyard();
+            var bf = eng.EntityStore.Create(); bf.MarkAsBattlefield("Battlefield");
+            var grave = eng.EntityStore.Create(); grave.MarkAsGraveyard();
 
-            var caster = eng.World.Create();
+            var caster = eng.EntityStore.Create();
             caster.MarkAsMinion("CasterP1");
             caster.SetHealth(30); caster.SetMaxHealth(30); caster.SetOwner(p1); caster.SetZone(bf);
 
-            var allyP1 = eng.World.Create();
+            var allyP1 = eng.EntityStore.Create();
             allyP1.MarkAsMinion("AllyP1");
             allyP1.SetHealth(10); allyP1.SetMaxHealth(10); allyP1.SetOwner(p1); allyP1.SetZone(bf);
 
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.MarkAsMinion("TargetP2");
             target.SetHealth(30); target.SetMaxHealth(30); target.SetOwner(p2); target.SetZone(bf);
 
-            var allyP2 = eng.World.Create();
+            var allyP2 = eng.EntityStore.Create();
             allyP2.MarkAsMinion("AllyP2");
             allyP2.SetHealth(10); allyP2.SetMaxHealth(10); allyP2.SetOwner(p2); allyP2.SetZone(bf);
 
@@ -134,7 +135,7 @@ namespace VerticalSlice.Tests
             var b = BuildBoard();
             b.eng.EffectStore.SetDirect<Deathrattle>(b.casterP1,
                 t => new DamageAllEnemies(t));
-            var hand = b.eng.World.Create(); hand.MarkAsZone("Hand");
+            var hand = b.eng.EntityStore.Create(); hand.MarkAsZone("Hand");
 
             b.eng.Enqueue(new MoveCard(b.casterP1, hand));
 

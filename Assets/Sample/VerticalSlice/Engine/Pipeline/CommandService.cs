@@ -38,12 +38,14 @@ namespace VerticalSlice.Engine.Pipeline
     public sealed class CommandService
     {
         private readonly World _world;
+        private EntityStore? _entities;
         private EffectService? _effects;
         private GameEngine? _engine;
         private EffectStore? _store;
 
         public CommandService(World world) { _world = world; }
 
+        internal void BindEntities(EntityStore entities) => _entities = entities;
         internal void BindEffects(EffectService effects) => _effects = effects;
         internal void BindEngine(GameEngine engine) => _engine = engine;
         internal void BindStore(EffectStore store) => _store = store;
@@ -64,7 +66,7 @@ namespace VerticalSlice.Engine.Pipeline
             var outcome = BlockOutcome.Completed;
             try
             {
-                var cmdScope = new CommandScope(_world, _store!, _engine!.Stack);
+                var cmdScope = new CommandScope(_entities!, _store!, _engine!.Stack);
                 Dispatch(command, HookPhase.Before, drainEach: true);
                 command.Apply(cmdScope);
                 Dispatch(command, HookPhase.After, drainEach: false);
@@ -113,21 +115,23 @@ namespace VerticalSlice.Engine.Pipeline
 
         private sealed class CommandScope : ICommandScope
         {
-            private readonly World _world;
+            private readonly EntityStore _entities;
             public EffectStore EffectStore { get; }
             public Stack Stack { get; }
 
-            public CommandScope(World w, EffectStore store, Stack stack)
+            public CommandScope(EntityStore entities, EffectStore store, Stack stack)
             {
-                _world = w;
+                _entities = entities;
                 EffectStore = store;
                 Stack = stack;
             }
 
-            public Entity? Resolve(IEntity entity) => _world.Get(entity.Id);
-            public Entity? Get(int id) => _world.Get(id);
-            public IEnumerable<Entity> All() => _world.All();
-            public IEnumerable<Entity> Where(TagKey<bool> marker) => _world.Where(marker);
+            public Entity? Resolve(IEntity entity) => _entities.Get(entity.Id);
+            public Entity? Get(int id) => _entities.Get(id);
+
+            public EntityQuery With(TagKey<bool> marker) => _entities.With(marker);
+            public EntityQuery Where<T>(TagKey<T> key, T value) where T : notnull
+                => _entities.Where(key, value);
         }
     }
 }

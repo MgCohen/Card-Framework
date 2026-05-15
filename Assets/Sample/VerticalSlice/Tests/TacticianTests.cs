@@ -20,8 +20,8 @@ namespace VerticalSlice.Tests
         public void Cast_OpensRequest_WithThreeOptions()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
 
@@ -38,8 +38,8 @@ namespace VerticalSlice.Tests
         public void PickDamageOption_DealsDamage_AndClosesRequest()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
             var reqId = eng.Requests.Open.Single().Key;
@@ -54,8 +54,8 @@ namespace VerticalSlice.Tests
         public void PickHealOption_Heals_AndClosesRequest()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30); target.SetHealth(20);
 
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
@@ -71,8 +71,8 @@ namespace VerticalSlice.Tests
         public void PickCancelOption_NoMutation_AndClosesRequest()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30); target.SetHealth(30);
 
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
@@ -88,8 +88,8 @@ namespace VerticalSlice.Tests
         public void RequestWireShape_BlockWithOptionEvents_FollowedByResponseAndCommand()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));
@@ -130,8 +130,8 @@ namespace VerticalSlice.Tests
             // Wire option events should carry the right entity refs and value —
             // no labels, just data.
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create(); target.SetHealth(30); target.SetMaxHealth(30);
 
             int checkpoint = eng.World.Log.Count;
             eng.Stack.Push(new StackFrame(new Tactician(caster, target)));

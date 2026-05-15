@@ -67,6 +67,8 @@ namespace VerticalSlice.UnityScene
         {
             _engine = new GameEngine();
 
+            Tags.RegisterIndices(_engine.EntityStore);
+
             DivineShieldRule.Register(_engine.EffectStore);
             ArmorRule.Register(_engine.EffectStore);
             BacklashRule.Register(_engine.EffectStore);
@@ -74,11 +76,11 @@ namespace VerticalSlice.UnityScene
             DeathSBA.Register(_engine);   // SBA: any 0-HP minion on a battlefield → graveyard
 
             // --- Heroes (player + health stats) -----------------------------
-            _jaina = _engine.World.Create();
+            _jaina = _engine.EntityStore.Create();
             _jaina.MarkAsPlayer("Jaina");
             _jaina.SetHealth(30); _jaina.SetMaxHealth(30); _jaina.SetArmor(0);
 
-            _garrosh = _engine.World.Create();
+            _garrosh = _engine.EntityStore.Create();
             _garrosh.MarkAsPlayer("Garrosh");
             // Warrior class: 30 HP + 5 starting armor. Demos ArmorRule
             // intrinsically — Fireball at Garrosh hits 5 armor first.
@@ -131,8 +133,10 @@ namespace VerticalSlice.UnityScene
             // block that just closed.
             _engine.Stack.OnCastResolved = card =>
             {
-                var grave = _engine.World.All().FirstOrDefault(
-                    z => z.IsGraveyard() && z.OwnerId() == card.OwnerId());
+                var grave = _engine.EntityStore
+                    .With(Tags.IsGraveyard)
+                    .And(Tags.Owner, card.OwnerId())
+                    .FirstOrDefault();
                 if (grave != null) _engine.Commands.Execute(new MoveCard(card, grave));
             };
 
@@ -148,7 +152,7 @@ namespace VerticalSlice.UnityScene
 
         private Entity MakeZone(string name, Entity owner)
         {
-            var z = _engine.World.Create();
+            var z = _engine.EntityStore.Create();
             z.MarkAsZone(name);
             z.SetOwner(owner);
             return z;
@@ -156,7 +160,7 @@ namespace VerticalSlice.UnityScene
 
         private Entity MakeBattlefield(string name, Entity owner)
         {
-            var z = _engine.World.Create();
+            var z = _engine.EntityStore.Create();
             z.MarkAsBattlefield(name);
             z.SetOwner(owner);
             return z;
@@ -164,7 +168,7 @@ namespace VerticalSlice.UnityScene
 
         private Entity MakeGraveyard(string name, Entity owner)
         {
-            var z = _engine.World.Create();
+            var z = _engine.EntityStore.Create();
             z.MarkAsGraveyard(name);
             z.SetOwner(owner);
             return z;
@@ -172,7 +176,7 @@ namespace VerticalSlice.UnityScene
 
         private Entity MakeMinion(string name, int cost, int atk, int hp, Entity owner, Entity zone)
         {
-            var m = _engine.World.Create();
+            var m = _engine.EntityStore.Create();
             m.MarkAsMinion(name);
             m.SetCost(cost); m.SetAttack(atk); m.SetHealth(hp); m.SetMaxHealth(hp);
             m.SetOwner(owner); m.SetZone(zone);
@@ -181,7 +185,7 @@ namespace VerticalSlice.UnityScene
 
         private Entity MakeSpell(string name, int cost, Entity owner, Entity zone)
         {
-            var s = _engine.World.Create();
+            var s = _engine.EntityStore.Create();
             s.MarkAsSpell(name);
             s.SetCost(cost);
             s.SetOwner(owner); s.SetZone(zone);
@@ -318,7 +322,7 @@ namespace VerticalSlice.UnityScene
             GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(360));
             GUILayout.Label("PRIMARY STATE (engine)");
             _primaryScroll = GUILayout.BeginScrollView(_primaryScroll, GUILayout.Height(320));
-            foreach (var kvp in _engine.World.Entities)
+            foreach (var kvp in _engine.EntityStore.EntitiesForDiagnostics)
             {
                 var ent = kvp.Value;
                 var kind = ent.IsMinion() ? "minion"
@@ -390,7 +394,7 @@ namespace VerticalSlice.UnityScene
         {
             if (player == null) return;
             GUILayout.Label($"━━ {player.PlayerName()}  (HP {player.Health()}/{player.MaxHealth()}, Armor {player.Armor()})  #{player.Id}");
-            foreach (var zone in _engine.World.Zones().Where(z => z.OwnerId() == player.Id)
+            foreach (var zone in _engine.EntityStore.Zones().Where(z => z.OwnerId() == player.Id)
                                                       .OrderBy(z => z.IsBattlefield() ? 0
                                                                   : z.IsGraveyard()   ? 2 : 1))
             {
@@ -398,7 +402,7 @@ namespace VerticalSlice.UnityScene
                              : zone.IsGraveyard()   ? "graveyard"
                              : "zone";
                 GUILayout.Label($"  {zone.ZoneName()} [{zoneKind}]  #{zone.Id}");
-                var cardsInZone = _engine.World.CardsIn(zone).ToList();
+                var cardsInZone = _engine.EntityStore.CardsIn(zone).ToList();
                 if (cardsInZone.Count == 0)
                 {
                     GUILayout.Label("      (empty)");

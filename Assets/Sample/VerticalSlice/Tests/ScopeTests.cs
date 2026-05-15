@@ -21,7 +21,7 @@ namespace VerticalSlice.Tests
         public void EffectScope_ResolvesIEntityForReadOnlyAccess()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
 
             IEntity? read = null;
@@ -37,7 +37,7 @@ namespace VerticalSlice.Tests
             // This is the core path: a command's payload carries IEntity, but
             // ICommandScope.Resolve upgrades it to mutable Entity for writes.
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
 
             eng.Enqueue(new DealDamage(null, target, 6));
@@ -55,8 +55,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             BacklashRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create(); caster.SetHealth(30); caster.SetMaxHealth(30);
-            var target = eng.World.Create(); target.SetHealth(30); target.SetMaxHealth(30);
+            var caster = eng.EntityStore.Create(); caster.SetHealth(30); caster.SetMaxHealth(30);
+            var target = eng.EntityStore.Create(); target.SetHealth(30); target.SetMaxHealth(30);
             caster.SetBacklash(true);
 
             eng.Stack.Push(new StackFrame(new Fireball(caster, target)));

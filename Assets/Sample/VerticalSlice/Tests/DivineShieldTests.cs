@@ -15,8 +15,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             DivineShieldRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
             target.SetDivineShield(true);
 
@@ -46,8 +46,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             DivineShieldRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
 
             eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
@@ -61,8 +61,8 @@ namespace VerticalSlice.Tests
             var eng = new GameEngine();
             DivineShieldRule.Register(eng.EffectStore);
 
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             target.SetHealth(30);
             target.SetDivineShield(true);
 

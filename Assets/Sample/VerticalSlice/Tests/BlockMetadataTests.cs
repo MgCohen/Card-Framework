@@ -21,7 +21,7 @@ namespace VerticalSlice.Tests
         public void BlockIds_AreMonotonic_StartingAt1()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -44,7 +44,7 @@ namespace VerticalSlice.Tests
         public void ParentId_NullForTopLevel_PointsAtEnclosingForNested()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -66,7 +66,7 @@ namespace VerticalSlice.Tests
         public void BlockKind_IsEffectForRunEffect_CommandForExecute()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -91,8 +91,8 @@ namespace VerticalSlice.Tests
         public void Source_ExtractedFromRunnableSourceProperty()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var t = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -117,7 +117,7 @@ namespace VerticalSlice.Tests
         public void Source_NullWhenRunnableHasNoSource()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -134,7 +134,7 @@ namespace VerticalSlice.Tests
         public void BlockEnd_IdMatchesBlockStart_LIFO()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;
@@ -156,7 +156,7 @@ namespace VerticalSlice.Tests
         public void BlockOutcome_CompletedOnNormalRun()
         {
             var eng = new GameEngine();
-            var t = eng.World.Create();
+            var t = eng.EntityStore.Create();
             t.SetHealth(30);
 
             int checkpoint = eng.World.Log.Count;

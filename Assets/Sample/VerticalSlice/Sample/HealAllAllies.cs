@@ -26,15 +26,15 @@ namespace VerticalSlice.Sample
         {
             int srcOwner = Trigger.Source.OwnerId();
             var targets = new List<IEntity>();
-            foreach (var e in scope.All())
+
+            foreach (var e in scope.With(Tags.IsMinion).And(Tags.Owner, srcOwner))
             {
-                if (!e.IsMinion()) continue;
-                if (e.OwnerId() != srcOwner) continue;
                 if (e.Id == Trigger.Source.Id) continue;   // skip dying self
                 var zone = scope.Get(e.ZoneId());
                 if (zone != null && zone.IsBattlefield())
                     targets.Add(e);
             }
+
             foreach (var t in targets)
                 scope.Execute(new Heal(Trigger.Source, t, HealAmount));
         }

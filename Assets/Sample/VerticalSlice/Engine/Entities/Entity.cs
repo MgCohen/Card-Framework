@@ -58,8 +58,21 @@ namespace VerticalSlice.Engine.Entities
 
         public override string ToString() => $"Entity#{Id}";
 
-        // Subscribed by World only. Internal so authors can't bypass the wire.
+        // Subscribed by EntityStore only. Internal so authors can't bypass
+        // the wire.
         internal event Action<Entity, TagKey, object>? TagSet;
         internal event Action<Entity, TagKey, object, object>? TagChanged;
+
+        // --- Internal accessors for EntityStore + EntityQuery -------------
+        // The store needs slot-keyed reads (untyped) for index maintenance
+        // and predicate matching without paying generic dispatch per call.
+        // Stays internal so the public surface remains Get<T>(TagKey<T>).
+
+        internal IEnumerable<KeyValuePair<int, object?>> SnapshotSlots() => _slots;
+
+        internal bool TryGetSlot(int slot, out object? value)
+            => _slots.TryGetValue(slot, out value);
+
+        internal bool HasSlot(int slot) => _slots.ContainsKey(slot);
     }
 }

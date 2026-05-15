@@ -29,7 +29,7 @@ namespace VerticalSlice.Sample
             // pattern simple and avoids mutating-while-enumerating quirks
             // even though SBA is read-only against the scope.
             var dying = new List<IEntity>();
-            foreach (var e in scope.Where(Tags.IsMinion))
+            foreach (var e in scope.With(Tags.IsMinion))
             {
                 if (e.Health() > 0) continue;
                 var zone = scope.Get(e.ZoneId());
@@ -47,9 +47,11 @@ namespace VerticalSlice.Sample
 
         private static IEntity? FindGraveyard(IEffectScope scope, int ownerId)
         {
-            foreach (var z in scope.All())
-                if (z.IsGraveyard() && z.OwnerId() == ownerId)
-                    return z;
+            // Owner-indexed query → the owner's graveyard, if any. With
+            // Tags.Owner registered as a value index, this hits the
+            // owner-keyed bucket directly instead of scanning all zones.
+            foreach (var z in scope.With(Tags.IsGraveyard).And(Tags.Owner, ownerId))
+                return z;
             return null;
         }
 

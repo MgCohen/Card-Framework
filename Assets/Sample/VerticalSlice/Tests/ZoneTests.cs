@@ -14,9 +14,10 @@ namespace VerticalSlice.Tests
         public void MoveCard_WritesZoneTagToDestinationId()
         {
             var eng = new GameEngine();
-            var hand = eng.World.Create();          hand.MarkAsZone("Hand");
-            var battlefield = eng.World.Create();   battlefield.MarkAsZone("Battlefield");
-            var card = eng.World.Create();          card.MarkAsCard();
+            Tags.RegisterIndices(eng.EntityStore);
+            var hand = eng.EntityStore.Create();          hand.MarkAsZone("Hand");
+            var battlefield = eng.EntityStore.Create();   battlefield.MarkAsZone("Battlefield");
+            var card = eng.EntityStore.Create();          card.MarkAsCard();
             card.SetZone(hand);
 
             eng.Enqueue(new MoveCard(card, battlefield));
@@ -30,8 +31,9 @@ namespace VerticalSlice.Tests
             // Card has never had a zone tag → first MoveCard emits TagSet,
             // not TagChange. Mirror Unapply will REMOVE the key.
             var eng = new GameEngine();
-            var hand = eng.World.Create(); hand.MarkAsZone("Hand");
-            var card = eng.World.Create(); card.MarkAsCard();
+            Tags.RegisterIndices(eng.EntityStore);
+            var hand = eng.EntityStore.Create(); hand.MarkAsZone("Hand");
+            var card = eng.EntityStore.Create(); card.MarkAsCard();
             // NOTE: card has no Zone tag yet — has never been placed.
 
             int checkpoint = eng.World.Log.Count;
@@ -47,9 +49,10 @@ namespace VerticalSlice.Tests
         public void MoveCard_Subsequent_EmitsTagChange()
         {
             var eng = new GameEngine();
-            var hand = eng.World.Create(); hand.MarkAsZone("Hand");
-            var battlefield = eng.World.Create(); battlefield.MarkAsZone("Battlefield");
-            var card = eng.World.Create(); card.MarkAsCard();
+            Tags.RegisterIndices(eng.EntityStore);
+            var hand = eng.EntityStore.Create(); hand.MarkAsZone("Hand");
+            var battlefield = eng.EntityStore.Create(); battlefield.MarkAsZone("Battlefield");
+            var card = eng.EntityStore.Create(); card.MarkAsCard();
             card.SetZone(hand);   // first placement (TagSet)
 
             int checkpoint = eng.World.Log.Count;
@@ -66,15 +69,16 @@ namespace VerticalSlice.Tests
         public void CardsInZone_ReturnsOnlyCardsTaggedInThatZone()
         {
             var eng = new GameEngine();
-            var hand = eng.World.Create(); hand.MarkAsZone("Hand");
-            var battlefield = eng.World.Create(); battlefield.MarkAsZone("Battlefield");
+            Tags.RegisterIndices(eng.EntityStore);
+            var hand = eng.EntityStore.Create(); hand.MarkAsZone("Hand");
+            var battlefield = eng.EntityStore.Create(); battlefield.MarkAsZone("Battlefield");
 
-            var c1 = eng.World.Create(); c1.MarkAsCard(); c1.SetZone(hand);
-            var c2 = eng.World.Create(); c2.MarkAsCard(); c2.SetZone(hand);
-            var c3 = eng.World.Create(); c3.MarkAsCard(); c3.SetZone(battlefield);
+            var c1 = eng.EntityStore.Create(); c1.MarkAsCard(); c1.SetZone(hand);
+            var c2 = eng.EntityStore.Create(); c2.MarkAsCard(); c2.SetZone(hand);
+            var c3 = eng.EntityStore.Create(); c3.MarkAsCard(); c3.SetZone(battlefield);
 
-            var inHand = eng.World.CardsIn(hand).Select(e => e.Id).OrderBy(i => i).ToList();
-            var onBattlefield = eng.World.CardsIn(battlefield).Select(e => e.Id).ToList();
+            var inHand = eng.EntityStore.CardsIn(hand).Select(e => e.Id).OrderBy(i => i).ToList();
+            var onBattlefield = eng.EntityStore.CardsIn(battlefield).Select(e => e.Id).ToList();
 
             Assert.That(inHand, Is.EqualTo(new[] { c1.Id, c2.Id }));
             Assert.That(onBattlefield, Is.EqualTo(new[] { c3.Id }));
@@ -87,11 +91,12 @@ namespace VerticalSlice.Tests
             // Replay-to-head, scrub back, scrub back, scrub forward — mirror's
             // view of the card's zone must track exactly.
             var eng = new GameEngine();
-            var hand = eng.World.Create(); hand.MarkAsZone("Hand");
-            var battlefield = eng.World.Create(); battlefield.MarkAsZone("Battlefield");
-            var graveyard = eng.World.Create(); graveyard.MarkAsZone("Graveyard");
+            Tags.RegisterIndices(eng.EntityStore);
+            var hand = eng.EntityStore.Create(); hand.MarkAsZone("Hand");
+            var battlefield = eng.EntityStore.Create(); battlefield.MarkAsZone("Battlefield");
+            var graveyard = eng.EntityStore.Create(); graveyard.MarkAsZone("Graveyard");
 
-            var card = eng.World.Create(); card.MarkAsCard();
+            var card = eng.EntityStore.Create(); card.MarkAsCard();
             card.SetZone(hand);
             eng.Enqueue(new MoveCard(card, battlefield));
             eng.Enqueue(new MoveCard(card, graveyard));
@@ -125,11 +130,12 @@ namespace VerticalSlice.Tests
         public void Zones_QueryReturnsOnlyZoneEntities()
         {
             var eng = new GameEngine();
-            var z1 = eng.World.Create(); z1.MarkAsZone("Z1");
-            var z2 = eng.World.Create(); z2.MarkAsZone("Z2");
-            var c  = eng.World.Create(); c.MarkAsCard();   // not a zone
+            Tags.RegisterIndices(eng.EntityStore);
+            var z1 = eng.EntityStore.Create(); z1.MarkAsZone("Z1");
+            var z2 = eng.EntityStore.Create(); z2.MarkAsZone("Z2");
+            var c  = eng.EntityStore.Create(); c.MarkAsCard();   // not a zone
 
-            var zones = eng.World.Zones().Select(e => e.Id).OrderBy(i => i).ToList();
+            var zones = eng.EntityStore.Zones().Select(e => e.Id).OrderBy(i => i).ToList();
             Assert.That(zones, Is.EqualTo(new[] { z1.Id, z2.Id }));
         }
     }

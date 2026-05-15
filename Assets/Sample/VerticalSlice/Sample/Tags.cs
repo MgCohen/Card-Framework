@@ -1,4 +1,5 @@
 #nullable enable
+using VerticalSlice.Engine.Pipeline;
 using VerticalSlice.Engine.Tags;
 
 namespace VerticalSlice.Sample
@@ -53,5 +54,34 @@ namespace VerticalSlice.Sample
         // References (entity id pointers — flat ECS)
         public static readonly TagKey<int>    Zone           = new("zone");      // card → containing zone
         public static readonly TagKey<int>    Owner          = new("owner");     // card → owning player
+
+        /// <summary>
+        /// Register the slice's tag indices on an <see cref="EntityStore"/>.
+        /// Call once at engine setup, before any entities are created (or
+        /// keep in mind that retroactive registration starts the index
+        /// empty — backfill isn't built yet).
+        ///
+        /// <para>Marker indices: kind tags + zone-kind tags. Anything we
+        /// routinely ask "show me all X" about. Plain ability flags
+        /// (DivineShield, Backlash) aren't indexed because we don't query
+        /// them collectively — they're per-entity gates inside hooks.</para>
+        ///
+        /// <para>Value indices: owner + zone — the two reference-tag
+        /// pivots ("entities owned by P1", "entities in zone Z") that
+        /// queries compound against most often.</para>
+        /// </summary>
+        public static void RegisterIndices(EntityStore store)
+        {
+            store.IndexMarker(IsCard);
+            store.IndexMarker(IsMinion);
+            store.IndexMarker(IsSpell);
+            store.IndexMarker(IsZone);
+            store.IndexMarker(IsPlayer);
+            store.IndexMarker(IsBattlefield);
+            store.IndexMarker(IsGraveyard);
+
+            store.IndexBy(Owner);
+            store.IndexBy(Zone);
+        }
     }
 }

@@ -25,8 +25,8 @@ namespace VerticalSlice.Tests
         public void RunEffect_OpensBlockNamedAfterEffect()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create(); target.SetHealth(30);
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create(); target.SetHealth(30);
             int checkpoint = eng.World.Log.Count;
 
             eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
@@ -42,8 +42,8 @@ namespace VerticalSlice.Tests
         public void RunEffect_PayloadCapturesPublicProperties()
         {
             var eng = new GameEngine();
-            var caster = eng.World.Create();
-            var target = eng.World.Create();
+            var caster = eng.EntityStore.Create();
+            var target = eng.EntityStore.Create();
             int checkpoint = eng.World.Log.Count;
 
             eng.Stack.Push(new StackFrame(new Fireball(caster, target)));
@@ -61,7 +61,7 @@ namespace VerticalSlice.Tests
         public void Execute_OpensBlock_AndAppliesMutation()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHealth(30);
+            var target = eng.EntityStore.Create(); target.SetHealth(30);
             int checkpoint = eng.World.Log.Count;
 
             eng.Enqueue(new DealDamage(null, target, 6));
@@ -78,7 +78,7 @@ namespace VerticalSlice.Tests
         public void HookFiresInBeforeAndAfterPhases()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHealth(30);
+            var target = eng.EntityStore.Create(); target.SetHealth(30);
 
             bool beforeFired = false, afterFired = false;
             eng.EffectStore.Subscribe<DealDamage>(
@@ -99,7 +99,7 @@ namespace VerticalSlice.Tests
         public void Hook_BeforeReplacement_RunsBeforeApply()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create(); target.SetHealth(30);
+            var target = eng.EntityStore.Create(); target.SetHealth(30);
 
             // Replacement-band hook zeroes Amount before Apply runs.
             eng.EffectStore.Subscribe<DealDamage>(

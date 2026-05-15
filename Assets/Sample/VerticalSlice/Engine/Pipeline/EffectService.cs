@@ -29,6 +29,7 @@ namespace VerticalSlice.Engine.Pipeline
     {
         private readonly World _world;
         private readonly CommandService _commands;
+        private EntityStore? _entities;
         private EffectStore? _store;
         private RequestsService? _requests;
         private GameEngine? _engine;
@@ -39,6 +40,7 @@ namespace VerticalSlice.Engine.Pipeline
             _commands = commands;
         }
 
+        internal void BindEntities(EntityStore entities) => _entities = entities;
         internal void BindStore(EffectStore store) => _store = store;
         internal void BindRequests(RequestsService requests) => _requests = requests;
         internal void BindEngine(GameEngine engine) => _engine = engine;
@@ -50,7 +52,7 @@ namespace VerticalSlice.Engine.Pipeline
         /// the engine's SBA pass.
         /// </summary>
         internal IEffectScope NewScope()
-            => new EffectScope(_world, _commands, _store!, this, _requests!, _engine!);
+            => new EffectScope(_entities!, _commands, _store!, this, _requests!, _engine!);
 
         /// <summary>
         /// Run a request-resolution body inline. The body's
@@ -113,18 +115,18 @@ namespace VerticalSlice.Engine.Pipeline
 
         private sealed class EffectScope : IEffectScope
         {
-            private readonly World _world;
+            private readonly EntityStore _entities;
             private readonly CommandService _commands;
             private readonly EffectStore _store;
             private readonly EffectService _effects;
             private readonly RequestsService _requests;
             private readonly GameEngine _engine;
 
-            public EffectScope(World w, CommandService c, EffectStore store,
+            public EffectScope(EntityStore entities, CommandService c, EffectStore store,
                                EffectService effects, RequestsService requests,
                                GameEngine engine)
             {
-                _world = w;
+                _entities = entities;
                 _commands = c;
                 _store = store;
                 _effects = effects;
@@ -151,9 +153,11 @@ namespace VerticalSlice.Engine.Pipeline
 
             public void OpenRequest(Request request) => _requests.OpenRequestInternal(request);
 
-            public IEntity? Get(int id) => _world.Get(id);
-            public IEnumerable<IEntity> All() => _world.All();
-            public IEnumerable<IEntity> Where(TagKey<bool> marker) => _world.Where(marker);
+            public IEntity? Get(int id) => _entities.Get(id);
+
+            public EntityQuery With(TagKey<bool> marker) => _entities.With(marker);
+            public EntityQuery Where<T>(TagKey<T> key, T value) where T : notnull
+                => _entities.Where(key, value);
         }
     }
 }

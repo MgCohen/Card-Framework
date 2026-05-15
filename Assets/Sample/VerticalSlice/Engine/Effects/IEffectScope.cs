@@ -1,21 +1,25 @@
 #nullable enable
-using System.Collections.Generic;
 using VerticalSlice.Engine.Commands;
 using VerticalSlice.Engine.Entities;
+using VerticalSlice.Engine.Pipeline;
 using VerticalSlice.Engine.Tags;
 
 namespace VerticalSlice.Engine.Effects
 {
     /// <summary>
     /// What an <see cref="Effect"/> sees inside its <see cref="Effect.Run"/>
-    /// body. Read access to entities, the ability to dispatch primitive
-    /// commands via <see cref="Execute"/>, and the ability to fire a
-    /// direct trigger on a specific entity via <see cref="FireDirect"/>.
+    /// body. Read access to entities via <see cref="Get"/> /
+    /// <see cref="With"/> / <see cref="Where{T}"/>, the ability to dispatch
+    /// primitive commands via <see cref="Execute"/>, and the ability to
+    /// fire a direct trigger on a specific entity via
+    /// <see cref="FireDirect"/>.
     ///
     /// <b>No entity.Set, no Subscribe</b> — the surface is "issue commands,
     /// fire direct triggers, read state for branching." Effects compose
     /// other effects through Execute (commands) or FireDirect (the
-    /// engine's direct-trigger pathway); they don't reach the bus directly.
+    /// engine's direct-trigger pathway); they don't reach the bus
+    /// directly. Query iteration yields <see cref="IEntity"/> — write
+    /// access isn't reachable from inside an effect body.
     /// </summary>
     public interface IEffectScope
     {
@@ -32,7 +36,7 @@ namespace VerticalSlice.Engine.Effects
         /// <summary>
         /// Fire a direct trigger on a specific entity. Engine looks up the
         /// entity's effect for <typeparamref name="TTrigger"/> (registered
-        /// via the card-effect store) and runs it with the supplied
+        /// via <c>EffectStore.SetDirect</c>) and runs it with the supplied
         /// payload. No-op if the entity has no effect for that trigger.
         ///
         /// Used by engine bridges that translate broadcast events into
@@ -61,7 +65,11 @@ namespace VerticalSlice.Engine.Effects
         void OpenRequest(Request request);
 
         IEntity? Get(int entityId);
-        IEnumerable<IEntity> All();
-        IEnumerable<IEntity> Where(TagKey<bool> marker);
+
+        /// <summary>Active-marker query (<c>scope.With(Tags.IsMinion)</c>).</summary>
+        EntityQuery With(TagKey<bool> marker);
+
+        /// <summary>Value-equals query (<c>scope.Where(Tags.Zone, p1Board.Id)</c>).</summary>
+        EntityQuery Where<T>(TagKey<T> key, T value) where T : notnull;
     }
 }

@@ -13,7 +13,7 @@ namespace VerticalSlice.Tests
         public void Heal_BelowMax_AddsAmount()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30);
             target.SetHealth(20);
 
@@ -26,7 +26,7 @@ namespace VerticalSlice.Tests
         public void Heal_ClampsAtMax()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30);
             target.SetHealth(28);
 
@@ -39,7 +39,7 @@ namespace VerticalSlice.Tests
         public void Heal_AtFullHealth_EmitsNoHealthTagEvent()
         {
             var eng = new GameEngine();
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30);
             target.SetHealth(30);
 
@@ -64,7 +64,7 @@ namespace VerticalSlice.Tests
             DivineShieldRule.Register(eng.EffectStore);
             ArmorRule.Register(eng.EffectStore);
 
-            var target = eng.World.Create();
+            var target = eng.EntityStore.Create();
             target.SetMaxHealth(30);
             target.SetHealth(20);
             target.SetDivineShield(true);

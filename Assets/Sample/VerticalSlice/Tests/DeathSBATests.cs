@@ -20,16 +20,17 @@ namespace VerticalSlice.Tests
                  Entity p2Bf, Entity p2Grave) BuildBoard(bool withDeathrattles = false)
         {
             var eng = new GameEngine();
+            Tags.RegisterIndices(eng.EntityStore);
             DeathrattleBridge.Register(eng.EffectStore);
             DeathSBA.Register(eng);
 
-            var p1 = eng.World.Create(); p1.MarkAsPlayer("P1"); p1.SetHealth(30); p1.SetMaxHealth(30);
-            var p2 = eng.World.Create(); p2.MarkAsPlayer("P2"); p2.SetHealth(30); p2.SetMaxHealth(30);
+            var p1 = eng.EntityStore.Create(); p1.MarkAsPlayer("P1"); p1.SetHealth(30); p1.SetMaxHealth(30);
+            var p2 = eng.EntityStore.Create(); p2.MarkAsPlayer("P2"); p2.SetHealth(30); p2.SetMaxHealth(30);
 
-            var p1Bf = eng.World.Create(); p1Bf.MarkAsBattlefield("P1 Battlefield"); p1Bf.SetOwner(p1);
-            var p1Grave = eng.World.Create(); p1Grave.MarkAsGraveyard("P1 Graveyard"); p1Grave.SetOwner(p1);
-            var p2Bf = eng.World.Create(); p2Bf.MarkAsBattlefield("P2 Battlefield"); p2Bf.SetOwner(p2);
-            var p2Grave = eng.World.Create(); p2Grave.MarkAsGraveyard("P2 Graveyard"); p2Grave.SetOwner(p2);
+            var p1Bf = eng.EntityStore.Create(); p1Bf.MarkAsBattlefield("P1 Battlefield"); p1Bf.SetOwner(p1);
+            var p1Grave = eng.EntityStore.Create(); p1Grave.MarkAsGraveyard("P1 Graveyard"); p1Grave.SetOwner(p1);
+            var p2Bf = eng.EntityStore.Create(); p2Bf.MarkAsBattlefield("P2 Battlefield"); p2Bf.SetOwner(p2);
+            var p2Grave = eng.EntityStore.Create(); p2Grave.MarkAsGraveyard("P2 Graveyard"); p2Grave.SetOwner(p2);
 
             return (eng, p1, p2, p1Bf, p1Grave, p2Bf, p2Grave);
         }
@@ -38,7 +39,7 @@ namespace VerticalSlice.Tests
         public void Minion_AtZeroHealth_MovesToOwnerGraveyard_AfterDispatch()
         {
             var b = BuildBoard();
-            var minion = b.eng.World.Create();
+            var minion = b.eng.EntityStore.Create();
             minion.MarkAsMinion("Doomed"); minion.SetOwner(b.p1); minion.SetZone(b.p1Bf);
             minion.SetHealth(2); minion.SetMaxHealth(2);
 
@@ -59,11 +60,11 @@ namespace VerticalSlice.Tests
             // by owner-id match, not by "first graveyard".
             var b = BuildBoard();
 
-            var p1Minion = b.eng.World.Create();
+            var p1Minion = b.eng.EntityStore.Create();
             p1Minion.MarkAsMinion("P1 Doomed"); p1Minion.SetOwner(b.p1); p1Minion.SetZone(b.p1Bf);
             p1Minion.SetHealth(0); p1Minion.SetMaxHealth(5);
 
-            var p2Minion = b.eng.World.Create();
+            var p2Minion = b.eng.EntityStore.Create();
             p2Minion.MarkAsMinion("P2 Doomed"); p2Minion.SetOwner(b.p2); p2Minion.SetZone(b.p2Bf);
             p2Minion.SetHealth(0); p2Minion.SetMaxHealth(5);
 
@@ -71,7 +72,7 @@ namespace VerticalSlice.Tests
             // Use a no-op move on a non-existent target… actually we need any
             // top-level dispatch. Use Fireball with Amount-zero edge: skip,
             // and just dispatch a trivial command instead.
-            var bystander = b.eng.World.Create(); bystander.MarkAsCard();
+            var bystander = b.eng.EntityStore.Create(); bystander.MarkAsCard();
             b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(p1Minion.ZoneId(), Is.EqualTo(b.p1Grave.Id));
@@ -82,12 +83,12 @@ namespace VerticalSlice.Tests
         public void SBA_DoesNotMove_LivingMinions()
         {
             var b = BuildBoard();
-            var alive = b.eng.World.Create();
+            var alive = b.eng.EntityStore.Create();
             alive.MarkAsMinion("Alive"); alive.SetOwner(b.p1); alive.SetZone(b.p1Bf);
             alive.SetHealth(3); alive.SetMaxHealth(3);
 
             // Trigger a drain pass via any top-level dispatch.
-            var bystander = b.eng.World.Create(); bystander.MarkAsCard();
+            var bystander = b.eng.EntityStore.Create(); bystander.MarkAsCard();
             b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(alive.ZoneId(), Is.EqualTo(b.p1Bf.Id),
@@ -101,11 +102,11 @@ namespace VerticalSlice.Tests
             // re-queued — the zone-is-battlefield gate excludes it. (Avoids
             // an infinite drain loop.)
             var b = BuildBoard();
-            var corpse = b.eng.World.Create();
+            var corpse = b.eng.EntityStore.Create();
             corpse.MarkAsMinion("Corpse"); corpse.SetOwner(b.p1); corpse.SetZone(b.p1Grave);
             corpse.SetHealth(0); corpse.SetMaxHealth(5);
 
-            var bystander = b.eng.World.Create(); bystander.MarkAsCard();
+            var bystander = b.eng.EntityStore.Create(); bystander.MarkAsCard();
             b.eng.Enqueue(new MoveCard(bystander, b.p1Bf));
 
             Assert.That(corpse.ZoneId(), Is.EqualTo(b.p1Grave.Id));
@@ -127,18 +128,18 @@ namespace VerticalSlice.Tests
             var b = BuildBoard();
             ArmorRule.Register(b.eng.EffectStore);   // for the armor-absorbs check
 
-            var abomination = b.eng.World.Create();
+            var abomination = b.eng.EntityStore.Create();
             abomination.MarkAsMinion("Abomination");
             abomination.SetOwner(b.p1); abomination.SetZone(b.p1Bf);
             abomination.SetHealth(4); abomination.SetMaxHealth(4); abomination.SetAttack(4);
             b.eng.EffectStore.SetDirect<Deathrattle>(abomination, t => new DamageAllEnemies(t));
 
-            var raptor = b.eng.World.Create();
+            var raptor = b.eng.EntityStore.Create();
             raptor.MarkAsMinion("Raptor");
             raptor.SetOwner(b.p2); raptor.SetZone(b.p2Bf);
             raptor.SetHealth(2); raptor.SetMaxHealth(2); raptor.SetAttack(3);
 
-            var yeti = b.eng.World.Create();
+            var yeti = b.eng.EntityStore.Create();
             yeti.MarkAsMinion("Yeti");
             yeti.SetOwner(b.p2); yeti.SetZone(b.p2Bf);
             yeti.SetHealth(5); yeti.SetMaxHealth(5); yeti.SetAttack(4);
@@ -168,7 +169,7 @@ namespace VerticalSlice.Tests
             // BlockStart events: outer + inner Apply nest, MoveCard from
             // SBA appears at top level AFTER the outer block closes.
             var b = BuildBoard();
-            var minion = b.eng.World.Create();
+            var minion = b.eng.EntityStore.Create();
             minion.MarkAsMinion("Doomed"); minion.SetOwner(b.p1); minion.SetZone(b.p1Bf);
             minion.SetHealth(2); minion.SetMaxHealth(2);
 

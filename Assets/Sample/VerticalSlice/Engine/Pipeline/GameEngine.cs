@@ -37,6 +37,7 @@ namespace VerticalSlice.Engine.Pipeline
     public sealed class GameEngine
     {
         public World World { get; }
+        public EntityStore EntityStore { get; }
         public CommandService Commands { get; }
         public EffectService Effects { get; }
         public RequestsService Requests { get; }
@@ -57,14 +58,17 @@ namespace VerticalSlice.Engine.Pipeline
         public GameEngine()
         {
             World = new World();
+            EntityStore = new EntityStore(World.Log);
             EffectStore = new EffectStore();
             Commands = new CommandService(World);
             Effects = new EffectService(World, Commands);
             Requests = new RequestsService(World, Effects);
             Stack = new Stack(this);
+            Commands.BindEntities(EntityStore);
             Commands.BindEffects(Effects);
             Commands.BindStore(EffectStore);
             Commands.BindEngine(this);
+            Effects.BindEntities(EntityStore);
             Effects.BindStore(EffectStore);
             Effects.BindRequests(Requests);
             Effects.BindEngine(this);
