@@ -105,30 +105,50 @@ namespace VerticalSlice.Engine.Pipeline
             finally { _pumping = false; }
         }
 
+        /// <summary>
+        /// Stabilisation step. MTG-shaped (CR 117.5): drain SBAs to fixpoint,
+        /// then resolve one stack frame, then loop. Triggers (After-phase
+        /// hooks) get added to the stack as part of SBA-emitted commands but
+        /// do <b>not</b> resolve inside the SBA loop — they wait for the
+        /// stack-pop step. After each stack frame resolves, state may have
+        /// changed, so we re-enter the SBA fixpoint before popping again.
+        /// Exits when SBAs are silent and the stack is empty.
+        /// </summary>
         private async Task EvaluateAsync()
         {
             while (true)
             {
-                bool progress = false;
+                // SBA fixpoint — each pass evaluates every registered SBA.
+                // Emissions execute inline (commands and their hooks run
+                // immediately; After-phase hooks may push effects to the
+                // stack, but we do not drain it here). A pass that emits
+                // zero commands terminates the fixpoint.
+                while (RunSBAPass()) { }
 
-                if (_sbas.Count > 0)
-                {
-                    var scope = Effects.NewScope();
-                    foreach (var sba in _sbas)
-                    {
-                        var emissions = new List<Command>(sba.Evaluate(scope));
-                        foreach (var cmd in emissions)
-                        {
-                            Commands.Execute(cmd);
-                            progress = true;
-                        }
-                    }
-                }
-
-                if (await Stack.ResolveNextAsync()) progress = true;
-
-                if (!progress) break;
+                // Stack-pop step — one frame at a time, MTG-style. If the
+                // stack is also empty, we're at rest and the pump can idle.
+                if (!await Stack.ResolveNextAsync()) break;
             }
+        }
+
+        private bool RunSBAPass()
+        {
+            if (_sbas.Count == 0) return false;
+
+            bool emitted = false;
+            var scope = Effects.NewScope();
+            foreach (var sba in _sbas)
+            {
+                // Materialize each SBA's emissions before running them so the
+                // SBA sees a stable snapshot (we mutate state as we go).
+                var emissions = new List<Command>(sba.Evaluate(scope));
+                foreach (var cmd in emissions)
+                {
+                    Commands.Execute(cmd);
+                    emitted = true;
+                }
+            }
+            return emitted;
         }
     }
 }

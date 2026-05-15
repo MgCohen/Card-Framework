@@ -12,21 +12,22 @@ namespace VerticalSlice.Engine.Pipeline
     /// Health ≤ 0 moves to its owner's graveyard"; the SBA scans, finds
     /// the dying minions, and yields the right <c>MoveCard</c> commands.
     ///
-    /// SBAs run AFTER every top-level command/effect tree completes
-    /// (engine drain pass). The engine collects every SBA's emissions,
-    /// dispatches each as a re-entrant <see cref="CommandService.Execute"/>
-    /// (so its own inline subtree — hooks, sub-commands, attached effects —
-    /// runs normally and nests cleanly under the SBA-emitted block on the
-    /// wire), then re-evaluates. Loops until every SBA is silent — death
-    /// cascades, deathrattle chains, win conditions all converge here
-    /// without bespoke orchestration.
+    /// <para><b>MTG-shaped ordering</b> (CR 117.5). The engine's Evaluate
+    /// runs a fixpoint: every registered SBA evaluates, each emission
+    /// dispatches inline through <see cref="CommandService.Execute"/>
+    /// (so its hooks fire and any After-phase reactions push effects onto
+    /// the stack as usual). The fixpoint repeats until a pass emits no
+    /// commands. Only then does the engine resolve one stack frame; the
+    /// SBA fixpoint then re-runs against the new state, and so on. SBAs
+    /// themselves carry no priority — they all just happen, simultaneously
+    /// in spirit, before any stack resolution.</para>
     ///
-    /// Contract: SBAs are read-only against the scope. They MUST NOT call
-    /// <c>scope.Execute</c> / <c>scope.Run</c> / <c>scope.FireDirect</c> /
-    /// <c>scope.OpenRequest</c>. Yield commands; let the engine dispatch
-    /// them. The full <see cref="IEffectScope"/> surface is here for
-    /// convenience (same Get/All/Where the effects see) — treat the
-    /// mutating methods as off-limits.
+    /// <para><b>Contract.</b> SBAs are read-only against the scope. They
+    /// MUST NOT call <c>scope.Execute</c> / <c>scope.Run</c> /
+    /// <c>scope.FireDirect</c> / <c>scope.OpenRequest</c>. Yield commands;
+    /// let the engine dispatch them. The full <see cref="IEffectScope"/>
+    /// surface is here for convenience (same Get/All/Where the effects
+    /// see) — treat the mutating methods as off-limits.</para>
     /// </summary>
     public interface ISBA
     {
