@@ -1,10 +1,13 @@
 ---
 type: spike
-status: draft
+status: concluded
+forward-link: [Product/spikes/entity-store-extraction.md, Product/spikes/tag-identity-typed-hybrid.md]
 tags: [#spike, #tag-bag, #refoundation]
 ---
 
 # Tag-Bag Design — Shaping the Key→Value Pair
+
+> **Status: concluded — superseded by later work.** The Option D recommendation in §4 (per-tag class everywhere) was overtaken by [entity-store-extraction.md](entity-store-extraction.md), which validated **tag-as-typed-key with value-as-identity** (closer to this doc's Option B) as the foundational model — quoting its rationale: passing slot identity around at runtime enables effects-as-data and keeps the wire alphabet untyped. The migration shape lives in [tag-identity-typed-hybrid.md](tag-identity-typed-hybrid.md), which adopts Option B as the default and uses Option D-style typed classes *only* for keywords with payload semantics (Deathrattle, future Poison). The Options A/B/C/D matrix, the SabberStone references, and the modifier-composition walkthrough below remain useful prior art.
 
 > **Status: draft.** One-decision spike for the event-sourced refoundation under discussion. Scope is *only* the C# shape of an entity's `(key → typed value)` pair. The event/envelope mechanics, the `TagChange` payload shape, the merge protocol, and the historical replay surface are siblings and out of scope here; they assume whichever shape this spike settles on.
 
