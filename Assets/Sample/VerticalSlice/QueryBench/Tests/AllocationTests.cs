@@ -36,7 +36,8 @@ namespace VerticalSlice.QueryBench.Tests
 
             var bytesPerQuery = (after - before) / (double)Iterations;
             TestContext.WriteLine($"[LINQ]               {bytesPerQuery:F1} B / query");
-            Assert.That(bytesPerQuery, Is.GreaterThan(0), "LINQ baseline must allocate (sanity check)");
+            // Informational only — Mono's GC.GetAllocatedBytesForCurrentThread()
+            // can read 0 even when allocations occurred, so no assert here.
         }
 
         [Test]
