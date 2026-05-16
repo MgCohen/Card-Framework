@@ -4,7 +4,8 @@
     "references": [
         "VerticalSlice.Engine",
         "VerticalSlice.Mirror",
-        "VerticalSlice.Sample"
+        "VerticalSlice.Sample",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -146,6 +146,17 @@ namespace VerticalSlice.UnityScene
             _sliderTracksHead = true;
             _sliderPos = _engine.World.Log.Count;
             _scrub.GoTo(_sliderPos);
+
+            // Build the Unity-UI play surface alongside the IMGUI debug
+            // surface. SliceUI handles card-click → target → cast; OnGUI
+            // below keeps Reset / scrubber / state panels / log / open
+            // requests / per-player zones for inspection. Tear down any
+            // prior SliceUI (Reset re-enters this method) so we don't
+            // stack canvases.
+            var existing = GetComponent<SliceUI>();
+            if (existing != null) Destroy(existing);
+            var ui = gameObject.AddComponent<SliceUI>();
+            ui.Bind(_engine);
         }
 
         // --- Setup helpers ---------------------------------------------------
@@ -213,9 +224,15 @@ namespace VerticalSlice.UnityScene
         }
 
         // --- GUI -------------------------------------------------------------
+        // IMGUI here is the *debug surface* — Reset / scrubber / open
+        // requests / state panels / event log. The play surface (clickable
+        // cards, hero panels, targeting) lives in SliceUI (Unity uGUI). The
+        // two coexist; SliceUI anchors to the right two-thirds of the
+        // screen and IMGUI renders left-aligned by default.
 
         private void OnGUI()
         {
+            GUILayout.BeginArea(new Rect(8, 8, Screen.width * 0.30f - 16, Screen.height - 16));
             GUILayout.BeginVertical();
 
             // --- Controls ----------------------------------------------------
@@ -223,53 +240,9 @@ namespace VerticalSlice.UnityScene
             if (GUILayout.Button("Reset", GUILayout.Width(80))) Setup();
             GUILayout.EndHorizontal();
 
-            // Jaina's actions.
-            if (_jaina != null && _jainaFireball != null && _jainaHealingTouch != null
-                && _garrosh != null && _argentSquire != null && _spiteImp != null)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Jaina casts:", GUILayout.Width(90));
-                if (_jainaFireball.ZoneId() == _jainaHand?.Id)
-                {
-                    // Garrosh has 5 armor → Fireball does 1 net dmg (demos ArmorRule).
-                    if (GUILayout.Button("Fireball → Garrosh", GUILayout.Width(160)))
-                        Cast(_jaina, _jainaFireball, _garrosh);
-                    // Argent Squire has DS → fully absorbed (demos DivineShieldRule).
-                    if (GUILayout.Button("Fireball → Argent Squire", GUILayout.Width(190)))
-                        Cast(_jaina, _jainaFireball, _argentSquire);
-                }
-                if (_jainaHealingTouch.ZoneId() == _jainaHand?.Id)
-                {
-                    if (GUILayout.Button("Healing Touch → Spite Imp", GUILayout.Width(200)))
-                        Cast(_jaina, _jainaHealingTouch, _spiteImp);
-                }
-                GUILayout.EndHorizontal();
-            }
-
-            // Garrosh's actions.
-            if (_garrosh != null && _garroshFireball != null && _garroshHealingTouch != null
-                && _jaina != null && _abomination != null && _yeti != null && _spiteImp != null)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Garrosh casts:", GUILayout.Width(110));
-                if (_garroshFireball.ZoneId() == _garroshHand?.Id)
-                {
-                    if (GUILayout.Button("Fireball → Jaina", GUILayout.Width(140)))
-                        Cast(_garrosh, _garroshFireball, _jaina);
-                    if (GUILayout.Button("Fireball → Abomination", GUILayout.Width(180)))
-                        Cast(_garrosh, _garroshFireball, _abomination);
-                    if (GUILayout.Button("Fireball → Spite Imp", GUILayout.Width(170)))
-                        Cast(_garrosh, _garroshFireball, _spiteImp);
-                }
-                if (_garroshHealingTouch.ZoneId() == _garroshHand?.Id)
-                {
-                    if (GUILayout.Button("Healing Touch → Yeti", GUILayout.Width(170)))
-                        Cast(_garrosh, _garroshHealingTouch, _yeti);
-                }
-                GUILayout.EndHorizontal();
-            }
-
             // --- Open requests (Choose-One pickers) ------------------------
+            // Kept in IMGUI for now — Request UI in Canvas is on the
+            // backlog. Tactician etc. still respond here when active.
             if (_engine.Requests.Open.Count > 0)
             {
                 GUILayout.BeginVertical(GUI.skin.box);
@@ -294,12 +267,6 @@ namespace VerticalSlice.UnityScene
                 }
                 GUILayout.EndVertical();
             }
-
-            // Deaths now flow through DeathSBA — minions hit 0 HP and
-            // move to their owner's graveyard automatically after the
-            // top-level cast resolves. Cast Garrosh's Fireball at
-            // Abomination (6 dmg, 4 HP) to see the cascade live.
-            GUILayout.Label("Deaths happen via damage now — DeathSBA moves 0-HP minions to the graveyard, and the DeathrattleBridge fires attached on-death effects in the same drain pass.");
 
             // --- Scrub slider -----------------------------------------------
             GUILayout.Space(8);
@@ -388,6 +355,7 @@ namespace VerticalSlice.UnityScene
             GUILayout.EndVertical();
 
             GUILayout.EndVertical();
+            GUILayout.EndArea();
         }
 
         private void RenderPlayerSection(Entity? player)
