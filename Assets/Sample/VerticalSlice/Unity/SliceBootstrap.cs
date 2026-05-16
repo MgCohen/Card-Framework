@@ -155,9 +155,11 @@ namespace VerticalSlice.UnityScene
             // stack canvases.
             var existing = GetComponent<SliceUI>();
             if (existing != null) Destroy(existing);
-            var ui = gameObject.AddComponent<SliceUI>();
-            ui.Bind(_engine);
+            _ui = gameObject.AddComponent<SliceUI>();
+            _ui.Bind(_engine, _mirror, _scrub);
         }
+
+        private SliceUI? _ui;
 
         // --- Setup helpers ---------------------------------------------------
 
@@ -278,17 +280,19 @@ namespace VerticalSlice.UnityScene
             {
                 _sliderPos = newPos;
                 _sliderTracksHead = _sliderPos == _engine.World.Log.Count;
-                _scrub.GoTo(_sliderPos);
+                // Drive both panels: SliceUI rebuilds from mirror at the
+                // new cursor; the IMGUI Mirror panel below also reads the
+                // mirror, so a single GoTo update covers both surfaces.
+                _ui?.SetCursor(_sliderPos);
             }
 
-            // --- Panels -----------------------------------------------------
+            // --- Top row: PRIMARY STATE + EVENT LOG -------------------------
             GUILayout.Space(8);
             GUILayout.BeginHorizontal();
 
-            // Primary
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(360));
+            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(220));
             GUILayout.Label("PRIMARY STATE (engine)");
-            _primaryScroll = GUILayout.BeginScrollView(_primaryScroll, GUILayout.Height(320));
+            _primaryScroll = GUILayout.BeginScrollView(_primaryScroll, GUILayout.Height(280));
             foreach (var kvp in _engine.EntityStore.EntitiesForDiagnostics)
             {
                 var ent = kvp.Value;
@@ -318,10 +322,20 @@ namespace VerticalSlice.UnityScene
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
-            // Mirror
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(300));
+            GUILayout.BeginVertical(GUI.skin.box);
+            GUILayout.Label("EVENT LOG");
+            _eventLogScroll = GUILayout.BeginScrollView(_eventLogScroll, GUILayout.Height(280));
+            RenderEventLog();
+            GUILayout.EndScrollView();
+            GUILayout.EndVertical();
+
+            GUILayout.EndHorizontal();
+
+            // --- Bottom row: MIRROR STATE (full width) ----------------------
+            GUILayout.Space(8);
+            GUILayout.BeginVertical(GUI.skin.box);
             GUILayout.Label($"MIRROR STATE (cursor {_scrub.Cursor})");
-            _mirrorScroll = GUILayout.BeginScrollView(_mirrorScroll, GUILayout.Height(320));
+            _mirrorScroll = GUILayout.BeginScrollView(_mirrorScroll, GUILayout.Height(260));
             foreach (var kvp in _mirror.Entities)
             {
                 var ent = kvp.Value;
@@ -333,64 +347,8 @@ namespace VerticalSlice.UnityScene
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
 
-            // Event log
-            GUILayout.BeginVertical(GUI.skin.box, GUILayout.Width(540));
-            GUILayout.Label("EVENT LOG");
-            _eventLogScroll = GUILayout.BeginScrollView(_eventLogScroll, GUILayout.Height(320));
-            RenderEventLog();
-            GUILayout.EndScrollView();
-            GUILayout.EndVertical();
-
-            GUILayout.EndHorizontal();
-
-            // --- Per-player zones panel -------------------------------------
-            GUILayout.Space(8);
-            GUILayout.BeginVertical(GUI.skin.box);
-            GUILayout.Label("BOARD (per-player zones — Hand / Battlefield / Graveyard)");
-            _zonesScroll = GUILayout.BeginScrollView(_zonesScroll, GUILayout.Height(260));
-            RenderPlayerSection(_jaina);
-            GUILayout.Space(6);
-            RenderPlayerSection(_garrosh);
-            GUILayout.EndScrollView();
-            GUILayout.EndVertical();
-
             GUILayout.EndVertical();
             GUILayout.EndArea();
-        }
-
-        private void RenderPlayerSection(Entity? player)
-        {
-            if (player == null) return;
-            GUILayout.Label($"━━ {player.PlayerName()}  (HP {player.Health()}/{player.MaxHealth()}, Armor {player.Armor()})  #{player.Id}");
-            foreach (var zone in _engine.EntityStore.Zones().Where(z => z.OwnerId() == player.Id)
-                                                      .OrderBy(z => z.IsBattlefield() ? 0
-                                                                  : z.IsGraveyard()   ? 2 : 1))
-            {
-                var zoneKind = zone.IsBattlefield() ? "battlefield"
-                             : zone.IsGraveyard()   ? "graveyard"
-                             : "zone";
-                GUILayout.Label($"  {zone.ZoneName()} [{zoneKind}]  #{zone.Id}");
-                var cardsInZone = _engine.EntityStore.CardsIn(zone).ToList();
-                if (cardsInZone.Count == 0)
-                {
-                    GUILayout.Label("      (empty)");
-                    continue;
-                }
-                foreach (var c in cardsInZone)
-                {
-                    var flags = new System.Text.StringBuilder();
-                    if (c.DivineShield()) flags.Append("  shield");
-                    if (c.Backlash())     flags.Append("  backlash");
-                    if (_engine.EffectStore.HasDirect<Deathrattle>(c)) flags.Append("  deathrattle");
-
-                    string body = c.IsMinion()
-                        ? $"[{c.Cost()}] {c.CardName(),-18} (Minion)  {c.Attack()}/{c.Health()}{flags}"
-                        : c.IsSpell()
-                            ? $"[{c.Cost()}] {c.CardName(),-18} (Spell)"
-                            : $"[{c.Cost()}] {c.CardName(),-18}";
-                    GUILayout.Label($"      #{c.Id} {body}");
-                }
-            }
         }
 
         private static string Stringify(object? v) => v switch
