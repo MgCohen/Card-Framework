@@ -1,0 +1,19 @@
+{
+    "name": "TagAuthoringPrototype.Editor",
+    "rootNamespace": "TagAuthoringPrototype.Editor",
+    "references": [
+        "TagAuthoringPrototype",
+        "VerticalSlice.Engine"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
