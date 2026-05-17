@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b2e5ab062714b94bfc90e58f183f339, type: 3}
+  m_Name: ElementTag
+  m_EditorClassIdentifier: TagAuthoringPrototype::TagAuthoringPrototype.Authoring.StringTag
+  id: element
+  slot: 1004
+  presentation:
+    icon: {fileID: 0}
+    label: Element
+    tooltip: 
+    color: {r: 0.65, g: 0.65, b: 0.65, a: 1}
