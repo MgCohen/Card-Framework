@@ -1,0 +1,17 @@
+{
+    "name": "Spike.TypedPayloads.Unity",
+    "rootNamespace": "TypedPayloads.UnityScene",
+    "references": [
+        "Spike.TypedPayloads.Engine",
+        "Spike.TypedPayloads.Sample"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
