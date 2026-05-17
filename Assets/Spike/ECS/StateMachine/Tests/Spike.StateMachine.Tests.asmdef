@@ -1,0 +1,26 @@
+{
+    "name": "Spike.StateMachine.Tests",
+    "rootNamespace": "StateMachine.Tests",
+    "references": [
+        "Spike.StateMachine.Engine",
+        "Spike.StateMachine.Sample"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

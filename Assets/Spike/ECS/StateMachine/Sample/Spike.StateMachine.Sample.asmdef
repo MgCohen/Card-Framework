@@ -1,0 +1,16 @@
+{
+    "name": "Spike.StateMachine.Sample",
+    "rootNamespace": "StateMachine.Sample",
+    "references": [
+        "Spike.StateMachine.Engine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
