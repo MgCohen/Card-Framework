@@ -40,7 +40,7 @@ namespace VerticalSlice.QueryBench.Stores
         public void Destroy(BenchEntity e)
         {
             if (!_entities.Remove(e.Id)) return;
-            _index.OnEntityDestroyed(e.Id, e.SnapshotSlots());
+            _index.OnEntityDestroyed(e.Id, e.Slots);
         }
 
         public BenchEntity? Get(int id) => _entities.TryGetValue(id, out var e) ? e : null;

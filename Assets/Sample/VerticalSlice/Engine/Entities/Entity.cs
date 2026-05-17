@@ -92,16 +92,11 @@ namespace VerticalSlice.Engine.Entities
         internal event Action<Entity, TagKey, object, object>? TagChanged;
         internal event Action<Entity, TagKey, object>? TagRemoved;
 
-        // --- Internal accessors for EntityStore + EntityQuery -------------
-        // The store needs slot-keyed reads (untyped) for index maintenance
-        // and predicate matching without paying generic dispatch per call.
-        // Stays internal so the public surface remains Get<T>(TagKey<T>).
-
-        internal IEnumerable<KeyValuePair<int, object?>> SnapshotSlots() => _slots;
-
-        internal bool TryGetSlot(int slot, out object? value)
-            => _slots.TryGetValue(slot, out value);
-
-        internal bool HasSlot(int slot) => _slots.ContainsKey(slot);
+        // --- Internal slot bag access for EntityStore + EntityQuery -------
+        // Untyped iteration / lookup the store needs for index maintenance
+        // on destroy and that the query needs for per-predicate matching
+        // without paying generic dispatch per call. Stays internal so the
+        // public surface remains Get<T>(TagKey<T>).
+        internal IReadOnlyDictionary<int, object?> Slots => _slots;
     }
 }

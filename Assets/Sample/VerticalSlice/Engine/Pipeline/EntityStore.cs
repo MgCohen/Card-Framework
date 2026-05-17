@@ -88,7 +88,7 @@ namespace VerticalSlice.Engine.Pipeline
         public void Destroy(Entity entity)
         {
             if (!_entities.Remove(entity.Id)) return;
-            _index.OnEntityDestroyed(entity.Id, entity.SnapshotSlots());
+            _index.OnEntityDestroyed(entity.Id, entity.Slots);
             entity.TagSet     -= OnTagSet;
             entity.TagChanged -= OnTagChanged;
             entity.TagRemoved -= OnTagRemoved;

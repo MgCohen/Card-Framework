@@ -176,10 +176,10 @@ namespace VerticalSlice.Engine.Pipeline
             {
                 if (p.IsMarker)
                 {
-                    if (!e.TryGetSlot(p.Slot, out var raw)) return false;
+                    if (!e.Slots.TryGetValue(p.Slot, out var raw)) return false;
                     return raw is bool b && b;
                 }
-                if (!e.TryGetSlot(p.Slot, out var v)) return false;
+                if (!e.Slots.TryGetValue(p.Slot, out var v)) return false;
                 return Equals(v, p.Expected);
             }
         }

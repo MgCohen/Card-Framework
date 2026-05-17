@@ -39,8 +39,9 @@ namespace VerticalSlice.QueryBench.Model
             }
         }
 
-        // Internal accessor for the store's Destroy path to clean indices.
-        internal IEnumerable<KeyValuePair<int, object?>> SnapshotSlots() => _slots;
+        // Untyped slot bag access — Destroy uses it for index cleanup,
+        // queries use it for per-predicate matching.
+        internal IReadOnlyDictionary<int, object?> Slots => _slots;
 
         // Event-free setter used by IndexedStore_Pure to model the
         // "ideal lower bound" — index maintained without dispatch.
@@ -59,13 +60,6 @@ namespace VerticalSlice.QueryBench.Model
                 _slots[slot] = value;
             }
         }
-
-        // Untyped slot read — used by query predicate checks so we don't
-        // re-pay generic dispatch per predicate.
-        internal bool TryGetSlot(int slot, out object? value)
-            => _slots.TryGetValue(slot, out value);
-
-        internal bool HasSlot(int slot) => _slots.ContainsKey(slot);
 
         internal event Action<BenchEntity, int, object>? TagSet;
         internal event Action<BenchEntity, int, object, object>? TagChanged;
