@@ -1,0 +1,16 @@
+{
+    "name": "Spike.TypedPayloads.Sample",
+    "rootNamespace": "TypedPayloads.Sample",
+    "references": [
+        "Spike.TypedPayloads.Engine"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
