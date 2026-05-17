@@ -11,6 +11,8 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**State-machine design pass — push-based service model (2026-05-17).** Multi-Q design walk on the framework's state-machine layer. Foundation reshape mid-walk: state stops being an entity (the v3 strawman direction) and becomes an immutable typed record per state-kind, owned by a per-role `IStateService` (sibling to `IRequestService`), pushed into the event stream as a custom block type. Walked 5 questions plus 1 foundation reshape; 2 questions foreclosed by the reshape. Locked: **F1** push-based service shape (state not entity; records owned by service; sibling to requests, not merged); **Q3** state and request are sibling services with the same pattern but separate concerns; **Q4** code-only `GameState` records for now (DSL deferred to authoring feature); **Q5** determinism plumbing out-of-scope (own pass; baked into world/services as needed); **Q6** skip `OnEnter`/`OnExit` on replay — hook outputs land as events with undo capability, replay walks history rather than re-firing; **Q7** ship three baseline states (`MatchNotStartedState`, `PlayingState`, `MatchEndedState`); games author more on demand. **Patch cascade pending:** ADR-0009 amendment/supersede (new ADR-0014?); new `features/states/` feature; heavy rewrite of `engine/07-match-state.md`; refresh of engine Models 01 / 03 / 08; per-state VM Models (ADR-0012) repointed to record dispatch; ADR-0010 / ADR-0011 audit for `MatchStateSlice` refs; `state.md` + GLOSSARY + OPEN-ITEMS terminology sweep. Wire-format encoding (block + typed inner event vs integer-encoded payload) flagged as separate downstream pass. **No code or doc edits yet** — locked decisions only.
+
 **Slice main-loop reshape — pipeline + effect stack split, SBAs, cast flow through commands (2026-05-15).** Multi-conversation design pass on `claude/entity-based-architecture-pMNhU` rewrote the slice's dispatch core around the user's mental model: "pipeline = FIFO commands; stack = LIFO effects; engine just orchestrates timing." Branch is **uncommitted** at session end pending an in-editor test run — files inventory below.
 
 The architectural moves:
@@ -219,6 +221,7 @@ Cascade summary (for reference):
 
 Deferred follow-ups (separate PRs, in order):
 
+- **State-machine model cascade** — design pass landed 2026-05-17 (F1 + Q3–Q7 locked). State stops being entity; becomes immutable typed record owned by `IStateService`; sibling to Requests. Cascade: ADR-0009 amendment/supersede (likely new ADR-0014); new `features/states/` feature; heavy rewrite of `engine/07-match-state.md`; refresh of engine Models 01 / 03 / 08; ADR-0012 per-state VM repoint to record dispatch; ADR-0010 / ADR-0011 audit; `state.md` + GLOSSARY + OPEN-ITEMS terminology sweep. Wire-format encoding deferred to its own pass. Queued behind the slice main-loop commit.
 - **`general/ARCHITECTURE.md` rewrite** — current content is research-phase; needs promotion to "current locked architecture" anchored by ADRs 0005–0012 + the 10 settled features. Real authoring lift (~500 lines of pre-cascade content).
 - **`support/samples/pile-counter.md` rewrite** — currently carries a "post-cascade rewrite pending" banner. Sibling task to the PLANS revision below.
 - **PLANS/pile-counter-vertical-slice.md vocabulary refresh** — repoint to landed ADRs (see Active focus above).
