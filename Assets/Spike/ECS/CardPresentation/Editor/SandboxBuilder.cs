@@ -18,9 +18,9 @@ namespace Spike.CardPresentation.Editor
     /// </summary>
     public static class SandboxBuilder
     {
-        private const string PrefabFolder = "Assets/Spike/CardPresentation/Prefabs";
+        private const string PrefabFolder = "Assets/Spike/ECS/CardPresentation/Prefabs";
         private const string CardPrefabPath = PrefabFolder + "/CardView.prefab";
-        private const string ScenePath = "Assets/Spike/CardPresentation/Sandbox.unity";
+        private const string ScenePath = "Assets/Spike/ECS/CardPresentation/Sandbox.unity";
 
         [MenuItem("Tools/CardPresentation/Build Sandbox")]
         public static void BuildAll()

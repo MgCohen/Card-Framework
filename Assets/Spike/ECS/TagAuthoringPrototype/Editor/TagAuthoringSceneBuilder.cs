@@ -21,7 +21,7 @@ namespace TagAuthoringPrototype.Editor
     /// </summary>
     public static class TagAuthoringSceneBuilder
     {
-        const string Root         = "Assets/Sample/TagAuthoringPrototype";
+        const string Root         = "Assets/Spike/ECS/TagAuthoringPrototype";
         const string GeneratedDir = Root + "/Demo/_Generated";
         const string ScenePath    = Root + "/Demo/Sample.unity";
 

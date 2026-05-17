@@ -11,7 +11,7 @@ tags: [#spike, #presentation, #cards, #zones, #reactive, #ui]
 
 The engine work has settled the data + command + stream + mirror loop end-to-end (see `vertical-slice-plan.md`). What's still open is how *card and zone presentation* hangs together on top of that — what shape the view layer takes, where drag/drop/flip live, how view state stays reactive against world mutations, and what's reusable when we eventually need 2D / 3D renderers alongside uGUI.
 
-A standalone playground that exercises card-table interactions (deck, hand, play field, graveyard, drag/drop between them) before committing to a presentation model. Live under `Assets/Spike/CardPresentation/`; entirely self-contained, no dependency on the slice.
+A standalone playground that exercises card-table interactions (deck, hand, play field, graveyard, drag/drop between them) before committing to a presentation model. Live under `Assets/Spike/ECS/CardPresentation/`; entirely self-contained, no dependency on the slice.
 
 ## What I tried
 

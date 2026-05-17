@@ -21,7 +21,7 @@ Both must become typed without losing the open-ended extensibility we get from d
 
 - **Parent spike: `wire-network-protocol.md` (status: deferred 2026-05-15).** Locked seven decisions; lock 7 ("WireEvent classes ARE the serialization format") committed to a unified engine + wire record. Sub-decision under lock 7 (typed payloads vs reflection dict) was deferred. This spike is that sub-decision resolving.
 - **Current state on disk:**
-  - `Assets/Sample/VerticalSlice/Engine/Stream/WireEvent.cs` — six concrete `WireEvent` subclasses, all pure-data, no methods beyond `Kind` discriminator + `ToString`.
+  - `Assets/Spike/ECS/VerticalSlice/Engine/Stream/WireEvent.cs` — six concrete `WireEvent` subclasses, all pure-data, no methods beyond `Kind` discriminator + `ToString`.
   - `TagSetEvent.Value` and `TagChangeEvent.Prev/Next` are `object?`.
   - `TagSetEvent.Key` / `TagChangeEvent.Key` are `string` (tag name, not slot id).
   - `BlockStartEvent.Payload` is `IReadOnlyDictionary<string, object?>` populated via `PayloadCapture.Of` (reflection).
@@ -433,12 +433,12 @@ Steps 1–4 are the load-bearing part; the rest is mechanical.
 
 ## What actually shipped
 
-The spike's shape (steps 1, 2, 4 from the plan above) landed at `Assets/Spike/TypedPayloads/` as an independent, headless-testable spike — deliberately decoupled from `Assets/Sample/VerticalSlice/` so iteration on the wire shape doesn't disturb the existing 71-test slice. Step 3 (string-tag migration) is a VerticalSlice change, not a spike change; deferred to its own pass. Steps 5–7 (BlockStart payload, source-gen, protobuf) are explicitly future work.
+The spike's shape (steps 1, 2, 4 from the plan above) landed at `Assets/Spike/ECS/TypedPayloads/` as an independent, headless-testable spike — deliberately decoupled from `Assets/Spike/ECS/VerticalSlice/` so iteration on the wire shape doesn't disturb the existing 71-test slice. Step 3 (string-tag migration) is a VerticalSlice change, not a spike change; deferred to its own pass. Steps 5–7 (BlockStart payload, source-gen, protobuf) are explicitly future work.
 
 ### Layout
 
 ```
-Assets/Spike/TypedPayloads/
+Assets/Spike/ECS/TypedPayloads/
 ├── Engine/                         (Spike.TypedPayloads.Engine — noEngineRefs)
 │   ├── WireKind.cs                 byte-sized discriminator
 │   ├── WireEvents.cs               base + EntityCreated/Destroyed, TagSet/Change/Removed

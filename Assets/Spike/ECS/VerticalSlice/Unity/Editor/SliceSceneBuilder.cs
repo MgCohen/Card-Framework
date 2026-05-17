@@ -15,7 +15,7 @@ namespace VerticalSlice.UnityScene.Editor
     /// </summary>
     public static class SliceSceneBuilder
     {
-        private const string ScenePath = "Assets/Sample/VerticalSlice/Unity/Sample.unity";
+        private const string ScenePath = "Assets/Spike/ECS/VerticalSlice/Unity/Sample.unity";
 
         [MenuItem("Tools/VerticalSlice/Build Sample Scene")]
         public static void Build()

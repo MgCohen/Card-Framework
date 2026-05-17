@@ -10,7 +10,7 @@ tags: [#spike, #entities, #modifiers, #ecs]
 
 ## Context
 
-Working in the tag-bag ECS world of [`Assets/Sample/VerticalSlice/`](Assets/Sample/VerticalSlice/) — single concrete `Entity` class with `int Id` + sparse `TagKey<T> → value` dict ([Entity.cs](Assets/Sample/VerticalSlice/Engine/Entities/Entity.cs)), `EntityStore` indexed by tag ([EntityStore.cs](Assets/Sample/VerticalSlice/Engine/Pipeline/EntityStore.cs)). No definitions exist yet — cards are built imperatively in [SliceBootstrap.MakeMinion](Assets/Sample/VerticalSlice/Unity/SliceBootstrap.cs#L190).
+Working in the tag-bag ECS world of [`Assets/Spike/ECS/VerticalSlice/`](Assets/Spike/ECS/VerticalSlice/) — single concrete `Entity` class with `int Id` + sparse `TagKey<T> → value` dict ([Entity.cs](Assets/Spike/ECS/VerticalSlice/Engine/Entities/Entity.cs)), `EntityStore` indexed by tag ([EntityStore.cs](Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/EntityStore.cs)). No definitions exist yet — cards are built imperatively in [SliceBootstrap.MakeMinion](Assets/Spike/ECS/VerticalSlice/Unity/SliceBootstrap.cs#L190).
 
 The framework docs (`Product/features/entities/models/*`) describe a settled `EntityInstance<TDef>` + `EntityState (Bases, Modifiers)` shape. **That shape is valid at the theory/idea level but is not the spike's implementation target** — the spike runs a tag-bag ECS, not the bridge/store/handle model.
 
@@ -278,7 +278,7 @@ squire.Read(Tags.Attack, store);         // 1 × 2 = 2
 
 ## What the sketch hand-waves (real impl will need)
 
-- **TagIndex** for the modifier queries (Type bucket + `(ModTarget, ModSlot)` index + `ModSource` index) — same shape as today's [TagIndex.cs](Assets/Sample/VerticalSlice/Engine/Pipeline/TagIndex.cs).
+- **TagIndex** for the modifier queries (Type bucket + `(ModTarget, ModSlot)` index + `ModSource` index) — same shape as today's [TagIndex.cs](Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/TagIndex.cs).
 - **Type-safe `IOp<T>` cast** in `Effective.Read`. Today's `Tags.ModOp` holds `IOp`; the cast assumes the author paired the right op kind with the right slot. Authoring-time check or a typed `TagKey<IOp<T>>` per slot family would lock this down.
 - **Wire emission** for modifier-entity create/destroy. Falls out of the existing entity wire shape — no new event kinds needed.
 - **OnCast / Deathrattle wiring** for cards — sits in EffectStore as today, attached at `Spawn.Card` if the def carries factories.

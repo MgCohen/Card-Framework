@@ -2,7 +2,7 @@
 
 Pattern C — data-defined tags — for the typed-hybrid tag system. Demonstrates designer-authored `ScriptableObject` tags coexisting with code-defined Pattern A / Pattern B tags in the same process-global `TagRegistry`.
 
-> Spike companion to [`Product/spikes/tag-identity-typed-hybrid.md`](../../../Product/spikes/tag-identity-typed-hybrid.md). Scoped to authoring + bake + presentation lookup. Constraints, defaults, and `TagRegistryAsset` (auto slot allocation) are explicitly out of scope.
+> Spike companion to [`Product/spikes/tag-identity-typed-hybrid.md`](../../../../Product/spikes/tag-identity-typed-hybrid.md). Scoped to authoring + bake + presentation lookup. Constraints, defaults, and `TagRegistryAsset` (auto slot allocation) are explicitly out of scope.
 
 ## What's here
 

@@ -11,7 +11,7 @@ tags: [#spike, #tags, #identity, #vertical-slice, #keywords]
 
 ## Premise
 
-Today the vertical slice declares every tag as `static readonly TagKey<T>` in `Assets/Sample/VerticalSlice/Sample/Tags.cs`. The pattern works cleanly for stat tags (Health, Attack) and kind markers (IsCard, IsMinion), but breaks down for **keywords** — Backlash carries a flag *and* a separate effect class; Deathrattle has no flag at all, only a payload class routed through `CardEffectStore`. The asymmetry is visible at every call site and makes "query the world by keyword" awkward.
+Today the vertical slice declares every tag as `static readonly TagKey<T>` in `Assets/Spike/ECS/VerticalSlice/Sample/Tags.cs`. The pattern works cleanly for stat tags (Health, Attack) and kind markers (IsCard, IsMinion), but breaks down for **keywords** — Backlash carries a flag *and* a separate effect class; Deathrattle has no flag at all, only a payload class routed through `CardEffectStore`. The asymmetry is visible at every call site and makes "query the world by keyword" awkward.
 
 We want:
 
@@ -25,7 +25,7 @@ This spike captures the agreed shape so we can iterate without losing context. I
 
 ## Context — what exists today
 
-[TagKey.cs](Assets/Sample/VerticalSlice/Engine/Tags/TagKey.cs):
+[TagKey.cs](Assets/Spike/ECS/VerticalSlice/Engine/Tags/TagKey.cs):
 
 ```csharp
 public abstract class TagKey {
@@ -43,7 +43,7 @@ public sealed class TagKey<T> : TagKey {
 
 Three roles bundled into one class:
 
-1. **Slot** — registration-order int. Used as the entity's storage address (`_slots[key.Slot]` in [Entity.cs:32-54](Assets/Sample/VerticalSlice/Engine/Entities/Entity.cs:32)).
+1. **Slot** — registration-order int. Used as the entity's storage address (`_slots[key.Slot]` in [Entity.cs:32-54](Assets/Spike/ECS/VerticalSlice/Engine/Entities/Entity.cs:32)).
 2. **Value-type binding** — `<T>` on the generic gives compile-time type safety on Get/Set.
 3. **Wire label** — `Name` (string). Used by `TagSetEvent` / `TagChangeEvent` and `ToString()`.
 
@@ -377,8 +377,8 @@ Mirror's Unapply semantics for `TagRemovedEvent`: restore `Prev` at the slot (re
 3. **Slot range conventions.** Locked or informal? Informal is simpler; conventions add discipline.
 4. **Boot-time registration discovery.** Manual `RegisterType(typeof(X))` calls or reflective scan? Start reflective; defer sourcegen.
 5. **Debug name override.** Do we need `[TagSlot(100, "deathrattle")]` in practice? Drop the optional parameter if never used.
-6. **Migration of `Where(TagKey<bool> marker)` engine APIs.** [ICommandScope.cs:28](Assets/Sample/VerticalSlice/Engine/Commands/ICommandScope.cs:28), [IEffectScope.cs:56](Assets/Sample/VerticalSlice/Engine/Effects/IEffectScope.cs:56), [IHookScope.cs:62](Assets/Sample/VerticalSlice/Engine/Hooks/IHookScope.cs:62), [World.cs:100](Assets/Sample/VerticalSlice/Engine/Pipeline/World.cs:100) all take `TagKey<bool>` today. Keep as-is for Pattern A, add parallel generic versions for Pattern B, or unify?
-7. **DeathrattleBridge relationship to the flag.** [DeathrattleBridge.cs:29](Assets/Sample/VerticalSlice/Sample/DeathrattleBridge.cs:29) fires the payload unconditionally. Under the new design, does the bridge pre-check `cmd.Card.Has<Deathrattle>()`? Or does `CardEffectStore` absence handle silently? Locks down the relationship between "tag flag" and "attached effect entry."
+6. **Migration of `Where(TagKey<bool> marker)` engine APIs.** [ICommandScope.cs:28](Assets/Spike/ECS/VerticalSlice/Engine/Commands/ICommandScope.cs:28), [IEffectScope.cs:56](Assets/Spike/ECS/VerticalSlice/Engine/Effects/IEffectScope.cs:56), [IHookScope.cs:62](Assets/Spike/ECS/VerticalSlice/Engine/Hooks/IHookScope.cs:62), [World.cs:100](Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:100) all take `TagKey<bool>` today. Keep as-is for Pattern A, add parallel generic versions for Pattern B, or unify?
+7. **DeathrattleBridge relationship to the flag.** [DeathrattleBridge.cs:29](Assets/Spike/ECS/VerticalSlice/Sample/DeathrattleBridge.cs:29) fires the payload unconditionally. Under the new design, does the bridge pre-check `cmd.Card.Has<Deathrattle>()`? Or does `CardEffectStore` absence handle silently? Locks down the relationship between "tag flag" and "attached effect entry."
 8. **Backlash classification.** Stays in Pattern A (plain flag at slot 40) for now. Reconsider if/when the retaliation amount or behavior becomes per-card.
 9. **Slot range for future-Poison-style.** Reserve `200+` for Pattern B "stateful keywords" if/when they arrive, separate from `100+` "boolean keywords"?
 

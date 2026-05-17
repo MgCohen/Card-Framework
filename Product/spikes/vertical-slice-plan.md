@@ -104,7 +104,7 @@ Sample/VerticalSlice/                      ← pure C#, Unity-agnostic, own asmd
     MirrorTests.cs                         // mirror equality, scrub correctness
     DivineShieldTests.cs                   // replacement-band hook semantics
 
-Assets/Sample/VerticalSlice/               ← Unity scene + UI
+Assets/Spike/ECS/VerticalSlice/               ← Unity scene + UI
   VerticalSliceScene.unity
   Scripts/
     SliceBootstrap.cs                      // composes Engine + Mirror, wires UI
@@ -298,7 +298,7 @@ Branch: `claude/entity-based-architecture-pMNhU`, 10 commits since `ffb9dee`. As
 | `cd96fb3` | **Effect<TPayload> + Validate + direct triggers via CardEffectStore.** Unifies game rules (DivineShield/Armor/Backlash) and per-card abilities (Deathrattle) under one `Effect<TCommand>` shape with payload-on-construction. `Validate` separate from `Run`, gates wire-emission. New `CardEffectStore` for direct triggers attached to a specific card; `IEffectScope.FireDirect<TTrigger>` for engine bridges. Two distinct deathrattles on two different cards prove per-card variation works without per-card C# subclasses. `HasDeathrattle` tag retired — store entry is the source of truth. |
 | `12f2383` | **Choose-One via first-class Request + typed option wire events.** `Request` peer to Effect/Command (not subordinate). `BlockKind.Request` for the options block. Three new leaf wire events: `PickOptionEvent` (generic — source/target/value), `CancelOptionEvent`, `ResponseEvent`. No labels on the wire — wire is pure data; client owns presentation. `RequestsService` on `GameEngine`. `IEffectScope.OpenRequest`. `Tactician` sample card demonstrates Choose-One (damage / heal / cancel) end-to-end. |
 
-### Files inventory (Assets/Sample/VerticalSlice/)
+### Files inventory (Assets/Spike/ECS/VerticalSlice/)
 
 **Engine** (6 DLLs total):
 

@@ -17,7 +17,7 @@ Unity.exe -batchmode -nographics -projectPath . -runTests \
 
 ## Unity scene
 
-`Assets/Sample/VerticalSlice/Unity/Sample.unity` ships with a `SliceBootstrap`
+`Assets/Spike/ECS/VerticalSlice/Unity/Sample.unity` ships with a `SliceBootstrap`
 already attached to a GameObject. Open the scene and hit Play. You can
 rebuild it any time via `Tools → VerticalSlice → Build Sample Scene`.
 

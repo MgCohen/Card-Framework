@@ -15,7 +15,7 @@ namespace TypedPayloads.UnityScene.Editor
     /// </summary>
     public static class TypedPayloadsSceneBuilder
     {
-        private const string ScenePath = "Assets/Spike/TypedPayloads/Unity/Sample.unity";
+        private const string ScenePath = "Assets/Spike/ECS/TypedPayloads/Unity/Sample.unity";
 
         [MenuItem("Tools/TypedPayloads/Build Sample Scene")]
         public static void Build()

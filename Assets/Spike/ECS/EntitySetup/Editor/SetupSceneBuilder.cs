@@ -15,7 +15,7 @@ namespace Spike.EntitySetup.Editor
     /// </summary>
     public static class SetupSceneBuilder
     {
-        private const string ScenePath = "Assets/Spike/EntitySetup/Sandbox.unity";
+        private const string ScenePath = "Assets/Spike/ECS/EntitySetup/Sandbox.unity";
 
         [MenuItem("Tools/EntitySetup/Build Sandbox Scene")]
         public static void Build()

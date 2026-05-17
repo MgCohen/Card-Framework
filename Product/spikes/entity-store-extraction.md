@@ -6,7 +6,7 @@ tags: [#spike, #entities, #world, #queries, #indices, #architecture, #benchmark]
 
 # Entity Store Extraction — Query Service + Indices
 
-> **Status: validated (2026-05-15).** Bench in `Assets/Sample/VerticalSlice/QueryBench/` measured the indexed shape against the LINQ baseline across three populations. Gate criterion (≥5× speedup at Hearthstone-sized / compound / mid-selectivity) met at **10.3–10.9× LINQ**. Two design changes the bench forced are folded into the recommendation; see [Bench results](#bench-results-2026-05-15). Extraction is cleared to proceed.
+> **Status: validated (2026-05-15).** Bench in `Assets/Spike/ECS/VerticalSlice/QueryBench/` measured the indexed shape against the LINQ baseline across three populations. Gate criterion (≥5× speedup at Hearthstone-sized / compound / mid-selectivity) met at **10.3–10.9× LINQ**. Two design changes the bench forced are folded into the recommendation; see [Bench results](#bench-results-2026-05-15). Extraction is cleared to proceed.
 
 A redesign of how entity storage and entity queries sit in the engine. Pulls the entity dictionary out of `World` and onto a dedicated `EntityStore` service, mirroring how effects and commands already live on their own services. Once the store is the sole reader of entity state, it can maintain tag-indexed views and expose a low-allocation query API — and there's no public side-door to bypass it.
 
@@ -15,7 +15,7 @@ A redesign of how entity storage and entity queries sit in the engine. Pulls the
 Two things are colliding on the entity-based-architecture branch:
 
 1. **Queries are about to explode in number.** The entity model leans on tags as the only discriminator — "all minions on `p1`'s board," "all face-up cards in any graveyard," "the entity carrying this aura's parent." Triggers, auras, SBAs, and targeting all re-ask the same shapes constantly. Today every such query is `world.Entities.Values.Where(...)`: a full-table LINQ scan, with a `WhereEnumerator` heap allocation per call.
-2. **`World` is supposed to be a god-free zone** ([World.cs:16](../../Assets/Sample/VerticalSlice/Engine/Pipeline/World.cs:16)). It already pushed verbs out onto services — `EffectService` for effects, `CommandService` for commands. But it still owns the entity dictionary *and* exposes it publicly:
+2. **`World` is supposed to be a god-free zone** ([World.cs:16](../../Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:16)). It already pushed verbs out onto services — `EffectService` for effects, `CommandService` for commands. But it still owns the entity dictionary *and* exposes it publicly:
 
    ```csharp
    public IReadOnlyDictionary<int, Entity> Entities => _entities;
@@ -30,7 +30,7 @@ These two together make the extraction the right move *before* the index work, n
 `World` shrinks back to genuine substrate. Three responsibilities total:
 
 - `EventLog Log` — append-only wire stream.
-- Block-id allocator + open-block stack — used by `EffectService` / `CommandService` to thread parent ids ([World.cs:32-58](../../Assets/Sample/VerticalSlice/Engine/Pipeline/World.cs:32)).
+- Block-id allocator + open-block stack — used by `EffectService` / `CommandService` to thread parent ids ([World.cs:32-58](../../Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:32)).
 - That's it.
 
 `EntityStore` takes over:
@@ -222,7 +222,7 @@ The whole extraction is gated on a benchmark. Build it first, in isolation, befo
 
 ### `VerticalSlice.QueryBench` — standalone test assembly
 
-A new asmdef under `Assets/Sample/VerticalSlice/QueryBench/`:
+A new asmdef under `Assets/Spike/ECS/VerticalSlice/QueryBench/`:
 
 ```json
 {
@@ -311,7 +311,7 @@ Two store variants run side by side per implementation:
 | `BenchStore_Pure` | Index maintained by direct calls inside `Set`. No events. Optimistic upper bound. |
 | `BenchStore_WithEvents` | Index maintained via `OnTagSet`/`OnTagChanged` subscription on `BenchEntity`, plus a fake-log `List<int>.Add` to model `_log.Append`. Same dispatch shape as production. |
 
-The delta between the two columns **is** the event-dispatch cost. A few-percent gap means integration is safe; a chasm means we revisit before any production code moves. Zero changes outside `Assets/Sample/VerticalSlice/QueryBench/` to cover this.
+The delta between the two columns **is** the event-dispatch cost. A few-percent gap means integration is safe; a chasm means we revisit before any production code moves. Zero changes outside `Assets/Spike/ECS/VerticalSlice/QueryBench/` to cover this.
 
 ### Validation deliverable
 
@@ -319,7 +319,7 @@ A short note appended to this spike — pass/fail against the success criteria, 
 
 ## Bench results (2026-05-15)
 
-Ran via a standalone `dotnet test` host (`C:\tmp\QueryBenchHost\`) that compiles the bench `.cs` files into a net9.0 NUnit assembly — no Unity needed, no engine references. The bench code at `Assets/Sample/VerticalSlice/QueryBench/` is identical to what would run in Unity Editor.
+Ran via a standalone `dotnet test` host (`C:\tmp\QueryBenchHost\`) that compiles the bench `.cs` files into a net9.0 NUnit assembly — no Unity needed, no engine references. The bench code at `Assets/Spike/ECS/VerticalSlice/QueryBench/` is identical to what would run in Unity Editor.
 
 ### Throughput — compound query (broad-to-narrow author order)
 
@@ -378,7 +378,7 @@ Event dispatch + log append cost the production design ~5% on the mutation path.
 
 ### Bench artifacts
 
-- Source: `Assets/Sample/VerticalSlice/QueryBench/` (asmdef, `noEngineReferences: true`).
+- Source: `Assets/Spike/ECS/VerticalSlice/QueryBench/` (asmdef, `noEngineReferences: true`).
 - Standalone host: `C:\tmp\QueryBenchHost\QueryBenchHost.csproj` — pulls the bench `.cs` files via `<Compile Include="...QueryBench/**/*.cs" />`, no copy. Run with `dotnet test`. **Not checked in** — it's a throwaway host. Recreate from the .csproj snippet in this section if needed.
 - 18 tests total: 3 correctness (all impls agree on id sets), 3 allocation gates, 12 throughput (×3 populations × multiple shapes including the 5× gate).
 

@@ -4,18 +4,18 @@ status: active
 tags: [#spike, #entities, #definition, #ecs]
 references:
   - Product/spikes/modifiers-as-entities-sketch.md
-sandbox: Assets/Spike/EntitySetup/
+sandbox: Assets/Spike/ECS/EntitySetup/
 ---
 
 # Definition × Entity Setup
 
-> **Status: active.** Captures the locked shape from the design pass on 2026-05-16. Live sandbox at [`Assets/Spike/EntitySetup/`](Assets/Spike/EntitySetup/) — open in Unity, run `Tools/EntitySetup/Build Sandbox Scene`, Play.
+> **Status: active.** Captures the locked shape from the design pass on 2026-05-16. Live sandbox at [`Assets/Spike/ECS/EntitySetup/`](Assets/Spike/ECS/EntitySetup/) — open in Unity, run `Tools/EntitySetup/Build Sandbox Scene`, Play.
 
 ## Context
 
-Working in the tag-bag ECS world of [`Assets/Sample/VerticalSlice/`](Assets/Sample/VerticalSlice/). The slice's `Entity` is a single concrete class with `int Id` + sparse `TagKey<T> → value` dict; the `EntityStore` indexes those tags ([Entity.cs](Assets/Sample/VerticalSlice/Engine/Entities/Entity.cs), [EntityStore.cs](Assets/Sample/VerticalSlice/Engine/Pipeline/EntityStore.cs)).
+Working in the tag-bag ECS world of [`Assets/Spike/ECS/VerticalSlice/`](Assets/Spike/ECS/VerticalSlice/). The slice's `Entity` is a single concrete class with `int Id` + sparse `TagKey<T> → value` dict; the `EntityStore` indexes those tags ([Entity.cs](Assets/Spike/ECS/VerticalSlice/Engine/Entities/Entity.cs), [EntityStore.cs](Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/EntityStore.cs)).
 
-Before this pass, the slice had no definition concept — cards were built imperatively in [SliceBootstrap.MakeMinion](Assets/Sample/VerticalSlice/Unity/SliceBootstrap.cs#L190). This spike works out **how authored content (cards, future zones, future heroes, future modifiers) relates to runtime entities** in the tag-bag world.
+Before this pass, the slice had no definition concept — cards were built imperatively in [SliceBootstrap.MakeMinion](Assets/Spike/ECS/VerticalSlice/Unity/SliceBootstrap.cs#L190). This spike works out **how authored content (cards, future zones, future heroes, future modifiers) relates to runtime entities** in the tag-bag world.
 
 The framework-level docs in [`Product/features/entities/models/`](Product/features/entities/models/) describe a `EntityInstance<TDef>` handle + `EntityState (Bases, Modifiers)` slice model. **That shape is valid at the theory level but not the spike's implementation target** — the spike runs a tag-bag ECS, not the bridge/store/handle model.
 
@@ -88,7 +88,7 @@ Three layers:
 
 ## The shape, in code
 
-Live sandbox under [`Assets/Spike/EntitySetup/`](Assets/Spike/EntitySetup/):
+Live sandbox under [`Assets/Spike/ECS/EntitySetup/`](Assets/Spike/ECS/EntitySetup/):
 
 | File | Role |
 |---|---|
@@ -144,12 +144,12 @@ var squire = engine.SpawnCard(catalogs.Cards[201], owner: jaina, zone: jainaFiel
 - **HeroDefinition / PlayerDefinition.** "Jaina" / "Garrosh" are content. Promoting Player to def-driven is the natural follow-up; today bootstrap fakes it with no name tag (UI would render "Player 1" / "Player 2" until heroes earn defs).
 - **Zone definitions.** Defless for now. Hand / Battlefield / Graveyard are categories, not authored content. When zones get defs (custom visibility rules, capacity, special behaviors), `SpawnZone(def, owner)` joins the family alongside the defless helpers.
 - **Modifier-entities.** See [`modifiers-as-entities-sketch.md`](Product/spikes/modifiers-as-entities-sketch.md). The Definition × Entity shape locked here is the foundation modifiers will compose on top of.
-- **Presentation / VM side.** How [`Assets/Spike/CardPresentation/`](Assets/Spike/CardPresentation/) reaches the catalog for Art / BodyText is a separate spike concern.
+- **Presentation / VM side.** How [`Assets/Spike/ECS/CardPresentation/`](Assets/Spike/ECS/CardPresentation/) reaches the catalog for Art / BodyText is a separate spike concern.
 
 ## Validating the sandbox
 
 1. Open the project in Unity.
-2. Run `Tools/EntitySetup/Build Sandbox Scene`. This generates `Assets/Spike/EntitySetup/Sandbox.unity`.
+2. Run `Tools/EntitySetup/Build Sandbox Scene`. This generates `Assets/Spike/ECS/EntitySetup/Sandbox.unity`.
 3. Open `Sandbox.unity` and Play.
 4. The IMGUI surface lists every spawned entity grouped by `EntityType` — Players, Zones, Cards. Each row shows the three identity fields (`Id`, `Type`, `Def → catalog name`) and the full tag bag.
 5. Click **Reset** to rebuild the engine. Notice the entity count restarts but the catalog count is unchanged — content survives, match state doesn't.
