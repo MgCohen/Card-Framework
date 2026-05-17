@@ -83,11 +83,22 @@ namespace Spike.CardPresentation
         }
 
         /// <summary>
-        /// Request this card move to a target zone. Routes through the
-        /// system layer — no direct world writes from the view side.
+        /// Request this card move to a target zone. The system matches the
+        /// intent against its <see cref="GameSystem.ValidActions"/> list;
+        /// accepts iff there's a corresponding entry, silently rejects
+        /// otherwise. View should typically check <see cref="CanMoveTo"/>
+        /// first, but TrySubmit is safe to call regardless.
         /// </summary>
-        public void RequestMove(int targetZoneId) =>
-            System?.MoveCard(CardId, targetZoneId);
+        public bool RequestMove(int targetZoneId) =>
+            System?.TrySubmit(CardId, targetZoneId) ?? false;
+
+        /// <summary>Is this card legally movable to the given zone right now?</summary>
+        public bool CanMoveTo(int targetZoneId) =>
+            System != null && System.CanMove(CardId, targetZoneId);
+
+        /// <summary>Does this card have any legal move at all? Used for highlighting.</summary>
+        public bool HasAnyMove() =>
+            System != null && System.HasAnyMove(CardId);
 
         private void Set<T>(ref T field, T value)
         {

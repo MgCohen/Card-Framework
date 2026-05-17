@@ -45,6 +45,20 @@ namespace Spike.CardPresentation
         public bool Flippable;
         public bool GhostAnchor;
 
+        // Highlighting — dim when the system reports the card has no
+        // legal moves right now. Driven by ConfigureCard via vm.HasAnyMove.
+        private bool _actionable = true;
+        public bool Actionable
+        {
+            get => _actionable;
+            set
+            {
+                _actionable = value;
+                if (_canvasGroup != null)
+                    _canvasGroup.alpha = _actionable ? 1.0f : 0.45f;
+            }
+        }
+
         // --- Cross-zone wiring (set by zone on spawn / by drop handler) ---
         /// <summary>The zone that currently owns this view. Set when spawned.</summary>
         public CardZone? OwningZone { get; set; }

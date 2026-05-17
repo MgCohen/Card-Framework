@@ -95,14 +95,18 @@ namespace Spike.CardPresentation
         public int MaxCards => _maxCards;
 
         /// <summary>
-        /// Per-card drop validation hook. Base combines <see cref="Droppable"/>
-        /// with the capacity limit; subclasses can override for kind-specific
-        /// rules. Called by <see cref="OnDrop"/> before emitting an intent.
+        /// Per-card drop validation hook. AND-combines three gates: the
+        /// zone's <see cref="Droppable"/> flag, the capacity limit, and
+        /// the system's authoritative valid-actions list (via
+        /// <see cref="CardViewModel.CanMoveTo"/>). All three must agree
+        /// for the drop to be allowed; subclasses can override for
+        /// additional kind-specific rules.
         /// </summary>
         public virtual bool CanAccept(CardViewModel vm)
         {
             if (!_droppable) return false;
             if (_maxCards >= 0 && _views.Count >= _maxCards) return false;
+            if (!vm.CanMoveTo(ZoneId)) return false;
             return true;
         }
 
@@ -119,24 +123,41 @@ namespace Spike.CardPresentation
         protected virtual void OnDestroy()
         {
             if (_world != null) _world.CardChanged -= OnWorldCardChanged;
+            if (_system != null) _system.ValidActionsChanged -= OnValidActionsChanged;
         }
 
         /// <summary>
-        /// Wire to the World+System. Subscribes to world changes, sets
-        /// this zone's id, and does the initial bind. Sandbox calls this
-        /// in Start() so all Awakes have settled.
+        /// Wire to the World+System. Subscribes to world changes + valid-
+        /// actions changes, sets this zone's id, and does the initial bind.
+        /// Sandbox calls this in Start() so all Awakes have settled.
         /// </summary>
         public void SetWorld(World world, GameSystem system, int zoneId)
         {
             if (_world != null) _world.CardChanged -= OnWorldCardChanged;
+            if (_system != null) _system.ValidActionsChanged -= OnValidActionsChanged;
             _world = world;
             _system = system;
             ZoneId = zoneId;
             _world.CardChanged += OnWorldCardChanged;
+            _system.ValidActionsChanged += OnValidActionsChanged;
             Rebind();
         }
 
         private void OnWorldCardChanged(CardEntity card) => Rebind();
+
+        /// <summary>
+        /// Re-derive per-card gates without rebuilding views. Cheap path —
+        /// only the toggles (Draggable, Actionable) depend on the action
+        /// list, so we don't need a full diff-rebind.
+        /// </summary>
+        private void OnValidActionsChanged()
+        {
+            foreach (var view in _views)
+            {
+                if (view.Model == null) continue;
+                ConfigureCard(view, view.Model);
+            }
+        }
 
         /// <summary>
         /// Pull the current set of cards-in-this-zone from the world and
@@ -202,12 +223,18 @@ namespace Spike.CardPresentation
         }
 
         /// <summary>
-        /// Combine zone defaults with VM intrinsics, write to the card's
-        /// public toggles. Subclasses can override for variant rules.
+        /// Combine zone defaults with VM intrinsics and the system's
+        /// valid-action list, write to the card's public toggles.
+        /// <c>Draggable</c> and <c>Actionable</c> are AND-gated against
+        /// <see cref="CardViewModel.HasAnyMove"/> — a card the system says
+        /// is immobile is dim and won't initiate drag, regardless of zone
+        /// defaults.
         /// </summary>
         protected virtual void ConfigureCard(UICardView view, CardViewModel vm)
         {
-            view.Draggable   = _draggable && !vm.Frozen;
+            bool hasMove = vm.HasAnyMove();
+            view.Draggable   = hasMove && _draggable && !vm.Frozen;
+            view.Actionable  = hasMove;
             view.AnchorsBack = (_anchoring == ZoneAnchoring.AnchorBack) || vm.Pinned;
             view.FaceDown    = (_visibility == ZoneVisibility.Hidden) && !vm.Revealed;
             view.Flippable   = _flippable;
@@ -228,8 +255,11 @@ namespace Spike.CardPresentation
         }
 
         /// <summary>
-        /// Variant hook for whole-set rules. Base implements Stack
-        /// repositioning + only-top-draggable.
+        /// Variant hook for whole-set rules. Base only handles Stack
+        /// repositioning — the "only top is draggable" rule has moved
+        /// into <see cref="GameSystem"/>'s valid-actions enumeration, so
+        /// non-top stack cards naturally have <see cref="UICardView.Draggable"/>
+        /// off via <see cref="ConfigureCard"/>.
         /// </summary>
         protected virtual void Relayout()
         {
@@ -239,10 +269,6 @@ namespace Spike.CardPresentation
                 {
                     var rt = (RectTransform)_views[i].transform;
                     rt.anchoredPosition = _stackOffset * i;
-
-                    bool isTop = i == _views.Count - 1;
-                    var vm = _views[i].Model;
-                    _views[i].Draggable = isTop && _draggable && (vm == null || !vm.Frozen);
                 }
             }
         }

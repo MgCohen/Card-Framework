@@ -46,6 +46,12 @@ namespace Spike.CardPresentation
 
             SeedWorld();
 
+            // World.AddCard doesn't fire CardChanged (it's an additive
+            // operation, not a mutation), so the system hasn't computed
+            // its initial valid-actions list yet. Kick it once here so
+            // zones see a populated allow-list during their first Rebind.
+            _system.Recompute();
+
             _deck?.SetWorld     (_world, _system, ZoneIdDeck);
             _hand?.SetWorld     (_world, _system, ZoneIdHand);
             _playfield?.SetWorld(_world, _system, ZoneIdPlayfield);
