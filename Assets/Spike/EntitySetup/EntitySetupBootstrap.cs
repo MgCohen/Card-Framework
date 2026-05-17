@@ -30,10 +30,14 @@ namespace Spike.EntitySetup
         private void Awake()
         {
             _catalogs = BuildCatalogs();     // content — once
-            Reset();                          // match state — on demand
+            Rebuild();                       // match state — on demand
         }
 
-        private void Reset()
+        // Renamed from Reset() — Unity reserves `Reset` as a magic editor
+        // callback that fires on AddComponent, BEFORE Awake. Letting our
+        // method bind to it crashes the SceneBuilder's AddComponent call
+        // (catalogs are still null at that point).
+        private void Rebuild()
         {
             _engine = new GameEngine(_catalogs);
             SetupMatch();
@@ -112,7 +116,7 @@ namespace Spike.EntitySetup
             GUILayout.BeginHorizontal();
             GUILayout.Label("Entity Setup Spike — construction flow validation",
                             GUI.skin.box, GUILayout.ExpandWidth(true));
-            if (GUILayout.Button("Reset", GUILayout.Width(100))) Reset();
+            if (GUILayout.Button("Reset", GUILayout.Width(100))) Rebuild();
             GUILayout.EndHorizontal();
             GUILayout.Space(6);
 
