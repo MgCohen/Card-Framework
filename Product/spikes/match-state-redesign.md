@@ -1,12 +1,13 @@
 ---
 type: spike
-status: accepted
-tags: [#spike, #state, #fsm, #match-state, #design-pass]
+status: superseded
+forward-link: Product/spikes/state-service.md
+tags: [#spike, #state, #fsm, #match-state, #design-pass, #superseded]
 ---
 
 # Match State Redesign
 
-> **Status: accepted (decisions locked, patch cascade pending).** Multi-session design pass on the framework's state-machine layer. Walked from the slice-based `MatchState`/`MatchStateSlice` shape settled in ADR-0009 through five intermediate sketches to **stateless polymorphic-record states owned by a per-role service, pushed onto the event stream as 2-byte wire events**. Decisions logged; downstream Models, ADRs, and the engine itself need cascading edits to reflect the new shape. The session that produced this spike ran 2026-05-17 on branch `claude/state-machine-design-hankF`.
+> **Status: superseded (2026-05-18) by [`state-service.md`](state-service.md).** This spike walked six sketches (v1 polymorphic-slice → v6 stateless records) and in the process surfaced framework-foundational questions (where data lives, how mutation/wire/rollback relate) that were too large for state alone. Those framework-wide answers now live in [`framework-architecture.md`](framework-architecture.md); the state-specific conclusions live in [`state-service.md`](state-service.md). This doc is preserved for archeology — readers wanting to see *why* v1–v5 were rejected and how v6 emerged should read it; readers picking up implementation should read state-service instead. The original session ran 2026-05-17 on branch `claude/state-machine-design-hankF`.
 
 ## Reading guide
 
