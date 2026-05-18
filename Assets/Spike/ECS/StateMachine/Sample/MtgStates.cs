@@ -120,6 +120,8 @@ namespace StateMachine.Sample
     /// </summary>
     public sealed record MatchNotStartedState : GameState
     {
+        public override IReadOnlyList<Type> Actions => new[] { typeof(PassCommand) };
+
         public override bool IsCompleted(GameAction a, CommandResult r, IStateScope s) =>
             a is PassCommand;
     }

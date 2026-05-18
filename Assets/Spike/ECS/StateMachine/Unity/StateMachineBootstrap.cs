@@ -60,6 +60,10 @@ namespace StateMachine.UnityScene
 
         private void OnGUI()
         {
+            // Domain reloads during Play mode wipe these fields without re-running
+            // Awake — re-seed so the sandbox survives a hot script reload.
+            if (_engine == null) Setup();
+
             GUILayout.BeginArea(new Rect(8, 8, Screen.width - 16, Screen.height - 16));
 
             DrawHeader();

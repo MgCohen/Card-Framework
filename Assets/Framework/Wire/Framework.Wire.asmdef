@@ -1,0 +1,16 @@
+{
+    "name": "Framework.Wire",
+    "rootNamespace": "Framework.Wire",
+    "references": [
+        "Scaffold.Autopacker"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

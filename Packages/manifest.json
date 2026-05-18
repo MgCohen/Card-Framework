@@ -1,5 +1,9 @@
 {
   "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
+    "com.scaffold.autopacker": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.autopacker#main",
+    "com.scaffold.maps": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.maps#main",
+    "com.scaffold.variables": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.variables#main",
     "com.unity.2d.animation": "14.0.3",
     "com.unity.2d.aseprite": "4.0.1",
     "com.unity.2d.psdimporter": "13.0.2",
@@ -53,5 +57,14 @@
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0"
-  }
+  },
+  "scopedRegistries": [
+    {
+      "name": "openupm",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.cysharp.unitask"
+      ]
+    }
+  ]
 }
