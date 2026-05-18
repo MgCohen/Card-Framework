@@ -3,7 +3,7 @@ type: spike
 status: active
 tags: [#spike, #entities, #definition, #ecs]
 references:
-  - Product/spikes/modifiers-as-entities-sketch.md
+  - Product/spikes/modifiers-as-entities.md
 sandbox: Assets/Spike/ECS/EntitySetup/
 ---
 
@@ -57,7 +57,7 @@ Zones / players don't have definitions yet. Bootstrap builds them inline via hel
 
 ### Q5 — Effects on the def: **data-asset list**
 
-Card def carries `IReadOnlyList<CardEffect>`. Effects are themselves data-assets carrying all required definitions. Registration mechanics (how the spawn helper wires them into an EffectStore) deferred along with the modifier shape — parked in [`modifiers-as-entities-sketch.md`](Product/spikes/modifiers-as-entities-sketch.md).
+Card def carries `IReadOnlyList<CardEffect>`. Effects are themselves data-assets carrying all required definitions. Registration mechanics (how the spawn helper wires them into an EffectStore) deferred along with the modifier shape — see [`modifiers-as-entities.md`](modifiers-as-entities.md).
 
 ### Q6 — SO authoring of effects: **parked**
 
@@ -145,7 +145,7 @@ var squire = engine.SpawnCard(catalogs.Cards[201], owner: jaina, zone: jainaFiel
 - **Catalog loading flow.** Code-defined only in the spike. SO wrapping + `Resources.LoadAll` / manifest / explicit registration is a separate concern.
 - **HeroDefinition / PlayerDefinition.** "Jaina" / "Garrosh" are content. Promoting Player to def-driven is the natural follow-up; today bootstrap fakes it with no name tag (UI would render "Player 1" / "Player 2" until heroes earn defs).
 - **Zone definitions.** Defless for now. Hand / Battlefield / Graveyard are categories, not authored content. When zones get defs (custom visibility rules, capacity, special behaviors), `SpawnZone(def, owner)` joins the family alongside the defless helpers.
-- **Modifier-entities.** See [`modifiers-as-entities-sketch.md`](Product/spikes/modifiers-as-entities-sketch.md). The Definition × Entity shape locked here is the foundation modifiers will compose on top of.
+- **Modifier-entities.** See [`modifiers-as-entities.md`](modifiers-as-entities.md). The Definition × Entity shape locked here is the foundation modifiers compose on top of.
 - **Presentation / VM side.** How [`Assets/Spike/ECS/CardPresentation/`](Assets/Spike/ECS/CardPresentation/) reaches the catalog for Art / BodyText is a separate spike concern.
 
 ## Validating the sandbox

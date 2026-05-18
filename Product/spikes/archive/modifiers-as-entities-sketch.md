@@ -1,7 +1,23 @@
 ---
 type: spike
-status: parked
-tags: [#spike, #entities, #modifiers, #ecs]
+status: superseded
+superseded_by: [spikes/modifiers-as-entities.md]
+archived_on: 2026-05-18
+reason: "The 2026-05-18 design pass on modifiers walked past this sketch's core moves. Refresh-from-base replaced fold-on-read; OnAttach/Refresh split replaced single-effect; per-tag rebase policy (transient vs rebaseable) replaced uniform Effective.Read; one modifier-def → one entity replaced one-def-→-N-entities; consumption-as-tag-write replaced source-sweep-destroy as the default for transient keywords. The sketch is preserved for provenance; the active design lives in spikes/modifiers-as-entities.md."
+tags: [#spike, #entities, #modifiers, #ecs, #archived]
+---
+
+> **Archived 2026-05-18.** Superseded by [`spikes/modifiers-as-entities.md`](../modifiers-as-entities.md). This sketch was the parked starting point; the active design walked past several of its core moves. Notable shifts:
+>
+> - **Fold-on-read → refresh-from-base.** Effective values stop being computed at every read; refresh resets rebaseable tags + replays effects in Order. Reads are plain dict lookups.
+> - **One def → N modifier-entities → one def → one entity.** Composite effects on a single modifier-entity, not one entity per row.
+> - **`IOp<T>` strategy objects → free-form `IModifierEffect`.** Effects can do anything an effect can (set, add, multiply, grant deathrattle, spawn child entities). No typed-op vocabulary.
+> - **Uniform tag fold → per-tag rebase policy.** Slots declare `Rebaseable | Transient`. Refresh only touches rebaseable slots; transient state survives across refresh.
+> - **Single `Effect` → `OnAttach` + `Refresh` split.** Transient grants (DS, Stealth) live in `OnAttach` (one-shot). Rebaseable contributions (+3 ATK) live in `Refresh` (replayed every refresh).
+> - **Source-sweep destroy → consumption-as-tag-write.** Hits flip `DS=false` directly; modifier-entity stays, refresh leaves transient state alone. Source-sweep cleanup remains for explicit "remove all modifiers from X" semantics.
+>
+> Original content preserved below for provenance.
+
 ---
 
 # Modifiers as Entities — sketch (parked)
