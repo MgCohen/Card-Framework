@@ -1,0 +1,17 @@
+{
+    "name": "Spike.StateMachine.Unity",
+    "rootNamespace": "StateMachine.UnityScene",
+    "references": [
+        "Spike.StateMachine.Engine",
+        "Spike.StateMachine.Sample"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
