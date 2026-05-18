@@ -33,9 +33,11 @@ The design pass walked Q1 through Q10. Each lock here references the question it
 | `Type` | `EntityType` | Catalog partition — tells which dict to look up `DefinitionId` against |
 | `DefinitionId` | `int` | Content reference — `0` for defless / generic entities |
 
-`EntityType` is a `readonly struct(int Value, string Name)` — open registry, TagKey-style. Games extend by declaring more `static readonly EntityType` fields. **Not an enum.** (`feedback_int_over_enum_for_open_types`.)
+`EntityType` is a `readonly record struct(int Slot, string Name)` — open registry, TagKey-style. Equality on `Slot` only; `Name` is debug-resolved via `EntityTypeRegistry`. Games extend by declaring more `static readonly EntityType` fields. **Not an enum.** (`feedback_int_over_enum_for_open_types`.)
 
-All identity/ref/bookkeeping is `int` (or `Guid` if cross-run stability is needed). No `string` IDs. (`feedback_int_ids_over_strings`.)
+All identity/ref/bookkeeping is `int` (or `Guid` if cross-run stability is needed). No `string` IDs. No `long`. (`feedback_int_ids_over_strings`.)
+
+The full registry shape is locked in the [2026-05-18 closure](#closure-2026-05-18--entitytype-registry).
 
 ### Q1 — Definition representation: **plain C# + SO wrapper**
 
@@ -161,10 +163,68 @@ What you should see exercised by playing:
 - Argent Squire's `DivineShield` tag set from the def's intrinsic.
 - No `CardName` / `ZoneName` / `PlayerName` tags anywhere. The IMGUI panel reads card names through the catalog by `DefinitionId`.
 
+## Closure 2026-05-18 — EntityType registry
+
+Follow-up design pass after the spike landed. Sets the registry shape, the engine/game split, and the marker-tag retirement that the original Q1–Q10 pass left implicit.
+
+### Identity rule
+
+The discriminator for "field vs tag" is now explicit:
+
+> **Anything fixed for the entity's lifetime is a field. Anything mutable is a tag.**
+
+`Id`, `Type`, `DefinitionId` qualify. Future facets must pass the immutability test before being promoted; `Owner` and `Zone` are mutable and stay tags forever.
+
+### Pattern split (mirrors the tag pattern split)
+
+- **Pattern A — code-defined.** Static fields on a game-side class. Primary mechanism.
+- **Pattern B — dropped.** A keyword-class form (`record Card : EntityType(1)`) doesn't earn its keep here — EntityType has no typed payload (unlike Pattern B tags, which carry `T`). Pattern B for entity types is just Pattern A with extra ceremony.
+- **Pattern C — designer-authored.** `EntityTypeAsset` ScriptableObject with `Slot`, `Name`, optional `DefType` binding, optional `Presentation`. Mirrors TagAuthoring's Pattern C shape. Defless-by-design is allowed (a Pattern C type may have no paired def).
+
+### Engine-reserved slots
+
+The engine ships these. Games extend.
+
+| Slot | Name | Notes |
+|---|---|---|
+| 0 | `Unknown` | Sentinel; mirror falls back here for unknown ints on the wire |
+| 1 | *(reserved)* | Game-as-entity — pending StateMachine spike review |
+| 2 | `Player` | |
+| 3 | `Zone` | |
+| 4 | `Card` | |
+| 5 | `Modifier` | Engine-reserved; concrete shape TBD when the modifier spike runs |
+
+No range convention beyond engine reservations — collision is guarded by `EntityTypeRegistry`. Range discipline can be introduced later if it bites.
+
+### API surface
+
+```csharp
+public readonly record struct EntityType(int Slot, string Name);
+// Equality on Slot only; Name is debug-resolved via EntityTypeRegistry.
+```
+
+`EntityTypeRegistry` mirrors `TagRegistry` — process-global today, scoped per-World eventually.
+
+### Wire
+
+`EntityCreatedEvent` carries `(Id, Type.Slot, DefinitionId)` so the mirror knows kind at creation. The name is *not* on the wire — the receiver resolves it through its local registry. Unknown slots survive as `Unknown(N)` with the original int preserved for debug; cross-version replay degrades gracefully rather than crashing.
+
+### Marker tags retired
+
+With `Type` first-class, `IsCard` / `IsZone` / `IsPlayer` are pure redundancy and go. Sub-kinds *within* a Type stay as tags — the natural shape is one enum tag (`CardKind = Minion | Spell | Weapon`) rather than three boolean markers. Rule: **Type partitions catalogs; sub-kinds are tags.**
+
+### Notes carried over
+
+- `DefinitionId` stays `int` with `0` = defless (preserved from Q4).
+- The original Q-pass used `Value` for the `EntityType` int field. The closure locks `Slot` for consistency with `TagKey.Slot` and the broader registry vocabulary.
+
 ## Follow-ups visible from this spike
 
+- **`EntityType.Game` decision.** Slot 1 reserved; whether the match becomes an entity (vs. an ambient `MatchSingleton`) belongs to the StateMachine spike.
+- **Modifier shape.** Slot 5 reserved; whether modifiers attach as separate entities or as tags-on-host is the next big call.
 - **HeroDefinition / PlayerDefinition Q.** "Jaina" is content; she earns a def.
 - **`IEntityDefinition` base parameters Q.** What pressure makes us add fields beyond `Id` + `Type`?
 - **Catalog loading flow.** SO scan vs explicit registration vs manifest.
 - **Effect data-asset shape.** Bundled with the modifier-as-entities work.
+- **Pattern C slot governance.** Hand-picked today; auto-allocation if/when content teams hit the friction.
 - **Presentation / VM integration.** Card presentation reads through the catalog.
