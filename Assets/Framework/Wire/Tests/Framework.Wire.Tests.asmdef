@@ -3,7 +3,8 @@
     "rootNamespace": "Framework.Wire.Tests",
     "references": [
         "Framework.Wire",
-        "Scaffold.Autopacker"
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"

@@ -4,7 +4,8 @@
     "references": [
         "Framework.Tags",
         "Framework.Wire",
-        "Scaffold.Autopacker"
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"

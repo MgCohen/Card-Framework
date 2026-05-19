@@ -3,7 +3,8 @@
     "rootNamespace": "Framework.Tags",
     "references": [
         "Framework.Wire",
-        "Scaffold.Autopacker"
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -13,5 +14,5 @@
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": true
+    "noEngineReferences": false
 }

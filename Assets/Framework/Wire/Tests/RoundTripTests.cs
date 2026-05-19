@@ -6,28 +6,26 @@ namespace Framework.Wire.Tests
 {
     public class RoundTripTests
     {
-        static (EventStream server, EventStream client, Network network) NewWired(IPackingHandler handler = null)
+        static (EventStream server, EventStream client, Network serverNet, Network clientNet)
+            NewWired(IPackingHandler handler = null)
         {
-            var server = new EventStream();
-            var client = new EventStream();
-            var network = new Network(handler);
-            new Wire(server, client, network);
-            network.Register<EntityCreatedEvent>();
-            network.Register<EntityDestroyedEvent>();
-            network.Register<EntityMovedEvent>();
-            network.Register<EntityLabeledEvent>();
-            network.Register<BlockStartEvent>();
-            network.Register<BlockEndEvent>();
-            return (server, client, network);
+            var (server, client, serverNet, clientNet) = Wire.Connect(handler);
+            // Same order on both ends — channel ids must match.
+            serverNet.Register<EntityCreatedEvent>();   clientNet.Register<EntityCreatedEvent>();
+            serverNet.Register<EntityDestroyedEvent>(); clientNet.Register<EntityDestroyedEvent>();
+            serverNet.Register<EntityMovedEvent>();     clientNet.Register<EntityMovedEvent>();
+            serverNet.Register<EntityLabeledEvent>();   clientNet.Register<EntityLabeledEvent>();
+            serverNet.Register<BlockStartEvent>();      clientNet.Register<BlockStartEvent>();
+            serverNet.Register<BlockEndEvent>();        clientNet.Register<BlockEndEvent>();
+            return (server, client, serverNet, clientNet);
         }
 
         [Test]
         public void Composite_Payload_RoundTrips()
         {
-            var (server, client, network) = NewWired();
+            var (server, client, _, _) = NewWired();
 
             server.Add(new EntityMovedEvent { EntityId = 7, Position = new Vec3(1.5f, 2.5f, 3.5f) });
-            network.Pump();
 
             Assert.AreEqual(1, client.Count);
             var received = (EntityMovedEvent)client[0];
@@ -40,12 +38,11 @@ namespace Framework.Wire.Tests
         [Test]
         public void Handler_Mapped_Payload_RoundTrips()
         {
-            var (server, client, network) = NewWired(new SimplePackingHandler());
+            var (server, client, _, _) = NewWired(new SimplePackingHandler());
 
             server.Add(new EntityLabeledEvent { EntityId = 11, Label = "alpha" });
             server.Add(new EntityLabeledEvent { EntityId = 12, Label = "beta" });
             server.Add(new EntityLabeledEvent { EntityId = 13, Label = "alpha" });
-            network.Pump();
 
             Assert.AreEqual(3, client.Count);
             Assert.AreEqual("alpha", ((EntityLabeledEvent)client[0]).Label);
@@ -59,10 +56,9 @@ namespace Framework.Wire.Tests
         [Test]
         public void Event_RoundTrips_From_Server_To_Client()
         {
-            var (server, client, network) = NewWired();
+            var (server, client, _, _) = NewWired();
 
             server.Add(new EntityCreatedEvent { EntityId = 42 });
-            network.Pump();
 
             Assert.AreEqual(1, client.Count);
             Assert.AreEqual(42, ((EntityCreatedEvent)client[0]).EntityId);
@@ -71,12 +67,11 @@ namespace Framework.Wire.Tests
         [Test]
         public void Client_Stream_Preserves_Send_Order_Within_One_Channel()
         {
-            var (server, client, network) = NewWired();
+            var (server, client, _, _) = NewWired();
 
             server.Add(new EntityCreatedEvent { EntityId = 1 });
             server.Add(new EntityCreatedEvent { EntityId = 2 });
             server.Add(new EntityCreatedEvent { EntityId = 3 });
-            network.Pump();
 
             Assert.AreEqual(3, client.Count);
             Assert.AreEqual(1, ((EntityCreatedEvent)client[0]).EntityId);
@@ -93,15 +88,12 @@ namespace Framework.Wire.Tests
             catalog.Add(fireball);
             catalog.Add(healing);
 
-            var server = new EventStream();
-            var client = new EventStream();
-            var network = new Network(new CatalogPackingHandler(catalog));
-            new Wire(server, client, network);
-            network.Register<CardPlayedEvent>();
+            var (server, client, serverNet, clientNet) = Wire.Connect(new CatalogPackingHandler(catalog));
+            serverNet.Register<CardPlayedEvent>();
+            clientNet.Register<CardPlayedEvent>();
 
             server.Add(new CardPlayedEvent { EntityId = 1, Definition = fireball });
             server.Add(new CardPlayedEvent { EntityId = 2, Definition = healing  });
-            network.Pump();
 
             Assert.AreEqual(2, client.Count);
             Assert.AreSame(fireball, ((CardPlayedEvent)client[0]).Definition);
@@ -145,11 +137,10 @@ namespace Framework.Wire.Tests
         [Test]
         public void Block_Brackets_RoundTrip()
         {
-            var (server, client, network) = NewWired();
+            var (server, client, _, _) = NewWired();
 
             server.Add(new BlockStartEvent { Kind = 1 });
             server.Add(new BlockEndEvent   { Kind = 1 });
-            network.Pump();
 
             Assert.IsInstanceOf<BlockStartEvent>(client[0]);
             Assert.IsInstanceOf<BlockEndEvent>(client[1]);
@@ -160,13 +151,12 @@ namespace Framework.Wire.Tests
         [Test]
         public void Nested_Blocks_Preserve_Order_And_Kind()
         {
-            var (server, client, network) = NewWired();
+            var (server, client, _, _) = NewWired();
 
             server.Add(new BlockStartEvent { Kind = 1 });
             server.Add(new BlockStartEvent { Kind = 2 });
             server.Add(new BlockEndEvent   { Kind = 2 });
             server.Add(new BlockEndEvent   { Kind = 1 });
-            network.Pump();
 
             Assert.AreEqual(4, client.Count);
             Assert.AreEqual(1, ((BlockStartEvent)client[0]).Kind);
@@ -178,7 +168,7 @@ namespace Framework.Wire.Tests
         [Test]
         public void Mixed_Alphabet_Stream_Preserves_Order()
         {
-            var (server, client, network) = NewWired(new SimplePackingHandler());
+            var (server, client, _, _) = NewWired(new SimplePackingHandler());
 
             server.Add(new BlockStartEvent     { Kind = 1 });
             server.Add(new EntityCreatedEvent  { EntityId = 1 });
@@ -187,7 +177,6 @@ namespace Framework.Wire.Tests
             server.Add(new EntityLabeledEvent  { EntityId = 1, Label = "hero" });
             server.Add(new EntityDestroyedEvent { EntityId = 1 });
             server.Add(new BlockEndEvent       { Kind = 1 });
-            network.Pump();
 
             Assert.AreEqual(7, client.Count);
             Assert.IsInstanceOf<BlockStartEvent>    (client[0]);
@@ -205,17 +194,18 @@ namespace Framework.Wire.Tests
         }
 
         [Test]
-        public void Client_Stream_OnAppended_Fires_After_Pump_Not_Send()
+        public void Client_Stream_Sees_Events_Synchronously_On_Server_Add()
         {
-            var (server, client, network) = NewWired();
+            // LoopbackTransport delivers synchronously — by the time server.Add returns,
+            // the client stream has already seen the event. No Pump step.
+            var (server, client, _, _) = NewWired();
             var seen = new List<long>();
             client.OnAppended += ev => seen.Add(((EntityCreatedEvent)ev).EntityId);
 
             server.Add(new EntityCreatedEvent { EntityId = 10 });
-            server.Add(new EntityCreatedEvent { EntityId = 20 });
+            CollectionAssert.AreEqual(new long[] { 10 }, seen);
 
-            Assert.AreEqual(0, seen.Count, "Client stream must not see events before network.Pump");
-            network.Pump();
+            server.Add(new EntityCreatedEvent { EntityId = 20 });
             CollectionAssert.AreEqual(new long[] { 10, 20 }, seen);
         }
     }

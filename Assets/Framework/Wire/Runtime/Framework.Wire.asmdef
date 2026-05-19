@@ -2,15 +2,17 @@
     "name": "Framework.Wire",
     "rootNamespace": "Framework.Wire",
     "references": [
-        "Scaffold.Autopacker"
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime",
+        "Unity.Collections"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
-    "allowUnsafeCode": false,
+    "allowUnsafeCode": true,
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
-    "noEngineReferences": true
+    "noEngineReferences": false
 }

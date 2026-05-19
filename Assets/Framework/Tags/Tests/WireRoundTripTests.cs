@@ -6,26 +6,18 @@ namespace Framework.Tags.Tests
 {
     public class WireRoundTripTests
     {
-        static (EventStream server, EventStream client, Network network) Wired()
-        {
-            var server = new EventStream();
-            var client = new EventStream();
-            var network = new Network();
-            new WireBridge(server, client, network);
-            return (server, client, network);
-        }
-
         [Test]
         public void TagSet_Int_RoundTrips_Through_Wire()
         {
-            var (server, client, network) = Wired();
+            var (server, client, serverNet, clientNet) = WireBridge.Connect();
+            serverNet.Register<TagSetEvent<int>>();
+            var clientChannel = clientNet.Register<TagSetEvent<int>>();
+
             var serverBag = new TagBagProbe { EntityId = 1, Emit = server.Add };
             var clientBag = new TagBagProbe { EntityId = 1 };
-
-            network.Register<TagSetEvent<int>>().OnReceived += clientBag.Apply;
+            clientChannel.OnReceived += clientBag.Apply;
 
             serverBag.Set(SampleTags.Health, 30);
-            network.Pump();
 
             Assert.AreEqual(1, client.Count);
             var rx = (TagSetEvent<int>)client[0];
@@ -37,14 +29,15 @@ namespace Framework.Tags.Tests
         [Test]
         public void TagSet_Bool_RoundTrips_Through_Wire()
         {
-            var (server, client, network) = Wired();
+            var (server, client, serverNet, clientNet) = WireBridge.Connect();
+            serverNet.Register<TagSetEvent<bool>>();
+            var clientChannel = clientNet.Register<TagSetEvent<bool>>();
+
             var serverBag = new TagBagProbe { EntityId = 1, Emit = server.Add };
             var clientBag = new TagBagProbe { EntityId = 1 };
-
-            network.Register<TagSetEvent<bool>>().OnReceived += clientBag.Apply;
+            clientChannel.OnReceived += clientBag.Apply;
 
             serverBag.Set(SampleTags.IsCard, true);
-            network.Pump();
 
             Assert.AreEqual(true, clientBag.Get(SampleTags.IsCard));
         }
@@ -52,16 +45,19 @@ namespace Framework.Tags.Tests
         [Test]
         public void TagRemoved_RoundTrips_And_Clears_Slot()
         {
-            var (server, client, network) = Wired();
+            var (server, client, serverNet, clientNet) = WireBridge.Connect();
+            serverNet.Register<TagSetEvent<int>>();
+            serverNet.Register<TagRemovedEvent>();
+            var clientSetChannel = clientNet.Register<TagSetEvent<int>>();
+            var clientRemoveChannel = clientNet.Register<TagRemovedEvent>();
+
             var serverBag = new TagBagProbe { EntityId = 1, Emit = server.Add };
             var clientBag = new TagBagProbe { EntityId = 1 };
-
-            network.Register<TagSetEvent<int>>() .OnReceived += clientBag.Apply;
-            network.Register<TagRemovedEvent>()  .OnReceived += clientBag.Apply;
+            clientSetChannel.OnReceived += clientBag.Apply;
+            clientRemoveChannel.OnReceived += clientBag.Apply;
 
             serverBag.Set(SampleTags.Health, 30);
             serverBag.Remove(SampleTags.Health);
-            network.Pump();
 
             Assert.IsFalse(clientBag.Has(SampleTags.Health));
             Assert.IsInstanceOf<TagRemovedEvent>(client[1]);
@@ -70,17 +66,20 @@ namespace Framework.Tags.Tests
         [Test]
         public void Mixed_Channels_Preserve_Send_Order()
         {
-            var (server, client, network) = Wired();
+            var (server, client, serverNet, clientNet) = WireBridge.Connect();
+            serverNet.Register<TagSetEvent<int>>();
+            serverNet.Register<TagSetEvent<bool>>();
+            var clientIntChannel = clientNet.Register<TagSetEvent<int>>();
+            var clientBoolChannel = clientNet.Register<TagSetEvent<bool>>();
+
             var serverBag = new TagBagProbe { EntityId = 1, Emit = server.Add };
             var clientBag = new TagBagProbe { EntityId = 1 };
-
-            network.Register<TagSetEvent<int>>() .OnReceived += clientBag.Apply;
-            network.Register<TagSetEvent<bool>>().OnReceived += clientBag.Apply;
+            clientIntChannel.OnReceived += clientBag.Apply;
+            clientBoolChannel.OnReceived += clientBag.Apply;
 
             serverBag.Set(SampleTags.Health, 10);
             serverBag.Set(SampleTags.IsCard, true);
             serverBag.Set(SampleTags.Attack, 5);
-            network.Pump();
 
             Assert.AreEqual(3, client.Count);
             Assert.IsInstanceOf<TagSetEvent<int>> (client[0]);
