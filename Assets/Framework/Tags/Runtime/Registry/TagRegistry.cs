@@ -5,6 +5,38 @@ using System.Reflection;
 
 namespace Framework.Tags
 {
+    /// <summary>
+    /// Slot-allocation registry for tags. Holds the authoritative <see cref="TagKey"/>
+    /// per int slot and per <see cref="ITagKey"/>-implementing class.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Registration paths</b></para>
+    /// <list type="bullet">
+    ///   <item><b>Pattern A</b> — static <c>TagKey&lt;T&gt;</c> instance with explicit slot.
+    ///   Base ctor calls <see cref="RegisterInstance"/> on first touch.</item>
+    ///   <item><b>Pattern B</b> — <c>[TagSlot(N)] class : ITagKey&lt;T&gt;</c> with
+    ///   <see cref="Tag{TClass}.Key"/> (or <c>Tag&lt;TClass, T&gt;.Key</c>) accessor.
+    ///   <see cref="For{TClass}"/> synthesizes the <c>TagKey&lt;T&gt;</c> singleton on
+    ///   first touch via reflection.</item>
+    /// </list>
+    /// <para><b>Slot-range conventions</b></para>
+    /// <para>Reserved by convention only — not enforced by the registry. Following them
+    /// keeps the two patterns from accidentally colliding and makes hand-allocated slots
+    /// readable at a glance.</para>
+    /// <list type="table">
+    ///   <listheader><term>Range</term><description>Use</description></listheader>
+    ///   <item><term>1–19</term><description>Kind markers (<c>IsCard</c>, <c>IsMinion</c>, <c>IsZone</c>, …)</description></item>
+    ///   <item><term>20–39</term><description>Stats (<c>Health</c>, <c>Attack</c>, <c>Cost</c>, …)</description></item>
+    ///   <item><term>40–59</term><description>Plain ability flags (<c>Backlash</c>, <c>DivineShield</c>, …)</description></item>
+    ///   <item><term>60–79</term><description>Names (strings — prefer content-id ints when possible)</description></item>
+    ///   <item><term>80–99</term><description>Entity-id refs (<c>Zone</c>, <c>Owner</c>, …)</description></item>
+    ///   <item><term>100–199</term><description>Pattern B boolean keywords (<c>Deathrattle</c>, …)</description></item>
+    ///   <item><term>200+</term><description>Reserved for future Pattern B with non-bool values</description></item>
+    /// </list>
+    /// <para><b>Slot uniqueness</b> is enforced at registration time — colliding slots
+    /// throw <see cref="InvalidOperationException"/>. A compile-time analyzer is deferred
+    /// pending a source-gen pass.</para>
+    /// </remarks>
     public static class TagRegistry
     {
         static readonly Dictionary<int, TagKey> _bySlot = new();

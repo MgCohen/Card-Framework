@@ -41,34 +41,65 @@ namespace Framework.Tags.Tests
         }
 
         [Test]
-        public void PatternB_KeyUsableWithSetGet_AfterCast()
+        public void PatternB_TypeParameterForm_RoundTrips()
         {
-            // Tag<TClass>.Key returns base TagKey — caller has to cast to the
-            // typed key to use the typed Set/Get. Documents the ergonomic gap
-            // the future Entity API overloads (Set<TTag>(T) where TTag : ITagKey<T>)
-            // will close.
+            // bag.Set<TTag>(value) — type-param sugar. No cast, no key reference at the call site.
             var bag = new TagBagProbe();
-            var deathrattle = (TagKey<bool>)Tag<SampleDeathrattle>.Key;
 
-            bag.Set(deathrattle, true);
-            Assert.IsTrue(bag.Get(deathrattle));
+            bag.Set<SampleDeathrattle>(true);
+            Assert.IsTrue(bag.Get<SampleDeathrattle, bool>());
+            Assert.IsTrue(bag.Has<SampleDeathrattle>());
 
-            bag.Set(deathrattle, false);
-            Assert.IsFalse(bag.Get(deathrattle), "false is a valid value — silenced, not absent");
-            Assert.IsTrue(bag.Has(deathrattle),  "Has stays true while slot is occupied");
+            bag.Set<SampleDeathrattle>(false);
+            Assert.IsFalse(bag.Get<SampleDeathrattle, bool>(), "false is a valid value — silenced, not absent");
+            Assert.IsTrue(bag.Has<SampleDeathrattle>(),       "Has stays true while slot is occupied");
 
-            bag.Remove(deathrattle);
-            Assert.IsFalse(bag.Has(deathrattle));
+            bag.Remove<SampleDeathrattle>();
+            Assert.IsFalse(bag.Has<SampleDeathrattle>());
+        }
+
+        [Test]
+        public void PatternB_NamedFieldForm_RoundTrips()
+        {
+            // bag.Set(Tag.SampleDeathrattle, value) — named-field accessor. Same underlying
+            // singleton as Tag<X, T>.Key; the named-field surface is declared once per assembly.
+            var bag = new TagBagProbe();
+
+            bag.Set(Tag.SampleDeathrattle, true);
+            Assert.IsTrue(bag.Get(Tag.SampleDeathrattle));
+
+            bag.Set(Tag.SampleDeathrattle, false);
+            Assert.IsFalse(bag.Get(Tag.SampleDeathrattle), "false is a valid value — silenced, not absent");
+            Assert.IsTrue(bag.Has(Tag.SampleDeathrattle),  "Has stays true while slot is occupied");
+
+            bag.Remove(Tag.SampleDeathrattle);
+            Assert.IsFalse(bag.Has(Tag.SampleDeathrattle));
+        }
+
+        [Test]
+        public void PatternB_BothForms_ResolveToSameKey()
+        {
+            // Type-param and named-field forms must agree — both writes mutate the same slot.
+            var bag = new TagBagProbe();
+
+            bag.Set<SampleDeathrattle>(true);
+            Assert.IsTrue(bag.Get(Tag.SampleDeathrattle), "Named-field read sees the type-param write");
+
+            bag.Set(Tag.SampleDeathrattle, false);
+            Assert.IsFalse(bag.Get<SampleDeathrattle, bool>(), "Type-param read sees the named-field write");
         }
 
         [Test]
         public void PatternB_TypedValue_NotJustBool()
         {
+            // SamplePoison : ITagKey<int> — same clean call sites with a non-bool value type.
             var bag = new TagBagProbe();
-            var poison = (TagKey<int>)Tag<SamplePoison>.Key;
 
-            bag.Set(poison, 3);
-            Assert.AreEqual(3, bag.Get(poison));
+            bag.Set<SamplePoison>(3);
+            Assert.AreEqual(3, bag.Get<SamplePoison, int>());
+
+            bag.Set(Tag.SamplePoison, 7);
+            Assert.AreEqual(7, bag.Get(Tag.SamplePoison));
         }
     }
 }
