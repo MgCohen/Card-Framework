@@ -1,17 +1,18 @@
 ---
 type: spike
-status: design-pass
+status: locked
 created: 2026-05-19
 references:
   - Product/spikes/wire-autopacker-sample.md
   - Product/spikes/wire-refoundation-roadmap.md
+  - Product/proposals/autopacker-typed-accessors.md
 sandbox: Assets/Framework/Wire/
 tags: [#spike, #wire, #network, #design]
 ---
 
 # Network Architecture
 
-> Design pass on the network architecture before Phase 6 implementation. Phases 1–5 built the in-process wire on a "shared Network" simplification; the real production target requires per-end Network + transport. This doc settles the design questions explicitly so implementation is mechanical. No code yet — decisions only.
+> Design pass on the network architecture before Phase 6 implementation. Phases 1–5 built the in-process wire on a "shared Network" simplification; the real production target requires per-end Network + transport. All decisions locked — implementation is mechanical from here.
 
 ## Where we are coming from
 
@@ -29,13 +30,18 @@ This doc settles them.
 
 ## Locked already
 
-- **IDispatcher composition.** `Channel<T>` takes an internal `IDispatcher { IPackingHandler Handler; void Receive(WireEvent); }` instead of full `Network`. `Network` implements the interface via explicit interface implementation. Channel sees the minimum it needs; future Network restructuring doesn't ripple into Channel. *Applied and verified — 276/276 tests passing.*
-- **Channel-as-discriminator (Q-B).** Each registered channel has a stable id derived from the channel itself. That id is what the receiver uses to route incoming bytes back to a typed channel.
-- **Channel owns type-specific ops (Q-E).** Pack, unpack, discriminator — all live on `Channel<T>`. Network is dispatch + transport only.
-- **Registry sync by type matching (Q-C).** Both ends register the same C# types; channel ids derive from type identity (registration order, type-name hash, or explicit id — see implementation note below).
+- **Network composition (Q-Composition).** Network is the orchestrator façade. It composes a `Dispatcher` (sub-service that owns `ITransport` + `IPackingHandler` + channel registry) and a `Dictionary<Type, Channel>` for the boxed `Send(WireEvent)` lookup. Channel takes the Dispatcher as a direct ref (no `IDispatcher` interface — base class abstract methods are enough). Strictly downward dependencies: `Network → Channel → Dispatcher → ITransport`; on receive `ITransport → Dispatcher → Channel`. No back-references.
+- **Channel-as-discriminator (Q-B).** Each registered channel has a stable `byte` id derived from registration order. That id is what the receiver uses to route incoming bytes back to a typed channel.
+- **Channel owns type routing + serialization (Q-E).** Channel<T> knows its discriminator, owns its `OnReceived` event, and handles the `Channel.Send(T)` / `Channel.DeliverFromBytes(reader)` round-trip via the Dispatcher. Pack/unpack codec itself lives on `WireEvent<TPacked>` (typed accessors).
+- **Registry sync by type matching (Q-C).** Both ends register the same C# types in the same order; channel ids match by position.
 - **Wire shape (Q-F).** `Wire` stays as the `EventStream` ↔ `Network` bridge. With per-end Network, the constructor splits into two overloads (outbound vs inbound).
+- **Synchronous delivery (Q-Sync).** `LoopbackTransport.Send` immediately invokes the peer's `OnReceived` — no buffering, no `Pump` step. Production transports (`NgoTransport`) deliver on their own cadence; framework provides no `Pump` method.
+- **byte discriminator (Q-DiscWidth).** 1-byte prefix per packet, 256 max channels. Tighter packets, fits card-game cardinality with comfortable margin. Migration to `short` is a wire-format-breaking change if ever needed.
+- **Per-send writer, per-channel cached size (Q-Sizing).** `Channel<T>` caches `_sizeWithDisc = 1 + Unsafe.SizeOf<TPacked>()` at construction. `Channel.Send` allocates a new `FastBufferWriter` per call against `Allocator.Temp` (Unity's per-frame bump allocator). Idiomatic NGO pattern; no writer-pool or persistent buffer state.
 
-## Open decisions
+## Decision rationale
+
+All decisions below are now locked (see Decision summary at the bottom). This section preserves the option space and tradeoffs that drove each lock.
 
 ### Q-A: Network identity — per-end vs shared
 
@@ -83,16 +89,40 @@ Alternative considered and rejected: keep `Framework.Wire` engine-free, expose `
 ## The shape if all leans accepted
 
 ```csharp
-public sealed class Network : IDispatcher
+// Orchestrator façade. Public API surface.
+public sealed class Network
 {
     public Network(ITransport transport, IPackingHandler handler = null);
 
     public Channel<T> Register<T>() where T : WireEvent, new();
-    public void Send(WireEvent ev);
+    public void Send(WireEvent ev);                       // boxed entry, type → channel lookup
 
-    public event Action<WireEvent> OnReceived;
+    public event Action<WireEvent> OnReceived;            // relayed from Dispatcher.OnAnyReceived
 }
 
+// Send/receive engine. Owns transport, handler, and the channel registry by id.
+public sealed class Dispatcher
+{
+    public event Action<WireEvent> OnAnyReceived;
+
+    internal void Register(byte id, Channel ch);
+    internal void Send(in FastBufferWriter writer);       // called by Channel.Send after it writes its bytes
+}
+
+// Type-router + serializer. One per registered event type.
+public abstract class Channel
+{
+    internal abstract void SendBoxed(WireEvent ev);
+    internal abstract WireEvent DeliverFromBytes(ref FastBufferReader r, IPackingHandler h);
+}
+
+public sealed class Channel<T> : Channel where T : WireEvent, new()
+{
+    public event Action<T> OnReceived;
+    public void Send(T ev);
+}
+
+// Transport contract. Loopback for tests, NGO for production.
 public delegate void TransportReceiveCallback(FastBufferReader reader);
 
 public interface ITransport
@@ -104,27 +134,68 @@ public interface ITransport
 public sealed class LoopbackTransport : ITransport
 {
     public static (LoopbackTransport server, LoopbackTransport client) Pair();
-    // Send to one end invokes OnReceived on the other with a matching FastBufferReader.
+    // Send to one end synchronously invokes OnReceived on the other.
 }
 
+// EventStream ↔ Network bridge. Constructor splits per direction.
 public sealed class Wire
 {
-    public Wire(EventStream source, Network network);   // outbound
-    public Wire(Network network, EventStream sink);     // inbound
+    public Wire(EventStream source, Network network);     // outbound
+    public Wire(Network network, EventStream sink);       // inbound
+
+    public static (EventStream serverStream, EventStream clientStream,
+                   Network serverNetwork, Network clientNetwork)
+        Connect(IPackingHandler handler = null);          // in-process loopback pair for tests
 }
 ```
 
-### Open implementation question: Channel<T> ↔ Packed-type lookup
+### Channel<T> ↔ Packed-type lookup — resolved via AutoPacker typed accessors
 
-`FastBufferWriter.WriteValueSafe<T>(in T)` requires the concrete unmanaged `T` at compile time. But `Channel<T>` only knows `T : WireEvent, new()` — the nested `Packed` struct is per-event and not in the generic constraint.
+`FastBufferWriter.WriteValueSafe<T>(in T)` requires the concrete unmanaged `T` at compile time. `Channel<T>` only knows `T : WireEvent, new()` — the nested `Packed` struct is per-event and not in the generic constraint.
 
-Three resolutions:
+**Resolution:** AutoPacker shipped typed accessors (see [`autopacker-typed-accessors.md`](../proposals/autopacker-typed-accessors.md)) — `PackTyped(handler) → TPacked` and `UnpackTyped(in TPacked, handler)` on every `[AutoPack]` type, plus `IPackable<TPacked>` / `IUnpackable<TPacked>` interfaces and `override` emission through hand-written generic abstract intermediates.
 
-1. **Two-param Channel** — `Channel<TEvent, TPacked>`. Register becomes `network.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>()`. Verbose but no reflection.
-2. **Reflection at Register** — find `typeof(T).GetNestedType("Packed")` once, build typed read/write delegates via `Expression.Compile` or `DynamicMethod`, cache them. No call-site verbosity but a small reflective build at startup. (Works on Mono; uncertain on IL2CPP.)
-3. **Scaffold change** — AutoPacker emits static helpers on each `[AutoPack]` type: `static void WritePacked(ref FastBufferWriter, IPackedStruct)` and `static IPackedStruct ReadPacked(ref FastBufferReader)`. Channel uses them via reflection-discovered method or C# 11 static abstract interface member. No call-site verbosity, no reflection at runtime.
+This unlocks a `WireEvent<TPacked>` intermediate base in `Framework.Wire` that knows both sides of the bridge at compile time:
 
-**Lean:** #2 for now (reflection-built delegates cached at Register). It keeps the existing `network.Register<EntityCreatedEvent>()` ergonomics. If IL2CPP turns out to break it, fall back to #1 or escalate to #3 as a follow-up Scaffold proposal.
+```csharp
+public abstract class WireEvent
+{
+    public abstract void WriteToNetwork(ref FastBufferWriter w, IPackingHandler h);
+    public abstract void ReadFromNetwork(ref FastBufferReader r, IPackingHandler h);
+}
+
+public abstract class WireEvent<TPacked> : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>
+    where TPacked : unmanaged, IPackedStruct
+{
+    public abstract TPacked PackTyped(IPackingHandler h = null);
+    public abstract void UnpackTyped(in TPacked p, IPackingHandler h = null);
+
+    public sealed override void WriteToNetwork(ref FastBufferWriter w, IPackingHandler h)
+    {
+        var packed = PackTyped(h);
+        w.WriteValueSafe(packed);
+    }
+
+    public sealed override void ReadFromNetwork(ref FastBufferReader r, IPackingHandler h)
+    {
+        r.ReadValueSafe(out TPacked packed);
+        UnpackTyped(packed, h);
+    }
+}
+```
+
+Concrete events change a single token in the inheritance clause:
+
+```csharp
+public partial class EntityCreatedEvent : WireEvent<EntityCreatedEvent.Packed>
+{
+    [Packed] public long EntityId;
+}
+```
+
+AutoPacker emits `PackTyped` / `UnpackTyped` as `override` on the leaf (verified by `AutoPacker_HandWrittenAbstractTypedBase_DerivedOverridesAndRoundTrips` in the AutoPacker test suite).
+
+`Channel<T>` stays single-type-parameter; dispatch is virtual through the non-generic `WireEvent`. No reflection, no two-type-param register call. Zero-box round-trip (verified by `AutoPacker_PackTyped_ReturnsConcretePackedWithoutBoxing` + `AutoPacker_UnpackTyped_RestoresStateWithoutBoxing`).
 
 ### What an explicit two-end test looks like
 
@@ -151,8 +222,7 @@ new Wire(serverStream, serverNetwork);   // outbound
 new Wire(clientNetwork, clientStream);   // inbound
 
 serverStream.Add(new EntityCreatedEvent { EntityId = 42 });
-clientNetwork.Pump();
-// clientStream[0] is the EntityCreatedEvent
+// clientStream[0] is the EntityCreatedEvent — delivery is synchronous via LoopbackTransport.
 ```
 
 ### What the in-process helper looks like
@@ -160,29 +230,39 @@ clientNetwork.Pump();
 For tests that don't care about the boundary — same coverage as today's `new Wire(server, client, network)`:
 
 ```csharp
-var (serverStream, clientStream, network) = Wire.Connect(handler);
-// Internally builds two Networks + loopback transport + wires + helper-managed registration.
-// Returned `network` is a thin handle for Register and Pump.
+var (serverStream, clientStream, serverNet, clientNet) = Wire.Connect(handler);
+// Internally builds two Networks + loopback transport + wires.
+// Caller registers event types on each network (same order on both ends).
 ```
 
 This keeps simple tests simple. Two-end tests still available for things that *do* care about the boundary.
 
 ## Implementation plan
 
-### Phase 6a — architecture refactor + FastBufferWriter transport
+### Phase 6a — `WireEvent<TPacked>` bridge + FastBufferWriter transport
 
-Single load-bearing phase. FastBufferWriter is the medium from day one — no intermediate `IPackedStruct`-over-loopback stage. NGO source is available in `Library/PackageCache/` for reference.
+Single load-bearing phase. FastBufferWriter is the medium from day one — no intermediate `IPackedStruct`-over-loopback stage. AutoPacker's typed accessors (now shipped) carry the codec; this phase wires them to NGO's buffer primitives. NGO source is available in `Library/PackageCache/` for reference.
 
-- `Framework.Wire.asmdef` drops `noEngineReferences`, references `Unity.Netcode`.
+**Bridge layer (new, AutoPacker-unlocked):**
+
+- `WireEvent` (non-generic abstract) declares `WriteToNetwork(ref FastBufferWriter, IPackingHandler)` / `ReadFromNetwork(ref FastBufferReader, IPackingHandler)`.
+- `WireEvent<TPacked>` intermediate base implements both via `PackTyped` / `UnpackTyped` (zero-box). Declares the typed methods abstract.
+- Seven existing event classes (`EntityCreatedEvent`, `EntityDestroyedEvent`, `BlockStartEvent`, `BlockEndEvent`, + test fixtures `EntityMovedEvent`, `EntityLabeledEvent`, `CardPlayedEvent`) get a one-token base-clause change to `: WireEvent<X.Packed>`. AutoPacker emits the typed `override` automatically.
+
+**Network / Dispatcher / Channel split (Q-Composition):**
+
+- `Network.asmdef` drops `noEngineReferences`, references `Unity.Netcode.Runtime`.
 - `ITransport` interface (using `FastBufferWriter` / `FastBufferReader`).
-- `LoopbackTransport` — `Send(in FastBufferWriter)` on one end → `OnReceived(FastBufferReader)` on the other with a matching reader pointed at the same buffer (or a copy if lifetime requires).
-- `Network` refactored to per-end. Takes `ITransport` + `IPackingHandler` at construction.
-- `Channel<T>` learns `Pack(ref FastBufferWriter, T)` and `Unpack(FastBufferReader) → T`. Discriminator byte/short prepended.
+- `LoopbackTransport` — `Send(in FastBufferWriter)` synchronously invokes the peer's `OnReceived` with a matching reader. **No `Pump`, no buffering** — delivery is synchronous (Q-Sync).
+- `Dispatcher` (new). Holds `ITransport` + `IPackingHandler` + `Channel[256]` indexed by id. Exposes `Send(in FastBufferWriter)` for channels to call after they write their bytes. Hooks `ITransport.OnReceived`, reads the 1-byte discriminator (Q-DiscWidth), routes to the matching channel via `Channel.DeliverFromBytes`. Fires `OnAnyReceived(WireEvent)` after each delivery.
+- `Network` becomes the orchestrator. Takes `ITransport` + `IPackingHandler` at construction; internally constructs `Dispatcher` and registers channels into it. Drops `Queue<Envelope>` and `Pump`. Public `Send(WireEvent)` does a `Dictionary<Type, Channel>` lookup and forwards to `Channel.SendBoxed`. `OnReceived` event relays from `Dispatcher.OnAnyReceived`.
+- `Channel<T>` (single-type-parameter, `where T : WireEvent, new()`). Caches `_id` (byte) and `_sizeWithDisc = 1 + Unsafe.SizeOf<TPacked>()` at construction (Q-Sizing — TPacked discovered via a one-time `new T().PackedSize` read against the virtual property on `WireEvent`). `Send(T ev)` allocates a per-send `FastBufferWriter` against `Allocator.Temp`, writes discriminator + calls `ev.WriteToNetwork`, hands the writer to `Dispatcher.Send`, disposes. `DeliverFromBytes(ref reader, handler)` constructs `new T()`, calls `ev.ReadFromNetwork`, fires `OnReceived`, returns the event for Dispatcher's `OnAnyReceived` relay.
 - `Wire` constructors split into outbound (`source, network`) / inbound (`network, sink`).
-- `Wire.Connect(handler)` helper builds the loopback-paired two-Network setup for in-process tests.
-- Tests migrated. Existing test coverage preserved; new test exercises explicit two-end setup.
+- `Wire.Connect(handler)` helper builds the loopback-paired two-Network setup for in-process tests, returning both streams + both networks.
 
-Validation: 276 existing tests stay green, plus new tests covering two-end + FastBufferWriter round-trip.
+**Tests:** existing 11 wire tests migrate via `Wire.Connect` helper (no `Pump` calls anymore — delivery is synchronous). The one test asserting deferred-pump behavior rewrites to assert synchronous delivery on `Send`. New test exercises explicit two-end setup with paired `LoopbackTransport`.
+
+Validation: existing 346 EditMode tests stay green (11 wire tests + 29 AutoPacker self-tests + rest), plus new two-end + FastBufferWriter round-trip tests.
 
 ### Phase 6b — NGO transport
 
@@ -195,19 +275,22 @@ Validation: 276 existing tests stay green, plus new tests covering two-end + Fas
 - **Channel registry hash exchange / handshake.** Both ends must currently register the same C# types in the same order to get matching discriminator ids. A registry-hash handshake at connect time would detect drift; deferred to a later pass.
 - **Reliability / ordering guarantees.** `ITransport` contract is "best-effort delivery"; ordering preservation is the transport's responsibility (NGO's reliable-sequenced channel will provide it).
 - **Cross-process tests.** `LoopbackTransport` in the same process catches state-isolation issues. Real cross-process testing (child process + stdin/stdout, or AppDomains) is deferred — useful but not blocking framework development.
-- **Open-generic event types.** Pending upstream Scaffold change (see [`autopacker-open-generics.md`](../proposals/autopacker-open-generics.md)). Doesn't interact with network architecture.
+- **Open-generic event types.** Shipped in Scaffold (see [`autopacker-open-generics.md`](../proposals/autopacker-open-generics.md)). Doesn't interact with network architecture.
 
 ## Decision summary
 
 | # | Question | Locked |
 |---|---|---|
-| — | IDispatcher composition | ✅ Channel takes `IDispatcher`, not full `Network`. *Applied and verified.* |
+| Composition | Network/Dispatcher/Channel split | ✅ Network = orchestrator. Dispatcher = send/receive engine, holds transport + handler + channel registry. Channel = type-router + serializer (abstract base, not interface). Strictly downward deps. |
 | A | Network identity | ✅ Per-end (server + client construct their own) |
-| B | Discriminator | ✅ Channel id assigned at registration, sent as header byte/short |
-| C | Registry sync | ✅ Both ends register same types; ids derive from registration |
-| D | Transport abstraction | ✅ `ITransport` interface; `LoopbackTransport` for tests, `NgoTransport` for production |
-| E | Type-specific ops location | ✅ `Channel<T>` owns pack, unpack, discriminator |
-| F | Wire shape | ✅ Stays; constructor splits into outbound + inbound |
-| G | Migration | ✅ Replace + `Wire.Connect` helper for in-process case |
+| B | Discriminator | ✅ Channel id assigned at registration (registration order = id) |
+| C | Registry sync | ✅ Both ends register same types in same order; ids match by position |
+| D | Transport abstraction | ✅ `ITransport` with `FastBufferWriter`/`FastBufferReader`; `LoopbackTransport` for tests, `NgoTransport` for production |
+| E | Type-specific ops location | ✅ `WireEvent<TPacked>` owns pack/unpack codec via AutoPacker typed accessors; `Channel<T>` owns discriminator id + per-channel size cache + writer allocation |
+| F | Wire shape | ✅ Stays; constructor splits into outbound + inbound; static `Connect` helper for in-process pair |
+| G | Migration | ✅ Replace today's `Network` shape; `Wire.Connect` softens the in-process case |
+| Sync | Delivery timing | ✅ Synchronous in `LoopbackTransport.Send`. No `Pump` method. Production transports deliver on their own cadence. |
+| DiscWidth | Discriminator width | ✅ `byte` (256 channels max). Tighter packets; sufficient for card-game cardinality. |
+| Sizing | Buffer sizing | ✅ Per-send `FastBufferWriter` against `Allocator.Temp`; `_sizeWithDisc` cached per channel at construction. |
 
-All eight settled. Implementation can proceed mechanically through phases 6a → 6b → 6c.
+All settled. Implementation can proceed mechanically.

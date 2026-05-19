@@ -2,8 +2,7 @@
     "name": "Framework.Wire",
     "rootNamespace": "Framework.Wire",
     "references": [
-        "Scaffold.Autopacker",
-        "Unity.Netcode.Runtime"
+        "Scaffold.Autopacker"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

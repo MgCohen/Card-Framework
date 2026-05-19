@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Scaffold.AutoPacker;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
