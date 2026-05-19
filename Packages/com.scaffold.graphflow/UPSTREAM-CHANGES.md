@@ -20,6 +20,11 @@ it intends to support Unity 6.4+. Project-local concerns (manifest entries,
 embed vs. git URL, where we keep the generator source) are intentionally left
 out — see `PORT-NOTES.md` in this folder for those.
 
+This is **what we did** — the minimum to get the package working on 6.4.
+For **what we'd recommend doing next** (notably: making the generator and
+hand-written code work on both 6.3 and 6.4 from a single source), see
+[`FOLLOW-UPS.md`](FOLLOW-UPS.md).
+
 ---
 
 ## 1. Graph Toolkit became a built-in module in 6.4

@@ -12,11 +12,15 @@ code compiles, the Roslyn generator was rebuilt from source against the
 current Graph Toolkit API, sample compiles and its `CardSandbox.Tests`
 pass 2/2, and the editor tests pass 10/10.
 
-For an upstream-ready summary of the package-level changes (suitable for
-sending back to Scaffold as a PR or issue), see
-[`UPSTREAM-CHANGES.md`](UPSTREAM-CHANGES.md). This file covers the
-project-local concerns (manifest layout, embed vs. git URL, where the
-generator source lives) that aren't relevant upstream.
+Companion docs:
+
+- [`UPSTREAM-CHANGES.md`](UPSTREAM-CHANGES.md) — clean summary of what we
+  changed at the package level; sendable to Scaffold as-is.
+- [`FOLLOW-UPS.md`](FOLLOW-UPS.md) — what we **didn't** do yet but
+  probably should: making the generator + hand-written code support
+  both Unity 6.3 and 6.4 from a single source.
+- This file (`PORT-NOTES.md`) — project-local context: manifest layout,
+  embed vs. git URL, where the generator source lives.
 
 ## What's in the project
 
