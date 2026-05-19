@@ -1,5 +1,9 @@
 # AutoPacker — Proposal: `IUnpackable<T>` for symmetric, reflection-free unpack
 
+> **Status: accepted with modifications (2026-05-18).** Scaffold landed the asymmetry fix but chose an instance-method shape over the static-abstract design proposed below. Shipped: non-generic `IUnpackable` with `void Unpack(IPackedStruct packed)` — paired with the generator-emitted parameterless constructor, this gives the same zero-reflection outcome via `new T(); ev.Unpack(packed);` instead of `T.FromPacked(packed)`. Tradeoff: two-step instead of one-step construction, but no C# 11 / static-abstract requirement. The consumer-side win — reflection-free generic `Channel<T>` — is identical. See `Assets/Framework/Wire/Channel.cs` for the consuming code in its final form. Original proposal preserved below as historical record.
+>
+> ---
+>
 > One-line summary: AutoPacker today gives downstream code a polymorphic *pack* path (`IPackable.Pack`) but only a constructor-based *unpack* path. Adding an `IUnpackable<TSelf>` interface with a static abstract `FromPacked` method — and emitting it from the generator alongside the existing `IPackable` implementation — closes the asymmetry and eliminates reflection in every consumer that wants to round-trip generic `T : [AutoPack]` values through a wire / replay / dispatch layer.
 
 ## Context

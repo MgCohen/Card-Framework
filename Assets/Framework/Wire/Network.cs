@@ -4,30 +4,47 @@ using Scaffold.AutoPacker;
 
 namespace Framework.Wire
 {
-    public sealed class Network
+    public sealed class Network : IDispatcher
     {
-        readonly Dictionary<Type, Action<IPackedStruct>> _deliverers = new();
-        readonly Queue<(Action<IPackedStruct> deliver, IPackedStruct packed)> _inbound = new();
+        readonly Dictionary<Type, Channel> _channels = new();
+        readonly Queue<Envelope> _inbound = new();
+        readonly IPackingHandler _handler;
 
         public event Action<WireEvent> OnReceived;
 
-        public Channel<T> Register<T>() where T : WireEvent, IPackable, IUnpackable, new()
+        public Network(IPackingHandler handler = null) => _handler = handler;
+
+        IPackingHandler IDispatcher.Handler => _handler;
+        void IDispatcher.Receive(WireEvent ev) => OnReceived?.Invoke(ev);
+
+        public Channel<T> Register<T>() where T : WireEvent, new()
         {
-            var ch = new Channel<T>();
-            ch.OnDelivered += ev => OnReceived?.Invoke(ev);
-            _deliverers[typeof(T)] = ch.Deliver;
+            var ch = new Channel<T>(this);
+            _channels[typeof(T)] = ch;
             return ch;
         }
 
         public void Send(WireEvent ev) =>
-            _inbound.Enqueue((_deliverers[ev.GetType()], ((IPackable)ev).Pack()));
+            _inbound.Enqueue(new Envelope(ev.GetType(), ev.Pack(_handler)));
 
         public void Pump()
         {
             while (_inbound.Count > 0)
             {
-                var (deliver, packed) = _inbound.Dequeue();
-                deliver(packed);
+                var env = _inbound.Dequeue();
+                _channels[env.EventType].Deliver(env.Packed);
+            }
+        }
+
+        readonly struct Envelope
+        {
+            public readonly Type EventType;
+            public readonly IPackedStruct Packed;
+
+            public Envelope(Type eventType, IPackedStruct packed)
+            {
+                EventType = eventType;
+                Packed = packed;
             }
         }
     }

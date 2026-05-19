@@ -10,7 +10,7 @@ namespace Framework.Wire
         public event Action<WireEvent> OnAppended;
 
         public int Count => _events.Count;
-        public WireEvent Get(int index) => _events[index];
+        public WireEvent this[int index] => _events[index];
 
         public void Add(WireEvent ev)
         {

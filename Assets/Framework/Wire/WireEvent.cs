@@ -1,4 +1,7 @@
+using Scaffold.AutoPacker;
+
 namespace Framework.Wire
 {
-    public abstract class WireEvent { }
+    [AutoPack]
+    public abstract partial class WireEvent { }
 }
