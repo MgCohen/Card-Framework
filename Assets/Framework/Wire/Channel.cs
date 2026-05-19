@@ -3,19 +3,31 @@ using Scaffold.AutoPacker;
 
 namespace Framework.Wire
 {
-    public sealed class Channel<T> where T : WireEvent, IPackable, IUnpackable, new()
+    internal interface IDispatcher
     {
+        IPackingHandler Handler { get; }
+        void Receive(WireEvent ev);
+    }
+
+    public abstract class Channel
+    {
+        internal abstract void Deliver(IPackedStruct packed);
+    }
+
+    public sealed class Channel<T> : Channel where T : WireEvent, new()
+    {
+        readonly IDispatcher _dispatcher;
+
         public event Action<T> OnReceived;
-        internal event Action<WireEvent> OnDelivered;
 
-        internal Channel() { }
+        internal Channel(IDispatcher dispatcher) => _dispatcher = dispatcher;
 
-        internal void Deliver(IPackedStruct packed)
+        internal override void Deliver(IPackedStruct packed)
         {
             var ev = new T();
-            ev.Unpack(packed);
+            ev.Unpack(packed, _dispatcher.Handler);
             OnReceived?.Invoke(ev);
-            OnDelivered?.Invoke(ev);
+            _dispatcher.Receive(ev);
         }
     }
 }

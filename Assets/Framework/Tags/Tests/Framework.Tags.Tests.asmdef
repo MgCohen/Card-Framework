@@ -1,0 +1,28 @@
+{
+    "name": "Framework.Tags.Tests",
+    "rootNamespace": "Framework.Tags.Tests",
+    "references": [
+        "Framework.Tags",
+        "Framework.Wire",
+        "Scaffold.Autopacker"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

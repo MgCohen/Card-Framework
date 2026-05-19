@@ -1,0 +1,17 @@
+{
+    "name": "Framework.Tags",
+    "rootNamespace": "Framework.Tags",
+    "references": [
+        "Framework.Wire",
+        "Scaffold.Autopacker"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
