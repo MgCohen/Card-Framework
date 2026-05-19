@@ -1,0 +1,23 @@
+{
+    "name": "Scaffold.GraphFlow.CardSandbox.Editor",
+    "rootNamespace": "Scaffold.GraphFlow.CardSandbox.Editor",
+    "references": [
+        "Scaffold.GraphFlow.PackageAttributes",
+        "Scaffold.GraphFlow",
+        "Scaffold.GraphFlow.Editor",
+        "Scaffold.GraphFlow.CardSandbox",
+        "Unity.GraphToolkit.Common.Editor",
+        "Unity.GraphToolkit.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

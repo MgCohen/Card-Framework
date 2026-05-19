@@ -1,0 +1,18 @@
+{
+    "name": "Scaffold.GraphFlow",
+    "rootNamespace": "Scaffold.GraphFlow",
+    "references": [
+        "Scaffold.GraphFlow.PackageAttributes",
+        "Scaffold.Variables",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

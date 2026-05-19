@@ -1,0 +1,23 @@
+{
+    "name": "Scaffold.GraphFlow.Tests",
+    "rootNamespace": "Scaffold.GraphFlow.Tests",
+    "references": [
+        "Scaffold.GraphFlow",
+        "Scaffold.Variables",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

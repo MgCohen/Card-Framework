@@ -12,21 +12,27 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "120b6b88723f387c8f9147f4ee419f4b1e6afc4a"
+      "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
+    },
+    "com.scaffold.graphflow": {
+      "version": "file:com.scaffold.graphflow",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
     },
     "com.scaffold.maps": {
       "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.maps#main",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "2a2648068c173d5fe0a07befcda79df6629f5f48"
+      "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
     },
     "com.scaffold.variables": {
       "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.variables#main",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "2a2648068c173d5fe0a07befcda79df6629f5f48"
+      "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
     },
     "com.unity.2d.animation": {
       "version": "14.0.3",

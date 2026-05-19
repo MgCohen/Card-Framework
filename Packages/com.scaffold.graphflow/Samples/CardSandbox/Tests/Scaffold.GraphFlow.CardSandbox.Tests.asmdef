@@ -1,0 +1,23 @@
+{
+    "name": "Scaffold.GraphFlow.CardSandbox.Tests",
+    "rootNamespace": "Scaffold.GraphFlow.CardSandbox.Tests",
+    "references": [
+        "Scaffold.GraphFlow.CardSandbox",
+        "Scaffold.GraphFlow",
+        "UniTask"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

@@ -1,0 +1,19 @@
+{
+    "name": "Scaffold.GraphFlow.CardSandbox",
+    "rootNamespace": "Scaffold.GraphFlow.CardSandbox",
+    "references": [
+        "Scaffold.GraphFlow.PackageAttributes",
+        "Scaffold.GraphFlow",
+        "Scaffold.Variables",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

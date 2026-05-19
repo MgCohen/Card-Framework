@@ -1,0 +1,32 @@
+{
+
+    "name": "Scaffold.GraphFlow.PackageAttributes",
+
+    "rootNamespace": "Scaffold.GraphFlow",
+
+    "references": [],
+
+    "includePlatforms": [],
+
+    "excludePlatforms": [],
+
+    "allowUnsafeCode": false,
+
+    "overrideReferences": true,
+
+    "precompiledReferences": [
+
+        "Scaffold.GraphFlow.AttributesLib.dll"
+
+    ],
+
+    "autoReferenced": true,
+
+    "defineConstraints": [],
+
+    "versionDefines": [],
+
+    "noEngineReferences": true
+
+}
+
