@@ -10,7 +10,6 @@ namespace Framework.Wire.Tests
             NewWired(IPackingHandler handler = null)
         {
             var (server, client, serverNet, clientNet) = Wire.Connect(handler);
-            // Same order on both ends — channel ids must match.
             serverNet.Register<EntityCreatedEvent>();   clientNet.Register<EntityCreatedEvent>();
             serverNet.Register<EntityDestroyedEvent>(); clientNet.Register<EntityDestroyedEvent>();
             serverNet.Register<EntityMovedEvent>();     clientNet.Register<EntityMovedEvent>();
@@ -196,8 +195,6 @@ namespace Framework.Wire.Tests
         [Test]
         public void Client_Stream_Sees_Events_Synchronously_On_Server_Add()
         {
-            // LoopbackTransport delivers synchronously — by the time server.Add returns,
-            // the client stream has already seen the event. No Pump step.
             var (server, client, _, _) = NewWired();
             var seen = new List<long>();
             client.OnAppended += ev => seen.Add(((EntityCreatedEvent)ev).EntityId);

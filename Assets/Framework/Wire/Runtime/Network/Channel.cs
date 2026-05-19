@@ -5,28 +5,12 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
-    /// <summary>
-    /// Non-generic base. <see cref="Dispatcher"/> stores channels in a
-    /// <c>Channel[256]</c> indexed by discriminator id; the abstract members let the
-    /// dispatcher push/pull events without seeing the concrete type.
-    /// </summary>
     public abstract class Channel
     {
-        /// <summary>Send an event already known to belong to this channel's type.</summary>
         internal abstract void SendBoxed(WireEvent ev);
-
-        /// <summary>
-        /// Read this channel's payload from <paramref name="reader"/>, dispatch to
-        /// typed subscribers, and return the event up to the dispatcher for the
-        /// <see cref="Dispatcher.OnAnyReceived"/> relay.
-        /// </summary>
         internal abstract WireEvent DeliverFromBytes(ref FastBufferReader reader);
     }
 
-    /// <summary>
-    /// Type-router + serializer for a single <typeparamref name="T"/> on the wire.
-    /// Owns its discriminator id, a cached payload size, and the handler reference.
-    /// </summary>
     public sealed class Channel<T> : Channel where T : WireEvent, new()
     {
         readonly byte _id;
@@ -34,7 +18,6 @@ namespace Framework.Wire
         readonly IPackingHandler _handler;
         readonly int _sizeWithDisc;
 
-        /// <summary>Fired when an event of type <typeparamref name="T"/> arrives.</summary>
         public event Action<T> OnReceived;
 
         internal Channel(byte id, Dispatcher dispatcher, IPackingHandler handler)
@@ -43,13 +26,11 @@ namespace Framework.Wire
             _dispatcher = dispatcher;
             _handler = handler;
 
-            // Probe PackedSize once via a throwaway instance — the virtual property
-            // on WireEvent<TPacked> resolves to sizeof(TPacked), constant per closed type.
+            // PackedSize is constant per closed type — probe once via throwaway instance.
             var probe = new T();
             _sizeWithDisc = 1 + probe.PackedSize;
         }
 
-        /// <summary>Direct typed send. Allocates a per-call <see cref="FastBufferWriter"/> against <see cref="Allocator.Temp"/>.</summary>
         public void Send(T ev)
         {
             var writer = new FastBufferWriter(_sizeWithDisc, Allocator.Temp);

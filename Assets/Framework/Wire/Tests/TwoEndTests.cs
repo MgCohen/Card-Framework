@@ -2,11 +2,6 @@ using NUnit.Framework;
 
 namespace Framework.Wire.Tests
 {
-    /// <summary>
-    /// Exercises the explicit two-end shape (two Networks + paired LoopbackTransport)
-    /// without the <see cref="Wire.Connect"/> sugar. Proves the boundary between server
-    /// and client is real, not a fiction the helper hides.
-    /// </summary>
     public class TwoEndTests
     {
         [Test]
@@ -41,7 +36,6 @@ namespace Framework.Wire.Tests
             EntityCreatedEvent received = null;
             clientChannel.OnReceived += ev => received = ev;
 
-            // Bypass Network.Send (type lookup) — send directly through the typed channel.
             serverChannel.Send(new EntityCreatedEvent { EntityId = 99 });
 
             Assert.IsNotNull(received);
@@ -51,7 +45,6 @@ namespace Framework.Wire.Tests
         [Test]
         public void Channel_Ids_Match_When_Registration_Order_Matches()
         {
-            // Two ends register the same types in the same order — channel ids align.
             var (serverTransport, clientTransport) = LoopbackTransport.Pair();
             var serverNetwork = new Network(serverTransport);
             var clientNetwork = new Network(clientTransport);

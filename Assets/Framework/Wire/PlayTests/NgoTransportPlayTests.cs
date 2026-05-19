@@ -7,14 +7,6 @@ using UnityEngine.TestTools;
 
 namespace Framework.Wire.PlayTests
 {
-    /// <summary>
-    /// Play-mode validation for <see cref="NgoTransport"/>. Spins up a real
-    /// <see cref="NetworkManager"/> in host mode with <see cref="UnityTransport"/>,
-    /// builds a wire layer on top, and exercises a round-trip through NGO's
-    /// <c>CustomMessagingManager</c>. Host-mode broadcast loops back to the host's
-    /// own handler — proves the adapter wires up correctly without requiring two
-    /// distinct NetworkManager instances.
-    /// </summary>
     public class NgoTransportPlayTests
     {
         const string ListenAddress = "127.0.0.1";
@@ -63,7 +55,7 @@ namespace Framework.Wire.PlayTests
             Assert.IsTrue(_nm.StartHost(), "StartHost should succeed");
             yield return null;
 
-            _transport = new NgoTransport(_nm); // broadcast — host loops back to its own handler
+            _transport = new NgoTransport(_nm);
             var network = new Network(_transport);
             var channel = network.Register<EntityCreatedEvent>();
 
@@ -72,7 +64,6 @@ namespace Framework.Wire.PlayTests
 
             network.Send(new EntityCreatedEvent { EntityId = 42 });
 
-            // NGO dispatches custom messages on the next tick — yield a couple frames.
             yield return null;
             yield return null;
 

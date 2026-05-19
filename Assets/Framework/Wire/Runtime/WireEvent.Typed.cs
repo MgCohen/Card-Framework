@@ -3,20 +3,9 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
-    /// <summary>
-    /// Generic intermediate base that bridges AutoPacker's typed accessors to NGO's
-    /// <see cref="FastBufferWriter"/> / <see cref="FastBufferReader"/>. Concrete events
-    /// inherit <c>WireEvent&lt;X.Packed&gt;</c> and gain zero-box wire serialization for free —
-    /// AutoPacker emits the <c>PackTyped</c> / <c>UnpackTyped</c> overrides automatically.
-    /// </summary>
-    /// <remarks>
-    /// Uses the unmanaged byte-pointer path on FastBufferWriter/Reader rather than
-    /// <c>WriteValueSafe&lt;T, ForStructs&gt;</c>, because NGO's <c>ForStructs</c> overload requires
-    /// <c>INetworkSerializeByMemcpy</c> — a marker we deliberately keep off
-    /// <see cref="IPackedStruct"/> to avoid coupling AutoPacker to NGO. The unsafe block
-    /// is the single point where this framework adapts AutoPacker's typed structs to NGO's
-    /// constraints.
-    /// </remarks>
+    // Uses the unmanaged byte-pointer path (not FastBufferWriter.WriteValueSafe<T, ForStructs>)
+    // because that overload requires INetworkSerializeByMemcpy — a marker we keep off
+    // IPackedStruct to avoid coupling AutoPacker to NGO.
     public abstract class WireEvent<TPacked> : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>
         where TPacked : unmanaged, IPackedStruct
     {

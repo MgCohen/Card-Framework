@@ -2,7 +2,6 @@ using NUnit.Framework;
 
 namespace Framework.Tags.Tests
 {
-    // Uses TagBagProbe (TEST STUB) to exercise Set/Get/Has/Remove against real TagKeys.
     public class SetGetTests
     {
         [Test]
@@ -43,7 +42,6 @@ namespace Framework.Tags.Tests
         [Test]
         public void PatternB_TypeParameterForm_RoundTrips()
         {
-            // bag.Set<TTag>(value) — type-param sugar. No cast, no key reference at the call site.
             var bag = new TagBagProbe();
 
             bag.Set<SampleDeathrattle>(true);
@@ -61,8 +59,6 @@ namespace Framework.Tags.Tests
         [Test]
         public void PatternB_NamedFieldForm_RoundTrips()
         {
-            // bag.Set(Tag.SampleDeathrattle, value) — named-field accessor. Same underlying
-            // singleton as Tag<X, T>.Key; the named-field surface is declared once per assembly.
             var bag = new TagBagProbe();
 
             bag.Set(Tag.SampleDeathrattle, true);
@@ -79,7 +75,6 @@ namespace Framework.Tags.Tests
         [Test]
         public void PatternB_BothForms_ResolveToSameKey()
         {
-            // Type-param and named-field forms must agree — both writes mutate the same slot.
             var bag = new TagBagProbe();
 
             bag.Set<SampleDeathrattle>(true);
@@ -92,7 +87,6 @@ namespace Framework.Tags.Tests
         [Test]
         public void PatternB_TypedValue_NotJustBool()
         {
-            // SamplePoison : ITagKey<int> — same clean call sites with a non-bool value type.
             var bag = new TagBagProbe();
 
             bag.Set<SamplePoison>(3);

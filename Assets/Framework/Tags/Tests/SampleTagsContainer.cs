@@ -1,16 +1,27 @@
 namespace Framework.Tags.Tests
 {
-    /// <summary>
-    /// Test-local named-field container for Pattern B sample tags. Lives in the Tests
-    /// namespace because the sample keyword classes (<see cref="SampleDeathrattle"/>,
-    /// <see cref="SamplePoison"/>) do — partial classes can't span assemblies, so each
-    /// assembly owns its own <c>Tag</c> container alongside its keyword class declarations.
-    /// </summary>
-    /// <remarks>
-    /// One line per keyword. Same pattern downstream game assemblies will follow when
-    /// they declare their own keyword tags. Source-gen could later replace these
-    /// hand-written lines with no call-site changes.
-    /// </remarks>
+    static class SampleTags
+    {
+        public static readonly TagKey<int>  Health = new(1001);
+        public static readonly TagKey<int>  Attack = new(1002);
+        public static readonly TagKey<bool> IsCard = new(1003);
+    }
+
+    [TagSlot(1100)]
+    sealed class SampleDeathrattle : ITagKey<bool>
+    {
+        public int SourceEntityId { get; }
+        public SampleDeathrattle(int sourceEntityId) { SourceEntityId = sourceEntityId; }
+    }
+
+    [TagSlot(1101)]
+    sealed class SamplePoison : ITagKey<int>
+    {
+        public int Source { get; }
+        public int Amount { get; }
+        public SamplePoison(int source, int amount) { Source = source; Amount = amount; }
+    }
+
     internal static class Tag
     {
         public static readonly TagKey<bool> SampleDeathrattle = Tag<SampleDeathrattle, bool>.Key;
