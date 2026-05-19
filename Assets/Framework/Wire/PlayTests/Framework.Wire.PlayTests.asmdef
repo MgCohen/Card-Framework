@@ -1,0 +1,22 @@
+{
+    "name": "Framework.Wire.PlayTests",
+    "rootNamespace": "Framework.Wire.PlayTests",
+    "references": [
+        "Framework.Wire",
+        "Unity.Netcode.Runtime",
+        "Unity.Collections",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
