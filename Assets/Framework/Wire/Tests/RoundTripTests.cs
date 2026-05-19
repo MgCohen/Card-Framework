@@ -76,6 +76,7 @@ namespace Framework.Wire.Tests
             server.Add(new EntityCreatedEvent { EntityId = 1 });
             server.Add(new EntityCreatedEvent { EntityId = 2 });
             server.Add(new EntityCreatedEvent { EntityId = 3 });
+
             network.Pump();
 
             Assert.AreEqual(3, client.Count);

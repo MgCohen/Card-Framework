@@ -67,5 +67,8 @@
         "com.cysharp.unitask"
       ]
     }
+  ],
+  "testables": [
+    "com.scaffold.autopacker"
   ]
 }
