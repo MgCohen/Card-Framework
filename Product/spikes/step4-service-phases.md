@@ -83,7 +83,9 @@ handlers and bridges will hang off of**.
   IMGUI panel. Instantiated under each root.
 - `SandboxTransport` — scene-level MonoBehaviour (or scene init script)
   that creates an in-memory transport and injects it into both `Network`
-  instances at startup.
+  instances at startup. **Deferred to 4b** — 4a registers a
+  `NullTransport` so `Network` is constructable; the loopback pair
+  lands alongside the bridge layers when entity events show up.
 
 **`Framework.Wire` additions:**
 
@@ -104,18 +106,23 @@ handlers and bridges will hang off of**.
 **Sandbox scene:** `Assets/Framework/Bootstrap/Sandbox/BootstrapSandbox.unity`
 with `ServerRoot` + `ClientRoot` GameObjects (each with its
 `AppFlowRoot` subclass + a `BootstrapStatusUI`) + a `SandboxTransport`
-scene object. Both status panels show **"Engine bootstrapped. 0
-entities."** with their side label.
+scene object. **Scene file deferred to 4b**; 4a's headless test is the
+gating artifact for the dispatch surface + DI wiring.
 
-**Tests:** Edit-mode test that constructs a VContainer scope via
-`EngineLayer`, resolves `GameEngine` + `EventStream` + `Network`,
-asserts non-null and that `GameEngine.Stream` / `GameEngine.Network`
-return the registered singletons. Smoke test for `EventStream.Register`
-+ `Emit` dispatch (one fake handler, one fake event type). No Unity
-scene dep.
+**Tests:**
+- `Framework.Wire.Tests/EventStreamDispatchTests.cs` — typed-bucket
+  dispatch smoke (typed `Emit<T>` and non-generic `Emit(WireEvent)`,
+  cross-type isolation, OnAppended + history compatibility,
+  multi-handler fan-out).
+- `Framework.Bootstrap.Tests/EngineLayerTests.cs` — VContainer scope
+  built via `LifetimeScope.Create(EngineLayer.Install, …)`; asserts
+  `GameEngine` resolves with non-null `Stream` + `Network`,
+  `IEventEmitter` / `IHandlerRegistry` / `EventStream` all resolve to
+  the same singleton, and `engine.Stream` matches the container's
+  `EventStream`.
 
-**Closure:** sandbox scene runs in Play mode, both IMGUI panels show
-the "bootstrapped" message, Unity batch tests green.
+**Closure:** Unity batch tests green. (Sandbox Play-mode verification
+lands with the scene file in 4b.)
 
 ### 4b — `EntityStore` + `EntityService` worked example with per-type Apply handlers
 

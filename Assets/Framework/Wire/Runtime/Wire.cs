@@ -8,7 +8,7 @@ namespace Framework.Wire
             => source.OnAppended += network.Send;
 
         public Wire(Network network, EventStream sink)
-            => network.OnReceived += sink.Add;
+            => network.OnReceived += sink.Emit;
 
         public static (EventStream serverStream, EventStream clientStream,
                        Network serverNetwork, Network clientNetwork)
