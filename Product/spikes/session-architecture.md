@@ -1,17 +1,17 @@
 ---
 type: spike
-status: design-pass
+status: locked
 created: 2026-05-20
 references:
   - Product/spikes/network-architecture.md
   - Assets/Framework/Wire/Runtime/Network/
-sandbox: Assets/Framework/Session/
+sandbox: Assets/Framework/Session/, Assets/Framework/Relay/
 tags: [#spike, #session, #network, #design]
 ---
 
 # Session Architecture
 
-> Design pass on `Framework.Session` — the slice that owns peer lifecycle, discovery, identity, and the bridge into `Framework.Wire`. Wire knows how bytes move once peers exist; Session is how peers come into existence. All scope and shape locked in conversation 2026-05-20. This doc is the working spec — implementation reads from here.
+> Design pass on `Framework.Session` (+ sibling `Framework.Relay`) — the slices that own peer lifecycle, discovery, identity, and the bridge into `Framework.Wire`. Wire knows how bytes move once peers exist; Session is how peers come into existence. **All decisions locked 2026-05-20** — implementation is mechanical from here. This doc is the working spec.
 
 ## Goal
 
@@ -568,16 +568,6 @@ Captured explicitly so they don't accidentally creep in. All of these go into a 
 - **Multiple simultaneous sessions in one process.** API doesn't preclude it, but NGO's `NetworkManager.Singleton` does. Out of scope until we have a reason.
 - **Bot drivers.** Out of scope per project decision — bots live above the Session API, pushing intents into a solo or host session through normal gameplay code.
 
-## Unresolved (need confirmation before code)
-
-These three I want to surface explicitly — happy to defend my picks but they could go either way:
-
-1. **`Session` as a `MonoBehaviour` vs plain class.** Currently sketched as plain `IDisposable`. Pro: testable, decoupled from scene lifecycle. Con: it owns a `GameObject` (NetworkManager host) internally — feels mildly weird for a non-Mono to spawn a Mono. **Lean: plain class.** It's a service, not a scene object; the GO is an implementation detail.
-
-2. **Where the `EventStream` lives.** Wire defines `EventStream`; Session exposes one. Open question: does Session *own* an EventStream that auto-appends every received WireEvent, or does the user wire that themselves outside Session? **Lean: Session exposes a built-in EventStream populated from `Network.OnReceived`,** so the log "just exists" the moment the session is connected. User can ignore it if they don't care.
-
-3. **Welcome via transient transport vs in-band with recipient field.** Locked above as transient transport (per-recipient `NgoTransport`), but in-band with an `int targetSeat` field on `PeerWelcomeEvent` plus a receiver-side filter would also work. Transient transport is cleaner at the cost of a few extra NGO message-handler registrations per join. **Lean: transient transport — stand by previous lock unless someone has objections.**
-
 ## Decision summary
 
 | # | Decision | Lock |
@@ -597,4 +587,7 @@ These three I want to surface explicitly — happy to defend my picks but they c
 | 13 | Error model | Factories throw; in-session failures raise `Disconnected(reason)` |
 | 14 | Sequence number on WireEvent | Deferred (no phase-1 wire-format change) |
 | 15 | Sample scene | One Host/Join harness — manual cross-device verification deliverable |
-| 16 | Out of scope | LAN discovery, reconnect/backfill, dedicated server, spectators, multi-session, bots |
+| 16 | `Session` shape | Plain `sealed class : IDisposable`. Owns its `NetworkManager` GameObject as an implementation detail — Session itself is a service, not a scene object |
+| 17 | `EventStream` ownership | Session owns one and auto-appends every received `WireEvent` from `Network.OnReceived` — the log "just exists" once connected; users who don't care can ignore it |
+| 18 | `PeerWelcomeEvent` delivery | Transient per-recipient `NgoTransport` for the point-to-point write. No recipient-filter branching in the receive path |
+| 19 | Out of scope | LAN discovery, reconnect/backfill, dedicated server, spectators, multi-session, bots |
