@@ -56,61 +56,125 @@ The cleanly relevant pieces from Wire that Session consumes unchanged:
 
 ## Slice layout
 
-Standard vertical-slice shape per `docs/feature-layout.md`. Depends on `Framework.Wire` and the relevant NGO/Services packages.
+**Split into two sibling features** so Relay's three Unity Services packages stay an opt-in cost. Each feature is a clean vertical slice per `docs/feature-layout.md`.
+
+### Framework.Session — core (no Services deps)
+
+Covers solo, LAN, same-device, and anyone who pre-configures a `NetworkManager` themselves (including Relay).
 
 ```
 Assets/Framework/Session/
   Runtime/    Framework.Session.asmdef
-    Session.cs                 // façade — factory methods + public state
-    SessionState.cs            // enum: Connecting | Connected | Disconnected
+    Session.cs                 // façade — public factories + private bring-up helpers
     Peer.cs                    // readonly struct: Seat, NetworkId, IsLocal, IsHost
-    DisconnectReason.cs        // enum: LocalShutdown | HostShutdown | NetworkError | RelayError
+    SessionState.cs            // enum: Connecting | Connected | Disconnected
+    DisconnectReason.cs        // enum: LocalShutdown | HostShutdown | NetworkError
     Membership/
-      PeerRoster.cs            // mutable peer list — host authoritative
-      PeerWelcomeEvent.cs      // WireEvent — host → joiner: "you are seat N, here is the roster"
-      PeerJoinedEvent.cs       // WireEvent — host → all: "seat N joined"
-      PeerLeftEvent.cs         // WireEvent — host → all: "seat N left"
-    Modes/
-      SoloMode.cs              // builds session over LoopbackTransport
-      DirectHostMode.cs        // configures UTP for direct ip:port, StartHost, builds NgoTransport
-      DirectJoinMode.cs        // configures UTP for ip:port, StartClient, builds NgoTransport
-      RelayHostMode.cs         // Relay allocation → UTP → StartHost → NgoTransport
-      RelayJoinMode.cs         // Relay join → UTP → StartClient → NgoTransport
-    Services/
-      UnityServicesBoot.cs     // idempotent UnityServices.Initialize + anonymous sign-in
+      PeerWelcomeEvent.cs      // host → joiner (point-to-point): "you are seat N, roster"
+      PeerJoinedEvent.cs       // host → all: "seat N joined"
+      PeerLeftEvent.cs         // host → all: "seat N left"
   PlayTests/  Framework.Session.PlayTests.asmdef
     SoloSessionTests.cs
     DirectLoopbackTests.cs     // host + client on 127.0.0.1, two NetworkManagers per test
     PeerRosterTests.cs         // join/leave seat assignment
   Sample/     Framework.Session.Sample.asmdef
     HostJoinHarness.cs         // MonoBehaviour driving the Host/Join scene
-    HostJoinHarness.unity      // the scene itself
+    HostJoinHarness.unity
 ```
 
-Asmdef references (`Runtime`):
+Asmdef references (Runtime):
 
 ```
 Framework.Wire
 Unity.Netcode.Runtime
 Unity.Netcode.Transports.UTP
+Unity.Collections
+Scaffold.Autopacker            // membership events are WireEvents
+UniTask
+```
+
+No `Modes/` folder — bring-up logic (configure UTP for direct ip:port, call StartHost/Client, build NgoTransport) is private static helpers inside `Session.cs`. No `PeerRoster` type — Session keeps a private `List<Peer>` directly. Trims ~6 files vs. the first sketch with zero loss of clarity.
+
+### Framework.Relay — opt-in online
+
+Depends on `Framework.Session`. Adds the Relay factories. Anyone who doesn't want Unity Services doesn't import this package.
+
+```
+Assets/Framework/Relay/
+  Runtime/    Framework.Relay.asmdef
+    Relay.cs                   // public static — Host() / Join(joinCode)
+    UnityServicesBoot.cs       // idempotent UnityServices.Initialize + anonymous sign-in
+    RelayDisconnectReason.cs   // (if needed beyond DisconnectReason — TBD)
+  PlayTests/  Framework.Relay.PlayTests.asmdef
+    UnityServicesBootTests.cs  // idempotent boot, no network — covers what we can in CI
+    // Real Relay round-trip is manual via the Session Sample scene + creds; not in CI.
+```
+
+Asmdef references (Runtime):
+
+```
+Framework.Session
+Unity.Netcode.Runtime
+Unity.Netcode.Transports.UTP
 Unity.Services.Core
 Unity.Services.Authentication
 Unity.Services.Relay
-Unity.Collections
-Scaffold.Autopacker          // PeerWelcome/Joined/Left are WireEvents — need [AutoPack]
-UniTask                      // async surface
+UniTask
 ```
 
-`Sample/` and `PlayTests/` reference `Framework.Session` and `UnityEngine.TestRunner` / `TextMeshPro` as needed. No engine-free constraints; this slice is Unity-targeted by nature.
+### How they bolt together
+
+`Session` exposes two public "bring-up from a pre-configured NetworkManager" hooks. The direct/solo factories use them internally; `Relay` configures NM with relay allocation data and then calls into the same hooks. Single bring-up path, no duplicated lifecycle code, no `InternalsVisibleTo`.
+
+```csharp
+// In Framework.Session
+public sealed class Session
+{
+    public static UniTask<Session> StartSolo();
+    public static UniTask<Session> StartHostDirect(ushort port, string listenAddress = "0.0.0.0");
+    public static UniTask<Session> JoinDirect(string ip, ushort port);
+
+    // Public hooks — Relay (or any custom transport setup) uses these.
+    public static UniTask<Session> StartHost(NetworkManager preConfigured);
+    public static UniTask<Session> Join(NetworkManager preConfigured);
+}
+
+// In Framework.Relay
+public static class Relay
+{
+    public static async UniTask<(Session session, string joinCode)> Host(int maxConnections = 4)
+    {
+        await UnityServicesBoot.EnsureSignedIn();
+        var (nm, utp) = Session.CreateNetworkManager();              // public helper on Session
+        var allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
+        var joinCode   = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+        utp.SetRelayServerData(new RelayServerData(allocation, "dtls"));
+        var session = await Session.StartHost(nm);
+        return (session, joinCode);
+    }
+
+    public static async UniTask<Session> Join(string joinCode)
+    {
+        await UnityServicesBoot.EnsureSignedIn();
+        var (nm, utp) = Session.CreateNetworkManager();
+        var alloc = await RelayService.Instance.JoinAllocationAsync(joinCode);
+        utp.SetRelayServerData(new RelayServerData(alloc, "dtls"));
+        return await Session.Join(nm);
+    }
+}
+```
+
+`Session.CreateNetworkManager()` is a small public factory that returns a fresh `(NetworkManager, UnityTransport)` pair on a `DontDestroyOnLoad` GameObject — the one piece Relay needs to share with Session. Everything else stays inside Session.
 
 ## Public API surface
 
 ```csharp
+// Framework.Session
 public sealed class Session : IDisposable
 {
     // Wire side — gameplay registers channels here, exactly as today.
     public Network Network { get; }
-    public EventStream Stream { get; }      // optional convenience; can be wired by user too
+    public EventStream Stream { get; }
 
     // Identity.
     public Peer Self { get; }
@@ -125,14 +189,24 @@ public sealed class Session : IDisposable
     public event Action<Peer> PeerLeft;
     public event Action<DisconnectReason> Disconnected;
 
-    // Factories. All async; failures surface as thrown exceptions caught by the caller.
+    // Factories. All async; startup failures throw, post-connect drops raise Disconnected.
     public static UniTask<Session> StartSolo();
     public static UniTask<Session> StartHostDirect(ushort port, string listenAddress = "0.0.0.0");
     public static UniTask<Session> JoinDirect(string ip, ushort port);
-    public static UniTask<(Session session, string joinCode)> StartHostRelay(int maxConnections = 4);
-    public static UniTask<Session> JoinRelay(string joinCode);
+
+    // Lower-level hooks. Used by Framework.Relay and any custom transport setup.
+    public static UniTask<Session> StartHost(NetworkManager preConfigured);
+    public static UniTask<Session> Join(NetworkManager preConfigured);
+    public static (NetworkManager nm, UnityTransport utp) CreateNetworkManager();
 
     public void Dispose();   // tears down NGO, transport, NetworkManager GO
+}
+
+// Framework.Relay
+public static class Relay
+{
+    public static UniTask<(Session session, string joinCode)> Host(int maxConnections = 4);
+    public static UniTask<Session> Join(string joinCode);
 }
 
 public readonly struct Peer
@@ -158,7 +232,7 @@ Channel registration on `session.Network` follows Wire's existing rule: same typ
 
 ## Composition (per-mode)
 
-Every factory ends up at the same shape — `Network` over `ITransport`. They differ only in how the transport is brought up.
+Every factory ends up at the same shape — `Network` over `ITransport`. They differ only in how the transport is brought up. Direct and Relay both flow through the same `Session.StartHost(nm) / Session.Join(nm)` core — the slice splits only at the "configure the NetworkManager" step.
 
 ### Solo
 
@@ -197,32 +271,28 @@ session.State = Connected;
 
 Same as host but `utp.SetConnectionData(ip, port)` and `nm.StartClient()`. On `OnClientConnectedCallback(localClientId)`, register the membership channels (same order as host), set state to `Connecting`. Stay in `Connecting` until `PeerWelcomeEvent` arrives from the host — only then does the joiner know its `Self.Seat` and the current roster. State flips to `Connected` at that point.
 
-### Relay host
-
-Adds a Relay allocation step before the UTP configuration:
+### Relay host (lives in Framework.Relay)
 
 ```csharp
-await UnityServicesBoot.EnsureSignedIn();  // initialize + anonymous auth, idempotent
+await UnityServicesBoot.EnsureSignedIn();                                // initialize + anonymous auth, idempotent
+var (nm, utp) = Session.CreateNetworkManager();                          // public helper on Session
 var allocation = await RelayService.Instance.CreateAllocationAsync(maxConnections);
-var joinCode  = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
-var relayData = new RelayServerData(allocation, "dtls");
-utp.SetRelayServerData(relayData);
-nm.StartHost();
-// …then the same bring-up tail as Direct host.
-// Caller receives (session, joinCode).
+var joinCode   = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+utp.SetRelayServerData(new RelayServerData(allocation, "dtls"));
+var session = await Session.StartHost(nm);                               // shared bring-up
+return (session, joinCode);
 ```
 
-Any failure between `EnsureSignedIn` and `StartHost` surfaces as a thrown exception; partial state (GameObject created, services half-booted) gets cleaned up in a `try/catch` in the factory before rethrowing.
+Any failure between `EnsureSignedIn` and `StartHost` surfaces as a thrown exception; partial state (GameObject created, services half-booted) gets cleaned up in a `try/catch` before rethrowing.
 
-### Relay join
+### Relay join (lives in Framework.Relay)
 
 ```csharp
 await UnityServicesBoot.EnsureSignedIn();
-var joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
-var relayData      = new RelayServerData(joinAllocation, "dtls");
-utp.SetRelayServerData(relayData);
-nm.StartClient();
-// …same join tail as Direct join.
+var (nm, utp) = Session.CreateNetworkManager();
+var alloc = await RelayService.Instance.JoinAllocationAsync(joinCode);
+utp.SetRelayServerData(new RelayServerData(alloc, "dtls"));
+return await Session.Join(nm);
 ```
 
 ## Identity & seats
@@ -460,7 +530,7 @@ This scene is the manual deliverable that proves "I can play with someone." Two 
 
 ## Tests
 
-### PlayTests (in-editor)
+### Framework.Session.PlayTests (in-editor)
 
 - `SoloSessionTests`
   - StartSolo gives `Self = seat 0, host=true, local=true`.
@@ -478,10 +548,14 @@ This scene is the manual deliverable that proves "I can play with someone." Two 
 
 NGO requires a real `NetworkManager` per peer in the same process; UTP supports this since loopback connections multiplex by port. Two NMs in one test use distinct ports.
 
+### Framework.Relay.PlayTests
+
+- `UnityServicesBootTests` — idempotent boot semantics, no network calls. Real Relay round-trip needs creds we don't have in CI; manual verification via the Sample scene is the truth.
+
 ### What we don't test in EditMode
 
-- Relay path. Requires Unity Services creds in CI which we don't have. Verified manually via the Sample harness; covered by a soak doc, not automated.
-- Real LAN multi-device. Same — manual verification on the Sample scene is the truth.
+- Real Relay round-trip — needs Unity Services creds. Manual via Sample scene.
+- Real LAN multi-device — same; manual verification on the Sample scene.
 
 ## Out of scope
 
@@ -508,7 +582,7 @@ These three I want to surface explicitly — happy to defend my picks but they c
 
 | # | Decision | Lock |
 |---|---|---|
-| 1 | Slice name | `Framework.Session` |
+| 1 | Slice split | `Framework.Session` (core) + `Framework.Relay` (opt-in online); each a full vertical slice with Runtime + PlayTests + Sample |
 | 2 | Authority model (phase 1) | Host-authoritative listen-server |
 | 3 | Online infra | Unity Relay only |
 | 4 | Local play | Direct IP — covers same-LAN-two-devices and same-device-two-clients |
@@ -518,8 +592,8 @@ These three I want to surface explicitly — happy to defend my picks but they c
 | 8 | Channel id reservation | Session reserves ids 0–2; user channels from 3 |
 | 9 | Async surface | `UniTask` on all factories |
 | 10 | Threading | Main thread only |
-| 11 | NetworkManager ownership | Session creates and owns its NM GameObject |
-| 12 | UnityServices init | Idempotent, lazy, only on Relay factories |
+| 11 | NetworkManager ownership | Session creates and owns its NM GameObject; `Session.CreateNetworkManager()` is the public factory the Relay slice (or any custom transport) reuses |
+| 12 | UnityServices init | Idempotent, lazy; lives in `Framework.Relay`, never paid by Session-only consumers |
 | 13 | Error model | Factories throw; in-session failures raise `Disconnected(reason)` |
 | 14 | Sequence number on WireEvent | Deferred (no phase-1 wire-format change) |
 | 15 | Sample scene | One Host/Join harness — manual cross-device verification deliverable |
