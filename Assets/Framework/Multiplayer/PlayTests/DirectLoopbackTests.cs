@@ -25,36 +25,47 @@ namespace Framework.Multiplayer.PlayTests
         }
 
         [UnityTest]
-        public IEnumerator StartHostDirect_EntersConnectedAsHostAtSeatZero() => UniTask.ToCoroutine(async () =>
+        public IEnumerator StartHostDirect_EntersInLobbyAsHostAtSeatZero() => UniTask.ToCoroutine(async () =>
         {
             using var session = await Session.StartHostDirect(Port, ListenAddress);
 
-            Assert.AreEqual(SessionState.Connected, session.State);
+            Assert.AreEqual(SessionState.InLobby, session.State);
             Assert.AreEqual(0, session.Self.Seat);
             Assert.IsTrue(session.IsHost);
             Assert.IsTrue(session.Self.IsLocal);
             Assert.AreEqual(1, session.Peers.Count);
-            Assert.NotNull(session.Network);
-            Assert.NotNull(session.Stream);
+            Assert.NotNull(session.NetworkManager);
         });
 
         [UnityTest]
-        public IEnumerator StartHostDirect_UserChannel_SelfEchoesThroughNgo() => UniTask.ToCoroutine(async () =>
+        public IEnumerator StartHostDirect_SetSelfData_RoundTripsThroughNgoLoopback() => UniTask.ToCoroutine(async () =>
         {
             using var session = await Session.StartHostDirect(Port, ListenAddress);
-            var channel = session.Network.Register<ProbeEvent>();
 
-            ProbeEvent received = null;
-            channel.OnReceived += ev => received = ev;
+            PlayerContext received = null;
+            session.PlayerContextChanged += (peer, ctx) => received = ctx;
 
-            session.Network.Send(new ProbeEvent { Value = 99 });
+            session.SetSelfData(new PlayerData { PlayerId = 777 });
 
-            // NGO's CustomMessagingManager delivers via the player loop — wait a couple of frames.
-            await UniTask.NextFrame();
-            await UniTask.NextFrame();
+            // NGO's CustomMessagingManager delivers on the player loop; the resolver path is
+            // submit → host hears self-echo → resolver → broadcast → host hears that too.
+            // Give it a few frames.
+            for (var i = 0; i < 5; i++) await UniTask.NextFrame();
 
-            Assert.IsNotNull(received, "Host should hear its own broadcast through NGO loopback");
-            Assert.AreEqual(99, received.Value);
+            Assert.IsNotNull(received, "Host should hear its own PlayerContext broadcast through NGO loopback");
+            Assert.AreEqual(0, received.Seat);
+            Assert.AreEqual(777UL, received.PlayerId);
+        });
+
+        [UnityTest]
+        public IEnumerator StartHostDirect_StartMatch_TransitionsToInMatch() => UniTask.ToCoroutine(async () =>
+        {
+            using var session = await Session.StartHostDirect(Port, ListenAddress);
+
+            session.StartMatch();
+            for (var i = 0; i < 3; i++) await UniTask.NextFrame();
+
+            Assert.AreEqual(SessionState.InMatch, session.State);
         });
 
         [UnityTest]
@@ -69,8 +80,6 @@ namespace Framework.Multiplayer.PlayTests
             session.Dispose();
             session.Dispose();  // idempotent
 
-            // After Dispose the Session should have destroyed the NM GameObject, so the
-            // singleton clears synchronously (Destroy is queued, but the static unsets earlier).
             await UniTask.NextFrame();
 
             Assert.AreEqual(SessionState.Disconnected, session.State);

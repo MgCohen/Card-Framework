@@ -8,11 +8,11 @@ namespace Framework.Multiplayer.PlayTests
     public class SoloSessionTests
     {
         [UnityTest]
-        public IEnumerator Solo_StartsConnectedAsHostAtSeatZero() => UniTask.ToCoroutine(async () =>
+        public IEnumerator Solo_StartsInLobbyAsHostAtSeatZero() => UniTask.ToCoroutine(async () =>
         {
             using var session = await Session.StartSolo();
 
-            Assert.AreEqual(SessionState.Connected, session.State);
+            Assert.AreEqual(SessionState.InLobby, session.State);
             Assert.AreEqual(0, session.Self.Seat);
             Assert.IsTrue(session.IsHost);
             Assert.IsTrue(session.Self.IsLocal);
@@ -21,35 +21,78 @@ namespace Framework.Multiplayer.PlayTests
         });
 
         [UnityTest]
-        public IEnumerator Solo_UserChannel_SelfEchoesThroughLoopback() => UniTask.ToCoroutine(async () =>
+        public IEnumerator Solo_SetSelfData_PopulatesPlayersThroughResolver() => UniTask.ToCoroutine(async () =>
         {
             using var session = await Session.StartSolo();
-            var channel = session.Network.Register<ProbeEvent>();
 
-            ProbeEvent received = null;
-            channel.OnReceived += ev => received = ev;
+            PlayerContext received = null;
+            session.PlayerContextChanged += (peer, ctx) => received = ctx;
 
-            session.Network.Send(new ProbeEvent { Value = 42 });
+            session.SetSelfData(new PlayerData { PlayerId = 12345 });
 
-            Assert.IsNotNull(received, "Solo loopback should echo sends back to the same network");
-            Assert.AreEqual(42, received.Value);
+            Assert.IsNotNull(received, "Solo loopback should route PlayerData → resolver → PlayerContext back to self");
+            Assert.AreEqual(0, received.Seat);
+            Assert.AreEqual(12345UL, received.PlayerId);
+            Assert.IsTrue(session.Players.ContainsKey(0));
+            Assert.AreEqual(12345UL, session.Players[0].PlayerId);
         });
 
         [UnityTest]
-        public IEnumerator Solo_StreamAutoAppendsReceivedEvents() => UniTask.ToCoroutine(async () =>
+        public IEnumerator Solo_SetSelfReady_FlipsAllReady() => UniTask.ToCoroutine(async () =>
         {
             using var session = await Session.StartSolo();
-            session.Network.Register<ProbeEvent>();
 
-            Assert.AreEqual(0, session.Stream.Count);
+            Assert.IsFalse(session.AllReady, "Single peer should not be AllReady before SetSelfReady");
 
-            session.Network.Send(new ProbeEvent { Value = 7 });
-            session.Network.Send(new ProbeEvent { Value = 8 });
+            var raised = 0;
+            bool lastValue = false;
+            session.ReadyChanged += (peer, ready) => { raised++; lastValue = ready; };
 
-            Assert.AreEqual(2, session.Stream.Count);
-            Assert.IsInstanceOf<ProbeEvent>(session.Stream[0]);
-            Assert.AreEqual(7, ((ProbeEvent)session.Stream[0]).Value);
-            Assert.AreEqual(8, ((ProbeEvent)session.Stream[1]).Value);
+            session.SetSelfReady(true);
+
+            Assert.AreEqual(1, raised);
+            Assert.IsTrue(lastValue);
+            Assert.IsTrue(session.ReadyStates[0]);
+            Assert.IsTrue(session.AllReady);
+        });
+
+        [UnityTest]
+        public IEnumerator Solo_SetSelfReady_Idempotent() => UniTask.ToCoroutine(async () =>
+        {
+            using var session = await Session.StartSolo();
+
+            var raised = 0;
+            session.ReadyChanged += (peer, ready) => raised++;
+
+            session.SetSelfReady(true);
+            session.SetSelfReady(true);   // same value — no extra event
+
+            Assert.AreEqual(1, raised);
+        });
+
+        [UnityTest]
+        public IEnumerator Solo_StartMatch_TransitionsToInMatch() => UniTask.ToCoroutine(async () =>
+        {
+            using var session = await Session.StartSolo();
+
+            SessionState? observed = null;
+            session.StateChanged += s => observed = s;
+
+            session.StartMatch();
+
+            Assert.AreEqual(SessionState.InMatch, session.State);
+            Assert.AreEqual(SessionState.InMatch, observed);
+        });
+
+        [UnityTest]
+        public IEnumerator Solo_LobbyActionsAfterMatchStart_Throw() => UniTask.ToCoroutine(async () =>
+        {
+            using var session = await Session.StartSolo();
+            session.StartMatch();
+
+            Assert.Throws<System.InvalidOperationException>(() => session.SetSelfReady(true));
+            Assert.Throws<System.InvalidOperationException>(() => session.SetSelfData(new PlayerData()));
+            Assert.Throws<System.InvalidOperationException>(() => session.StartMatch());
         });
 
         [UnityTest]

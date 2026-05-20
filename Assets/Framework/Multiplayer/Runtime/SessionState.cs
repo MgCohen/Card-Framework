@@ -3,7 +3,8 @@ namespace Framework.Multiplayer
     public enum SessionState
     {
         Connecting,
-        Connected,
+        InLobby,
+        InMatch,
         Disconnected,
     }
 }
