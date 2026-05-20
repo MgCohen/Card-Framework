@@ -7,7 +7,7 @@ references:
   - Product/spikes/definition-service-pattern.md
   - Product/spikes/step3-entity-phases.md
 sandbox: Assets/Framework/Engine/, Assets/Framework/Bootstrap/
-tags: [#spike, #services, #phasing, #session-handoff]
+tags: [#spike, #services, #phasing, #session-handoff, #handlers]
 ---
 
 # Step 4 — Service pattern phasing
@@ -15,29 +15,32 @@ tags: [#spike, #services, #phasing, #session-handoff]
 > Session-handoff record. The 7-step refoundation roadmap names step 4 as
 > "Service pattern"; the locked design lives in
 > [`definition-service-pattern.md`](definition-service-pattern.md). Step 4
-> ships **the scaffold + one worked example (`EntityService`)**; specific
-> services (Commands, Effects, Triggers, Request, State) get the pattern
-> applied in step 5+.
+> ships **the scaffold + `EntityService` worked example with the
+> handler-based event command pattern**; specific services (Commands,
+> Effects, Triggers, Request, State) get the pattern applied in step 5+.
 
 ## Phase breakdown
 
 | Phase | Scope | Status | Commit |
 |---|---|---|---|
-| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, empty `GameEngine` shell); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped" | ⏳ | — |
-| 4b | `EntityService` worked example — refactor `Framework.Entities/EntityStore` → `EntityService`; `EntityServiceLayer` registers it; auto-emission lit up; symmetric server/client; sandbox demo extends to "1 entity, 3 tag events emitted, mirror in sync" | ⏳ | — |
-| 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; adjust convention summary; resolve any remaining Q leans against reality | ⏳ | — |
-| 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
+| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, empty `GameEngine` shell); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`WireEventDispatcher` + `IWireEventHandler<T>` infrastructure in `Framework.Wire`** | ⏳ | — |
+| 4b | `EntityService` worked example — single class both sides; `Entity` raises internal events; Emit handlers (server) + Apply handlers (client) registered via per-side layers; sandbox extends to "create card → mirror in sync" | ⏳ | — |
+| 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; finalize convention summary; resolve any "felt forced" items | ⏳ | — |
+| 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
 
-After 4d: scaffold + `EntityService` operational. Bootstrap a scene, press
-Play, see entity events round-trip server → client through the wire. The
+After 4d: scaffold + `EntityService` operational with full handler-based
+event round-trip. Bootstrap a scene, press Play, create an entity + tag
+mutations on server, see client mirror sync via dispatched handlers. The
 slice's `Engine/Pipeline/` stays as reference for step 5+.
 
 ## Phase scope
 
-### 4a — Scaffold
+### 4a — Scaffold + dispatcher infrastructure
 
-**No services beyond an empty `GameEngine` stub.** This phase proves the
-bones work: DI substrate, layer system, scene wiring, IMGUI feedback.
+**No services beyond an empty `GameEngine` stub.** This phase proves
+the bones work: DI substrate, layer system, scene wiring, IMGUI feedback,
+**plus the `WireEventDispatcher` infrastructure that 4b's handlers will
+hang off of**.
 
 **Manifest changes:**
 
@@ -49,129 +52,139 @@ bones work: DI substrate, layer system, scene wiring, IMGUI feedback.
 **New asmdef: `Framework.Engine`** (`Assets/Framework/Engine/`)
 
 - Pure C#; no Unity dep.
-- `GameEngine` — empty marker class for now (per Q3 lean). May gain
-  diagnostics fields (frame counter, ready state) if useful for the 4a
-  IMGUI panel.
+- `GameEngine` — empty marker class (per Q3 lean). May gain
+  diagnostics fields (frame counter, ready state) if useful for IMGUI.
 - No `GameEngineBuilder` in step 4 (per Q4 lean — defer until a non-Unity
   consumer needs it).
-- Test asmdef ships too, even if empty in 4a.
+- Test asmdef ships too (may be empty in 4a).
 
 **New asmdef: `Framework.Bootstrap`** (`Assets/Framework/Bootstrap/`)
 
-- Unity-coupled; depends on `VContainer`, `Scaffold.Appflow`, `Framework.Engine`.
+- Unity-coupled; depends on VContainer, Scaffold.Appflow,
+  `Framework.Engine`, `Framework.Wire`.
 - `FrameworkAppFlowRoot : AppFlowRoot` — MonoBehaviour, root composition.
-  Overrides `GetInitialLayers()` returning `EngineLayer`.
-- `EngineLayer : IScopeLayer` — registers `GameEngine` as singleton in the
-  container.
+  Overrides `GetInitialLayers()` returning `EngineLayer` (and later
+  `Server*Layer` / `Client*Layer` in 4b).
+- `EngineLayer : IScopeLayer` — registers `GameEngine` + `WireEventDispatcher`
+  as singletons.
 - `BootstrapStatusUI` — MonoBehaviour with `[Inject] GameEngine _engine`,
-  IMGUI panel reading state.
+  IMGUI panel.
+
+**`Framework.Wire` additions:**
+
+- `IWireEventHandler<TEvent>` interface — `void Handle(TEvent ev)`.
+- `WireEventDispatcher` — subscribes to `EventStream.OnAppended`;
+  registers typed handlers; routes by runtime type via
+  `Dictionary<Type, List<Action<WireEvent>>>`.
+- (Possibly) `WireHandlerInstaller<TEvent> : IAsyncInitializable` — a
+  bridge that registers a resolved handler with the dispatcher at scope
+  init. Details settle here.
 
 **Sandbox scene:** `Assets/Framework/Bootstrap/Sandbox/BootstrapSandbox.unity`
 with the `FrameworkAppFlowRoot` GameObject + a child `BootstrapStatusUI`
 showing **"Engine bootstrapped. 0 entities. 0 services registered."**
-(Service count is informational; resolves via `IObjectResolver` introspection
-or a hand-counted display field.)
-
-**Wire endpoint registration (per Q1 lock during 4a):** the layer
-registers `IServerWireSender` + `IClientWireReceiver` (or whatever
-interfaces win Q1) so 4b can constructor-inject them into `EntityService`.
-For 4a's empty-shell state, no service consumes them yet, but the
-registration plumbing is in place.
 
 **Tests:** Edit-mode test that constructs a VContainer scope via a layer,
-resolves `GameEngine`, asserts non-null. No Unity scene dep; the layer
-machinery is testable headless.
-
-**Commit pattern:** Single commit `feat(engine,bootstrap): Phase 4a —
-scaffold with VContainer + Appflow + sandbox scene` or split into two
-(`feat(deps): import VContainer + Scaffold.Appflow` + `feat(engine):
-Phase 4a scaffold`). TBD by diff size.
+resolves `GameEngine` + `WireEventDispatcher`, asserts non-null. No Unity
+scene dep.
 
 **Closure:** sandbox scene runs in Play mode, IMGUI shows the
 "bootstrapped" message, Unity batch tests green.
 
-### 4b — EntityService worked example
+### 4b — `EntityService` worked example with handler pattern
 
 **Touches:** `Framework.Entities`, `Framework.Tags`, `Framework.Bootstrap`.
-Possibly minor `Framework.Wire` if Q1's chosen interfaces need helpers.
 
 **`Framework.Entities` changes:**
 
-- Rename `EntityStore` → `EntityService`. Update `EntityWireRoundTripTests`
-  + the migrated 3e tests.
-- `EntityService` ctor takes the wire capabilities (interface names per
-  Q1 lock). Emission moves inside the service: `Create` → emits
-  `EntityCreatedEvent`; tag mutations route through subscribed Entity
-  events → emit `TagSetEvent<T>` / `TagChangeEvent<T>` / `TagRemovedEvent`.
-- `Entity` gains internal `TagSet` / `TagChanged` / `TagRemoved` events
-  (slot-keyed, untyped) for the service to subscribe on `Create` (per
-  Q5b lock). Public mutation surface (`Set` / `Remove`) stays unchanged.
-- Symmetric server/client (per L6): client-side `EntityService`
-  constructed with a receiving capability subscribes to incoming events
-  and applies them to its local bag.
+- Rename `EntityStore` → `EntityService`. Drop the wire-aware
+  constructor variants from 3d — service is now pure C#, no wire ref.
+- `EntityService` exposes one event: `public event Action<Entity>? OnCreated`.
+- `Entity` gains three internal events:
+  - `internal event Action<TagKey, object>? OnTagSet`
+  - `internal event Action<TagKey, object, object>? OnTagChanged`
+  - `internal event Action<TagKey, object>? OnTagRemoved`
+  - Raised inside `Entity.Set` / `Entity.Remove` as appropriate.
+- `Entity.Set` distinguishes first-write (raises `OnTagSet`) from
+  subsequent write (raises `OnTagChanged` with prev + next) — like slice.
+- No back-reference from `Entity` to `EntityService`. The service
+  subscribes to each Entity's events implicitly via per-side Emit
+  handlers (which subscribe to `EntityService.OnCreated`, then attach to
+  the Entity's events).
+
+**New `Framework.Entities/Runtime/Wire/` folder** holding the handlers:
+
+- `EmitEntityCreated` (server) — `entities.OnCreated` → `stream.Add(EntityCreatedEvent)`.
+- `EmitTagSet<T>` (server, generic) — attaches to each Entity's `OnTagSet`; emits `TagSetEvent<T>` if value matches T.
+- `EmitTagChange<T>` (server, generic) — `OnTagChanged`; emits `TagChangeEvent<T>`.
+- `EmitTagRemoved` (server) — `OnTagRemoved`; emits `TagRemovedEvent`.
+- `ApplyEntityCreated : IWireEventHandler<EntityCreatedEvent>` (client)
+  — calls `entities.Create(presetId, type, defId)`.
+- `ApplyTagSet<T> : IWireEventHandler<TagSetEvent<T>>` (client, generic).
+- `ApplyTagChange<T> : IWireEventHandler<TagChangeEvent<T>>` (client, generic).
+- `ApplyTagRemoved : IWireEventHandler<TagRemovedEvent>` (client).
 
 **`Framework.Tags` changes:**
 
 - Add `TagChangeEvent<T>` Pattern A wire event (carries `Prev` + `Next`)
-  for symmetric Set/Change/Removed trio (per Q5c lock). Mirrors slice's
-  `TagSetEvent` + `TagChangeEvent` split (slice has both already).
+  for symmetric Set/Change/Removed trio.
 
 **`Framework.Bootstrap` changes:**
 
-- New `EntityServiceLayer : IScopeLayer` registering `EntityService`.
-  Added to `FrameworkAppFlowRoot.GetInitialLayers()` after `EngineLayer`.
-- `BootstrapStatusUI` extended: counter of entities created, tag-event
-  log scroll, server vs client side panel.
-- Sandbox scene gets a button: "Create card on server" → calls
-  `serverEntities.Create(EntityTypes.Card, definitionId: 101).Set(SampleTags.Health, 30)`.
+- `ServerEntityLayer : IScopeLayer` — registers `EntityService` +
+  `WireEventDispatcher` + all `Emit*` handlers via `RegisterEntryPoint`.
+- `ClientEntityLayer : IScopeLayer` — registers `EntityService` +
+  `WireEventDispatcher` + all `Apply*` handlers (each as
+  `IWireEventHandler<TEvent>` + the dispatcher-installer bridge).
+- `FrameworkAppFlowRoot.GetInitialLayers()` adds both (or two child
+  scopes — per Q2 lock).
+- `BootstrapStatusUI` extended — counter of entities + recent events list,
+  side label.
+- Sandbox button: "Create card on server" → calls
+  `serverEntities.Create(EntityTypes.Card, defId: 101).Set(SampleTags.Health, 30)`.
   IMGUI shows the events flowing + the client entity reconstructed.
 
 **Tests:**
 
-- `EntityWireRoundTripTests` / `WireRoundTripTests` (migrated 3e): no
-  longer hand-construct `TagSetEvent` after each mutation — `EntityService`
-  emits automatically. Tests simplify substantially.
-- New: symmetric round-trip — server `EntityService` mutates, client
-  `EntityService` mirrors; assert both bags match after a sequence of
-  Set / Change / Remove operations.
+- Existing `EntityWireRoundTripTests` / `WireRoundTripTests` (migrated 3e)
+  simplify substantially — no longer hand-construct events; `EmitX`
+  handlers do it.
+- New: symmetric round-trip test — server scope mutates, client scope
+  mirrors; assert both bags match after a sequence of Set / Change /
+  Remove operations.
 
-**Defer (stay deferred per pattern doc):**
+**Defer (per pattern doc):**
 
 - `Destroy` + `EntityDestroyedEvent` emission (Q5e).
 - Indexed queries (`With` / `Where`) (Q5d).
-- Asymmetric mirror with Unapply (L6 — deferred).
+- Source-gen handler registration (Q6).
 
 **Closure:** sandbox scene + Unity batch tests green; pattern doc's
-sketch validates against the shipped code.
+sketch matches shipped code.
 
 ### 4c — Pattern doc validation
 
 Read [`definition-service-pattern.md`](definition-service-pattern.md)
-against the 4a + 4b implementation. The locked sections (L1–L7) ought
-to hold; the convention-summary draft block at the end of the doc gets
-finalized.
+against the 4a + 4b implementation. The locked sections (L1–L8) should
+hold. Convention summary at the bottom of the doc gets finalized.
 
-For anything that felt forced during 4a or 4b — call it out. Adjust
-either:
+For anything that felt forced — call it out. Adjust either:
 
 - Pattern doc (the convention was wrong → relax it), or
 - Implementation (the pattern is right → fix the code).
 
 Tests stay green. Note shifts in the commit message.
 
-**Closure:** pattern doc accurately describes the shipped code; no
-outstanding "felt forced" items.
+**Closure:** pattern doc accurately describes the shipped code.
 
 ### 4d — Step 4 closure
 
 - Phasing rows → ✅ with commit hashes.
 - `definition-service-pattern.md` banner: `status: in-design → active`.
-  (Or `done` once step 5 starts.)
 - Cross-link from `wire-refoundation-roadmap.md` step 4 line to both
   spike docs.
-- Brief handoff note for step 5+: "scaffold is in place; pattern is
-  proven via `EntityService`; apply the pattern to Commands / Effects /
-  Triggers / Request / State as their step lands."
+- Brief handoff note: scaffold + pattern proven; step 5+ applies the
+  pattern to Commands / Effects / Triggers / Request / State.
 
 **Closure:** step 5 session can pick up cold from these docs.
 
@@ -189,13 +202,14 @@ Carried forward; nothing in this list is in scope for step 4:
 | Ability abstraction (unify Subscribe/SetDirect/SBA) | When a 4th category earns it |
 | `Entity.Destroy` + `EntityDestroyedEvent` | When `entity-identity-model.md` lands |
 | `EntityService` indexed queries | When an author surface needs them |
-| Asymmetric `MirrorEntityService` (scrub / Unapply) | When replay forces it |
+| Source-gen per-T handler registration | When manual enumeration bites |
 | `GameEngineBuilder` (non-Unity hosts) | When a non-Unity consumer appears |
+| Preview / rollback buffering on Emit handlers | When the speculation feature is designed |
 | View-model layer | Step 7 |
 
 ## When this lands
 
 Step 4 graduates from "in-progress" to "done" when 4d ships green. The
-slice's `Engine/Pipeline/` folder stays intact as reference (per L5).
-Step 5 (existing services reviewed — applying the pattern to Commands /
-Effects / Triggers / Request / State) picks up from here.
+slice's `Engine/Pipeline/` folder stays intact as reference. Step 5
+(existing services reviewed — applying the pattern to Commands / Effects
+/ Triggers / Request / State) picks up from here.
