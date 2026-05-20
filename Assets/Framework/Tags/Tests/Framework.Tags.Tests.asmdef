@@ -2,10 +2,7 @@
     "name": "Framework.Tags.Tests",
     "rootNamespace": "Framework.Tags.Tests",
     "references": [
-        "Framework.Tags",
-        "Framework.Wire",
-        "Scaffold.Autopacker",
-        "Unity.Netcode.Runtime"
+        "Framework.Tags"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
@@ -17,8 +14,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll",
-        "AutoPackerContracts.dll"
+        "nunit.framework.dll"
     ],
     "autoReferenced": false,
     "defineConstraints": [

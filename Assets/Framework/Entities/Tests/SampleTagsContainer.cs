@@ -9,20 +9,8 @@ namespace Framework.Entities.Tests
         public static readonly TagKey<bool> IsCard = new(1003);
     }
 
-    [TagSlot(1100)]
-    sealed class SampleDeathrattle : ITagKey<bool>
-    {
-        public int SourceEntityId { get; }
-        public SampleDeathrattle(int sourceEntityId) { SourceEntityId = sourceEntityId; }
-    }
-
-    [TagSlot(1101)]
-    sealed class SamplePoison : ITagKey<int>
-    {
-        public int Source { get; }
-        public int Amount { get; }
-        public SamplePoison(int source, int amount) { Source = source; Amount = amount; }
-    }
+    [TagSlot(1100)] sealed class SampleDeathrattle : ITagKey<bool> { }
+    [TagSlot(1101)] sealed class SamplePoison      : ITagKey<int>  { }
 
     internal static partial class Tag
     {

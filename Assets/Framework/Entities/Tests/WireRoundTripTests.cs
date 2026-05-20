@@ -14,8 +14,7 @@ namespace Framework.Entities.Tests
             serverNet.Register<TagSetEvent<int>>();
             var clientChannel = clientNet.Register<TagSetEvent<int>>();
 
-            var store = new EntityStore();
-            var serverEntity = store.Create(EntityTypes.Card);
+            var serverEntity = new EntityStore().Create(EntityTypes.Card);
             var clientEntity = new EntityStore().Create(serverEntity.Id, EntityTypes.Card, 0);
             clientChannel.OnReceived += ev => clientEntity.Set((TagKey<int>)TagRegistry.BySlot(ev.Slot), ev.Value);
 
@@ -41,8 +40,7 @@ namespace Framework.Entities.Tests
             serverNet.Register<TagSetEvent<bool>>();
             var clientChannel = clientNet.Register<TagSetEvent<bool>>();
 
-            var store = new EntityStore();
-            var serverEntity = store.Create(EntityTypes.Card);
+            var serverEntity = new EntityStore().Create(EntityTypes.Card);
             var clientEntity = new EntityStore().Create(serverEntity.Id, EntityTypes.Card, 0);
             clientChannel.OnReceived += ev => clientEntity.Set((TagKey<bool>)TagRegistry.BySlot(ev.Slot), ev.Value);
 
@@ -66,8 +64,7 @@ namespace Framework.Entities.Tests
             var clientSetChannel = clientNet.Register<TagSetEvent<int>>();
             var clientRemoveChannel = clientNet.Register<TagRemovedEvent>();
 
-            var store = new EntityStore();
-            var serverEntity = store.Create(EntityTypes.Card);
+            var serverEntity = new EntityStore().Create(EntityTypes.Card);
             var clientEntity = new EntityStore().Create(serverEntity.Id, EntityTypes.Card, 0);
             clientSetChannel.OnReceived += ev => clientEntity.Set((TagKey<int>)TagRegistry.BySlot(ev.Slot), ev.Value);
             clientRemoveChannel.OnReceived += ev => clientEntity.Remove(TagRegistry.BySlot(ev.Slot));
@@ -99,8 +96,7 @@ namespace Framework.Entities.Tests
             var clientIntChannel = clientNet.Register<TagSetEvent<int>>();
             var clientBoolChannel = clientNet.Register<TagSetEvent<bool>>();
 
-            var store = new EntityStore();
-            var serverEntity = store.Create(EntityTypes.Card);
+            var serverEntity = new EntityStore().Create(EntityTypes.Card);
             var clientEntity = new EntityStore().Create(serverEntity.Id, EntityTypes.Card, 0);
             clientIntChannel.OnReceived  += ev => clientEntity.Set((TagKey<int>) TagRegistry.BySlot(ev.Slot), ev.Value);
             clientBoolChannel.OnReceived += ev => clientEntity.Set((TagKey<bool>)TagRegistry.BySlot(ev.Slot), ev.Value);

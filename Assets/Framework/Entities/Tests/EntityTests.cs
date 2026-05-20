@@ -39,6 +39,22 @@ namespace Framework.Entities.Tests
             Assert.IsTrue(entity.Has(health));
             Assert.IsTrue(entity.Remove(health));
             Assert.IsFalse(entity.Has(health));
+            Assert.IsFalse(entity.Remove(health), "Second remove is a no-op");
+        }
+
+        [Test]
+        public void PatternA_MultipleKeys_AreIndependent()
+        {
+            var store = new EntityStore();
+            var entity = store.Create(EntityTypes.Card);
+
+            entity.Set(SampleTags.Health, 30);
+            entity.Set(SampleTags.Attack, 7);
+            entity.Set(SampleTags.IsCard, true);
+
+            Assert.AreEqual(30,   entity.Get(SampleTags.Health));
+            Assert.AreEqual(7,    entity.Get(SampleTags.Attack));
+            Assert.AreEqual(true, entity.Get(SampleTags.IsCard));
         }
 
         [Test]
