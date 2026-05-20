@@ -16,31 +16,33 @@ tags: [#spike, #services, #phasing, #session-handoff, #handlers]
 > "Service pattern"; the locked design lives in
 > [`definition-service-pattern.md`](definition-service-pattern.md). Step 4
 > ships **the scaffold + `EntityService` worked example with the
-> handler-based event command pattern**; specific services (Commands,
-> Effects, Triggers, Request, State) get the pattern applied in step 5+.
+> service-emit + per-type Apply-handler pattern**; specific services
+> (Commands, Effects, Triggers, Request, State) get the pattern applied
+> in step 5+.
 
 ## Phase breakdown
 
 | Phase | Scope | Status | Commit |
 |---|---|---|---|
-| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, empty `GameEngine` shell); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`WireEventDispatcher` + `IWireEventHandler<T>` infrastructure in `Framework.Wire`** | ⏳ | — |
-| 4b | `EntityService` worked example — single class both sides; `Entity` raises internal events; Emit handlers (server) + Apply handlers (client) registered via per-side layers; sandbox extends to "create card → mirror in sync" | ⏳ | — |
+| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, empty `GameEngine` shell); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains `Register<T>` + `Emit` dispatch surface; `IWireEventHandler<T>` + `IEventEmitter` + `NoOpEventEmitter` land in `Framework.Wire`** | ⏳ | — |
+| 4b | `EntityService` worked example — single class both sides with `IEventEmitter`-injected emit + author/apply API split; per-type Apply handler classes register on `EventStream`; `WireForwarder` (server) + `NetworkInboundBridge` (client) cross the Network ↔ EventStream boundary; sandbox extends to "create card → mirror in sync" | ⏳ | — |
 | 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; finalize convention summary; resolve any "felt forced" items | ⏳ | — |
 | 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
 
-After 4d: scaffold + `EntityService` operational with full handler-based
-event round-trip. Bootstrap a scene, press Play, create an entity + tag
-mutations on server, see client mirror sync via dispatched handlers. The
-slice's `Engine/Pipeline/` stays as reference for step 5+.
+After 4d: scaffold + `EntityService` operational with full service-emit
++ per-type Apply round-trip. Bootstrap a scene, press Play, create an
+entity + tag mutations on server, see client mirror sync via dispatched
+Apply handlers. The slice's `Engine/Pipeline/` stays as reference for
+step 5+.
 
 ## Phase scope
 
-### 4a — Scaffold + dispatcher infrastructure
+### 4a — Scaffold + EventStream dispatch surface
 
 **No services beyond an empty `GameEngine` stub.** This phase proves
 the bones work: DI substrate, layer system, scene wiring, IMGUI feedback,
-**plus the `WireEventDispatcher` infrastructure that 4b's handlers will
-hang off of**.
+**plus the `EventStream` dispatch surface + `IWireEventHandler<T>` +
+`IEventEmitter` that 4b's handlers will hang off of**.
 
 **Manifest changes:**
 
@@ -52,9 +54,12 @@ hang off of**.
 **New asmdef: `Framework.Engine`** (`Assets/Framework/Engine/`)
 
 - Pure C#; no Unity dep.
-- `GameEngine` — empty marker class (per Q3 lean). May gain
-  diagnostics fields (frame counter, ready state) if useful for IMGUI.
-- No `GameEngineBuilder` in step 4 (per Q4 lean — defer until a non-Unity
+- References `Framework.Wire` (and in 4b, `Framework.Entities` +
+  `Framework.Tags`) so `GameEngine` can carry typed service properties
+  (per L11).
+- `GameEngine` — composition-shaped class. In 4a: `Stream` + `Network`
+  properties. (4b adds `Entities`.)
+- No `GameEngineBuilder` in step 4 (Q4 — defer until a non-Unity
   consumer needs it).
 - Test asmdef ships too (may be empty in 4a).
 
@@ -62,96 +67,134 @@ hang off of**.
 
 - Unity-coupled; depends on VContainer, Scaffold.Appflow,
   `Framework.Engine`, `Framework.Wire`.
-- `FrameworkAppFlowRoot : AppFlowRoot` — MonoBehaviour, root composition.
-  Overrides `GetInitialLayers()` returning `EngineLayer` (and later
-  `Server*Layer` / `Client*Layer` in 4b).
-- `EngineLayer : IScopeLayer` — registers `GameEngine` + `WireEventDispatcher`
-  as singletons.
+- Two `AppFlowRoot` subclasses (Q2 — two-roots-per-scene shape):
+  - `ServerAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (and
+    later `ServerEntityLayer` in 4b).
+  - `ClientAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (and
+    later `ClientEntityLayer` in 4b).
+- `EngineLayer : IScopeLayer` — registers `GameEngine` + `EventStream`
+  + `Network` as singletons. Side-agnostic; the per-side bindings for
+  `IEventEmitter` come from the entity layers in 4b.
 - `BootstrapStatusUI` — MonoBehaviour with `[Inject] GameEngine _engine`,
-  IMGUI panel.
+  IMGUI panel. Instantiated under each root.
+- `SandboxTransport` — scene-level MonoBehaviour (or scene init script)
+  that creates an in-memory transport and injects it into both `Network`
+  instances at startup.
 
 **`Framework.Wire` additions:**
 
-- `IWireEventHandler<TEvent>` interface — `void Handle(TEvent ev)`.
-- `WireEventDispatcher` — subscribes to `EventStream.OnAppended`;
-  registers typed handlers; routes by runtime type via
-  `Dictionary<Type, List<Action<WireEvent>>>`.
-- (Possibly) `WireHandlerInstaller<TEvent> : IAsyncInitializable` — a
-  bridge that registers a resolved handler with the dispatcher at scope
-  init. Details settle here.
+- `IWireEventHandler<TEvent>` — `void Apply(TEvent ev)` +
+  `void Unapply(TEvent ev)` (Unapply throws `NotImplementedException`
+  until the rollback feature is designed).
+- `IEventEmitter` interface — `void Emit(WireEvent ev)`.
+- `NoOpEventEmitter` — drops on the floor; client-side binding.
+- `EventStream` gains `Register<TEvent>(IWireEventHandler<TEvent>)` +
+  `Emit(WireEvent)` over an internal
+  `Dictionary<Type, List<Action<WireEvent>>>` dispatch table.
+- (Possibly) extension method to expose `EventStream`-as-`IEventEmitter`
+  for the server-side DI binding (`stream.AsEmitter()`).
 
 **Sandbox scene:** `Assets/Framework/Bootstrap/Sandbox/BootstrapSandbox.unity`
-with the `FrameworkAppFlowRoot` GameObject + a child `BootstrapStatusUI`
-showing **"Engine bootstrapped. 0 entities. 0 services registered."**
+with `ServerRoot` + `ClientRoot` GameObjects (each with its
+`AppFlowRoot` subclass + a `BootstrapStatusUI`) + a `SandboxTransport`
+scene object. Both status panels show **"Engine bootstrapped. 0
+entities."** with their side label.
 
-**Tests:** Edit-mode test that constructs a VContainer scope via a layer,
-resolves `GameEngine` + `WireEventDispatcher`, asserts non-null. No Unity
+**Tests:** Edit-mode test that constructs a VContainer scope via
+`EngineLayer`, resolves `GameEngine` + `EventStream` + `Network`,
+asserts non-null and that `GameEngine.Stream` / `GameEngine.Network`
+return the registered singletons. Smoke test for `EventStream.Register`
++ `Emit` dispatch (one fake handler, one fake event type). No Unity
 scene dep.
 
-**Closure:** sandbox scene runs in Play mode, IMGUI shows the
-"bootstrapped" message, Unity batch tests green.
+**Closure:** sandbox scene runs in Play mode, both IMGUI panels show
+the "bootstrapped" message, Unity batch tests green.
 
-### 4b — `EntityService` worked example with handler pattern
+### 4b — `EntityService` worked example with per-type Apply handlers
 
-**Touches:** `Framework.Entities`, `Framework.Tags`, `Framework.Bootstrap`.
+**Touches:** `Framework.Entities`, `Framework.Tags`, `Framework.Wire`,
+`Framework.Bootstrap`.
 
 **`Framework.Entities` changes:**
 
 - Rename `EntityStore` → `EntityService`. Drop the wire-aware
-  constructor variants from 3d — service is now pure C#, no wire ref.
-- `EntityService` exposes one event: `public event Action<Entity>? OnCreated`.
-- `Entity` gains three internal events:
-  - `internal event Action<TagKey, object>? OnTagSet`
-  - `internal event Action<TagKey, object, object>? OnTagChanged`
-  - `internal event Action<TagKey, object>? OnTagRemoved`
-  - Raised inside `Entity.Set` / `Entity.Remove` as appropriate.
-- `Entity.Set` distinguishes first-write (raises `OnTagSet`) from
-  subsequent write (raises `OnTagChanged` with prev + next) — like slice.
-- No back-reference from `Entity` to `EntityService`. The service
-  subscribes to each Entity's events implicitly via per-side Emit
-  handlers (which subscribe to `EntityService.OnCreated`, then attach to
-  the Entity's events).
+  constructor variants from 3d.
+- `EntityService` ctor-injects `IEventEmitter`. Public `Create` mutates
+  state and calls `_emitter.Emit(new EntityCreatedEvent { ... })`.
+- Internal `ApplyCreated(int id, EntityType type, int defId)` for client
+  Apply handlers — mutates without emitting.
+- `Entity` ctor-injects `IEventEmitter` too. Public `Set<T>` mutates +
+  emits `TagSetEvent<T>` (first write) or `TagChangeEvent<T>`
+  (subsequent write) inline.
+- Internal `Entity.ApplyTagSet<T>(int slot, T value)` +
+  `ApplyTagRemoved(int slot)` — mutate without emitting.
+- No `OnCreated` / `OnTagSet` domain events — emission is direct via
+  `IEventEmitter`, no intermediate seam.
 
-**New `Framework.Entities/Runtime/Wire/` folder** holding the handlers:
+**New `Framework.Entities/Runtime/Wire/` folder** holding per-type Apply
+handlers (client only; server registers none of these):
 
-- `EmitEntityCreated` (server) — `entities.OnCreated` → `stream.Add(EntityCreatedEvent)`.
-- `EmitTagSet<T>` (server, generic) — attaches to each Entity's `OnTagSet`; emits `TagSetEvent<T>` if value matches T.
-- `EmitTagChange<T>` (server, generic) — `OnTagChanged`; emits `TagChangeEvent<T>`.
-- `EmitTagRemoved` (server) — `OnTagRemoved`; emits `TagRemovedEvent`.
-- `ApplyEntityCreated : IWireEventHandler<EntityCreatedEvent>` (client)
-  — calls `entities.Create(presetId, type, defId)`.
-- `ApplyTagSet<T> : IWireEventHandler<TagSetEvent<T>>` (client, generic).
-- `ApplyTagChange<T> : IWireEventHandler<TagChangeEvent<T>>` (client, generic).
-- `ApplyTagRemoved : IWireEventHandler<TagRemovedEvent>` (client).
+- `EntityCreatedHandler : IWireEventHandler<EntityCreatedEvent>` —
+  `Apply` calls `entities.ApplyCreated(...)`. `Unapply` throws.
+- `TagSetHandler<T> : IWireEventHandler<TagSetEvent<T>>` — `Apply`
+  calls `entities.Get(id)?.ApplyTagSet(slot, value)`.
+- `TagChangeHandler<T> : IWireEventHandler<TagChangeEvent<T>>` — same,
+  applies `Next`.
+- `TagRemovedHandler : IWireEventHandler<TagRemovedEvent>` — `Apply`
+  calls `entities.Get(id)?.ApplyTagRemoved(slot)`.
+
+Each handler is `IAsyncInitializable`; its `InitializeAsync` calls
+`_stream.Register<TEvent>(this)`.
 
 **`Framework.Tags` changes:**
 
 - Add `TagChangeEvent<T>` Pattern A wire event (carries `Prev` + `Next`)
   for symmetric Set/Change/Removed trio.
 
+**`Framework.Wire` additions:**
+
+- `WireForwarder` (server only) — implements `IWireEventHandler<TEvent>`
+  for each known entity event type; on `Apply`, calls `Network.Send(ev)`.
+  Registers itself for each type during `InitializeAsync`. (Manual
+  enumeration in step 4; source-gen later — Q6.)
+- `NetworkInboundBridge` (client only) — subscribes to `Network`'s
+  typed receive surface for each event type; on receive, calls
+  `EventStream.Emit(ev)`. Symmetric to `WireForwarder`.
+
 **`Framework.Bootstrap` changes:**
 
-- `ServerEntityLayer : IScopeLayer` — registers `EntityService` +
-  `WireEventDispatcher` + all `Emit*` handlers via `RegisterEntryPoint`.
-- `ClientEntityLayer : IScopeLayer` — registers `EntityService` +
-  `WireEventDispatcher` + all `Apply*` handlers (each as
-  `IWireEventHandler<TEvent>` + the dispatcher-installer bridge).
-- `FrameworkAppFlowRoot.GetInitialLayers()` adds both (or two child
-  scopes — per Q2 lock).
+- `ServerEntityLayer : IScopeLayer` — registers `EntityService`;
+  binds `IEventEmitter` → real `EventStream` (e.g. `stream.AsEmitter()`);
+  `RegisterEntryPoint<WireForwarder>`. No Apply handlers.
+- `ClientEntityLayer : IScopeLayer` — registers `EntityService`;
+  binds `IEventEmitter` → `NoOpEventEmitter`;
+  `RegisterEntryPoint<NetworkInboundBridge>`; per-type
+  `RegisterEntryPoint<EntityCreatedHandler>` /
+  `<TagSetHandler<int>>` / `<TagSetHandler<bool>>` /
+  `<TagChangeHandler<int>>` / `<TagChangeHandler<bool>>` /
+  `<TagRemovedHandler>` (manual list; source-gen later).
+- `ServerAppFlowRoot.GetInitialLayers()` adds `EngineLayer` +
+  `ServerEntityLayer`; `ClientAppFlowRoot.GetInitialLayers()` adds
+  `EngineLayer` + `ClientEntityLayer`.
+- `GameEngine` gains an `Entities` property (ctor injection).
 - `BootstrapStatusUI` extended — counter of entities + recent events list,
   side label.
-- Sandbox button: "Create card on server" → calls
-  `serverEntities.Create(EntityTypes.Card, defId: 101).Set(SampleTags.Health, 30)`.
-  IMGUI shows the events flowing + the client entity reconstructed.
+- Sandbox button (on server root only): "Create card" → calls
+  `serverEngine.Entities.Create(EntityTypes.Card, defId: 101).Set(SampleTags.Health, 30)`.
+  Both IMGUI panels show the events flowing + the client entity
+  reconstructed.
 
 **Tests:**
 
 - Existing `EntityWireRoundTripTests` / `WireRoundTripTests` (migrated 3e)
-  simplify substantially — no longer hand-construct events; `EmitX`
-  handlers do it.
-- New: symmetric round-trip test — server scope mutates, client scope
-  mirrors; assert both bags match after a sequence of Set / Change /
-  Remove operations.
+  simplify substantially — no longer hand-construct events; the service
+  emit path does it inline.
+- New: symmetric round-trip test — server scope mutates via `Create` +
+  `Set`, client scope mirrors via Apply handlers; assert both bags match
+  after a sequence of Set / Change / Remove operations.
+- New: loop-safety test — invoke client `EntityService.Create` directly;
+  verify the no-op emitter swallows the emit (nothing reaches
+  `EventStream` on the client).
 
 **Defer (per pattern doc):**
 
