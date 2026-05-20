@@ -1,4 +1,6 @@
-namespace Framework.Tags.Tests
+using Framework.Tags;
+
+namespace Framework.Entities.Tests
 {
     static class SampleTags
     {
@@ -22,7 +24,7 @@ namespace Framework.Tags.Tests
         public SamplePoison(int source, int amount) { Source = source; Amount = amount; }
     }
 
-    internal static class Tag
+    internal static partial class Tag
     {
         public static readonly TagKey<bool> SampleDeathrattle = Tag<SampleDeathrattle, bool>.Key;
         public static readonly TagKey<int>  SamplePoison      = Tag<SamplePoison, int>.Key;
