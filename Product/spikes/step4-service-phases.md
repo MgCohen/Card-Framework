@@ -24,10 +24,12 @@ tags: [#spike, #services, #phasing, #session-handoff, #handlers]
 
 | Phase | Scope | Status | Commit |
 |---|---|---|---|
-| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, `GameEngine` with `Stream` + `Network` properties); `Framework.Bootstrap` (Unity-coupled, two `AppFlowRoot` subclasses + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains typed-bucket `Register<T>` + typed `Emit<T>` + non-generic `Emit(WireEvent)`; `IWireEventHandler<T>` lands in `Framework.Wire`** | ⏳ | — |
+| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, `GameEngine` with `Stream` + `Network` properties); `Framework.Bootstrap` (Unity-coupled, two `AppFlowRoot` subclasses + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains typed-bucket `Register<T>` + typed `Emit<T>` + non-generic `Emit(WireEvent)`; `IWireEventHandler<T>` lands in `Framework.Wire`** | 🧪 verify | `3c1ed43` |
 | 4b | `EntityStore` + `EntityService` worked example — repository (store) + command/emit (service) split; same classes both sides; per-type Apply handlers depend on `EntityStore`; `WireForwarder` (server, `IWireEventHandler<T>`-shaped) + `NetworkInboundBridge` (client, one-liner) cross the Network ↔ EventStream boundary; sandbox extends to "create card on server → mirror in sync on client" | ⏳ | — |
 | 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; finalize convention summary; resolve any "felt forced" items | ⏳ | — |
 | 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
+
+> **Status legend.** ⏳ not started · 🧪 code landed, awaiting Unity batch verification · ✅ verified green.
 
 After 4d: scaffold + `EntityStore`/`EntityService` operational with
 full event-sourced round-trip. Bootstrap the sandbox scene (two
@@ -45,6 +47,86 @@ for step 5+.
 system, scene wiring, IMGUI feedback, **plus the typed-bucket
 `EventStream` dispatch surface + `IWireEventHandler<T>` that 4b's
 handlers and bridges will hang off of**.
+
+#### Current status — 🧪 awaiting Unity verification
+
+Code landed in `3c1ed43`. The remote-execution environment used to
+write the code has no Unity install, so the headless batch tests have
+**not** been run against the commit. Verification is required locally
+before 4a flips to ✅.
+
+**Run from the project root:**
+
+```
+Unity.exe -batchmode -nographics -projectPath . -runTests \
+  -testPlatform EditMode \
+  -testResults Logs/test-results.xml \
+  -logFile Logs/test.log
+```
+
+Read `Logs/test.log` first for compile errors (the new asmdefs may
+expose typos or missing references). Read `Logs/test-results.xml` for
+the new test outcomes.
+
+**Tests to expect:**
+
+- `Framework.Wire.Tests/EventStreamDispatchTests.cs` (new, 5 tests) —
+  typed dispatch, cross-type isolation, untyped runtime-type routing,
+  OnAppended+history compatibility, multi-handler fan-out.
+- `Framework.Wire.Tests/RoundTripTests.cs` (existing, modified) —
+  mechanical `server.Add → server.Emit` rename across 25 sites; all
+  existing tests should still pass.
+- `Framework.Bootstrap.Tests/EngineLayerTests.cs` (new, 3 tests) —
+  `LifetimeScope.Create(EngineLayer.Install, …)` resolves `GameEngine`
+  with non-null `Stream` + `Network`; `IEventEmitter`,
+  `IHandlerRegistry`, and `EventStream` all resolve to the same
+  singleton; `engine.Stream` matches the container's `EventStream`.
+
+**Known risk areas** (most likely to fail compile/runtime, ordered by
+likelihood):
+
+1. **VContainer factory-lambda overload.** `Register<Network>(c => new Network(c.Resolve<ITransport>()), Lifetime.Singleton)`
+   — confirmed against VContainer 1.17.0 source, but exact behavior
+   under `LifetimeScope.Create` (root scope, no parent) untested here.
+2. **Scoped-interface registration ordering.** `.AsSelf().As<IEventEmitter>().As<IHandlerRegistry>()`
+   pattern — `AsSelf()` first to keep `EventStream` resolvable as
+   itself. The Appflow samples use `.As<X>().AsSelf()` (interfaces
+   first). Both should be equivalent per VContainer's
+   `AddInterfaceType` semantics, but verify.
+3. **`NullTransport` custom event accessor.** `add { _ = value; } remove { _ = value; }`
+   to suppress CS0067 "event never used." Discard-pattern syntax (C#
+   7+) should compile under Unity 6's Roslyn, but it's an unusual
+   shape.
+4. **`[RequireComponent(typeof(AppFlowRoot))]` on `BootstrapStatusUI`**
+   — `AppFlowRoot` is abstract. Unity should match by inheritance
+   (any subclass satisfies the requirement), but editor UX may emit a
+   warning when adding `BootstrapStatusUI` to a fresh GameObject.
+5. **Asmdef name mismatches.** `Scaffold.AppFlow` and `VContainer` are
+   the references I used; if the actual assembly names from the
+   packages differ, the asmdefs won't resolve. Verify in the Unity
+   console.
+6. **`Object.DestroyImmediate` in test teardown.** Works in EditMode
+   (which is where tests run); cited by Appflow's own tests, so
+   should be fine.
+
+#### Deferred to 4b
+
+Two items from the original 4a scope landed below the line. Both
+depend on entity-event traffic to be meaningful and are cleaner to
+build alongside the bridge layers:
+
+- **`SandboxTransport`** (loopback `LoopbackTransport.Pair()` wiring
+  between server + client `Network` instances). 4a uses
+  `NullTransport` as a placeholder so `Network` is constructable.
+- **`BootstrapSandbox.unity` scene file** (the `ServerRoot` + `ClientRoot`
+  GameObjects + `SandboxTransport` scene object). 4a is gated by the
+  headless test surface; the scene becomes the Play-mode demo for 4b's
+  end-to-end "create card → mirror in sync" deliverable.
+
+#### Implementation reference
+
+Below: the shape the implementation actually took. Use this section as
+the spec to read the 4a commit against.
 
 **Manifest changes:**
 
