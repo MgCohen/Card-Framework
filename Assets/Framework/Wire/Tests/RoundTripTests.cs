@@ -196,14 +196,14 @@ namespace Framework.Wire.Tests
         public void Client_Stream_Sees_Events_Synchronously_On_Server_Add()
         {
             var (server, client, _, _) = NewWired();
-            var seen = new List<long>();
+            var seen = new List<int>();
             client.OnAppended += ev => seen.Add(((EntityCreatedEvent)ev).EntityId);
 
             server.Add(new EntityCreatedEvent { EntityId = 10 });
-            CollectionAssert.AreEqual(new long[] { 10 }, seen);
+            CollectionAssert.AreEqual(new int[] { 10 }, seen);
 
             server.Add(new EntityCreatedEvent { EntityId = 20 });
-            CollectionAssert.AreEqual(new long[] { 10, 20 }, seen);
+            CollectionAssert.AreEqual(new int[] { 10, 20 }, seen);
         }
     }
 }

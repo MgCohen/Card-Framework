@@ -68,5 +68,12 @@ namespace Framework.Entities.Tests
 
             Assert.Throws<InvalidOperationException>(() => catalog.Add(new CardTestDef(101, 5)));
         }
+
+        [Test]
+        public void Add_ZeroId_Throws()
+        {
+            var catalog = new Catalog<CardTestDef>();
+            Assert.Throws<InvalidOperationException>(() => catalog.Add(new CardTestDef(0, 3)));
+        }
     }
 }

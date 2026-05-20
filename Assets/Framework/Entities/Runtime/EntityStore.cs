@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Framework.Entities
@@ -8,9 +9,15 @@ namespace Framework.Entities
         int _nextId = 1;
 
         public Entity Create(EntityType type, int definitionId = 0)
+            => Create(_nextId, type, definitionId);
+
+        public Entity Create(int id, EntityType type, int definitionId)
         {
-            var entity = new Entity(_nextId++, type, definitionId);
-            _byId[entity.Id] = entity;
+            if (_byId.ContainsKey(id))
+                throw new InvalidOperationException($"Id {id} claimed.");
+            var entity = new Entity(id, type, definitionId);
+            _byId[id] = entity;
+            if (id >= _nextId) _nextId = id + 1;
             return entity;
         }
 

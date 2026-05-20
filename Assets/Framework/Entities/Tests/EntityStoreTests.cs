@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
@@ -95,6 +96,36 @@ namespace Framework.Entities.Tests
 
             Assert.AreEqual(1, a.Id);
             Assert.AreEqual(2, b.Id);
+        }
+
+        [Test]
+        public void Create_WithPresetId_UsesThatId()
+        {
+            var store = new EntityStore();
+            var entity = store.Create(42, EntityTypes.Card, 101);
+
+            Assert.AreEqual(42, entity.Id);
+            Assert.AreSame(entity, store.ById(42));
+        }
+
+        [Test]
+        public void Create_WithPresetId_AdvancesNextIdPastIt()
+        {
+            var store = new EntityStore();
+            store.Create(42, EntityTypes.Card, 101);
+            var next = store.Create(EntityTypes.Card);
+
+            Assert.AreEqual(43, next.Id);
+        }
+
+        [Test]
+        public void Create_WithPresetId_DuplicateThrows()
+        {
+            var store = new EntityStore();
+            store.Create(42, EntityTypes.Card, 101);
+
+            Assert.Throws<InvalidOperationException>(
+                () => store.Create(42, EntityTypes.Card, 102));
         }
     }
 }

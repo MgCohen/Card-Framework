@@ -10,6 +10,8 @@ namespace Framework.Entities
 
         public void Add(TDef def)
         {
+            if (def.Id == 0)
+                throw new InvalidOperationException("Definition Id must be non-zero; 0 is the defless sentinel.");
             if (_byId.ContainsKey(def.Id))
                 throw new InvalidOperationException($"Id {def.Id} claimed.");
             _byId[def.Id] = def;
