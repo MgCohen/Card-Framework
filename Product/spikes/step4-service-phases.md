@@ -24,25 +24,27 @@ tags: [#spike, #services, #phasing, #session-handoff, #handlers]
 
 | Phase | Scope | Status | Commit |
 |---|---|---|---|
-| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, empty `GameEngine` shell); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains `Register<T>` + `Emit` dispatch surface; `IWireEventHandler<T>` + `IEventEmitter` + `NoOpEventEmitter` land in `Framework.Wire`** | ⏳ | — |
-| 4b | `EntityService` worked example — single class both sides with `IEventEmitter`-injected emit + author/apply API split; per-type Apply handler classes register on `EventStream`; `WireForwarder` (server) + `NetworkInboundBridge` (client) cross the Network ↔ EventStream boundary; sandbox extends to "create card → mirror in sync" | ⏳ | — |
+| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, `GameEngine` with `Stream` + `Network` properties); `Framework.Bootstrap` (Unity-coupled, two `AppFlowRoot` subclasses + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains typed-bucket `Register<T>` + typed `Emit<T>` + non-generic `Emit(WireEvent)`; `IWireEventHandler<T>` lands in `Framework.Wire`** | ⏳ | — |
+| 4b | `EntityStore` + `EntityService` worked example — repository (store) + command/emit (service) split; same classes both sides; per-type Apply handlers depend on `EntityStore`; `WireForwarder` (server, `IWireEventHandler<T>`-shaped) + `NetworkInboundBridge` (client, one-liner) cross the Network ↔ EventStream boundary; sandbox extends to "create card on server → mirror in sync on client" | ⏳ | — |
 | 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; finalize convention summary; resolve any "felt forced" items | ⏳ | — |
 | 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
 
-After 4d: scaffold + `EntityService` operational with full service-emit
-+ per-type Apply round-trip. Bootstrap a scene, press Play, create an
-entity + tag mutations on server, see client mirror sync via dispatched
-Apply handlers. The slice's `Engine/Pipeline/` stays as reference for
-step 5+.
+After 4d: scaffold + `EntityStore`/`EntityService` operational with
+full event-sourced round-trip. Bootstrap the sandbox scene (two
+`AppFlowRoot`s), press Play, create an entity + tag mutations on server,
+see client mirror sync via dispatched Apply handlers reading the
+client's `EntityStore`. The slice's `Engine/Pipeline/` stays as reference
+for step 5+.
 
 ## Phase scope
 
 ### 4a — Scaffold + EventStream dispatch surface
 
-**No services beyond an empty `GameEngine` stub.** This phase proves
-the bones work: DI substrate, layer system, scene wiring, IMGUI feedback,
-**plus the `EventStream` dispatch surface + `IWireEventHandler<T>` +
-`IEventEmitter` that 4b's handlers will hang off of**.
+**No stores or services yet — `GameEngine` carries only `Stream` +
+`Network`.** This phase proves the bones work: DI substrate, layer
+system, scene wiring, IMGUI feedback, **plus the typed-bucket
+`EventStream` dispatch surface + `IWireEventHandler<T>` that 4b's
+handlers and bridges will hang off of**.
 
 **Manifest changes:**
 
@@ -68,13 +70,13 @@ the bones work: DI substrate, layer system, scene wiring, IMGUI feedback,
 - Unity-coupled; depends on VContainer, Scaffold.Appflow,
   `Framework.Engine`, `Framework.Wire`.
 - Two `AppFlowRoot` subclasses (Q2 — two-roots-per-scene shape):
-  - `ServerAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (and
-    later `ServerEntityLayer` in 4b).
-  - `ClientAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (and
-    later `ClientEntityLayer` in 4b).
+  - `ServerAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (4b adds
+    `EntityLayer` + `ServerBridgeLayer`).
+  - `ClientAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (4b adds
+    `EntityLayer` + `ClientBridgeLayer`).
 - `EngineLayer : IScopeLayer` — registers `GameEngine` + `EventStream`
-  + `Network` as singletons. Side-agnostic; the per-side bindings for
-  `IEventEmitter` come from the entity layers in 4b.
+  + `Network` as singletons. Side-agnostic; no per-side delta at the
+  engine layer.
 - `BootstrapStatusUI` — MonoBehaviour with `[Inject] GameEngine _engine`,
   IMGUI panel. Instantiated under each root.
 - `SandboxTransport` — scene-level MonoBehaviour (or scene init script)
@@ -86,13 +88,16 @@ the bones work: DI substrate, layer system, scene wiring, IMGUI feedback,
 - `IWireEventHandler<TEvent>` — `void Apply(TEvent ev)` +
   `void Unapply(TEvent ev)` (Unapply throws `NotImplementedException`
   until the rollback feature is designed).
-- `IEventEmitter` interface — `void Emit(WireEvent ev)`.
-- `NoOpEventEmitter` — drops on the floor; client-side binding.
-- `EventStream` gains `Register<TEvent>(IWireEventHandler<TEvent>)` +
-  `Emit(WireEvent)` over an internal
-  `Dictionary<Type, List<Action<WireEvent>>>` dispatch table.
-- (Possibly) extension method to expose `EventStream`-as-`IEventEmitter`
-  for the server-side DI binding (`stream.AsEmitter()`).
+- `IHandlerBucket` (internal) + `HandlerBucket<T>` (internal) — typed
+  per-T bucket of handlers; no `object` casts at the dictionary level.
+- `EventStream` gains:
+  - `Register<TEvent>(IWireEventHandler<TEvent>)` — stores in the typed
+    bucket for that `T`.
+  - `Emit<TEvent>(TEvent ev)` — typed fast path; services and the
+    server-side `WireForwarder` use this.
+  - `Emit(WireEvent ev)` — type-routing path; `NetworkInboundBridge`
+    uses this so the bridge stays a one-liner with no `switch`
+    statement.
 
 **Sandbox scene:** `Assets/Framework/Bootstrap/Sandbox/BootstrapSandbox.unity`
 with `ServerRoot` + `ClientRoot` GameObjects (each with its
@@ -110,41 +115,47 @@ scene dep.
 **Closure:** sandbox scene runs in Play mode, both IMGUI panels show
 the "bootstrapped" message, Unity batch tests green.
 
-### 4b — `EntityService` worked example with per-type Apply handlers
+### 4b — `EntityStore` + `EntityService` worked example with per-type Apply handlers
 
 **Touches:** `Framework.Entities`, `Framework.Tags`, `Framework.Wire`,
 `Framework.Bootstrap`.
 
 **`Framework.Entities` changes:**
 
-- Rename `EntityStore` → `EntityService`. Drop the wire-aware
-  constructor variants from 3d.
-- `EntityService` ctor-injects `IEventEmitter`. Public `Create` mutates
-  state and calls `_emitter.Emit(new EntityCreatedEvent { ... })`.
-- Internal `ApplyCreated(int id, EntityType type, int defId)` for client
-  Apply handlers — mutates without emitting.
-- `Entity` ctor-injects `IEventEmitter` too. Public `Set<T>` mutates +
-  emits `TagSetEvent<T>` (first write) or `TagChangeEvent<T>`
-  (subsequent write) inline.
-- Internal `Entity.ApplyTagSet<T>(int slot, T value)` +
-  `ApplyTagRemoved(int slot)` — mutate without emitting.
-- No `OnCreated` / `OnTagSet` domain events — emission is direct via
-  `IEventEmitter`, no intermediate seam.
+- The step-3 single-class `EntityStore` splits into two:
+  - `EntityStore` (kept) — the repository. Reads + raw writes; never
+    emits. `Insert(EntityType, int)`, `Insert(int id, EntityType, int)`
+    (idempotent for re-runs), `Get(int)`, `SetTag<T>(int id, int slot, T)`,
+    `RemoveTag(int id, int slot)`. The all-entities enumerable too.
+  - `EntityService` (new) — the command surface. Ctor-injects
+    `EntityStore` + `EventStream`. Public `Create(EntityType, int)`
+    delegates to `_store.Insert` then `_stream.Emit(EntityCreatedEvent)`.
+    `Set<T>(int entityId, TagKey<T>, T)` reads prev via store, picks
+    `TagSetEvent` vs `TagChangeEvent`, calls `_store.SetTag`, emits.
+    `Get(int)` delegates to store.
+- `Entity` becomes data-only. No `IEventEmitter` ref, no `EntityService`
+  ref, no `Set<T>` public method. Public readers (`Get<T>(TagKey<T>)`)
+  + internal raw setters (`SetSlotRaw<T>`, `RemoveSlotRaw`,
+  `TryGetSlotRaw<T>`) that only `EntityStore` calls.
+- Drop the wire-aware constructor variants from 3d.
 
 **New `Framework.Entities/Runtime/Wire/` folder** holding per-type Apply
-handlers (client only; server registers none of these):
+handlers (registered on **both** sides — they cannot emit, so re-running
+on server is a structurally-safe no-op):
 
 - `EntityCreatedHandler : IWireEventHandler<EntityCreatedEvent>` —
-  `Apply` calls `entities.ApplyCreated(...)`. `Unapply` throws.
-- `TagSetHandler<T> : IWireEventHandler<TagSetEvent<T>>` — `Apply`
-  calls `entities.Get(id)?.ApplyTagSet(slot, value)`.
+  ctor-injects `EntityStore` + `EventStream`. `Apply` calls
+  `_store.Insert(ev.EntityId, type, defId)` (idempotent).
+- `TagSetHandler<T> : IWireEventHandler<TagSetEvent<T>>` — `Apply` calls
+  `_store.SetTag(ev.EntityId, ev.Slot, ev.Value)`.
 - `TagChangeHandler<T> : IWireEventHandler<TagChangeEvent<T>>` — same,
   applies `Next`.
 - `TagRemovedHandler : IWireEventHandler<TagRemovedEvent>` — `Apply`
-  calls `entities.Get(id)?.ApplyTagRemoved(slot)`.
+  calls `_store.RemoveTag(ev.EntityId, ev.Slot)`.
 
 Each handler is `IAsyncInitializable`; its `InitializeAsync` calls
-`_stream.Register<TEvent>(this)`.
+`_stream.Register<TEvent>(this)`. None of them inject `EntityService` —
+the type system rules out emit.
 
 **`Framework.Tags` changes:**
 
@@ -153,48 +164,53 @@ Each handler is `IAsyncInitializable`; its `InitializeAsync` calls
 
 **`Framework.Wire` additions:**
 
-- `WireForwarder` (server only) — implements `IWireEventHandler<TEvent>`
-  for each known entity event type; on `Apply`, calls `Network.Send(ev)`.
-  Registers itself for each type during `InitializeAsync`. (Manual
-  enumeration in step 4; source-gen later — Q6.)
-- `NetworkInboundBridge` (client only) — subscribes to `Network`'s
-  typed receive surface for each event type; on receive, calls
-  `EventStream.Emit(ev)`. Symmetric to `WireForwarder`.
+- `WireForwarder` (server only) — single class implementing
+  `IWireEventHandler<T>` for each replicated entity event type. Each
+  `Apply` is a one-liner: `_network.Send(ev)`. Registers itself for each
+  type during `InitializeAsync`. (Manual enumeration in step 4;
+  source-gen later — Q6.)
+- `NetworkInboundBridge` (client only) — subscribes to
+  `Network.OnReceived` and forwards into `EventStream.Emit(WireEvent)`
+  (the non-generic type-routing overload). One line, no switch.
 
 **`Framework.Bootstrap` changes:**
 
-- `ServerEntityLayer : IScopeLayer` — registers `EntityService`;
-  binds `IEventEmitter` → real `EventStream` (e.g. `stream.AsEmitter()`);
-  `RegisterEntryPoint<WireForwarder>`. No Apply handlers.
-- `ClientEntityLayer : IScopeLayer` — registers `EntityService`;
-  binds `IEventEmitter` → `NoOpEventEmitter`;
-  `RegisterEntryPoint<NetworkInboundBridge>`; per-type
-  `RegisterEntryPoint<EntityCreatedHandler>` /
-  `<TagSetHandler<int>>` / `<TagSetHandler<bool>>` /
-  `<TagChangeHandler<int>>` / `<TagChangeHandler<bool>>` /
-  `<TagRemovedHandler>` (manual list; source-gen later).
-- `ServerAppFlowRoot.GetInitialLayers()` adds `EngineLayer` +
-  `ServerEntityLayer`; `ClientAppFlowRoot.GetInitialLayers()` adds
-  `EngineLayer` + `ClientEntityLayer`.
-- `GameEngine` gains an `Entities` property (ctor injection).
-- `BootstrapStatusUI` extended — counter of entities + recent events list,
-  side label.
+- `EntityLayer : IScopeLayer` — both sides. Registers `EntityStore` +
+  `EntityService` as singletons; `RegisterEntryPoint<...>` for each
+  Apply handler (`EntityCreatedHandler`, `TagSetHandler<int>`,
+  `TagSetHandler<bool>`, `TagChangeHandler<int>`, `TagChangeHandler<bool>`,
+  `TagRemovedHandler`).
+- `ServerBridgeLayer : IScopeLayer` — server only.
+  `RegisterEntryPoint<WireForwarder>`.
+- `ClientBridgeLayer : IScopeLayer` — client only.
+  `RegisterEntryPoint<NetworkInboundBridge>`.
+- `ServerAppFlowRoot.GetInitialLayers()` returns `EngineLayer`,
+  `EntityLayer`, `ServerBridgeLayer`. `ClientAppFlowRoot` returns
+  `EngineLayer`, `EntityLayer`, `ClientBridgeLayer`. Layers stack
+  additively.
+- `GameEngine` gains an `Entities` property (= `EntityService`, ctor
+  injection).
+- `BootstrapStatusUI` extended — counter of entities + recent events
+  list, side label.
 - Sandbox button (on server root only): "Create card" → calls
-  `serverEngine.Entities.Create(EntityTypes.Card, defId: 101).Set(SampleTags.Health, 30)`.
-  Both IMGUI panels show the events flowing + the client entity
-  reconstructed.
+  `serverEngine.Entities.Create(EntityTypes.Card, defId: 101)` then
+  `serverEngine.Entities.Set(card.Id, SampleTags.Health, 30)`. Both
+  IMGUI panels show the events flowing + the client entity reconstructed.
 
 **Tests:**
 
 - Existing `EntityWireRoundTripTests` / `WireRoundTripTests` (migrated 3e)
-  simplify substantially — no longer hand-construct events; the service
-  emit path does it inline.
+  simplify — no longer hand-construct events; the service emit path
+  does it inline.
 - New: symmetric round-trip test — server scope mutates via `Create` +
-  `Set`, client scope mirrors via Apply handlers; assert both bags match
-  after a sequence of Set / Change / Remove operations.
-- New: loop-safety test — invoke client `EntityService.Create` directly;
-  verify the no-op emitter swallows the emit (nothing reaches
-  `EventStream` on the client).
+  `Set`, client scope mirrors via Apply handlers; assert both stores
+  match after a sequence of Set / Change / Remove operations.
+- New: type-safety smoke — confirm `EntityCreatedHandler` doesn't see
+  `EntityService` (compile-time check via the ctor signature; documents
+  the no-bounce invariant).
+- New: server-side idempotency — emit `EntityCreatedEvent` for an id
+  that already exists in the server's store; assert no exception,
+  state unchanged.
 
 **Defer (per pattern doc):**
 
@@ -208,7 +224,7 @@ sketch matches shipped code.
 ### 4c — Pattern doc validation
 
 Read [`definition-service-pattern.md`](definition-service-pattern.md)
-against the 4a + 4b implementation. The locked sections (L1–L8) should
+against the 4a + 4b implementation. The locked sections (L1–L11) should
 hold. Convention summary at the bottom of the doc gets finalized.
 
 For anything that felt forced — call it out. Adjust either:
