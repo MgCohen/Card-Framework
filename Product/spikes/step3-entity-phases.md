@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-progress
+status: done
 created: 2026-05-19
 references:
   - Product/spikes/wire-refoundation-roadmap.md
@@ -25,9 +25,11 @@ tags: [#spike, #entities, #phasing, #session-handoff]
 | 3b | `Entity` + `EntityStore` + Pattern B extensions | ✅ | `4ac0be2` |
 | 3c | `IEntityDefinition` + `Catalog<TDef>` + `EntityStore.From<TDef>` | ✅ | `f197df1` |
 | 3d | Wire integration — `EntityCreatedEvent` gains `TypeSlot` + `DefinitionId`; `long → int` | ✅ | `440300c` |
-| 3e | Cleanup — migrate bag tests to real `Entity`, delete `TagBagProbe`, delete spike | ⏳ | — |
+| 3e | Cleanup — migrate bag tests to real `Entity`, delete `TagBagProbe`, delete spike | ✅ | `1411d30`, `f9fd5a4` |
 
 After 3d: 397/397 EditMode + 1/1 PlayMode pass.
+After 3e: 357/357 EditMode (40 EntitySetup spike tests dropped) + 1/1 PlayMode pass.
+Sister cleanup `b5aba24` also removes the TypedPayloads spike (357 → 333).
 
 ## What landed per phase
 
@@ -89,43 +91,22 @@ strict `BySlot`); no `Catalog` wiring through `IPackingHandler`; test fixtures
 (`CardPlayedEvent`, `EntityLabeledEvent`, `EntityMovedEvent`) keep `long
 EntityId` — they're fixtures, not framework events.
 
-## Phase 3e — Cleanup (pending)
+### 3e — Cleanup
 
-Goal: drop the test stub and spike folder now that real `Entity` carries their
-workload.
+`Framework.Tags.Tests/TagBagProbe.cs` gone. `SetGetTests` + `WireRoundTripTests`
+moved into `Framework.Entities.Tests` running against real `Entity`. The wire
+tests construct `TagSetEvent<T>` / `TagRemovedEvent` manually after each
+`Entity.Set` / `Remove` since auto-emission is still deferred to step 4, and
+look up the client-side `TagKey` via `TagRegistry.BySlot` (re-`new TagKey<T>`
+would double-claim the slot). `SampleTagsContainer` travels with the migrated
+tests; the existing `Tag` named-field container becomes `partial` so both
+fixture files extend it. `RegistrationTests` gains its own local `Reg*`
+fixtures so `Framework.Tags.Tests` stays self-contained.
+`Assets/Spike/ECS/EntitySetup/` deleted whole (runtime, tests, Unity sandbox).
+Sister commit `b5aba24` also deletes `Assets/Spike/ECS/TypedPayloads/`.
 
-To migrate / delete:
-
-1. **`Framework.Tags.Tests/TagBagProbe.cs`** — delete. Bag-mechanic + wire-roundtrip
-   tests get rewritten against real `Entity`.
-2. **`Framework.Tags.Tests/SetGetTests.cs`** — move to `Framework.Entities.Tests`,
-   swap `TagBagProbe` for `Entity`.
-3. **`Framework.Tags.Tests/WireRoundTripTests.cs`** — same: move, swap. (Verifies
-   the wire round-trip of `TagSetEvent<T>` / `TagRemovedEvent` through a real
-   entity's `Set` / `Remove` mutations.)
-4. **`Assets/Spike/ECS/EntitySetup/`** — entire spike folder (runtime + tests +
-   Unity sandbox bootstrap). Delete. git history preserves.
-5. **Unity sandbox** (`EntitySetupBootstrap.cs` + `Editor/SetupSceneBuilder.cs` in
-   the spike) — evaluate separately. Lean: delete with the rest; sandbox scene
-   demos are content-authoring concerns, not framework.
-
-**Sister cleanup (optional separate commit):**
-
-- **`Assets/Spike/ECS/TypedPayloads/`** — superseded by `Framework.Wire` since
-   Phase 5 of the wire roadmap. Same delete pattern. Skip if scope-creep, do
-   alongside if convenient.
-
-After 3e:
-
-- `Framework.Tags.Tests` shrinks to `RegistrationTests` only (pure registry).
-- `Framework.Entities.Tests` owns bag-mechanic + wire-roundtrip end-to-end.
-- Spike folder for EntitySetup gone.
-
-**Important:** when moving SetGetTests / WireRoundTripTests into the entities
-test assembly, the local sample tags (`SampleDeathrattle` / `SamplePoison` /
-`SampleTags.Health` / `SampleTags.IsCard` / etc.) come with them — they're tag
-slot declarations that the bag tests assert against. The test container `Tag.*`
-named-field declarations move too.
+**Locked:** `Framework.Tags.Tests` is now `RegistrationTests.cs` + asmdef only;
+`Framework.Entities.Tests` owns bag-mechanic + tag wire-roundtrip end-to-end.
 
 ## Deferred items (logged so future phases don't re-debate)
 
@@ -140,9 +121,9 @@ named-field declarations move too.
 | Kill `EntityType` via source-gen-emitted per-definition catalogs | Identity-allocation revisit during/after step 4. |
 | Test fixtures (`CardPlayedEvent` etc.) `long → int` alignment | When all-int rule wants enforcement past framework events. |
 
-## When this lands
+## Next
 
-Step 3 graduates from "in-progress" to "done" when 3e ships green. After that,
-this doc + `definition-entity-setup.md` can fold into a Model under
-`Product/features/entities/` or graduate to an ADR. Until then this is the
-session-handoff record — pick up at 3e from here.
+Step 3 is done. This doc + `definition-entity-setup.md` can fold into a Model
+under `Product/features/entities/` or graduate to an ADR. The next session
+picks up step 4 (service pattern) of `wire-refoundation-roadmap.md`, where the
+deferred auto-emission and ability-abstraction questions light up.
