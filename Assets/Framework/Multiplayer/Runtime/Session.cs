@@ -18,7 +18,6 @@ namespace Framework.Multiplayer
         readonly List<Peer> _peers = new();
         readonly Dictionary<int, TContext> _players = new();
         readonly Dictionary<int, bool> _ready = new();
-        bool _disposed;
 
         NetworkManager _nm;
         NgoTransport _transport;
@@ -37,16 +36,13 @@ namespace Framework.Multiplayer
         Action<ulong> _hostDisconnectHandler;
         Action<ulong> _clientDisconnectHandler;
 
-        int _nextSeat = 1;
-
         bool _isHost;
+        bool _disposed;
+        int _nextSeat = 1;
 
         public NetworkManager NetworkManager => _nm;
         public Peer Self { get; private set; }
         public IReadOnlyList<Peer> Peers => _peers;
-        // Sourced from a flag set at factory time, not Self.IsHost — Self is default(Peer)
-        // on clients during Connecting (Seat == 0), which would otherwise misroute host-only
-        // handlers like the PlayerData resolver path.
         public bool IsHost => _isHost;
         public SessionState State { get; private set; }
         public IReadOnlyDictionary<int, TContext> Players => _players;
@@ -58,9 +54,7 @@ namespace Framework.Multiplayer
             {
                 if (_peers.Count == 0) return false;
                 foreach (var peer in _peers)
-                {
                     if (!_ready.TryGetValue(peer.Seat, out var r) || !r) return false;
-                }
                 return true;
             }
         }
@@ -72,9 +66,7 @@ namespace Framework.Multiplayer
         public event Action<SessionState> StateChanged;
         public event Action<DisconnectReason> Disconnected;
 
-        protected Session() { }
-
-        // === Factories ===
+        private Session() { }
 
         public static UniTask<Session<TData, TContext>> StartSolo(
             ContextResolver<TData, TContext> contextResolver = null)
@@ -97,11 +89,7 @@ namespace Framework.Multiplayer
         public static (NetworkManager nm, UnityTransport utp) CreateNetworkManager()
         {
             if (NetworkManager.Singleton != null)
-            {
-                throw new SessionStartupException(
-                    "A NetworkManager.Singleton already exists. Session creates and owns its own NetworkManager; " +
-                    "tear down the existing one before starting a Session.");
-            }
+                throw new SessionStartupException("NetworkManager already exists");
 
             var go = new GameObject("Framework.Multiplayer.NetworkManager");
             UnityEngine.Object.DontDestroyOnLoad(go);
@@ -136,8 +124,6 @@ namespace Framework.Multiplayer
             NetworkManager nm,
             ContextResolver<TData, TContext> contextResolver = null)
         {
-            if (nm == null) throw new ArgumentNullException(nameof(nm));
-
             var s = new Session<TData, TContext>
             {
                 _nm = nm,
@@ -171,12 +157,10 @@ namespace Framework.Multiplayer
 
         public static async UniTask<Session<TData, TContext>> Join(NetworkManager nm)
         {
-            if (nm == null) throw new ArgumentNullException(nameof(nm));
-
             var s = new Session<TData, TContext>
             {
                 _nm = nm,
-                _contextResolver = DefaultResolver,   // unused on clients, set for completeness
+                _contextResolver = DefaultResolver,
             };
 
             s._clientDisconnectHandler = s.ClientOnClientDisconnected;
@@ -190,7 +174,7 @@ namespace Framework.Multiplayer
 
             s.TransitionTo(SessionState.Connecting);
 
-            // Register the named-message handler synchronously so the host's first sends are not lost.
+            // Register synchronously so the host's first sends aren't lost.
             s._transport = new NgoTransport(nm, LobbyMessageName);
             s._network = new Network(s._transport);
             s.RegisterChannels();
@@ -204,23 +188,20 @@ namespace Framework.Multiplayer
             catch (TimeoutException ex)
             {
                 s.TearDownNgo();
-                throw new SessionJoinException(JoinFailureKind.Timeout, "Did not receive PeerWelcomeEvent within timeout", ex);
+                throw new SessionJoinException(JoinFailureKind.Timeout, "Welcome timeout", ex);
             }
 
             if (s.State != SessionState.InLobby)
             {
                 s.TearDownNgo();
-                throw new SessionJoinException(JoinFailureKind.NgoConnectFailed, "Connection failed before Welcome arrived");
+                throw new SessionJoinException(JoinFailureKind.NgoConnectFailed, "Disconnected before Welcome");
             }
 
             return s;
         }
 
-        // === Channel setup ===
-
         void RegisterChannels()
         {
-            // Order is the discriminator contract — host and joiner must register the same types in the same order.
             _welcomeCh       = _network.Register<PeerWelcomeEvent>();
             _joinedCh        = _network.Register<PeerJoinedEvent>();
             _leftCh          = _network.Register<PeerLeftEvent>();
@@ -241,24 +222,15 @@ namespace Framework.Multiplayer
             _matchStartCh.OnReceived    += OnMatchStartReceived;
         }
 
-        static TContext DefaultResolver(TData data)
+        static TContext DefaultResolver(TData data) => new TContext
         {
-            var ctx = new TContext
-            {
-                NetworkId = data.NetworkId,
-                PlayerId  = data.PlayerId,
-            };
-            return ctx;
-        }
-
-        // === Lobby actions ===
+            NetworkId = data.NetworkId,
+            PlayerId  = data.PlayerId,
+        };
 
         public void SetSelfData(TData data)
         {
-            if (data == null) throw new ArgumentNullException(nameof(data));
-            RequireInLobby(nameof(SetSelfData));
-
-            // Stamp the submitter's NetworkId — apps can leave it default; we fill from Self.
+            if (State != SessionState.InLobby) throw new InvalidOperationException("Not in lobby");
             data.NetworkId = Self.NetworkId;
             _network.Send(new PlayerDataEvent
             {
@@ -270,34 +242,23 @@ namespace Framework.Multiplayer
 
         public void SetSelfReady(bool ready)
         {
-            RequireInLobby(nameof(SetSelfReady));
+            if (State != SessionState.InLobby) throw new InvalidOperationException("Not in lobby");
             _network.Send(new PeerReadyChangedEvent { Seat = Self.Seat, Ready = ready });
         }
 
         public void StartMatch()
         {
-            if (!IsHost) throw new InvalidOperationException("StartMatch is host-only");
-            RequireInLobby(nameof(StartMatch));
+            if (!_isHost) throw new InvalidOperationException("Host only");
+            if (State != SessionState.InLobby) throw new InvalidOperationException("Not in lobby");
             _network.Send(new MatchStartEvent());
         }
-
-        void RequireInLobby(string op)
-        {
-            if (State != SessionState.InLobby)
-                throw new InvalidOperationException($"{op} requires SessionState.InLobby (got {State})");
-        }
-
-        // === Host-side NGO callbacks ===
 
         void HostOnClientConnected(ulong clientId)
         {
             if (clientId == _nm.LocalClientId) return;
 
-            // Backfill — tell the new joiner about every existing peer (including host).
             foreach (var existing in _peers)
-            {
                 _network.Send(new PeerJoinedEvent { Seat = existing.Seat, NetworkId = existing.NetworkId });
-            }
 
             var seat = _nextSeat++;
             var peer = new Peer(seat: seat, networkId: clientId, isLocal: false);
@@ -306,24 +267,11 @@ namespace Framework.Multiplayer
             _network.Send(new PeerWelcomeEvent { YourSeat = seat, YourNetworkId = clientId });
             _network.Send(new PeerJoinedEvent { Seat = seat, NetworkId = clientId });
 
-            // Replay roster's known PlayerContext to the new joiner so they catch up on
-            // who's already submitted what.
-            foreach (var entry in _players)
-            {
-                var ctx = entry.Value;
-                _network.Send(new PlayerContextEvent
-                {
-                    Seat      = ctx.Seat,
-                    NetworkId = ctx.NetworkId,
-                    PlayerId  = ctx.PlayerId,
-                });
-            }
+            foreach (var ctx in _players.Values)
+                _network.Send(new PlayerContextEvent { Seat = ctx.Seat, NetworkId = ctx.NetworkId, PlayerId = ctx.PlayerId });
 
-            // Likewise replay current ready states.
             foreach (var entry in _ready)
-            {
                 _network.Send(new PeerReadyChangedEvent { Seat = entry.Key, Ready = entry.Value });
-            }
 
             PeerJoined?.Invoke(peer);
         }
@@ -341,8 +289,6 @@ namespace Framework.Multiplayer
             PeerLeft?.Invoke(peer);
         }
 
-        // === Client-side NGO callbacks ===
-
         void ClientOnClientDisconnected(ulong clientId)
         {
             if (clientId != _nm.LocalClientId) return;
@@ -354,8 +300,6 @@ namespace Framework.Multiplayer
             TransitionTo(SessionState.Disconnected);
             Disconnected?.Invoke(reason);
         }
-
-        // === Receive handlers ===
 
         void OnWelcomeReceived(PeerWelcomeEvent ev)
         {
@@ -369,13 +313,12 @@ namespace Framework.Multiplayer
 
         void OnPeerJoinedReceived(PeerJoinedEvent ev)
         {
-            if (_nm != null && ev.NetworkId == _nm.LocalClientId) return;     // self-echo
-            if (_peers.Exists(p => p.Seat == ev.Seat)) return;                // already known
+            if (_nm != null && ev.NetworkId == _nm.LocalClientId) return;
+            if (_peers.Exists(p => p.Seat == ev.Seat)) return;
 
             var peer = new Peer(seat: ev.Seat, networkId: ev.NetworkId, isLocal: false);
             _peers.Add(peer);
 
-            // Backfill events arriving during Connecting populate the roster silently.
             if (State == SessionState.InLobby)
                 PeerJoined?.Invoke(peer);
         }
@@ -393,18 +336,10 @@ namespace Framework.Multiplayer
 
         void OnPlayerDataReceived(PlayerDataEvent ev)
         {
-            // Only the host resolves submissions and broadcasts the authoritative context.
-            if (!IsHost) return;
-            // Ignore submissions for seats not in the roster (defensive — shouldn't happen).
-            if (!_peers.Exists(p => p.Seat == ev.Seat)) return;
+            if (!_isHost) return;
 
-            var submission = new TData
-            {
-                NetworkId = ev.NetworkId,
-                PlayerId  = ev.PlayerId,
-            };
-            var resolved = _contextResolver(submission) ?? DefaultResolver(submission);
-            // Host stamps the seat — clients can't lie about where they sit.
+            var submission = new TData { NetworkId = ev.NetworkId, PlayerId = ev.PlayerId };
+            var resolved = _contextResolver(submission);
             resolved.Seat = ev.Seat;
             resolved.NetworkId = ev.NetworkId;
 
@@ -425,24 +360,17 @@ namespace Framework.Multiplayer
                 PlayerId  = ev.PlayerId,
             };
             _players[ev.Seat] = ctx;
-
-            var peer = FindPeer(ev.Seat);
-            PlayerContextChanged?.Invoke(peer, ctx);
+            PlayerContextChanged?.Invoke(_peers.Find(p => p.Seat == ev.Seat), ctx);
         }
 
         void OnReadyReceived(PeerReadyChangedEvent ev)
         {
-            var wasInRoster = _ready.TryGetValue(ev.Seat, out var prev);
-            var changed = !wasInRoster || prev != ev.Ready;
-            if (!changed) return;     // idempotent — also terminates the host re-broadcast loop
+            if (_ready.TryGetValue(ev.Seat, out var prev) && prev == ev.Ready) return;
 
             _ready[ev.Seat] = ev.Ready;
-            var peer = FindPeer(ev.Seat);
-            ReadyChanged?.Invoke(peer, ev.Ready);
+            ReadyChanged?.Invoke(_peers.Find(p => p.Seat == ev.Seat), ev.Ready);
 
-            // Host re-broadcasts so other clients hear the update. Self-echo of the rebroadcast
-            // hits the change filter above and stops.
-            if (IsHost)
+            if (_isHost)
                 _network.Send(new PeerReadyChangedEvent { Seat = ev.Seat, Ready = ev.Ready });
         }
 
@@ -450,14 +378,6 @@ namespace Framework.Multiplayer
         {
             if (State != SessionState.InLobby) return;
             TransitionTo(SessionState.InMatch);
-        }
-
-        // === Helpers ===
-
-        Peer FindPeer(int seat)
-        {
-            foreach (var p in _peers) if (p.Seat == seat) return p;
-            return default;
         }
 
         void TransitionTo(SessionState newState)
@@ -471,21 +391,12 @@ namespace Framework.Multiplayer
         {
             if (_nm == null) return;
 
-            if (_hostConnectHandler != null)
-            {
-                _nm.OnClientConnectedCallback -= _hostConnectHandler;
-                _hostConnectHandler = null;
-            }
-            if (_hostDisconnectHandler != null)
-            {
-                _nm.OnClientDisconnectCallback -= _hostDisconnectHandler;
-                _hostDisconnectHandler = null;
-            }
-            if (_clientDisconnectHandler != null)
-            {
-                _nm.OnClientDisconnectCallback -= _clientDisconnectHandler;
-                _clientDisconnectHandler = null;
-            }
+            if (_hostConnectHandler != null) _nm.OnClientConnectedCallback -= _hostConnectHandler;
+            if (_hostDisconnectHandler != null) _nm.OnClientDisconnectCallback -= _hostDisconnectHandler;
+            if (_clientDisconnectHandler != null) _nm.OnClientDisconnectCallback -= _clientDisconnectHandler;
+            _hostConnectHandler = null;
+            _hostDisconnectHandler = null;
+            _clientDisconnectHandler = null;
 
             _transport?.Dispose();
             _transport = null;
@@ -510,11 +421,6 @@ namespace Framework.Multiplayer
         }
     }
 
-    // Non-generic facade for the common case (no game-specific PlayerData/PlayerContext extension).
-    // Deviation from the spike doc's `sealed class Session : Session<PlayerData, PlayerContext>`
-    // pattern: inheritance would propagate the generic class's static return types
-    // (UniTask<Session<PlayerData, PlayerContext>>) verbatim, which is fine but reads as a leaky
-    // abstraction. A static facade keeps the call sites clean.
     public static class Session
     {
         public static UniTask<Session<PlayerData, PlayerContext>> StartSolo()

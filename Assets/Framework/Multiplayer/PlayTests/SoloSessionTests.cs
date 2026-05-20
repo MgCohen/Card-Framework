@@ -30,7 +30,7 @@ namespace Framework.Multiplayer.PlayTests
 
             session.SetSelfData(new PlayerData { PlayerId = 12345 });
 
-            Assert.IsNotNull(received, "Solo loopback should route PlayerData → resolver → PlayerContext back to self");
+            Assert.IsNotNull(received);
             Assert.AreEqual(0, received.Seat);
             Assert.AreEqual(12345UL, received.PlayerId);
             Assert.IsTrue(session.Players.ContainsKey(0));
@@ -42,7 +42,7 @@ namespace Framework.Multiplayer.PlayTests
         {
             using var session = await Session.StartSolo();
 
-            Assert.IsFalse(session.AllReady, "Single peer should not be AllReady before SetSelfReady");
+            Assert.IsFalse(session.AllReady);
 
             var raised = 0;
             bool lastValue = false;
@@ -65,7 +65,7 @@ namespace Framework.Multiplayer.PlayTests
             session.ReadyChanged += (peer, ready) => raised++;
 
             session.SetSelfReady(true);
-            session.SetSelfReady(true);   // same value — no extra event
+            session.SetSelfReady(true);
 
             Assert.AreEqual(1, raised);
         });
@@ -105,7 +105,7 @@ namespace Framework.Multiplayer.PlayTests
             session.Disconnected += r => { raised++; reason = r; };
 
             session.Dispose();
-            session.Dispose();  // idempotent
+            session.Dispose();
 
             Assert.AreEqual(SessionState.Disconnected, session.State);
             Assert.AreEqual(1, raised);

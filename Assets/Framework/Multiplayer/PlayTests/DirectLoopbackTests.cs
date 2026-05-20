@@ -14,13 +14,9 @@ namespace Framework.Multiplayer.PlayTests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            // Belt-and-braces: if a test failed mid-way, scrub any stray NetworkManager singleton
-            // so the next test starts clean. Successful tests dispose the Session which destroys
-            // its own NM, so this is a no-op in the happy path.
+            // Scrub any singleton left over from a failed test.
             if (NetworkManager.Singleton != null)
-            {
                 UnityEngine.Object.DestroyImmediate(NetworkManager.Singleton.gameObject);
-            }
             yield return null;
         }
 
@@ -47,12 +43,9 @@ namespace Framework.Multiplayer.PlayTests
 
             session.SetSelfData(new PlayerData { PlayerId = 777 });
 
-            // NGO's CustomMessagingManager delivers on the player loop; the resolver path is
-            // submit → host hears self-echo → resolver → broadcast → host hears that too.
-            // Give it a few frames.
             for (var i = 0; i < 5; i++) await UniTask.NextFrame();
 
-            Assert.IsNotNull(received, "Host should hear its own PlayerContext broadcast through NGO loopback");
+            Assert.IsNotNull(received);
             Assert.AreEqual(0, received.Seat);
             Assert.AreEqual(777UL, received.PlayerId);
         });
@@ -78,14 +71,14 @@ namespace Framework.Multiplayer.PlayTests
             session.Disconnected += r => { raised++; reason = r; };
 
             session.Dispose();
-            session.Dispose();  // idempotent
+            session.Dispose();
 
             await UniTask.NextFrame();
 
             Assert.AreEqual(SessionState.Disconnected, session.State);
             Assert.AreEqual(1, raised);
             Assert.AreEqual(DisconnectReason.LocalShutdown, reason);
-            Assert.IsNull(NetworkManager.Singleton, "Session.Dispose should destroy the owned NetworkManager");
+            Assert.IsNull(NetworkManager.Singleton);
         });
 
         [UnityTest]
