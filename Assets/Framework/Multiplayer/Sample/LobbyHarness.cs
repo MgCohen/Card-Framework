@@ -78,7 +78,7 @@ namespace Framework.Multiplayer.Sample
         void DrawDisconnectedPanel()
         {
             GUILayout.Label("Disconnected.");
-            if (GUILayout.Button("Reset")) _session = null;
+            if (GUILayout.Button("Reset")) Leave();
         }
 
         async UniTask StartSolo() => _session = await Session.StartSolo();
