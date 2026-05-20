@@ -1,7 +1,9 @@
 {
     "name": "Framework.Entities",
     "rootNamespace": "Framework.Entities",
-    "references": [],
+    "references": [
+        "Framework.Tags"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

@@ -2,7 +2,8 @@
     "name": "Framework.Entities.Tests",
     "rootNamespace": "Framework.Entities.Tests",
     "references": [
-        "Framework.Entities"
+        "Framework.Entities",
+        "Framework.Tags"
     ],
     "includePlatforms": [
         "Editor"
