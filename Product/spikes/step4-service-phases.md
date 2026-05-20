@@ -74,9 +74,11 @@ handlers and bridges will hang off of**.
     `EntityLayer` + `ServerBridgeLayer`).
   - `ClientAppFlowRoot : AppFlowRoot` — installs `EngineLayer` (4b adds
     `EntityLayer` + `ClientBridgeLayer`).
-- `EngineLayer : IScopeLayer` — registers `GameEngine` + `EventStream`
-  + `Network` as singletons. Side-agnostic; no per-side delta at the
-  engine layer.
+- `EngineLayer : IScopeLayer` — registers `GameEngine` + `Network` +
+  `EventStream` as singletons; `EventStream` additionally exposed as
+  `IEventEmitter` and `IHandlerRegistry` (same instance) so scoped
+  consumers resolve the narrowed surfaces. Side-agnostic; no per-side
+  delta at the engine layer.
 - `BootstrapStatusUI` — MonoBehaviour with `[Inject] GameEngine _engine`,
   IMGUI panel. Instantiated under each root.
 - `SandboxTransport` — scene-level MonoBehaviour (or scene init script)
@@ -90,14 +92,14 @@ handlers and bridges will hang off of**.
   until the rollback feature is designed).
 - `IHandlerBucket` (internal) + `HandlerBucket<T>` (internal) — typed
   per-T bucket of handlers; no `object` casts at the dictionary level.
-- `EventStream` gains:
-  - `Register<TEvent>(IWireEventHandler<TEvent>)` — stores in the typed
-    bucket for that `T`.
-  - `Emit<TEvent>(TEvent ev)` — typed fast path; services and the
-    server-side `WireForwarder` use this.
-  - `Emit(WireEvent ev)` — type-routing path; `NetworkInboundBridge`
-    uses this so the bridge stays a one-liner with no `switch`
-    statement.
+- `IEventEmitter` (public) — scoped narrowing of `EventStream` with
+  `Emit<T>(T)` + `Emit(WireEvent)`.
+- `IHandlerRegistry` (public) — scoped narrowing with
+  `Register<T>(IWireEventHandler<T>)`.
+- `EventStream` implements both interfaces over the typed-bucket table.
+  Single impl, no NoOp variant. DI binds `IEventEmitter` and
+  `IHandlerRegistry` to the `EventStream` singleton; full `EventStream`
+  remains resolvable for end-user code that wants the whole surface.
 
 **Sandbox scene:** `Assets/Framework/Bootstrap/Sandbox/BootstrapSandbox.unity`
 with `ServerRoot` + `ClientRoot` GameObjects (each with its
@@ -128,14 +130,14 @@ the "bootstrapped" message, Unity batch tests green.
     (idempotent for re-runs), `Get(int)`, `SetTag<T>(int id, int slot, T)`,
     `RemoveTag(int id, int slot)`. The all-entities enumerable too.
   - `EntityService` (new) — the command surface. Ctor-injects
-    `EntityStore` + `EventStream`. Public `Create(EntityType, int)`
-    delegates to `_store.Insert` then `_stream.Emit(EntityCreatedEvent)`.
-    `Set<T>(int entityId, TagKey<T>, T)` reads prev via store, picks
-    `TagSetEvent` vs `TagChangeEvent`, calls `_store.SetTag`, emits.
-    `Get(int)` delegates to store.
-- `Entity` becomes data-only. No `IEventEmitter` ref, no `EntityService`
-  ref, no `Set<T>` public method. Public readers (`Get<T>(TagKey<T>)`)
-  + internal raw setters (`SetSlotRaw<T>`, `RemoveSlotRaw`,
+    `EntityStore` + `IEventEmitter` (scoped — emit only). Public
+    `Create(EntityType, int)` delegates to `_store.Insert` then
+    `_events.Emit(EntityCreatedEvent)`. `Set<T>(int entityId, TagKey<T>, T)`
+    reads prev via store, picks `TagSetEvent` vs `TagChangeEvent`,
+    calls `_store.SetTag`, emits. `Get(int)` delegates to store.
+- `Entity` becomes data-only. No emitter ref, no `EntityService` ref,
+  no `Set<T>` public method. Public readers (`Get<T>(TagKey<T>)`) +
+  internal raw setters (`SetSlotRaw<T>`, `RemoveSlotRaw`,
   `TryGetSlotRaw<T>`) that only `EntityStore` calls.
 - Drop the wire-aware constructor variants from 3d.
 
@@ -144,7 +146,7 @@ handlers (registered on **both** sides — they cannot emit, so re-running
 on server is a structurally-safe no-op):
 
 - `EntityCreatedHandler : IWireEventHandler<EntityCreatedEvent>` —
-  ctor-injects `EntityStore` + `EventStream`. `Apply` calls
+  ctor-injects `EntityStore` + `IHandlerRegistry`. `Apply` calls
   `_store.Insert(ev.EntityId, type, defId)` (idempotent).
 - `TagSetHandler<T> : IWireEventHandler<TagSetEvent<T>>` — `Apply` calls
   `_store.SetTag(ev.EntityId, ev.Slot, ev.Value)`.
@@ -154,8 +156,8 @@ on server is a structurally-safe no-op):
   calls `_store.RemoveTag(ev.EntityId, ev.Slot)`.
 
 Each handler is `IAsyncInitializable`; its `InitializeAsync` calls
-`_stream.Register<TEvent>(this)`. None of them inject `EntityService` —
-the type system rules out emit.
+`_handlers.Register<TEvent>(this)`. None of them inject `EntityService`
+*or* `IEventEmitter` — the type system rules out emit twice over.
 
 **`Framework.Tags` changes:**
 
@@ -165,13 +167,15 @@ the type system rules out emit.
 **`Framework.Wire` additions:**
 
 - `WireForwarder` (server only) — single class implementing
-  `IWireEventHandler<T>` for each replicated entity event type. Each
-  `Apply` is a one-liner: `_network.Send(ev)`. Registers itself for each
-  type during `InitializeAsync`. (Manual enumeration in step 4;
-  source-gen later — Q6.)
-- `NetworkInboundBridge` (client only) — subscribes to
-  `Network.OnReceived` and forwards into `EventStream.Emit(WireEvent)`
-  (the non-generic type-routing overload). One line, no switch.
+  `IWireEventHandler<T>` for each replicated entity event type.
+  Ctor-injects `IHandlerRegistry` + `Network`. Each `Apply` is a
+  one-liner: `_network.Send(ev)`. Registers itself for each type during
+  `InitializeAsync`. (Manual enumeration in step 4; source-gen later —
+  Q6.)
+- `NetworkInboundBridge` (client only) — ctor-injects `IEventEmitter` +
+  `Network`. Subscribes to `Network.OnReceived` and forwards into
+  `IEventEmitter.Emit(WireEvent)` (the non-generic type-routing
+  overload). One line, no switch.
 
 **`Framework.Bootstrap` changes:**
 
