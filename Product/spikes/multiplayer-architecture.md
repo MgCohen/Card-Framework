@@ -862,4 +862,22 @@ Captured explicitly so they don't accidentally creep in. Tracked in OPEN-ITEMS /
 
 This file supersedes `session-architecture.md` (same path, renamed 2026-05-20). The original locked design treated `Framework.Session` as a host for gameplay channels — public `Session.Network` was the central surface. User clarification narrowed scope to matchmaking-adjacent concerns and broadened it to include lobby / profile / ready / match-start. The 9-Q `/builder:design-pass` walk on 2026-05-20 reshaped the slice: umbrella feature `Framework.Multiplayer` with sub-asmdefs (Q4), no `Network` on the public surface (Q2), no `EventStream` either (Q9), widened `SessionState` (Q7), generic-typed `Session<TData, TContext>` (Q5), first-class ready (Q6), full matchmaking scope with discovery deferred (Q1, Q3).
 
-What survived the reshape: the membership protocol (Welcome / Joined / Left + backfill + receiver-filter), NGO bring-up via `CreateNetworkManager` + `StartHost(nm)` / `Join(nm)`, the Direct factories, seat assignment, threading model, error model, NetworkManager ownership, UnityServicesBoot. The implementation under `Assets/Framework/Session/` (4 commits on `claude/basic-network-implementation-DOA3z`) still reflects the *old* surface — the patch cascade following this doc rewrite renames the directory, drops `Network`/`Stream`, adds the lobby API, and refactors tests.
+What survived the reshape: the membership protocol (Welcome / Joined / Left + backfill + receiver-filter), NGO bring-up via `CreateNetworkManager` + `StartHost(nm)` / `Join(nm)`, the Direct factories, seat assignment, threading model, error model, NetworkManager ownership, UnityServicesBoot (now under the Relay sub-asmdef).
+
+## Implementation status
+
+The patch cascade landed on branch `claude/basic-network-implementation-DOA3z` between 2026-05-20 commits `8d5b89a` (mechanical rename) and `7557f68` (sample cleanup). Compileable first cut covers: core types (`Session<TData, TContext>` + `Session` facade, `Peer`, `PlayerData`, `PlayerContext`, `ContextResolver`, `SessionState`, `DisconnectReason`, `JoinFailureKind`, `SessionStartupException`, `SessionJoinException`), all 7 wire events (3 membership + 4 lobby), the host/joiner handshake protocol, the resolve/broadcast lobby flow, ready aggregation with host re-broadcast, match-start signalling, PlayTests for Solo + host-only Direct, and an OnGUI sample harness driver.
+
+**Deviations from the spec above as shipped:**
+
+- `PlayerData` / `PlayerContext` ship with `ulong NetworkId` + `ulong PlayerId` only. The spec sketched `string DisplayName` too, but AutoPacker has no native string support — strings need an `IPackingHandler` the framework doesn't ship. Folded into the polymorphic-wire-events deferral.
+- `Session` is a `static class` facade rather than `sealed class Session : Session<PlayerData, PlayerContext>`. Inheritance would propagate the generic class's static return types (`UniTask<Session<PlayerData, PlayerContext>>`) into the facade signatures, which reads as a leaky abstraction. Same call-site experience either way.
+- `MatchStartEvent` carries a `byte Reserved` field — uncertainty whether AutoPacker generates valid code for zero-`[Packed]` events. Placeholder until verified.
+
+**Not yet shipped (need Editor or external decisions):**
+
+- Compile + EditMode test verification.
+- `Framework.Multiplayer.Relay` sub-asmdef + `Relay.cs` + `UnityServicesBoot.cs` — gated on adding `com.unity.services.{core, authentication, relay}` to `Packages/manifest.json`.
+- `LobbyHarness.unity` scene file — Editor-authored wrapper around the existing `LobbyHarness.cs` MonoBehaviour.
+- Multi-NM-per-process PlayTests (`PeerRosterTests`, two-peer `DirectLoopbackTests` round-trip, cross-peer `PlayerDataTests` / `ReadyTests`) — need empirical Editor verification that NGO permits the pattern.
+- `bl-polymorphic-wire-events` OPEN-ITEMS entry + Multiplayer / PlayerData / PlayerContext / LobbyPhase / MatchStarting / Ready glossary additions — deferred housekeeping.
