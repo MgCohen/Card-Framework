@@ -27,6 +27,13 @@
       "dependencies": {},
       "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
     },
+    "com.scaffold.records": {
+      "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.records#main",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
+    },
     "com.scaffold.variables": {
       "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.variables#main",
       "depth": 0,

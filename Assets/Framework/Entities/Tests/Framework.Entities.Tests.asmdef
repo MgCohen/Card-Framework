@@ -3,7 +3,8 @@
     "rootNamespace": "Framework.Entities.Tests",
     "references": [
         "Framework.Entities",
-        "Framework.Tags"
+        "Framework.Tags",
+        "Scaffold.Records"
     ],
     "includePlatforms": [
         "Editor"

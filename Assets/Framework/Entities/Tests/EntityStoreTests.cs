@@ -74,5 +74,27 @@ namespace Framework.Entities.Tests
             var store = new EntityStore();
             Assert.IsFalse(store.TryGetById(999, out _));
         }
+
+        [Test]
+        public void From_CreatesEntityWithDefIdAndType()
+        {
+            var store = new EntityStore();
+            var def = new CardTestDef(101, 3);
+
+            var entity = store.From(def);
+            Assert.AreEqual(EntityTypes.Card, entity.Type);
+            Assert.AreEqual(101, entity.DefinitionId);
+        }
+
+        [Test]
+        public void From_AllocatesSequentialIds()
+        {
+            var store = new EntityStore();
+            var a = store.From(new CardTestDef(101, 3));
+            var b = store.From(new CardTestDef(102, 5));
+
+            Assert.AreEqual(1, a.Id);
+            Assert.AreEqual(2, b.Id);
+        }
     }
 }
