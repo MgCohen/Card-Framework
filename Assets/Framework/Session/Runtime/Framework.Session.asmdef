@@ -1,0 +1,20 @@
+{
+    "name": "Framework.Session",
+    "rootNamespace": "Framework.Session",
+    "references": [
+        "Framework.Wire",
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime",
+        "Unity.Collections",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
