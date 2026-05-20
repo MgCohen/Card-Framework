@@ -1,7 +1,7 @@
 using Framework.Wire;
 using Scaffold.AutoPacker;
 
-namespace Framework.Session
+namespace Framework.Multiplayer
 {
     public partial class PeerLeftEvent : WireEvent<PeerLeftEvent.Packed>
     {

@@ -3,7 +3,7 @@ using Cysharp.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine.TestTools;
 
-namespace Framework.Session.PlayTests
+namespace Framework.Multiplayer.PlayTests
 {
     public class SoloSessionTests
     {

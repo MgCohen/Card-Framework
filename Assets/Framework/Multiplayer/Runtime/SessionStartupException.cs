@@ -1,6 +1,6 @@
 using System;
 
-namespace Framework.Session
+namespace Framework.Multiplayer
 {
     public sealed class SessionStartupException : Exception
     {

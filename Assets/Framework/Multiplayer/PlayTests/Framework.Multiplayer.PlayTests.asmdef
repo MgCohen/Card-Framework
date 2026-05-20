@@ -1,8 +1,8 @@
 {
-    "name": "Framework.Session.PlayTests",
-    "rootNamespace": "Framework.Session.PlayTests",
+    "name": "Framework.Multiplayer.PlayTests",
+    "rootNamespace": "Framework.Multiplayer.PlayTests",
     "references": [
-        "Framework.Session",
+        "Framework.Multiplayer",
         "Framework.Wire",
         "Scaffold.Autopacker",
         "Unity.Netcode.Runtime",

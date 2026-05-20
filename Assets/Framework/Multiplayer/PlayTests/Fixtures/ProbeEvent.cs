@@ -1,7 +1,7 @@
 using Framework.Wire;
 using Scaffold.AutoPacker;
 
-namespace Framework.Session.PlayTests
+namespace Framework.Multiplayer.PlayTests
 {
     public partial class ProbeEvent : WireEvent<ProbeEvent.Packed>
     {

@@ -1,6 +1,6 @@
 {
-    "name": "Framework.Session",
-    "rootNamespace": "Framework.Session",
+    "name": "Framework.Multiplayer",
+    "rootNamespace": "Framework.Multiplayer",
     "references": [
         "Framework.Wire",
         "Scaffold.Autopacker",

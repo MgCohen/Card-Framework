@@ -1,4 +1,4 @@
-namespace Framework.Session
+namespace Framework.Multiplayer
 {
     public readonly struct Peer
     {

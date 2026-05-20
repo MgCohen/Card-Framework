@@ -6,7 +6,7 @@ using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
 
-namespace Framework.Session
+namespace Framework.Multiplayer
 {
     public sealed class Session : IDisposable
     {
@@ -69,7 +69,7 @@ namespace Framework.Session
                     "tear down the existing one before starting a Session.");
             }
 
-            var go = new GameObject("Framework.Session.NetworkManager");
+            var go = new GameObject("Framework.Multiplayer.NetworkManager");
             UnityEngine.Object.DontDestroyOnLoad(go);
             var nm = go.AddComponent<NetworkManager>();
             var utp = go.AddComponent<UnityTransport>();
