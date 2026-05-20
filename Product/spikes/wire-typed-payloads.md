@@ -1,10 +1,14 @@
 ---
 type: spike
-status: active
-forward-link: TBD
-references: [Product/spikes/wire-network-protocol.md]
+status: graduated
+forward-link: Framework.Wire (wire-refoundation-roadmap.md phase 5)
+references:
+  - Product/spikes/wire-network-protocol.md
+  - Product/spikes/wire-refoundation-roadmap.md
 tags: [#spike, #wire, #serialization, #typing, #source-gen, #tags]
 ---
+
+> **Status: graduated.** The findings — typed `TagSetEvent<T>` / `TagRemovedEvent`, `AutoPacker`-style codec installation, slot-based registry — landed in `Framework.Wire` + `Framework.Tags` during the wire-refoundation roadmap (phase 5 of `wire-refoundation-roadmap.md`). The original `Assets/Spike/ECS/TypedPayloads/` sandbox was deleted (commit `b5aba24`); git history preserves it. This doc is retained as the design-trail record. Items 5–7 of the implementation order (BlockStart payload, source-gen project, protobuf transport) remain open work, tracked by the roadmap, not by this doc.
 
 # Wire Typed Payloads — spike
 
@@ -433,7 +437,7 @@ Steps 1–4 are the load-bearing part; the rest is mechanical.
 
 ## What actually shipped
 
-The spike's shape (steps 1, 2, 4 from the plan above) landed at `Assets/Spike/ECS/TypedPayloads/` as an independent, headless-testable spike — deliberately decoupled from `Assets/Spike/ECS/VerticalSlice/` so iteration on the wire shape doesn't disturb the existing 71-test slice. Step 3 (string-tag migration) is a VerticalSlice change, not a spike change; deferred to its own pass. Steps 5–7 (BlockStart payload, source-gen, protobuf) are explicitly future work.
+The spike's shape (steps 1, 2, 4 from the plan above) landed first at `Assets/Spike/ECS/TypedPayloads/` as an independent, headless-testable spike — deliberately decoupled from `Assets/Spike/ECS/VerticalSlice/` so iteration on the wire shape didn't disturb the existing 71-test slice. The codec / typed-event pattern then graduated into [`Assets/Framework/Wire/`](Assets/Framework/Wire/) + [`Assets/Framework/Tags/`](Assets/Framework/Tags/) as part of the wire-refoundation roadmap; the spike folder was deleted in commit `b5aba24`. The layout below is the historical spike shape preserved for the design trail. Step 3 (string-tag migration) was a VerticalSlice change, not a spike change; deferred to its own pass. Steps 5–7 (BlockStart payload, source-gen, protobuf) remain explicitly future work.
 
 ### Layout
 
@@ -489,4 +493,4 @@ These came out of the build but aren't blockers — flagged for when we revisit:
 
 ### Status note
 
-This spike's shape is built and green; the doc stays `active` until we either fold the findings into a Model (graduating the spike) or commit to the source-gen pass that closes out steps 5–7. New work on the wire — `BlockStart.Payload` migration, source-gen project, transport — should land as its own spike → model → ADR per workflow, not as further appends here.
+This spike has graduated; the findings live in `Framework.Wire` + `Framework.Tags`, tracked by [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md). New work on the wire — `BlockStart.Payload` migration, source-gen project, transport — lands as its own spike → model → ADR per workflow, not as further appends here.

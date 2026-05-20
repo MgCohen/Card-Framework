@@ -1,15 +1,16 @@
 ---
 type: spike
-status: active
+status: graduated
 tags: [#spike, #entities, #definition, #ecs]
 references:
   - Product/spikes/modifiers-as-entities.md
-sandbox: Assets/Spike/ECS/EntitySetup/
+  - Product/spikes/step3-entity-phases.md
+sandbox: Assets/Framework/Entities/
 ---
 
 # Definition × Entity Setup
 
-> **Status: active.** Captures the locked shape from the design pass on 2026-05-16. Live sandbox at [`Assets/Spike/ECS/EntitySetup/`](Assets/Spike/ECS/EntitySetup/) — open in Unity, run `Tools/EntitySetup/Build Sandbox Scene`, Play.
+> **Status: graduated.** Design pass on 2026-05-16 (Q1–Q10) plus the 2026-05-18 EntityType registry closure landed in [`Assets/Framework/Entities/`](Assets/Framework/Entities/) across phases 3a–3e (see [`step3-entity-phases.md`](step3-entity-phases.md)). The original sandbox under `Assets/Spike/ECS/EntitySetup/` is deleted (commit `f9fd5a4`); git history preserves it. This doc is retained as the locked-design record.
 
 ## Context
 
@@ -90,21 +91,20 @@ Three layers:
 
 ## The shape, in code
 
-Live sandbox under [`Assets/Spike/ECS/EntitySetup/`](Assets/Spike/ECS/EntitySetup/):
+Graduated into [`Assets/Framework/Entities/Runtime/`](Assets/Framework/Entities/Runtime/). The spike's L1 primitives plus `EntityType` and `Catalog` shipped; the L2 `From<TDef>` extension is on `EntityStoreExtensions.cs`. L3 helpers (`SpawnCard` / `SpawnPlayer` / `SpawnHand` / `SpawnBattlefield` / `SpawnGraveyard`) and the `EntitySetupBootstrap` / `SetupSceneBuilder` Unity-authoring scaffolding were spike-only and did **not** graduate — they were content-authoring concerns, not framework. The four-phase shape is recorded in [`step3-entity-phases.md`](step3-entity-phases.md).
 
-| File | Role |
+| Framework file | Role |
 |---|---|
-| `EntityType.cs` | Struct-wrapped int + `EntityTypes` static class |
-| `TagKey.cs` | Typed tag keys (slot + name) |
-| `Tags.cs` | Tag inventory — kind markers, stats, ability flags, refs |
-| `Entity.cs` | Three-field base + sparse slot dict |
-| `EntityStore.cs` | L1 primitive — `Create(type, defId)` |
-| `Definition.cs` | `IEntityDefinition`, `CardKind` enum, `CardDefinition` record, `CardEffect` placeholder |
-| `Catalog.cs` | `CatalogOf<TDef>` + `Catalogs` per-type bag |
-| `Engine.cs` | `GameEngine` + L2 `From(def)` extension |
-| `Spawn.cs` | L3 — `SpawnCard` (def-driven), `SpawnPlayer` / `SpawnHand` / `SpawnBattlefield` / `SpawnGraveyard` (defless) |
-| `EntitySetupBootstrap.cs` | MonoBehaviour + IMGUI dump showing every spawned entity's three-field identity + tag bag |
-| `Editor/SetupSceneBuilder.cs` | One-shot scene builder under `Tools/EntitySetup/Build Sandbox Scene` |
+| `Runtime/EntityType.cs` | Struct-wrapped int + `EntityTypes` engine-reserved slots |
+| `Runtime/Registry/EntityTypeRegistry.cs` | Process-global type registry |
+| `Runtime/Entity.cs` | Three-field base (`Id`, `Type`, `DefinitionId`) + sparse slot dict |
+| `Runtime/EntityStore.cs` | L1 primitive — `Create(type, defId)` |
+| `Runtime/EntityExtensions.cs` | Pattern B sugar — `Set<TTag,T>` / `Get<TTag,T>` / `Has<TTag>` / `Remove<TTag>` |
+| `Runtime/IEntityDefinition.cs` | Minimum def interface — `Id` + `Type` |
+| `Runtime/Catalog.cs` | `Catalog<TDef>` — open constraint, throws on duplicate / zero Id |
+| `Runtime/EntityStoreExtensions.cs` | L2 `From<TDef>(this EntityStore, TDef)` |
+
+Tags themselves (`TagKey.cs`, `Tags.cs`) live in the sibling `Framework.Tags` assembly. Definition surfaces beyond `Id` + `Type` (`CardKind`, `CardDefinition`, `CardEffect`) didn't graduate — they're game-side authoring concerns, not framework.
 
 Sketch of the full setup flow (extracted from `EntitySetupBootstrap`):
 
@@ -148,20 +148,9 @@ var squire = engine.SpawnCard(catalogs.Cards[201], owner: jaina, zone: jainaFiel
 - **Modifier-entities.** See [`modifiers-as-entities.md`](modifiers-as-entities.md). The Definition × Entity shape locked here is the foundation modifiers compose on top of.
 - **Presentation / VM side.** How [`Assets/Spike/ECS/CardPresentation/`](Assets/Spike/ECS/CardPresentation/) reaches the catalog for Art / BodyText is a separate spike concern.
 
-## Validating the sandbox
+## Validating the design
 
-1. Open the project in Unity.
-2. Run `Tools/EntitySetup/Build Sandbox Scene`. This generates `Assets/Spike/ECS/EntitySetup/Sandbox.unity`.
-3. Open `Sandbox.unity` and Play.
-4. The IMGUI surface lists every spawned entity grouped by `EntityType` — Players, Zones, Cards. Each row shows the three identity fields (`Id`, `Type`, `Def → catalog name`) and the full tag bag.
-5. Click **Reset** to rebuild the engine. Notice the entity count restarts but the catalog count is unchanged — content survives, match state doesn't.
-
-What you should see exercised by playing:
-
-- Two players, three zones each, six cards distributed across hands and battlefields.
-- Same `CardDefinition` (Fireball, id 101) spawned twice — into Jaina's hand and Garrosh's hand. Same `DefinitionId`, different `Id` and different `Owner` / `Zone` tags. Def is placement-agnostic; spawn handles placement.
-- Argent Squire's `DivineShield` tag set from the def's intrinsic.
-- No `CardName` / `ZoneName` / `PlayerName` tags anywhere. The IMGUI panel reads card names through the catalog by `DefinitionId`.
+The framework version is exercised by `Framework.Entities.Tests` (entity / store / catalog / wire-roundtrip) and `Framework.Tags.Tests` (registry). Phase-by-phase verification + commit hashes live in [`step3-entity-phases.md`](step3-entity-phases.md). The original IMGUI sandbox under `Assets/Spike/ECS/EntitySetup/` was deleted alongside graduation; the design choices it validated (def placement-agnostic, `DefinitionId` immutable, no name tags on entities) hold in the framework version.
 
 ## Closure 2026-05-18 — EntityType registry
 
