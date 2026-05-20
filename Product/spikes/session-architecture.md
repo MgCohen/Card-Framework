@@ -372,9 +372,7 @@ public readonly partial struct RosterEntry
 [AutoPack] public sealed partial class PeerLeftEvent   : WireEvent { public int Seat; }
 ```
 
-`PeerWelcomeEvent` is the only message sent point-to-point (host → one joiner) — that's why `NgoTransport` already takes an optional `ulong? targetClientId`. Session constructs a *second* transient `NgoTransport(nm, messageName, targetClientId: joinerId)` for the welcome write, or — simpler — sends through the same shared transport but tags the Welcome event so others ignore it. **Decision: use a per-recipient transient transport for Welcome.** Cleaner separation; no "ignore if not for me" branching in the receive path. The transient transport shares NGO's named-message channel with the broadcast transport — NGO multiplexes by recipient on its side.
-
-`PeerJoinedEvent` and `PeerLeftEvent` broadcast normally through the shared transport.
+All three membership events broadcast through the shared `NgoTransport`. `PeerWelcomeEvent` is logically point-to-point (host → one joiner), but it's broadcast rather than targeted: receivers filter by checking `ev.YourNetworkId == _nm.LocalClientId` and gate on `State == Connecting`. Host and already-connected peers see the welcome and drop it; only the new joiner accepts. The cost is ~16 extra bytes per peer-join, negligible for card-game cardinality. This is a revision of the original "transient per-recipient transport" plan — `NgoTransport`'s constructor registers a named-message handler, so two transports with the same message name conflict. Broadcast + filter sidesteps that without touching Wire.
 
 ## End-to-end flows
 
@@ -589,5 +587,5 @@ Captured explicitly so they don't accidentally creep in. All of these go into a 
 | 15 | Sample scene | One Host/Join harness — manual cross-device verification deliverable |
 | 16 | `Session` shape | Plain `sealed class : IDisposable`. Owns its `NetworkManager` GameObject as an implementation detail — Session itself is a service, not a scene object |
 | 17 | `EventStream` ownership | Session owns one and auto-appends every received `WireEvent` from `Network.OnReceived` — the log "just exists" once connected; users who don't care can ignore it |
-| 18 | `PeerWelcomeEvent` delivery | Transient per-recipient `NgoTransport` for the point-to-point write. No recipient-filter branching in the receive path |
+| 18 | `PeerWelcomeEvent` delivery | Broadcast through the shared `NgoTransport`. Receivers filter: `if (ev.YourNetworkId != _nm.LocalClientId) return`. Host and already-connected peers also gate on `State == Connecting` for belt-and-braces. Single-field check on the receive path; no Wire changes. Revised from the original "transient per-recipient transport" plan once it was clear NgoTransport's ctor registers a named-message handler — two transports sharing the same message name would fight. |
 | 19 | Out of scope | LAN discovery, reconnect/backfill, dedicated server, spectators, multi-session, bots |
