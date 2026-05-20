@@ -307,21 +307,31 @@ Seats are session-scoped, monotonic, host-assigned. The host is canonically seat
 Host                                                       Joining client
 ----                                                       ---------------
 NetworkManager.OnClientConnectedCallback(id)
-  roster.AddClient(seat = next, networkId = id)            (NGO completed handshake)
-  send PeerWelcomeEvent {                                  NetworkManager.OnClientConnectedCallback(localId)
-    yourSeat = newSeat,                                      // we now know our NetworkId
-    roster = [(seat0, hostId), (seat1, ...), ...]            State = Connecting
-  } directly to id                                           (waiting for Welcome)
+  for each existing peer P in roster:                      (NGO completed handshake)
+    broadcast PeerJoinedEvent {                            NetworkManager.OnClientConnectedCallback(localId)
+      seat = P.Seat, networkId = P.NetworkId                 // we now know our NetworkId
+    }                                                        State = Connecting
+  roster.AddClient(seat = next, networkId = id)              (waiting for Welcome)
+  broadcast PeerWelcomeEvent {                             channel.OnReceived(PeerJoined for P) →
+    yourSeat = newSeat, yourNetworkId = id                   if state == Connecting: silently add to roster
+  }                                                          (no PeerJoined event raise during Connecting)
   broadcast PeerJoinedEvent {                              channel.OnReceived(Welcome) →
-    seat = newSeat, networkId = id                           Self = Peer(yourSeat, localId, true)
-  } to everyone else                                         roster = welcome.roster
+    seat = newSeat, networkId = id                           if YourNetworkId != localId: drop
+  }                                                          Self = Peer(yourSeat, localId, true)
+  raise PeerJoined(newPeer) locally                          add Self to roster
                                                              State = Connected
-                                                             raise PeerJoined for each existing peer
                                                              // app code can now Send/Register safely
-existing clients receive PeerJoinedEvent →
-  roster.AddClient(...)
-  raise PeerJoined(newPeer)
+existing clients receive backfill PeerJoinedEvents          channel.OnReceived(PeerJoined for newPeer) →
+  → already in roster, drop                                  ev.NetworkId == localId → drop (self-echo)
+existing clients receive Welcome →
+  YourNetworkId != localId → drop
+existing clients receive PeerJoinedEvent(newPeer) →
+  not in roster, add, raise PeerJoined(newPeer)
+host self-echo on its own broadcasts →
+  ev.NetworkId == localId or seat already in roster → drop
 ```
+
+Receive-side contract: a PeerJoinedEvent that arrives while `State == Connecting` populates the roster silently. PeerJoined raises only fire after the joiner transitions to Connected, and only for peers that arrive _after_ that point. The pre-existing roster is just facts queryable via `Peers`. This keeps user code from seeing a flurry of join events at startup.
 
 **Flow on leave:**
 
@@ -404,11 +414,19 @@ JoinApp.JoinDirect(host.lan.ip, 7787) →
   build NgoTransport, build Network, register 3 membership channels
   State = Connecting, wait for Welcome
 host receives OnClientConnectedCallback(joinerNgoId)
+  broadcast PeerJoinedEvent(seat=0, nid=hostNgoId)   // backfill — tells joiner about host
   roster.AddClient(seat=1, nid=joinerNgoId)
-  send PeerWelcomeEvent point-to-point
-  broadcast PeerJoinedEvent (only host hears it here — joiner gets it via Welcome)
-joiner receives Welcome → Self = (1, ...), roster filled, State = Connected, raise PeerJoined(host)
-host raises PeerJoined(joiner) locally
+  broadcast PeerWelcomeEvent(yourSeat=1, yourNetworkId=joinerNgoId)
+  broadcast PeerJoinedEvent(seat=1, nid=joinerNgoId)
+  raise PeerJoined(joiner) locally
+joiner receives (in NGO send order):
+  PeerJoinedEvent(host) → state=Connecting, add host to roster silently
+  PeerWelcomeEvent → yourNetworkId matches localId, Self = (1, ...), State = Connected
+  PeerJoinedEvent(joiner) → ev.NetworkId == localId, drop (self-echo)
+host receives its own broadcasts (NGO self-loops):
+  PeerJoinedEvent(host) → ev.NetworkId == localId, drop
+  PeerWelcomeEvent → yourNetworkId != localId, drop
+  PeerJoinedEvent(joiner) → seat already in roster, drop
 both sides can now session.Network.Send(...) any registered user event and it round-trips.
 ```
 
