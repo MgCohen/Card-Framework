@@ -6,7 +6,7 @@ namespace Framework.Wire
     public sealed class Dispatcher
     {
         readonly ITransport _transport;
-        readonly Channel[] _channels = new Channel[256];
+        readonly NetworkChannel[] _channels = new NetworkChannel[256];
 
         public event Action<WireEvent> OnAnyReceived;
 
@@ -16,7 +16,7 @@ namespace Framework.Wire
             _transport.OnReceived += OnTransportReceived;
         }
 
-        internal void Register(byte id, Channel channel) => _channels[id] = channel;
+        internal void Register(byte id, NetworkChannel channel) => _channels[id] = channel;
 
         internal void Send(in FastBufferWriter writer) => _transport.Send(in writer);
 

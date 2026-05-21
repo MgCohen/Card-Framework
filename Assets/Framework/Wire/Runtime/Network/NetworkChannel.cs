@@ -5,13 +5,13 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
-    public abstract class Channel
+    public abstract class NetworkChannel
     {
         internal abstract void SendBoxed(WireEvent ev);
         internal abstract WireEvent DeliverFromBytes(ref FastBufferReader reader);
     }
 
-    public sealed class Channel<T> : Channel where T : WireEvent, new()
+    public sealed class NetworkChannel<T> : NetworkChannel where T : WireEvent, new()
     {
         readonly byte _id;
         readonly Dispatcher _dispatcher;
@@ -20,7 +20,7 @@ namespace Framework.Wire
 
         public event Action<T> OnReceived;
 
-        internal Channel(byte id, Dispatcher dispatcher, IPackingHandler handler)
+        internal NetworkChannel(byte id, Dispatcher dispatcher, IPackingHandler handler)
         {
             _id = id;
             _dispatcher = dispatcher;

@@ -24,13 +24,13 @@ namespace Framework.Wire
             }
         }
 
-        public static (LoopbackTransport a, LoopbackTransport b) Pair()
+        public static LoopbackPair Pair()
         {
             var a = new LoopbackTransport();
             var b = new LoopbackTransport();
             a._peer = b;
             b._peer = a;
-            return (a, b);
+            return new LoopbackPair(a, b);
         }
 
         public static LoopbackTransport Solo()

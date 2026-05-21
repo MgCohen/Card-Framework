@@ -8,7 +8,7 @@ namespace Framework.Wire
     {
         readonly Dispatcher _dispatcher;
         readonly IPackingHandler _handler;
-        readonly Dictionary<Type, Channel> _byType = new();
+        readonly Dictionary<Type, NetworkChannel> _byType = new();
         byte _nextId;
 
         public event Action<WireEvent> OnReceived;
@@ -20,10 +20,10 @@ namespace Framework.Wire
             _dispatcher.OnAnyReceived += ev => OnReceived?.Invoke(ev);
         }
 
-        public Channel<T> Register<T>() where T : WireEvent, new()
+        public NetworkChannel<T> Register<T>() where T : WireEvent, new()
         {
             var id = _nextId++;
-            var ch = new Channel<T>(id, _dispatcher, _handler);
+            var ch = new NetworkChannel<T>(id, _dispatcher, _handler);
             _byType[typeof(T)] = ch;
             _dispatcher.Register(id, ch);
             return ch;
