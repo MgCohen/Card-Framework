@@ -5,6 +5,7 @@
     "com.scaffold.autopacker": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.autopacker#main",
     "com.scaffold.maps": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.maps#main",
     "com.scaffold.records": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.records#main",
+    "com.scaffold.sceneflow": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.sceneflow#main",
     "com.scaffold.variables": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.variables#main",
     "com.unity.2d.animation": "14.0.3",
     "com.unity.2d.aseprite": "4.0.1",

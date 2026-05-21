@@ -19,7 +19,7 @@ namespace Framework.Entities.Tests
             clientChannel.OnReceived += ev => clientEntity.Set((TagKey<int>)TagRegistry.BySlot(ev.Slot), ev.Value);
 
             serverEntity.Set(SampleTags.Health, 30);
-            server.Add(new TagSetEvent<int>
+            server.Emit(new TagSetEvent<int>
             {
                 EntityId = serverEntity.Id,
                 Slot     = SampleTags.Health.Slot,
@@ -45,7 +45,7 @@ namespace Framework.Entities.Tests
             clientChannel.OnReceived += ev => clientEntity.Set((TagKey<bool>)TagRegistry.BySlot(ev.Slot), ev.Value);
 
             serverEntity.Set(SampleTags.IsCard, true);
-            server.Add(new TagSetEvent<bool>
+            server.Emit(new TagSetEvent<bool>
             {
                 EntityId = serverEntity.Id,
                 Slot     = SampleTags.IsCard.Slot,
@@ -70,14 +70,14 @@ namespace Framework.Entities.Tests
             clientRemoveChannel.OnReceived += ev => clientEntity.Remove(TagRegistry.BySlot(ev.Slot));
 
             serverEntity.Set(SampleTags.Health, 30);
-            server.Add(new TagSetEvent<int>
+            server.Emit(new TagSetEvent<int>
             {
                 EntityId = serverEntity.Id,
                 Slot     = SampleTags.Health.Slot,
                 Value    = 30,
             });
             serverEntity.Remove(SampleTags.Health);
-            server.Add(new TagRemovedEvent
+            server.Emit(new TagRemovedEvent
             {
                 EntityId = serverEntity.Id,
                 Slot     = SampleTags.Health.Slot,
@@ -102,11 +102,11 @@ namespace Framework.Entities.Tests
             clientBoolChannel.OnReceived += ev => clientEntity.Set((TagKey<bool>)TagRegistry.BySlot(ev.Slot), ev.Value);
 
             serverEntity.Set(SampleTags.Health, 10);
-            server.Add(new TagSetEvent<int>  { EntityId = serverEntity.Id, Slot = SampleTags.Health.Slot, Value = 10 });
+            server.Emit(new TagSetEvent<int>  { EntityId = serverEntity.Id, Slot = SampleTags.Health.Slot, Value = 10 });
             serverEntity.Set(SampleTags.IsCard, true);
-            server.Add(new TagSetEvent<bool> { EntityId = serverEntity.Id, Slot = SampleTags.IsCard.Slot, Value = true });
+            server.Emit(new TagSetEvent<bool> { EntityId = serverEntity.Id, Slot = SampleTags.IsCard.Slot, Value = true });
             serverEntity.Set(SampleTags.Attack, 5);
-            server.Add(new TagSetEvent<int>  { EntityId = serverEntity.Id, Slot = SampleTags.Attack.Slot, Value = 5 });
+            server.Emit(new TagSetEvent<int>  { EntityId = serverEntity.Id, Slot = SampleTags.Attack.Slot, Value = 5 });
 
             Assert.AreEqual(3, client.Count);
             Assert.IsInstanceOf<TagSetEvent<int>> (client[0]);

@@ -16,7 +16,7 @@ namespace Framework.Entities.Tests
             var store = new EntityStore();
             var entity = store.From(new CardTestDef(101, 3));
 
-            server.Add(new EntityCreatedEvent
+            server.Emit(new EntityCreatedEvent
             {
                 EntityId     = entity.Id,
                 TypeSlot     = entity.Type.Slot,
@@ -37,7 +37,7 @@ namespace Framework.Entities.Tests
             serverNet.Register<EntityDestroyedEvent>();
             clientNet.Register<EntityDestroyedEvent>();
 
-            server.Add(new EntityDestroyedEvent { EntityId = 42 });
+            server.Emit(new EntityDestroyedEvent { EntityId = 42 });
 
             Assert.AreEqual(1, client.Count);
             Assert.AreEqual(42, ((EntityDestroyedEvent)client[0]).EntityId);
