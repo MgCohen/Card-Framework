@@ -1,0 +1,21 @@
+{
+    "name": "Framework.Multiplayer",
+    "rootNamespace": "Framework.Multiplayer",
+    "references": [
+        "Framework.Wire",
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Transports.UTP",
+        "Unity.Collections",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

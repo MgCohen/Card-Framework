@@ -32,5 +32,12 @@ namespace Framework.Wire
             b._peer = a;
             return (a, b);
         }
+
+        public static LoopbackTransport Solo()
+        {
+            var t = new LoopbackTransport();
+            t._peer = t;
+            return t;
+        }
     }
 }

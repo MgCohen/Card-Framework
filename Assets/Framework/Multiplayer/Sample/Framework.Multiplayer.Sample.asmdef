@@ -1,0 +1,17 @@
+{
+    "name": "Framework.Multiplayer.Sample",
+    "rootNamespace": "Framework.Multiplayer.Sample",
+    "references": [
+        "Framework.Multiplayer",
+        "UniTask"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

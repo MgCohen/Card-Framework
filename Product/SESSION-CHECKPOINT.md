@@ -11,6 +11,35 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**Framework.Multiplayer scope reshape — design pass + cascade landed (2026-05-20).** Mid-implementation pivot on `claude/basic-network-implementation-DOA3z`. The locked `Framework.Session` design treated Session as a host for gameplay channels (via a public `Network` property); user clarified scope is matchmaking-adjacent only — lobby, profiles, ready-up, match-start signalling, but never gameplay traffic. Walked 9 Qs in `/builder:design-pass` mode. Locked: **Q1 = C** full matchmaking scope with discovery as a later milestone; **Q2 = A** handoff seam via `session.NetworkManager` exposed (gameplay builds its own Wire `Network` on a separate `NgoTransport(nm, "Game")`); **Q3 = B** discovery decoupled from Session via the join-code primitive; **Q4 = B** umbrella feature `Framework.Multiplayer` with sub-asmdefs for opt-in deps (Relay/Lobby/Discovery as sub-features, not siblings); **Q5 = D + A** server-authoritative two-phase player data (clients submit `PlayerData` → host resolver builds `PlayerContext` → host broadcasts), extension via generic-typed `Session<TData, TContext>`; **Q6 = A** first-class ready API (`SetSelfReady`, `AllReady`, `ReadyChanged`); **Q7 = B** widened `SessionState` (`Connecting | InLobby | InMatch | Disconnected`) with generic `StateChanged` event, host-only `StartMatch()`; **Q8 = A** Solo as single-peer multiplayer (same API; "online solo" vs "local solo" are transport choices); **Q9 = C** no `EventStream` on Session, .NET events only.
+
+**Cascade landed on branch `claude/basic-network-implementation-DOA3z`:**
+- `58f1a60` — spike doc rename `session-architecture.md` → `multiplayer-architecture.md`, full rewrite (umbrella slice layout, generic Session surface, lobby data flow, ready-up, match-start, 25-row decision summary, Provenance footer).
+- `8d5b89a` — mechanical `Assets/Framework/Session/` → `Assets/Framework/Multiplayer/` directory rename, asmdef rename, namespace sweep across 15 files (76–99% git rename detection).
+- `21dbeae` — semantic Session surface reshape: drop `Network`/`Stream`; add `NetworkManager` property; widen `SessionState`; convert to `Session<TData, TContext>` generic with `static class Session` facade; new lobby events (`PlayerDataEvent`, `PlayerContextEvent`, `PeerReadyChangedEvent`, `MatchStartEvent`); host-side resolve+broadcast protocol; HostOnClientConnected replays Players/ReadyStates to joiners.
+- `4aad3b8` — strip cascade to load-bearing parts (-126 LOC: drop section dividers, what-comments, null-arg guards, `??` fallbacks, defensive in-roster checks, FindPeer/RequireInLobby helpers).
+- `dc2cc05` — `LobbyHarness.cs` MonoBehaviour sample (OnGUI) + `Framework.Multiplayer.Sample.asmdef` + `docs/feature-layout.md` amendment carving out the multi-asmdef exception for optional-dep sub-features.
+- `7557f68` — Reset button disposes session before clearing.
+
+**Cascade deviations from the locked spike doc:**
+- `PlayerData` / `PlayerContext` ship with `ulong NetworkId` + `ulong PlayerId` only. `DisplayName` deferred — AutoPacker has no native string support (would need an `IPackingHandler`). Same bucket as polymorphic-wire-events.
+- `Session` is a `static class` facade rather than `sealed class Session : Session<PlayerData, PlayerContext>`. Inheritance leaks the generic return types into the facade signatures; static facade keeps call sites clean.
+- `MatchStartEvent` has a `byte Reserved` placeholder field — uncertainty whether AutoPacker generates valid code for zero-`[Packed]` events.
+
+**Still pending (need Editor or external decisions):**
+- Compile + test verification — no Unity in cloud container; user must run `-runTests` locally.
+- `Framework.Multiplayer.Relay` sub-asmdef + `Relay.cs` + `UnityServicesBoot.cs` — needs `com.unity.services.{core, authentication, relay}` added to `Packages/manifest.json` (decision held pending user sign-off).
+- `LobbyHarness.unity` scene file — Editor-authored.
+- Multi-NM-per-process PlayTests (PeerRosterTests, two-peer DirectLoopback round-trip, full PlayerDataTests/ReadyTests/MatchStartTests across peers) — need empirical Editor verification that two `NetworkManager`s can coexist in one process.
+
+**Explicit later milestones (per locked design):**
+- `Framework.Multiplayer.Lobby` sub-asmdef (browseable listings via Unity Lobby).
+- `Framework.Multiplayer.Discovery` sub-asmdef.
+- Post-match phase (Q7 deferred — what `SessionState` does after `InMatch`).
+- Polymorphic wire events on Wire (unlocks subclass-based PlayerData/Context extension + string fields).
+
+**OPEN-ITEMS / GLOSSARY updates deferred per user request** — `bl-polymorphic-wire-events` and the Multiplayer / PlayerData / PlayerContext / LobbyPhase glossary entries are not yet recorded.
+
 **State-machine design pass — push-based service model (2026-05-17).** Multi-Q design walk on the framework's state-machine layer. Foundation reshape mid-walk: state stops being an entity (the v3 strawman direction) and becomes an immutable typed record per state-kind, owned by a per-role `IStateService` (sibling to `IRequestService`), pushed into the event stream as a custom block type. Walked 5 questions plus 1 foundation reshape; 2 questions foreclosed by the reshape. Locked: **F1** push-based service shape (state not entity; records owned by service; sibling to requests, not merged); **Q3** state and request are sibling services with the same pattern but separate concerns; **Q4** code-only `GameState` records for now (DSL deferred to authoring feature); **Q5** determinism plumbing out-of-scope (own pass; baked into world/services as needed); **Q6** skip `OnEnter`/`OnExit` on replay — hook outputs land as events with undo capability, replay walks history rather than re-firing; **Q7** ship three baseline states (`MatchNotStartedState`, `PlayingState`, `MatchEndedState`); games author more on demand. **Patch cascade pending:** ADR-0009 amendment/supersede (new ADR-0014?); new `features/states/` feature; heavy rewrite of `engine/07-match-state.md`; refresh of engine Models 01 / 03 / 08; per-state VM Models (ADR-0012) repointed to record dispatch; ADR-0010 / ADR-0011 audit for `MatchStateSlice` refs; `state.md` + GLOSSARY + OPEN-ITEMS terminology sweep. Wire-format encoding (block + typed inner event vs integer-encoded payload) flagged as separate downstream pass. **No code or doc edits yet** — locked decisions only.
 
 **Slice main-loop reshape — pipeline + effect stack split, SBAs, cast flow through commands (2026-05-15).** Multi-conversation design pass on `claude/entity-based-architecture-pMNhU` rewrote the slice's dispatch core around the user's mental model: "pipeline = FIFO commands; stack = LIFO effects; engine just orchestrates timing." Branch is **uncommitted** at session end pending an in-editor test run — files inventory below.
@@ -205,7 +234,14 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Slice main-loop reshape — uncommitted, awaiting in-editor test pass.** This session's work (engine pipeline + effect stack split, SBAs, PlayCard/OnCast, AsyncStack base, reaction split, Stack ownership of policy/resolution) sits as 20 modified + 8 new files on `claude/entity-based-architecture-pMNhU`. Trace through the major test paths says everything stays green, but the Unity Editor was held open across sessions so batch tests couldn't run. **Next thread: open Test Runner → EditMode → Run All**; if green, commit as one logical unit (suggested title in [§commit-ready summary](#commit-ready-summary) below); if red, fix forward.
+**Framework.Multiplayer cascade landed — awaiting Editor verification.** Branch `claude/basic-network-implementation-DOA3z` carries the full reshape (see [§Where we stopped](#where-we-stopped) for commit-by-commit). Next thread is **pull the branch and run the EditMode tests in Unity** — confirms compile + the host-only Solo/DirectLoopback PlayTests pass. After that, three forks in priority order:
+1. **Decide on UGS-package inclusion** (`com.unity.services.{core, authentication, relay}` in `Packages/manifest.json`). If yes → I write the `Framework.Multiplayer.Relay` sub-asmdef + `Relay.cs` + `UnityServicesBoot.cs`. If defer → skip Relay until later.
+2. **Multi-NM-per-process empirical check.** Spin up two `NetworkManager`s in one Editor process to confirm NGO doesn't fight the singleton. Outcome decides whether PeerRosterTests / two-peer DirectLoopback / cross-peer PlayerDataTests get written against real NMs or fall back to single-NM protocol tests via Wire's `LoopbackTransport.Pair`.
+3. **`LobbyHarness.unity` scene file.** Drop the `LobbyHarness` MonoBehaviour onto a GameObject in a new scene; saves the asset. Manual cross-device verification deliverable.
+
+OPEN-ITEMS / GLOSSARY housekeeping for `bl-polymorphic-wire-events` and the new Multiplayer terms is deferred per current session direction.
+
+**Slice main-loop reshape — uncommitted, awaiting in-editor test pass.** Prior session's work (engine pipeline + effect stack split, SBAs, PlayCard/OnCast, AsyncStack base, reaction split, Stack ownership of policy/resolution) sits as 20 modified + 8 new files on `claude/entity-based-architecture-pMNhU`. Trace through the major test paths says everything stays green, but the Unity Editor was held open across sessions so batch tests couldn't run. **Next thread: open Test Runner → EditMode → Run All**; if green, commit as one logical unit (suggested title in [§commit-ready summary](#commit-ready-summary) below); if red, fix forward.
 
 After commit, the natural next step is concrete exercise of the `AsyncStack` pattern (a working MTG-priority subclass, or animation-pause demo) — currently sketched in docs only. UI work (draggable cards) and the Pile Counter sample remain queued behind that.
 
@@ -269,7 +305,9 @@ Saved as one logical unit covering the whole reshape:
 
 *Mid-conversation questions worth holding onto for the current session, but not yet promoted to OPEN-ITEMS. End of session: answer (delete), promote (move to OPEN-ITEMS), or leave for next session.*
 
-*Scratch is empty — design pass landed in code; next session opens with the in-editor test run.*
+- **Polymorphic wire events for subclass-based PlayerData/Context extension (Q5 deferral).** User preferred subclass-with-cast-at-boundary for PlayerData/PlayerContext extension; ruled it out for now because AutoPacker/Wire doesn't natively support polymorphism (no discriminator on `WireEvent` itself, only at the channel-id level). Going with generic-typed `Session<TData, TContext>` for the first cut. Revisit as a Wire-layer enhancement: a discriminator scheme on WireEvent that would let one channel carry multiple concrete subclasses, and let Session expose `PlayerData`/`PlayerContext` base references with safe downcasts at boundaries. Promote to OPEN-ITEMS as `bl-polymorphic-wire-events` when the cascade lands.
+
+- **Post-match phase.** Q7 locked `SessionState` at `Connecting | InLobby | InMatch | Disconnected`. What happens when the match ends (someone won, time's up, host-aborted) — does Session re-enter `InLobby`, fire an `OnMatchEnded` event, expose a `LastMatchOutcome`? Out of scope for this design pass; deserves its own follow-up walk. Likely entangled with the framework's existing `MatchEndedState` work (state-machine cascade row in §Where we stopped).
 
 ---
 

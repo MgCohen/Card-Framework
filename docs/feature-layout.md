@@ -25,7 +25,7 @@ The layout mirrors Unity's UPM package convention so a feature can be lifted out
 ## Rules
 
 - **Naming.** Asmdef file and assembly name: `Framework.<Feature>[.Editor|.Tests|.Sample]`. PascalCase, dotted. Root C# namespace matches.
-- **One asmdef per layer.** Inside `Runtime/`, split by subfeature folders (`View/`, `Service/`, …) as needed, but stay one asmdef. Never split Runtime into multiple asmdefs by subfeature — the dependency graph explodes for no benefit.
+- **One asmdef per layer, with one exception.** Inside `Runtime/`, split by subfeature folders (`View/`, `Service/`, …) as needed, but stay one asmdef. The exception is **optional-dep sub-asmdefs**: when a subfeature pulls in a heavy or optional package that the rest of the feature doesn't need, give it its own asmdef under `Runtime/<SubFeature>/Framework.<Feature>.<SubFeature>.asmdef`. Consumers who don't need that package skip the sub-asmdef. `Framework.Multiplayer` uses this for the Relay / Lobby / Discovery sub-features (each pulls in Unity Services packages the core doesn't touch). Never split Runtime into multiple asmdefs just to organize code — only to gate optional deps.
 - **Dependency direction.** A feature's `Runtime` may depend on other features' `Runtime` only. `Editor`, `Tests`, `Sample` are leaves — nothing depends on them.
 - **Validation-only slices.** Features that exist mainly as internal harnesses (e.g. Wire) still live under `Framework/`; the demo/harness goes in `Sample/`.
 

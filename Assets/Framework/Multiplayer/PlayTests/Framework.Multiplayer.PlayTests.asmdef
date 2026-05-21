@@ -1,0 +1,26 @@
+{
+    "name": "Framework.Multiplayer.PlayTests",
+    "rootNamespace": "Framework.Multiplayer.PlayTests",
+    "references": [
+        "Framework.Multiplayer",
+        "Framework.Wire",
+        "Scaffold.Autopacker",
+        "Unity.Netcode.Runtime",
+        "Unity.Netcode.Transports.UTP",
+        "Unity.Collections",
+        "UniTask",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": ["UNITY_INCLUDE_TESTS"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
