@@ -17,6 +17,16 @@ tags: [#handoff, #cloud, #step4, #services]
 > and what's pending verdict before implementation begins. Delete this
 > file once step 4 ships.
 
+> **2026-05-20 update — Q1 verdict landed.** The handler-based pattern
+> as originally drafted was rejected; redesign walked through `Network`
+> as a dumb pipe, `EventStream` as the dispatch surface, services emit
+> via `IEventEmitter`, and per-type Apply handler classes register
+> directly on `EventStream`. Locked as L8/L9/L10 in
+> [`definition-service-pattern.md`](definition-service-pattern.md).
+> Remaining Qs (Q2/Q3/Q4/Q6/Q7) lock during their phase, not blockers.
+> Everything below this banner reflects the pre-verdict state and is
+> kept for context.
+
 ## Where we are
 
 Step 3 (entity layer) shipped completely. We started step 4 (service

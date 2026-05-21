@@ -24,7 +24,7 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired();
 
-            server.Add(new EntityMovedEvent { EntityId = 7, Position = new Vec3(1.5f, 2.5f, 3.5f) });
+            server.Emit(new EntityMovedEvent { EntityId = 7, Position = new Vec3(1.5f, 2.5f, 3.5f) });
 
             Assert.AreEqual(1, client.Count);
             var received = (EntityMovedEvent)client[0];
@@ -39,9 +39,9 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired(new SimplePackingHandler());
 
-            server.Add(new EntityLabeledEvent { EntityId = 11, Label = "alpha" });
-            server.Add(new EntityLabeledEvent { EntityId = 12, Label = "beta" });
-            server.Add(new EntityLabeledEvent { EntityId = 13, Label = "alpha" });
+            server.Emit(new EntityLabeledEvent { EntityId = 11, Label = "alpha" });
+            server.Emit(new EntityLabeledEvent { EntityId = 12, Label = "beta" });
+            server.Emit(new EntityLabeledEvent { EntityId = 13, Label = "alpha" });
 
             Assert.AreEqual(3, client.Count);
             Assert.AreEqual("alpha", ((EntityLabeledEvent)client[0]).Label);
@@ -57,7 +57,7 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired();
 
-            server.Add(new EntityCreatedEvent { EntityId = 42 });
+            server.Emit(new EntityCreatedEvent { EntityId = 42 });
 
             Assert.AreEqual(1, client.Count);
             Assert.AreEqual(42, ((EntityCreatedEvent)client[0]).EntityId);
@@ -68,9 +68,9 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired();
 
-            server.Add(new EntityCreatedEvent { EntityId = 1 });
-            server.Add(new EntityCreatedEvent { EntityId = 2 });
-            server.Add(new EntityCreatedEvent { EntityId = 3 });
+            server.Emit(new EntityCreatedEvent { EntityId = 1 });
+            server.Emit(new EntityCreatedEvent { EntityId = 2 });
+            server.Emit(new EntityCreatedEvent { EntityId = 3 });
 
             Assert.AreEqual(3, client.Count);
             Assert.AreEqual(1, ((EntityCreatedEvent)client[0]).EntityId);
@@ -91,8 +91,8 @@ namespace Framework.Wire.Tests
             serverNet.Register<CardPlayedEvent>();
             clientNet.Register<CardPlayedEvent>();
 
-            server.Add(new CardPlayedEvent { EntityId = 1, Definition = fireball });
-            server.Add(new CardPlayedEvent { EntityId = 2, Definition = healing  });
+            server.Emit(new CardPlayedEvent { EntityId = 1, Definition = fireball });
+            server.Emit(new CardPlayedEvent { EntityId = 2, Definition = healing  });
 
             Assert.AreEqual(2, client.Count);
             Assert.AreSame(fireball, ((CardPlayedEvent)client[0]).Definition);
@@ -138,8 +138,8 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired();
 
-            server.Add(new BlockStartEvent { Kind = 1 });
-            server.Add(new BlockEndEvent   { Kind = 1 });
+            server.Emit(new BlockStartEvent { Kind = 1 });
+            server.Emit(new BlockEndEvent   { Kind = 1 });
 
             Assert.IsInstanceOf<BlockStartEvent>(client[0]);
             Assert.IsInstanceOf<BlockEndEvent>(client[1]);
@@ -152,10 +152,10 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired();
 
-            server.Add(new BlockStartEvent { Kind = 1 });
-            server.Add(new BlockStartEvent { Kind = 2 });
-            server.Add(new BlockEndEvent   { Kind = 2 });
-            server.Add(new BlockEndEvent   { Kind = 1 });
+            server.Emit(new BlockStartEvent { Kind = 1 });
+            server.Emit(new BlockStartEvent { Kind = 2 });
+            server.Emit(new BlockEndEvent   { Kind = 2 });
+            server.Emit(new BlockEndEvent   { Kind = 1 });
 
             Assert.AreEqual(4, client.Count);
             Assert.AreEqual(1, ((BlockStartEvent)client[0]).Kind);
@@ -169,13 +169,13 @@ namespace Framework.Wire.Tests
         {
             var (server, client, _, _) = NewWired(new SimplePackingHandler());
 
-            server.Add(new BlockStartEvent     { Kind = 1 });
-            server.Add(new EntityCreatedEvent  { EntityId = 1 });
-            server.Add(new EntityCreatedEvent  { EntityId = 2 });
-            server.Add(new EntityMovedEvent    { EntityId = 1, Position = new Vec3(10, 20, 30) });
-            server.Add(new EntityLabeledEvent  { EntityId = 1, Label = "hero" });
-            server.Add(new EntityDestroyedEvent { EntityId = 1 });
-            server.Add(new BlockEndEvent       { Kind = 1 });
+            server.Emit(new BlockStartEvent     { Kind = 1 });
+            server.Emit(new EntityCreatedEvent  { EntityId = 1 });
+            server.Emit(new EntityCreatedEvent  { EntityId = 2 });
+            server.Emit(new EntityMovedEvent    { EntityId = 1, Position = new Vec3(10, 20, 30) });
+            server.Emit(new EntityLabeledEvent  { EntityId = 1, Label = "hero" });
+            server.Emit(new EntityDestroyedEvent { EntityId = 1 });
+            server.Emit(new BlockEndEvent       { Kind = 1 });
 
             Assert.AreEqual(7, client.Count);
             Assert.IsInstanceOf<BlockStartEvent>    (client[0]);
@@ -199,10 +199,10 @@ namespace Framework.Wire.Tests
             var seen = new List<int>();
             client.OnAppended += ev => seen.Add(((EntityCreatedEvent)ev).EntityId);
 
-            server.Add(new EntityCreatedEvent { EntityId = 10 });
+            server.Emit(new EntityCreatedEvent { EntityId = 10 });
             CollectionAssert.AreEqual(new int[] { 10 }, seen);
 
-            server.Add(new EntityCreatedEvent { EntityId = 20 });
+            server.Emit(new EntityCreatedEvent { EntityId = 20 });
             CollectionAssert.AreEqual(new int[] { 10, 20 }, seen);
         }
     }

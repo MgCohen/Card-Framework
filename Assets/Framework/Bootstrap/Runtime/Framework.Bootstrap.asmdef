@@ -1,0 +1,19 @@
+{
+    "name": "Framework.Bootstrap",
+    "rootNamespace": "Framework.Bootstrap",
+    "references": [
+        "Framework.Engine",
+        "Framework.Wire",
+        "Scaffold.AppFlow",
+        "VContainer"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
