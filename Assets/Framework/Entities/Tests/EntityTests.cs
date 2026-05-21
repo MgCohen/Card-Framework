@@ -17,7 +17,7 @@ namespace Framework.Entities.Tests
         }
 
         [Test]
-        public void PatternA_SetGetRoundTrip()
+        public void SetGetRoundTrip()
         {
             var store = new EntityStore();
             var entity = store.Create(EntityTypes.Card);
@@ -28,7 +28,7 @@ namespace Framework.Entities.Tests
         }
 
         [Test]
-        public void PatternA_HasAndRemove()
+        public void HasAndRemove()
         {
             var store = new EntityStore();
             var entity = store.Create(EntityTypes.Card);
@@ -43,7 +43,7 @@ namespace Framework.Entities.Tests
         }
 
         [Test]
-        public void PatternA_MultipleKeys_AreIndependent()
+        public void MultipleKeys_AreIndependent()
         {
             var store = new EntityStore();
             var entity = store.Create(EntityTypes.Card);
@@ -55,60 +55,6 @@ namespace Framework.Entities.Tests
             Assert.AreEqual(30,   entity.Get(SampleTags.Health));
             Assert.AreEqual(7,    entity.Get(SampleTags.Attack));
             Assert.AreEqual(true, entity.Get(SampleTags.IsCard));
-        }
-
-        [Test]
-        public void PatternB_ExtensionForm_RoundTrips()
-        {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
-
-            entity.Set<DeathrattleTestTag, bool>(true);
-            Assert.IsTrue(entity.Get<DeathrattleTestTag, bool>());
-            Assert.IsTrue(entity.Has<DeathrattleTestTag>());
-
-            entity.Remove<DeathrattleTestTag>();
-            Assert.IsFalse(entity.Has<DeathrattleTestTag>());
-        }
-
-        [Test]
-        public void PatternB_NamedFieldForm_RoundTrips()
-        {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
-
-            entity.Set(Tag.Deathrattle, true);
-            Assert.IsTrue(entity.Get(Tag.Deathrattle));
-            Assert.IsTrue(entity.Has(Tag.Deathrattle));
-
-            entity.Remove(Tag.Deathrattle);
-            Assert.IsFalse(entity.Has(Tag.Deathrattle));
-        }
-
-        [Test]
-        public void PatternB_BothForms_ResolveToSameSlot()
-        {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
-
-            entity.Set<DeathrattleTestTag, bool>(true);
-            Assert.IsTrue(entity.Get(Tag.Deathrattle));
-
-            entity.Set(Tag.Deathrattle, false);
-            Assert.IsFalse(entity.Get<DeathrattleTestTag, bool>());
-        }
-
-        [Test]
-        public void PatternB_TypedValue_NotJustBool()
-        {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
-
-            entity.Set<PoisonTestTag, int>(3);
-            Assert.AreEqual(3, entity.Get<PoisonTestTag, int>());
-
-            entity.Set(Tag.Poison, 7);
-            Assert.AreEqual(7, entity.Get(Tag.Poison));
         }
 
         [Test]

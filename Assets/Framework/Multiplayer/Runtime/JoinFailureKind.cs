@@ -4,8 +4,5 @@ namespace Framework.Multiplayer
     {
         NgoConnectFailed,
         Timeout,
-        InvalidJoinCode,
-        AllocationNotFound,
-        RelayUnavailable,
     }
 }

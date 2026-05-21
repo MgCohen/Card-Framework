@@ -86,7 +86,7 @@ namespace Framework.Multiplayer
             return UniTask.FromResult(s);
         }
 
-        public static (NetworkManager nm, UnityTransport utp) CreateNetworkManager()
+        public static NetworkManagerSetup CreateNetworkManager()
         {
             if (NetworkManager.Singleton != null)
                 throw new SessionStartupException("NetworkManager already exists");
@@ -100,7 +100,7 @@ namespace Framework.Multiplayer
                 NetworkTransport = utp,
                 TickRate = 30,
             };
-            return (nm, utp);
+            return new NetworkManagerSetup(nm, utp);
         }
 
         public static UniTask<Session<TData, TContext>> StartHostDirect(
@@ -108,16 +108,16 @@ namespace Framework.Multiplayer
             string listenAddress = "0.0.0.0",
             ContextResolver<TData, TContext> contextResolver = null)
         {
-            var (nm, utp) = CreateNetworkManager();
-            utp.SetConnectionData(listenAddress, port, listenAddress);
-            return StartHost(nm, contextResolver);
+            var setup = CreateNetworkManager();
+            setup.Transport.SetConnectionData(listenAddress, port, listenAddress);
+            return StartHost(setup.Manager, contextResolver);
         }
 
         public static UniTask<Session<TData, TContext>> JoinDirect(string ip, ushort port)
         {
-            var (nm, utp) = CreateNetworkManager();
-            utp.SetConnectionData(ip, port);
-            return Join(nm);
+            var setup = CreateNetworkManager();
+            setup.Transport.SetConnectionData(ip, port);
+            return Join(setup.Manager);
         }
 
         public static UniTask<Session<TData, TContext>> StartHost(
@@ -278,7 +278,7 @@ namespace Framework.Multiplayer
 
         void HostOnClientDisconnected(ulong clientId)
         {
-            var idx = _peers.FindIndex(p => p.NetworkId == clientId);
+            var idx = IndexByNetworkId(clientId);
             if (idx < 0) return;
             var peer = _peers[idx];
             _peers.RemoveAt(idx);
@@ -314,7 +314,7 @@ namespace Framework.Multiplayer
         void OnPeerJoinedReceived(PeerJoinedEvent ev)
         {
             if (_nm != null && ev.NetworkId == _nm.LocalClientId) return;
-            if (_peers.Exists(p => p.Seat == ev.Seat)) return;
+            if (IndexBySeat(ev.Seat) >= 0) return;
 
             var peer = new Peer(seat: ev.Seat, networkId: ev.NetworkId, isLocal: false);
             _peers.Add(peer);
@@ -325,7 +325,7 @@ namespace Framework.Multiplayer
 
         void OnPeerLeftReceived(PeerLeftEvent ev)
         {
-            var idx = _peers.FindIndex(p => p.Seat == ev.Seat);
+            var idx = IndexBySeat(ev.Seat);
             if (idx < 0) return;
             var peer = _peers[idx];
             _peers.RemoveAt(idx);
@@ -360,7 +360,8 @@ namespace Framework.Multiplayer
                 PlayerId  = ev.PlayerId,
             };
             _players[ev.Seat] = ctx;
-            PlayerContextChanged?.Invoke(_peers.Find(p => p.Seat == ev.Seat), ctx);
+            var idx = IndexBySeat(ev.Seat);
+            PlayerContextChanged?.Invoke(idx >= 0 ? _peers[idx] : default, ctx);
         }
 
         void OnReadyReceived(PeerReadyChangedEvent ev)
@@ -368,7 +369,8 @@ namespace Framework.Multiplayer
             if (_ready.TryGetValue(ev.Seat, out var prev) && prev == ev.Ready) return;
 
             _ready[ev.Seat] = ev.Ready;
-            ReadyChanged?.Invoke(_peers.Find(p => p.Seat == ev.Seat), ev.Ready);
+            var idx = IndexBySeat(ev.Seat);
+            ReadyChanged?.Invoke(idx >= 0 ? _peers[idx] : default, ev.Ready);
 
             if (_isHost)
                 _network.Send(new PeerReadyChangedEvent { Seat = ev.Seat, Ready = ev.Ready });
@@ -378,6 +380,20 @@ namespace Framework.Multiplayer
         {
             if (State != SessionState.InLobby) return;
             TransitionTo(SessionState.InMatch);
+        }
+
+        int IndexBySeat(int seat)
+        {
+            for (var i = 0; i < _peers.Count; i++)
+                if (_peers[i].Seat == seat) return i;
+            return -1;
+        }
+
+        int IndexByNetworkId(ulong networkId)
+        {
+            for (var i = 0; i < _peers.Count; i++)
+                if (_peers[i].NetworkId == networkId) return i;
+            return -1;
         }
 
         void TransitionTo(SessionState newState)
@@ -439,7 +455,7 @@ namespace Framework.Multiplayer
         public static UniTask<Session<PlayerData, PlayerContext>> Join(NetworkManager nm)
             => Session<PlayerData, PlayerContext>.Join(nm);
 
-        public static (NetworkManager nm, UnityTransport utp) CreateNetworkManager()
+        public static NetworkManagerSetup CreateNetworkManager()
             => Session<PlayerData, PlayerContext>.CreateNetworkManager();
     }
 }

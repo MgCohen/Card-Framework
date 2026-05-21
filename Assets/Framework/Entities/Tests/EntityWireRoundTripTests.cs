@@ -9,22 +9,22 @@ namespace Framework.Entities.Tests
         [Test]
         public void EntityCreatedEvent_FromEntity_RoundTripsThroughWire()
         {
-            var (server, client, serverNet, clientNet) = WireBridge.Connect();
-            serverNet.Register<EntityCreatedEvent>();
-            clientNet.Register<EntityCreatedEvent>();
+            var w = WireBridge.Connect();
+            w.ServerNetwork.Register<EntityCreatedEvent>();
+            w.ClientNetwork.Register<EntityCreatedEvent>();
 
             var store = new EntityStore();
             var entity = store.From(new CardTestDef(101, 3));
 
-            server.Emit(new EntityCreatedEvent
+            w.ServerStream.Emit(new EntityCreatedEvent
             {
                 EntityId     = entity.Id,
                 TypeSlot     = entity.Type.Slot,
                 DefinitionId = entity.DefinitionId,
             });
 
-            Assert.AreEqual(1, client.Count);
-            var rx = (EntityCreatedEvent)client[0];
+            Assert.AreEqual(1, w.ClientStream.Count);
+            var rx = (EntityCreatedEvent)w.ClientStream[0];
             Assert.AreEqual(entity.Id, rx.EntityId);
             Assert.AreEqual(entity.Type, EntityTypeRegistry.BySlot(rx.TypeSlot));
             Assert.AreEqual(101, rx.DefinitionId);
@@ -33,14 +33,14 @@ namespace Framework.Entities.Tests
         [Test]
         public void EntityDestroyedEvent_RoundTripsThroughWire()
         {
-            var (server, client, serverNet, clientNet) = WireBridge.Connect();
-            serverNet.Register<EntityDestroyedEvent>();
-            clientNet.Register<EntityDestroyedEvent>();
+            var w = WireBridge.Connect();
+            w.ServerNetwork.Register<EntityDestroyedEvent>();
+            w.ClientNetwork.Register<EntityDestroyedEvent>();
 
-            server.Emit(new EntityDestroyedEvent { EntityId = 42 });
+            w.ServerStream.Emit(new EntityDestroyedEvent { EntityId = 42 });
 
-            Assert.AreEqual(1, client.Count);
-            Assert.AreEqual(42, ((EntityDestroyedEvent)client[0]).EntityId);
+            Assert.AreEqual(1, w.ClientStream.Count);
+            Assert.AreEqual(42, ((EntityDestroyedEvent)w.ClientStream[0]).EntityId);
         }
     }
 }
