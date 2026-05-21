@@ -16,6 +16,7 @@ namespace VerticalSlice.QueryBench.Tests
     // These aren't strict pass/fail gates — small fluctuations come from
     // JIT / runtime housekeeping — but they pin order-of-magnitude claims.
     [TestFixture]
+    [Category("Benchmark")]
     public class AllocationTests
     {
         private const int Iterations = 1000;

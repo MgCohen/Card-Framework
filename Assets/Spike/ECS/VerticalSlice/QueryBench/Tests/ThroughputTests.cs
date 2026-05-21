@@ -16,6 +16,7 @@ namespace VerticalSlice.QueryBench.Tests
     // Hearthstone-sized / mid-selectivity / 2+-predicate config, the
     // indexed shape must be at least 5× faster than LINQ.
     [TestFixture]
+    [Category("Benchmark")]
     public class ThroughputTests
     {
         private const int Iterations = 10_000;

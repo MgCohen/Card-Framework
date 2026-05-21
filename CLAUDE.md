@@ -36,12 +36,15 @@ Card Framework/
 ```
 Unity.exe -batchmode -nographics -projectPath . -runTests \
   -testPlatform EditMode \
+  -testCategory "!Benchmark" \
   [-assemblyNames Framework.<Feature>.Tests] \
   [-testFilter <Namespace>.<Class>.<Method>] \
   -testResults Logs/test-results.xml -logFile Logs/test.log
 ```
 
 Read `Logs/test-results.xml` for pass/fail, `Logs/test.log` for compile errors and stack traces.
+
+**Benchmarks are opt-in.** Tests tagged `[Category("Benchmark")]` (perf/allocation gates — currently in `Assets/Spike/ECS/VerticalSlice/QueryBench/`) are excluded by default via `-testCategory "!Benchmark"`. To run only them, swap to `-testCategory "Benchmark"`.
 
 **Adding or modifying a feature.** Follow [docs/feature-layout.md](docs/feature-layout.md).
 
