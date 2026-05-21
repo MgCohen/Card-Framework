@@ -7,9 +7,9 @@ namespace Framework.Wire.Tests
         [Test]
         public void Explicit_Two_Network_Setup_RoundTrips()
         {
-            var transports = LoopbackTransport.Pair();
-            var serverNetwork = new Network(transports.ServerSide);
-            var clientNetwork = new Network(transports.ClientSide);
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport);
+            var clientNetwork = new Network(clientTransport);
 
             serverNetwork.Register<EntityCreatedEvent>();
             var clientChannel = clientNetwork.Register<EntityCreatedEvent>();
@@ -26,9 +26,9 @@ namespace Framework.Wire.Tests
         [Test]
         public void Direct_Typed_Send_On_Channel_Skips_Type_Lookup()
         {
-            var transports = LoopbackTransport.Pair();
-            var serverNetwork = new Network(transports.ServerSide);
-            var clientNetwork = new Network(transports.ClientSide);
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport);
+            var clientNetwork = new Network(clientTransport);
 
             var serverChannel = serverNetwork.Register<EntityCreatedEvent>();
             var clientChannel = clientNetwork.Register<EntityCreatedEvent>();
@@ -45,9 +45,9 @@ namespace Framework.Wire.Tests
         [Test]
         public void Channel_Ids_Match_When_Registration_Order_Matches()
         {
-            var transports = LoopbackTransport.Pair();
-            var serverNetwork = new Network(transports.ServerSide);
-            var clientNetwork = new Network(transports.ClientSide);
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport);
+            var clientNetwork = new Network(clientTransport);
 
             serverNetwork.Register<EntityCreatedEvent>();
             serverNetwork.Register<EntityDestroyedEvent>();
@@ -68,9 +68,9 @@ namespace Framework.Wire.Tests
         [Test]
         public void Network_OnReceived_Fires_For_Every_Inbound_Event()
         {
-            var transports = LoopbackTransport.Pair();
-            var serverNetwork = new Network(transports.ServerSide);
-            var clientNetwork = new Network(transports.ClientSide);
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport);
+            var clientNetwork = new Network(clientTransport);
 
             serverNetwork.Register<EntityCreatedEvent>();
             clientNetwork.Register<EntityCreatedEvent>();

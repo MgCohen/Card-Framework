@@ -6,9 +6,9 @@ namespace Framework.Wire
     {
         public static WireConnection Connect(IPackingHandler handler = null)
         {
-            var transports = LoopbackTransport.Pair();
-            var serverNetwork = new Network(transports.ServerSide, handler);
-            var clientNetwork = new Network(transports.ClientSide, handler);
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport, handler);
+            var clientNetwork = new Network(clientTransport, handler);
             var serverStream  = new EventStream();
             var clientStream  = new EventStream();
 
