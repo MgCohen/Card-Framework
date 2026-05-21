@@ -112,3 +112,6 @@ InitTestScene*.unity*
 # session. `/builder:end-session` force-tracks (`git add -f`) when committing
 # the completed note. Already-tracked session files are unaffected.
 Product/sessions/session-*.md
+
+# Local agent-mail config (machine-specific paths)
+.agent-mail-config.json
