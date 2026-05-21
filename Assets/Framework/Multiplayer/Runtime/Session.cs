@@ -24,13 +24,13 @@ namespace Framework.Multiplayer
         Network _network;
         ContextResolver<TData, TContext> _contextResolver;
 
-        Channel<PeerWelcomeEvent> _welcomeCh;
-        Channel<PeerJoinedEvent> _joinedCh;
-        Channel<PeerLeftEvent> _leftCh;
-        Channel<PlayerDataEvent> _playerDataCh;
-        Channel<PlayerContextEvent> _playerContextCh;
-        Channel<PeerReadyChangedEvent> _readyCh;
-        Channel<MatchStartEvent> _matchStartCh;
+        Framework.Wire.Channel<PeerWelcomeEvent> _welcomeCh;
+        Framework.Wire.Channel<PeerJoinedEvent> _joinedCh;
+        Framework.Wire.Channel<PeerLeftEvent> _leftCh;
+        Framework.Wire.Channel<PlayerDataEvent> _playerDataCh;
+        Framework.Wire.Channel<PlayerContextEvent> _playerContextCh;
+        Framework.Wire.Channel<PeerReadyChangedEvent> _readyCh;
+        Framework.Wire.Channel<MatchStartEvent> _matchStartCh;
 
         Action<ulong> _hostConnectHandler;
         Action<ulong> _hostDisconnectHandler;

@@ -6,6 +6,7 @@
         "Scaffold.Autopacker",
         "Unity.Netcode.Runtime",
         "Unity.Netcode.Transports.UTP",
+        "Unity.Networking.Transport",
         "Unity.Collections",
         "UniTask"
     ],
