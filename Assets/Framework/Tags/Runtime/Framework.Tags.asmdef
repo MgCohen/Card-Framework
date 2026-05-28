@@ -4,6 +4,8 @@
     "references": [
         "Framework.Wire",
         "Scaffold.Autopacker",
+        "Scaffold.AppFlow",
+        "Scaffold.Maps",
         "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [],

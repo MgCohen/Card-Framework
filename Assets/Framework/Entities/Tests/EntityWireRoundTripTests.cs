@@ -4,29 +4,29 @@ using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.Entities.Tests
 {
+    // Wire-layer round-trip for entity events. Pure serialization assertions; the full
+    // server→client mirror via EntityService + EntityCreatedHandler lives in
+    // MirrorIntegrationTests.
     public class EntityWireRoundTripTests
     {
         [Test]
-        public void EntityCreatedEvent_FromEntity_RoundTripsThroughWire()
+        public void EntityCreatedEvent_RoundTripsThroughWire()
         {
             var w = WireBridge.Connect();
             w.ServerNetwork.Register<EntityCreatedEvent>();
             w.ClientNetwork.Register<EntityCreatedEvent>();
 
-            var store = new EntityStore();
-            var entity = store.From(new CardTestDef(101, 3));
-
             w.ServerStream.Emit(new EntityCreatedEvent
             {
-                EntityId     = entity.Id,
-                TypeSlot     = entity.Type.Slot,
-                DefinitionId = entity.DefinitionId,
+                EntityId     = 7,
+                TypeSlot     = EntityTypes.Card.Slot,
+                DefinitionId = 101,
             });
 
             Assert.AreEqual(1, w.ClientStream.Count);
             var rx = (EntityCreatedEvent)w.ClientStream[0];
-            Assert.AreEqual(entity.Id, rx.EntityId);
-            Assert.AreEqual(entity.Type, EntityTypeRegistry.BySlot(rx.TypeSlot));
+            Assert.AreEqual(7, rx.EntityId);
+            Assert.AreEqual(EntityTypes.Card, EntityTypeRegistry.BySlot(rx.TypeSlot));
             Assert.AreEqual(101, rx.DefinitionId);
         }
 

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
@@ -7,20 +6,20 @@ namespace Framework.Entities.Tests
     public class EntityStoreTests
     {
         [Test]
-        public void Create_AllocatesIdStartingAt1()
+        public void Insert_AllocatesIdStartingAt1()
         {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(EntityTypes.Card);
             Assert.AreEqual(1, entity.Id);
         }
 
         [Test]
-        public void Create_IncrementsId()
+        public void Insert_IncrementsId()
         {
-            var store = new EntityStore();
-            var a = store.Create(EntityTypes.Card);
-            var b = store.Create(EntityTypes.Card);
-            var c = store.Create(EntityTypes.Card);
+            var store = new TestStack().EntityStore;
+            var a = store.Insert(EntityTypes.Card);
+            var b = store.Insert(EntityTypes.Card);
+            var c = store.Insert(EntityTypes.Card);
 
             Assert.AreEqual(1, a.Id);
             Assert.AreEqual(2, b.Id);
@@ -28,43 +27,43 @@ namespace Framework.Entities.Tests
         }
 
         [Test]
-        public void Create_SetsTypeAndDefinitionId()
+        public void Insert_SetsTypeAndDefinitionId()
         {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card, 201);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(EntityTypes.Card, 201);
 
             Assert.AreEqual(EntityTypes.Card, entity.Type);
             Assert.AreEqual(201, entity.DefinitionId);
         }
 
         [Test]
-        public void Create_DefinitionIdDefaultsToZero()
+        public void Insert_DefinitionIdDefaultsToZero()
         {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Zone);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(EntityTypes.Zone);
             Assert.AreEqual(0, entity.DefinitionId);
         }
 
         [Test]
-        public void ById_ReturnsCreatedEntity()
+        public void ById_ReturnsInsertedEntity()
         {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(EntityTypes.Card);
             Assert.AreSame(entity, store.ById(entity.Id));
         }
 
         [Test]
         public void ById_UnknownId_Throws()
         {
-            var store = new EntityStore();
+            var store = new TestStack().EntityStore;
             Assert.Throws<KeyNotFoundException>(() => store.ById(999));
         }
 
         [Test]
         public void TryGetById_ReturnsTrueForKnown()
         {
-            var store = new EntityStore();
-            var entity = store.Create(EntityTypes.Card);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(EntityTypes.Card);
             Assert.IsTrue(store.TryGetById(entity.Id, out var fetched));
             Assert.AreSame(entity, fetched);
         }
@@ -72,14 +71,14 @@ namespace Framework.Entities.Tests
         [Test]
         public void TryGetById_ReturnsFalseForUnknown()
         {
-            var store = new EntityStore();
+            var store = new TestStack().EntityStore;
             Assert.IsFalse(store.TryGetById(999, out _));
         }
 
         [Test]
         public void From_CreatesEntityWithDefIdAndType()
         {
-            var store = new EntityStore();
+            var store = new TestStack().EntityStore;
             var def = new CardTestDef(101, 3);
 
             var entity = store.From(def);
@@ -90,7 +89,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void From_AllocatesSequentialIds()
         {
-            var store = new EntityStore();
+            var store = new TestStack().EntityStore;
             var a = store.From(new CardTestDef(101, 3));
             var b = store.From(new CardTestDef(102, 5));
 
@@ -99,33 +98,35 @@ namespace Framework.Entities.Tests
         }
 
         [Test]
-        public void Create_WithPresetId_UsesThatId()
+        public void Insert_WithPresetId_UsesThatId()
         {
-            var store = new EntityStore();
-            var entity = store.Create(42, EntityTypes.Card, 101);
+            var store = new TestStack().EntityStore;
+            var entity = store.Insert(42, EntityTypes.Card, 101);
 
             Assert.AreEqual(42, entity.Id);
             Assert.AreSame(entity, store.ById(42));
         }
 
         [Test]
-        public void Create_WithPresetId_AdvancesNextIdPastIt()
+        public void Insert_WithPresetId_AdvancesNextIdPastIt()
         {
-            var store = new EntityStore();
-            store.Create(42, EntityTypes.Card, 101);
-            var next = store.Create(EntityTypes.Card);
+            var store = new TestStack().EntityStore;
+            store.Insert(42, EntityTypes.Card, 101);
+            var next = store.Insert(EntityTypes.Card);
 
             Assert.AreEqual(43, next.Id);
         }
 
         [Test]
-        public void Create_WithPresetId_DuplicateThrows()
+        public void Insert_WithPresetId_DuplicateReturnsExistingInstance()
         {
-            var store = new EntityStore();
-            store.Create(42, EntityTypes.Card, 101);
+            // Apply-handler path: replaying EntityCreatedEvent must be a no-op rather than throw.
+            var store = new TestStack().EntityStore;
+            var first  = store.Insert(42, EntityTypes.Card, 101);
+            var second = store.Insert(42, EntityTypes.Card, 999); // ignored — entity already exists
 
-            Assert.Throws<InvalidOperationException>(
-                () => store.Create(42, EntityTypes.Card, 102));
+            Assert.AreSame(first, second);
+            Assert.AreEqual(101, second.DefinitionId, "DefId stays at the first-insert value");
         }
     }
 }

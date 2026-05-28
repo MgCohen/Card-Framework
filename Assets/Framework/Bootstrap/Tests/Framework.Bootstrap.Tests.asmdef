@@ -4,6 +4,8 @@
     "references": [
         "Framework.Bootstrap",
         "Framework.Engine",
+        "Framework.Entities",
+        "Framework.Tags",
         "Framework.Wire",
         "Scaffold.AppFlow",
         "VContainer",

@@ -2,7 +2,9 @@
     "name": "Framework.Engine",
     "rootNamespace": "Framework.Engine",
     "references": [
-        "Framework.Wire"
+        "Framework.Wire",
+        "Framework.Tags",
+        "Framework.Entities"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

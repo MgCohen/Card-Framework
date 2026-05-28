@@ -3,6 +3,8 @@
     "rootNamespace": "Framework.Bootstrap",
     "references": [
         "Framework.Engine",
+        "Framework.Entities",
+        "Framework.Tags",
         "Framework.Wire",
         "Scaffold.AppFlow",
         "VContainer"

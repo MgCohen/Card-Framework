@@ -2,7 +2,9 @@
     "name": "Framework.Entities",
     "rootNamespace": "Framework.Entities",
     "references": [
-        "Framework.Tags"
+        "Framework.Tags",
+        "Framework.Wire",
+        "Scaffold.AppFlow"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
