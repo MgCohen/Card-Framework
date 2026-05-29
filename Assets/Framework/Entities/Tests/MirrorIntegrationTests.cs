@@ -32,9 +32,11 @@ namespace Framework.Entities.Tests
             server.RegisterCoreHandlers();
             server.RegisterTagHandlers<int>();
             server.RegisterTagHandlers<bool>();
+            server.Wire();
             client.RegisterCoreHandlers();
             client.RegisterTagHandlers<int>();
             client.RegisterTagHandlers<bool>();
+            client.Wire();
 
             return (server, client, w);
         }

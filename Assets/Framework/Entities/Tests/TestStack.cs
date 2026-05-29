@@ -1,10 +1,13 @@
+using System.Collections.Generic;
 using Framework.Tags;
 using Framework.Wire;
 
 namespace Framework.Entities.Tests
 {
     // Bundles the runtime classes needed to exercise the entity + tag flow without VContainer.
-    // Hand-wires the same shape EntityLayer + TagLayer would do — direct ctor calls, no DI.
+    // Hand-wires the same shape EntityLayer + TagLayer would do — direct ctor calls.
+    // Handlers accumulate via RegisterCoreHandlers / RegisterTagHandlers; one final Wire()
+    // call constructs the HandlerRegistry, which subscribes to Stream.OnAppended in its ctor.
     sealed class TestStack
     {
         public EventStream Stream { get; }
@@ -12,6 +15,9 @@ namespace Framework.Entities.Tests
         public TagService Tags { get; }
         public EntityStore EntityStore { get; }
         public EntityService Entities { get; }
+        public HandlerRegistry Registry { get; private set; }
+
+        readonly List<IWireEventHandler> _handlers = new();
 
         public TestStack() : this(new EventStream()) { }
 
@@ -24,20 +30,18 @@ namespace Framework.Entities.Tests
             Entities = new EntityService(EntityStore, Stream);
         }
 
-        // Construct + initialize the non-generic apply handlers (entity create, tag remove).
-        // Equivalent to what EntityLayer + TagLayer would register via EntryPoints in production.
         public void RegisterCoreHandlers()
         {
-            new EntityCreatedHandler(EntityStore, Stream).InitializeAsync(default).Wait();
-            new TagRemovedHandler(TagStore, Stream).InitializeAsync(default).Wait();
+            _handlers.Add(new EntityCreatedHandler(EntityStore));
+            _handlers.Add(new TagRemovedHandler(TagStore));
         }
 
-        // Construct + initialize the closed-T tag handlers. Production uses TagApplyHandlerRegistrar
-        // (visitor over TagRegistry) to drive this; tests call per-T explicitly.
         public void RegisterTagHandlers<T>() where T : unmanaged
         {
-            new TagSetHandler<T>(TagStore, Stream).InitializeAsync(default).Wait();
-            new TagChangeHandler<T>(TagStore, Stream).InitializeAsync(default).Wait();
+            _handlers.Add(new TagSetHandler<T>(TagStore));
+            _handlers.Add(new TagChangeHandler<T>(TagStore));
         }
+
+        public void Wire() => Registry = new HandlerRegistry(Stream, _handlers);
     }
 }

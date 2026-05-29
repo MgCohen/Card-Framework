@@ -2,12 +2,13 @@ using Framework.Engine;
 using Framework.Wire;
 using Scaffold.AppFlow;
 using VContainer;
-using VContainer.Unity;
 
 namespace Framework.Bootstrap
 {
-    // Engine substrate + the side-asymmetric wire bridge. EntityLayer and TagLayer compose
-    // on top — they don't fork by side because the asymmetry is fully captured here.
+    // Engine substrate + the side-asymmetric wire bridge. The build callback forces resolve
+    // on HandlerRegistry and the bridge — both classes do their work in their ctors
+    // (subscription wiring). VContainer's RegisterEntryPoint alone wouldn't trigger them
+    // because they don't implement any VContainer lifecycle interface.
     public sealed class EngineLayer : IScopeLayer
     {
         readonly bool _isServer;
@@ -21,13 +22,18 @@ namespace Framework.Bootstrap
 
             builder.Register<EventStream>(Lifetime.Singleton)
                 .AsSelf()
-                .As<IEventEmitter>()
-                .As<IHandlerRegistry>();
+                .As<IEventEmitter>();
 
+            builder.Register<HandlerRegistry>(Lifetime.Singleton);
             builder.Register<GameEngine>(Lifetime.Singleton);
 
-            if (_isServer) builder.RegisterEntryPoint<WireForwarder>(Lifetime.Singleton);
-            else           builder.RegisterEntryPoint<NetworkInboundBridge>(Lifetime.Singleton);
+            if (_isServer) builder.Register<WireForwarder>(Lifetime.Singleton);
+            else           builder.Register<NetworkInboundBridge>(Lifetime.Singleton);
+
+            // Force eager resolve at container build — these classes wire via ctor side-effects.
+            builder.RegisterBuildCallback(c => c.Resolve<HandlerRegistry>());
+            if (_isServer) builder.RegisterBuildCallback(c => c.Resolve<WireForwarder>());
+            else           builder.RegisterBuildCallback(c => c.Resolve<NetworkInboundBridge>());
         }
     }
 }

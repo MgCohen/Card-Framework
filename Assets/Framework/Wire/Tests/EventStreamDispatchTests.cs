@@ -1,23 +1,26 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace Framework.Wire.Tests
 {
     public class EventStreamDispatchTests
     {
-        sealed class CountingHandler<T> : IWireEventHandler<T> where T : WireEvent
+        sealed class CountingHandler<T> : WireEventHandler<T> where T : WireEvent
         {
             public int Applied;
             public T Last;
-            public void Apply(T ev) { Applied++; Last = ev; }
-            public void Unapply(T ev) { }
+            public override void Apply(T ev) { Applied++; Last = ev; }
         }
+
+        static HandlerRegistry Wire(EventStream stream, params IWireEventHandler[] handlers)
+            => new(stream, handlers);
 
         [Test]
         public void Typed_Emit_Dispatches_To_Registered_Handler()
         {
             var stream = new EventStream();
             var handler = new CountingHandler<EntityCreatedEvent>();
-            stream.Register(handler);
+            Wire(stream, handler);
 
             stream.Emit(new EntityCreatedEvent { EntityId = 7 });
 
@@ -31,8 +34,7 @@ namespace Framework.Wire.Tests
             var stream = new EventStream();
             var createdH = new CountingHandler<EntityCreatedEvent>();
             var destroyedH = new CountingHandler<EntityDestroyedEvent>();
-            stream.Register(createdH);
-            stream.Register(destroyedH);
+            Wire(stream, createdH, destroyedH);
 
             stream.Emit(new EntityCreatedEvent { EntityId = 1 });
 
@@ -45,7 +47,7 @@ namespace Framework.Wire.Tests
         {
             var stream = new EventStream();
             var handler = new CountingHandler<EntityCreatedEvent>();
-            stream.Register(handler);
+            Wire(stream, handler);
 
             WireEvent boxed = new EntityCreatedEvent { EntityId = 42 };
             stream.Emit(boxed);
@@ -76,8 +78,7 @@ namespace Framework.Wire.Tests
             var stream = new EventStream();
             var a = new CountingHandler<EntityCreatedEvent>();
             var b = new CountingHandler<EntityCreatedEvent>();
-            stream.Register(a);
-            stream.Register(b);
+            Wire(stream, a, b);
 
             stream.Emit(new EntityCreatedEvent { EntityId = 9 });
 

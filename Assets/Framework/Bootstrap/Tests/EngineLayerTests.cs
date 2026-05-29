@@ -53,12 +53,10 @@ namespace Framework.Bootstrap.Tests
         [Test]
         public void EventStream_Resolvable_As_Scoped_Interfaces()
         {
-            var stream   = _scope.Container.Resolve<EventStream>();
-            var emitter  = _scope.Container.Resolve<IEventEmitter>();
-            var registry = _scope.Container.Resolve<IHandlerRegistry>();
+            var stream  = _scope.Container.Resolve<EventStream>();
+            var emitter = _scope.Container.Resolve<IEventEmitter>();
 
             Assert.AreSame(stream, emitter);
-            Assert.AreSame(stream, registry);
         }
 
         [Test]
