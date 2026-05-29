@@ -26,7 +26,7 @@ namespace Framework.Entities.Tests
             Stream = stream;
             TagStore = new TagStore();
             Tags = new TagService(TagStore, Stream);
-            EntityStore = new EntityStore(Tags);
+            EntityStore = new EntityStore();
             Entities = new EntityService(EntityStore, Stream);
         }
 

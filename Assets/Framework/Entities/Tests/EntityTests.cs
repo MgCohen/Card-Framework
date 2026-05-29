@@ -3,6 +3,8 @@ using NUnit.Framework;
 
 namespace Framework.Entities.Tests
 {
+    // Entity is data-only — tag access goes through TagService (server) or TagStore (client).
+    // These tests exercise the server-side authoring path via TagService against an Entity id.
     public class EntityTests
     {
         [Test]
@@ -23,8 +25,8 @@ namespace Framework.Entities.Tests
             var entity = stack.EntityStore.Insert(EntityTypes.Card);
             var health = new TagKey<int>(9200);
 
-            entity.Set(health, 30);
-            Assert.AreEqual(30, entity.Get(health));
+            stack.Tags.Set(entity.Id, health, 30);
+            Assert.AreEqual(30, stack.Tags.Get(entity.Id, health));
         }
 
         [Test]
@@ -34,12 +36,12 @@ namespace Framework.Entities.Tests
             var entity = stack.EntityStore.Insert(EntityTypes.Card);
             var health = new TagKey<int>(9201);
 
-            Assert.IsFalse(entity.Has(health));
-            entity.Set(health, 5);
-            Assert.IsTrue(entity.Has(health));
-            Assert.IsTrue(entity.Remove(health));
-            Assert.IsFalse(entity.Has(health));
-            Assert.IsFalse(entity.Remove(health), "Second remove is a no-op");
+            Assert.IsFalse(stack.Tags.Has(entity.Id, health));
+            stack.Tags.Set(entity.Id, health, 5);
+            Assert.IsTrue(stack.Tags.Has(entity.Id, health));
+            Assert.IsTrue(stack.Tags.Remove(entity.Id, health));
+            Assert.IsFalse(stack.Tags.Has(entity.Id, health));
+            Assert.IsFalse(stack.Tags.Remove(entity.Id, health), "Second remove is a no-op");
         }
 
         [Test]
@@ -48,13 +50,13 @@ namespace Framework.Entities.Tests
             var stack = new TestStack();
             var entity = stack.EntityStore.Insert(EntityTypes.Card);
 
-            entity.Set(SampleTags.Health, 30);
-            entity.Set(SampleTags.Attack, 7);
-            entity.Set(SampleTags.IsCard, true);
+            stack.Tags.Set(entity.Id, SampleTags.Health, 30);
+            stack.Tags.Set(entity.Id, SampleTags.Attack, 7);
+            stack.Tags.Set(entity.Id, SampleTags.IsCard, true);
 
-            Assert.AreEqual(30,   entity.Get(SampleTags.Health));
-            Assert.AreEqual(7,    entity.Get(SampleTags.Attack));
-            Assert.AreEqual(true, entity.Get(SampleTags.IsCard));
+            Assert.AreEqual(30,   stack.Tags.Get(entity.Id, SampleTags.Health));
+            Assert.AreEqual(7,    stack.Tags.Get(entity.Id, SampleTags.Attack));
+            Assert.AreEqual(true, stack.Tags.Get(entity.Id, SampleTags.IsCard));
         }
 
         [Test]
@@ -64,10 +66,10 @@ namespace Framework.Entities.Tests
             var stack = new TestStack();
             var entity = stack.EntityStore.Insert(EntityTypes.Card);
 
-            entity.Set(SampleTags.Health, 30);  // emits TagSetEvent
+            stack.Tags.Set(entity.Id, SampleTags.Health, 30);  // emits TagSetEvent
             var countAfterFirst = stack.Stream.Count;
 
-            entity.Set(SampleTags.Health, 30);  // same value — should not emit
+            stack.Tags.Set(entity.Id, SampleTags.Health, 30);  // same value — should not emit
             Assert.AreEqual(countAfterFirst, stack.Stream.Count, "Same-value set must not emit");
         }
 
@@ -77,8 +79,8 @@ namespace Framework.Entities.Tests
             var stack = new TestStack();
             var entity = stack.EntityStore.Insert(EntityTypes.Card);
 
-            entity.Set(SampleTags.Health, 30);  // first set
-            entity.Set(SampleTags.Health, 40);  // change
+            stack.Tags.Set(entity.Id, SampleTags.Health, 30);  // first set
+            stack.Tags.Set(entity.Id, SampleTags.Health, 40);  // change
 
             // Last event should be TagChangeEvent<int> with Prev=30, Next=40
             Assert.AreEqual(2, stack.Stream.Count);

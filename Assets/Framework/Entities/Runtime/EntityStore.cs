@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Framework.Tags;
 
 namespace Framework.Entities
 {
@@ -9,15 +8,12 @@ namespace Framework.Entities
     public sealed class EntityStore
     {
         readonly Dictionary<int, Entity> _byId = new();
-        readonly TagService _tags;
         int _nextId = 1;
-
-        public EntityStore(TagService tags) { _tags = tags; }
 
         // Auto-id insert — server allocates ids.
         public Entity Insert(EntityType type, int definitionId = 0)
         {
-            var entity = new Entity(_nextId++, type, definitionId, _tags);
+            var entity = new Entity(_nextId++, type, definitionId);
             _byId[entity.Id] = entity;
             return entity;
         }
@@ -28,7 +24,7 @@ namespace Framework.Entities
         public Entity Insert(int id, EntityType type, int definitionId)
         {
             if (_byId.TryGetValue(id, out var existing)) return existing;
-            var entity = new Entity(id, type, definitionId, _tags);
+            var entity = new Entity(id, type, definitionId);
             _byId[id] = entity;
             if (id >= _nextId) _nextId = id + 1;
             return entity;
