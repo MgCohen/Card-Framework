@@ -2,9 +2,10 @@ using Framework.Wire;
 
 namespace Framework.Entities
 {
-    // Mirror-side writer for EntityCreatedEvent. EntityStore.Insert is idempotent on dup
-    // id, so this is safe to run server-side too (the service already inserted) — same
-    // path both sides, no fork.
+    // Sole writer for EntityCreatedEvent on both sides. Server: EntityService allocates
+    // an id and emits — this handler runs synchronously and does the Insert. Client: the
+    // wire delivers the event — same handler, same write. Explicit-id Insert is idempotent
+    // for safety, but the no-double-write invariant means it shouldn't trigger.
     internal sealed class EntityCreatedHandler : WireEventHandler<EntityCreatedEvent>
     {
         readonly EntityStore _store;

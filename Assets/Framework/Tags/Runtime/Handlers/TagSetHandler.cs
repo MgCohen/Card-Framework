@@ -2,8 +2,9 @@ using Framework.Wire;
 
 namespace Framework.Tags
 {
-    // Mirror-side writer for TagSetEvent<T>. Depends on TagStore only — no IEventEmitter,
-    // no TagService reference. Type system enforces no-bounce: this handler cannot re-emit.
+    // Sole writer for TagSetEvent<T> on both sides. Server: TagService.Set emits — this
+    // handler runs synchronously and writes the store. Client: the wire delivers the
+    // event — same handler, same write. Service never touches the store directly.
     internal sealed class TagSetHandler<T> : WireEventHandler<TagSetEvent<T>> where T : unmanaged
     {
         readonly TagStore _store;

@@ -9,6 +9,10 @@ namespace Framework.Bootstrap
     // on HandlerRegistry and the bridge — both classes do their work in their ctors
     // (subscription wiring). VContainer's RegisterEntryPoint alone wouldn't trigger them
     // because they don't implement any VContainer lifecycle interface.
+    //
+    // GameEngine registers only on the server — it composes the authoring services, which
+    // the client doesn't have. Client UI code injects EventStream / EntityStore / TagStore
+    // directly; the layer file itself is the documented surface of what's available.
     public sealed class EngineLayer : IScopeLayer
     {
         readonly bool _isServer;
@@ -25,10 +29,16 @@ namespace Framework.Bootstrap
                 .As<IEventEmitter>();
 
             builder.Register<HandlerRegistry>(Lifetime.Singleton);
-            builder.Register<GameEngine>(Lifetime.Singleton);
 
-            if (_isServer) builder.Register<WireForwarder>(Lifetime.Singleton);
-            else           builder.Register<NetworkInboundBridge>(Lifetime.Singleton);
+            if (_isServer)
+            {
+                builder.Register<GameEngine>(Lifetime.Singleton);
+                builder.Register<WireForwarder>(Lifetime.Singleton);
+            }
+            else
+            {
+                builder.Register<NetworkInboundBridge>(Lifetime.Singleton);
+            }
 
             // Force eager resolve at container build — these classes wire via ctor side-effects.
             builder.RegisterBuildCallback(c => c.Resolve<HandlerRegistry>());

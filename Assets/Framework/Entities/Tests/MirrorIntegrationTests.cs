@@ -6,7 +6,8 @@ using WireBridge = Framework.Wire.Wire;
 namespace Framework.Entities.Tests
 {
     // End-to-end mirror tests — the 4b deliverable. Server stack mutates via services;
-    // events round-trip through the wire; client stack's apply handlers reconstruct state.
+    // events round-trip through the wire; both server and client write through the same
+    // per-type handlers — handler is the sole writer on each side, no double-write.
     public class MirrorIntegrationTests
     {
         static (TestStack server, TestStack client, WireConnection w) Build()
@@ -26,17 +27,6 @@ namespace Framework.Entities.Tests
 
             var server = new TestStack(w.ServerStream);
             var client = new TestStack(w.ClientStream);
-
-            // Register apply handlers on both sides (matches spec L6 — register both,
-            // server-side handler runs are idempotent no-ops because the service already wrote).
-            server.RegisterCoreHandlers();
-            server.RegisterTagHandlers<int>();
-            server.RegisterTagHandlers<bool>();
-            server.Wire();
-            client.RegisterCoreHandlers();
-            client.RegisterTagHandlers<int>();
-            client.RegisterTagHandlers<bool>();
-            client.Wire();
 
             return (server, client, w);
         }

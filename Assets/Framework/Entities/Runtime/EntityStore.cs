@@ -3,14 +3,21 @@ using System.Collections.Generic;
 namespace Framework.Entities
 {
     // Repository for entities. Pure storage + raw mutation API; never emits.
-    // EntityService wraps this with emit logic. Apply handlers call this directly to mirror
-    // server-side changes without re-emitting.
+    // EntityService allocates ids here and emits; apply handlers do the actual Insert,
+    // both on the server (where the service emitted) and on the client (where the wire
+    // delivered the event). Handler is the sole writer either side.
     public sealed class EntityStore
     {
         readonly Dictionary<int, Entity> _byId = new();
         int _nextId = 1;
 
-        // Auto-id insert — server allocates ids.
+        // Server reserves the next id without inserting. Service emits with this id;
+        // the EntityCreatedHandler does the matching Insert(id, ...). Splitting allocate
+        // from insert lets the service emit-first while still returning the new Entity.
+        public int AllocateId() => _nextId++;
+
+        // Auto-id insert — convenience for direct-store callers (tests). Production
+        // authoring goes through EntityService.Create.
         public Entity Insert(EntityType type, int definitionId = 0)
         {
             var entity = new Entity(_nextId++, type, definitionId);
@@ -18,9 +25,7 @@ namespace Framework.Entities
             return entity;
         }
 
-        // Explicit-id insert — idempotent. Apply handlers re-run safely; if the entity
-        // already exists (server-side, where EntityService.Create already inserted) the
-        // existing instance is returned.
+        // Explicit-id insert — idempotent. Apply handlers re-run safely.
         public Entity Insert(int id, EntityType type, int definitionId)
         {
             if (_byId.TryGetValue(id, out var existing)) return existing;

@@ -4,9 +4,9 @@ using UnityEngine;
 
 namespace Framework.Bootstrap
 {
-    // Single root for both server and client scopes. The `_isServer` field is the only
-    // asymmetry — flows down into EngineLayer to pick WireForwarder vs NetworkInboundBridge.
-    // EntityLayer and TagLayer are side-agnostic.
+    // Single root for both server and client scopes. `_isServer` flows down into every layer
+    // that has a per-side delta: EngineLayer (ServerEngine vs ClientEngine + bridge),
+    // TagLayer and EntityLayer (gate the command-service registrations).
     [DefaultExecutionOrder(-1000)]
     public sealed class FrameworkAppFlowRoot : AppFlowRoot
     {
@@ -15,8 +15,8 @@ namespace Framework.Bootstrap
         protected override IEnumerable<IScopeLayer> GetInitialLayers()
         {
             yield return new EngineLayer(_isServer);
-            yield return new TagLayer();
-            yield return new EntityLayer();
+            yield return new TagLayer(_isServer);
+            yield return new EntityLayer(_isServer);
         }
     }
 }

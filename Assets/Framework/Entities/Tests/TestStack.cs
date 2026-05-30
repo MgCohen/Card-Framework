@@ -4,10 +4,11 @@ using Framework.Wire;
 
 namespace Framework.Entities.Tests
 {
-    // Bundles the runtime classes needed to exercise the entity + tag flow without VContainer.
-    // Hand-wires the same shape EntityLayer + TagLayer would do — direct ctor calls.
-    // Handlers accumulate via RegisterCoreHandlers / RegisterTagHandlers; one final Wire()
-    // call constructs the HandlerRegistry, which subscribes to Stream.OnAppended in its ctor.
+    // Hand-wires the same shape EntityLayer + TagLayer would. Auto-registers the standard
+    // handler set (Entity + Tag<int> + Tag<bool>) and constructs the HandlerRegistry, so the
+    // service-emit path has a live writer on the other end. Tests that exercise the
+    // service-emit path use this; tests that hit the store directly can construct a bare
+    // EntityStore / TagStore instead.
     sealed class TestStack
     {
         public EventStream Stream { get; }
@@ -15,9 +16,7 @@ namespace Framework.Entities.Tests
         public TagService Tags { get; }
         public EntityStore EntityStore { get; }
         public EntityService Entities { get; }
-        public HandlerRegistry Registry { get; private set; }
-
-        readonly List<IWireEventHandler> _handlers = new();
+        public HandlerRegistry Registry { get; }
 
         public TestStack() : this(new EventStream()) { }
 
@@ -28,20 +27,17 @@ namespace Framework.Entities.Tests
             Tags = new TagService(TagStore, Stream);
             EntityStore = new EntityStore();
             Entities = new EntityService(EntityStore, Stream);
-        }
 
-        public void RegisterCoreHandlers()
-        {
-            _handlers.Add(new EntityCreatedHandler(EntityStore));
-            _handlers.Add(new TagRemovedHandler(TagStore));
+            var handlers = new List<IWireEventHandler>
+            {
+                new EntityCreatedHandler(EntityStore),
+                new TagRemovedHandler(TagStore),
+                new TagSetHandler<int>(TagStore),
+                new TagChangeHandler<int>(TagStore),
+                new TagSetHandler<bool>(TagStore),
+                new TagChangeHandler<bool>(TagStore),
+            };
+            Registry = new HandlerRegistry(Stream, handlers);
         }
-
-        public void RegisterTagHandlers<T>() where T : unmanaged
-        {
-            _handlers.Add(new TagSetHandler<T>(TagStore));
-            _handlers.Add(new TagChangeHandler<T>(TagStore));
-        }
-
-        public void Wire() => Registry = new HandlerRegistry(Stream, _handlers);
     }
 }

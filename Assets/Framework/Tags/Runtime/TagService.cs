@@ -3,8 +3,10 @@ using Framework.Wire;
 
 namespace Framework.Tags
 {
-    // Command surface over TagStore. Writes to the store + emits the matching wire event.
-    // Equality short-circuit on Set kills accidental re-entry as a defense in depth backstop.
+    // Command surface over TagStore. Peeks the store to dedupe + pick the right event,
+    // then emits. The store write happens exclusively through TagSetHandler<T> /
+    // TagChangeHandler<T> / TagRemovedHandler — same path on server (this scope) and on
+    // the client (via the wire). No double-write.
     public sealed class TagService
     {
         readonly TagStore _store;
@@ -26,8 +28,7 @@ namespace Framework.Tags
             if (_store.Has(entityId, key.Slot))
             {
                 var prev = _store.Get<T>(entityId, key.Slot);
-                if (EqualityComparer<T>.Default.Equals(prev, value)) return;  // ← equality short-circuit
-                _store.Set(entityId, key.Slot, value);
+                if (EqualityComparer<T>.Default.Equals(prev, value)) return;
                 _events.Emit(new TagChangeEvent<T>
                 {
                     EntityId = entityId,
@@ -38,7 +39,6 @@ namespace Framework.Tags
             }
             else
             {
-                _store.Set(entityId, key.Slot, value);
                 _events.Emit(new TagSetEvent<T>
                 {
                     EntityId = entityId,
@@ -50,7 +50,7 @@ namespace Framework.Tags
 
         public bool Remove(int entityId, TagKey key)
         {
-            if (!_store.Remove(entityId, key.Slot)) return false;
+            if (!_store.Has(entityId, key.Slot)) return false;
             _events.Emit(new TagRemovedEvent { EntityId = entityId, Slot = key.Slot });
             return true;
         }

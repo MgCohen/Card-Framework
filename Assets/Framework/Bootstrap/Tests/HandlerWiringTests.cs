@@ -22,8 +22,8 @@ namespace Framework.Bootstrap.Tests
             _scope = LifetimeScope.Create(builder =>
             {
                 new EngineLayer(isServer: false).Install(builder);
-                new TagLayer().Install(builder);
-                new EntityLayer().Install(builder);
+                new TagLayer(isServer: false).Install(builder);
+                new EntityLayer(isServer: false).Install(builder);
             }, "HandlerWiringTestRoot");
 
             if (_scope.Container == null) _scope.Build();

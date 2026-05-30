@@ -2,9 +2,10 @@ using Framework.Wire;
 
 namespace Framework.Entities
 {
-    // Command surface over EntityStore. Public Create allocates an entity via the store and
-    // emits EntityCreatedEvent so the mirror side can reconstruct it. The store handles
-    // raw inserts; this class owns the emit seam.
+    // Command surface over EntityStore. Allocates an id, emits EntityCreatedEvent, returns
+    // the entity the handler synchronously inserted. The store write happens exclusively
+    // through the EntityCreatedHandler — same path on server (this scope) and on the client
+    // (via the wire). No double-write.
     public sealed class EntityService
     {
         readonly EntityStore _store;
@@ -18,14 +19,14 @@ namespace Framework.Entities
 
         public Entity Create(EntityType type, int definitionId = 0)
         {
-            var entity = _store.Insert(type, definitionId);
+            var id = _store.AllocateId();
             _events.Emit(new EntityCreatedEvent
             {
-                EntityId     = entity.Id,
+                EntityId     = id,
                 TypeSlot     = type.Slot,
                 DefinitionId = definitionId,
             });
-            return entity;
+            return _store.ById(id);
         }
 
         public Entity ById(int id) => _store.ById(id);
