@@ -3,7 +3,7 @@ using Scaffold.AutoPacker;
 
 namespace Framework.Multiplayer
 {
-    public partial class PlayerContextEvent : WireEvent<PlayerContextEvent.Packed>
+    public partial class PlayerContextEvent : WireEvent
     {
         [Packed] public int Seat;
         [Packed] public ulong NetworkId;

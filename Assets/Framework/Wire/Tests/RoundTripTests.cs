@@ -9,15 +9,15 @@ namespace Framework.Wire.Tests
         static WireConnection NewWired(IPackingHandler handler = null)
         {
             var w = Wire.Connect(handler);
-            w.ServerNetwork.Register<EntityCreatedEvent>();   w.ClientNetwork.Register<EntityCreatedEvent>();
-            w.ServerNetwork.Register<EntityDestroyedEvent>(); w.ClientNetwork.Register<EntityDestroyedEvent>();
-            w.ServerNetwork.Register<EntityMovedEvent>();     w.ClientNetwork.Register<EntityMovedEvent>();
-            w.ServerNetwork.Register<EntityLabeledEvent>();   w.ClientNetwork.Register<EntityLabeledEvent>();
-            w.ServerNetwork.Register<BlockStartEvent>();      w.ClientNetwork.Register<BlockStartEvent>();
-            w.ServerNetwork.Register<BlockEndEvent>();        w.ClientNetwork.Register<BlockEndEvent>();
-            w.ServerNetwork.Register<RequestOpenedEvent>();   w.ClientNetwork.Register<RequestOpenedEvent>();
-            w.ServerNetwork.Register<RequestClosedEvent>();   w.ClientNetwork.Register<RequestClosedEvent>();
-            w.ServerNetwork.Register<ResponseEvent>();        w.ClientNetwork.Register<ResponseEvent>();
+            w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();   w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            w.ServerNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>(); w.ClientNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
+            w.ServerNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();     w.ClientNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();
+            w.ServerNetwork.Register<EntityLabeledEvent, EntityLabeledEvent.Packed>();   w.ClientNetwork.Register<EntityLabeledEvent, EntityLabeledEvent.Packed>();
+            w.ServerNetwork.Register<BlockStartEvent, BlockStartEvent.Packed>();      w.ClientNetwork.Register<BlockStartEvent, BlockStartEvent.Packed>();
+            w.ServerNetwork.Register<BlockEndEvent, BlockEndEvent.Packed>();        w.ClientNetwork.Register<BlockEndEvent, BlockEndEvent.Packed>();
+            w.ServerNetwork.Register<RequestOpenedEvent, RequestOpenedEvent.Packed>();   w.ClientNetwork.Register<RequestOpenedEvent, RequestOpenedEvent.Packed>();
+            w.ServerNetwork.Register<RequestClosedEvent, RequestClosedEvent.Packed>();   w.ClientNetwork.Register<RequestClosedEvent, RequestClosedEvent.Packed>();
+            w.ServerNetwork.Register<ResponseEvent, ResponseEvent.Packed>();        w.ClientNetwork.Register<ResponseEvent, ResponseEvent.Packed>();
             return w;
         }
 
@@ -90,8 +90,8 @@ namespace Framework.Wire.Tests
             catalog.Add(healing);
 
             var w = Wire.Connect(new CatalogPackingHandler(catalog));
-            w.ServerNetwork.Register<CardPlayedEvent>();
-            w.ClientNetwork.Register<CardPlayedEvent>();
+            w.ServerNetwork.Register<CardPlayedEvent, CardPlayedEvent.Packed>();
+            w.ClientNetwork.Register<CardPlayedEvent, CardPlayedEvent.Packed>();
 
             w.ServerStream.Emit(new CardPlayedEvent { EntityId = 1, Definition = fireball });
             w.ServerStream.Emit(new CardPlayedEvent { EntityId = 2, Definition = healing  });

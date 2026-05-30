@@ -1,13 +1,15 @@
 using Scaffold.AutoPacker;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
+    // Marker base for events that travel over the network.
+    //
+    // [AutoPack] on the abstract base makes the generator emit IPackable + IUnpackable
+    // here (the polymorphic boxed surface) while skipping the typed IPackable<T> / IUnpackable<T>
+    // (the base has no Packed struct). Leaf classes get those typed interfaces emitted on
+    // themselves, closed over their own nested Packed type. NetworkChannel<T, TPacked>
+    // calls the typed PackTyped/UnpackTyped directly via constraint, so the event itself
+    // never implements WriteToNetwork/ReadFromNetwork.
     [AutoPack]
-    public abstract partial class WireEvent
-    {
-        public abstract int PackedSize { get; }
-        public abstract void WriteToNetwork(ref FastBufferWriter writer, IPackingHandler handler);
-        public abstract void ReadFromNetwork(ref FastBufferReader reader, IPackingHandler handler);
-    }
+    public abstract partial class WireEvent { }
 }

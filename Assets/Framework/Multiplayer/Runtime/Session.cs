@@ -202,13 +202,13 @@ namespace Framework.Multiplayer
 
         void RegisterChannels()
         {
-            _welcomeCh       = _network.Register<PeerWelcomeEvent>();
-            _joinedCh        = _network.Register<PeerJoinedEvent>();
-            _leftCh          = _network.Register<PeerLeftEvent>();
-            _playerDataCh    = _network.Register<PlayerDataEvent>();
-            _playerContextCh = _network.Register<PlayerContextEvent>();
-            _readyCh         = _network.Register<PeerReadyChangedEvent>();
-            _matchStartCh    = _network.Register<MatchStartEvent>();
+            _welcomeCh       = _network.Register<PeerWelcomeEvent, PeerWelcomeEvent.Packed>();
+            _joinedCh        = _network.Register<PeerJoinedEvent, PeerJoinedEvent.Packed>();
+            _leftCh          = _network.Register<PeerLeftEvent, PeerLeftEvent.Packed>();
+            _playerDataCh    = _network.Register<PlayerDataEvent, PlayerDataEvent.Packed>();
+            _playerContextCh = _network.Register<PlayerContextEvent, PlayerContextEvent.Packed>();
+            _readyCh         = _network.Register<PeerReadyChangedEvent, PeerReadyChangedEvent.Packed>();
+            _matchStartCh    = _network.Register<MatchStartEvent, MatchStartEvent.Packed>();
         }
 
         void SubscribeChannels()

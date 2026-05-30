@@ -14,16 +14,16 @@ namespace Framework.Entities.Tests
         {
             var w = WireBridge.Connect();
             // Register the wire channels for every event we'll emit, both sides.
-            w.ServerNetwork.Register<EntityCreatedEvent>();
-            w.ClientNetwork.Register<EntityCreatedEvent>();
-            w.ServerNetwork.Register<TagSetEvent<int>>();
-            w.ClientNetwork.Register<TagSetEvent<int>>();
-            w.ServerNetwork.Register<TagSetEvent<bool>>();
-            w.ClientNetwork.Register<TagSetEvent<bool>>();
-            w.ServerNetwork.Register<TagChangeEvent<int>>();
-            w.ClientNetwork.Register<TagChangeEvent<int>>();
-            w.ServerNetwork.Register<TagRemovedEvent>();
-            w.ClientNetwork.Register<TagRemovedEvent>();
+            w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            w.ServerNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();
+            w.ClientNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();
+            w.ServerNetwork.Register<TagSetEvent<bool>, TagSetEvent<bool>.Packed>();
+            w.ClientNetwork.Register<TagSetEvent<bool>, TagSetEvent<bool>.Packed>();
+            w.ServerNetwork.Register<TagChangeEvent<int>, TagChangeEvent<int>.Packed>();
+            w.ClientNetwork.Register<TagChangeEvent<int>, TagChangeEvent<int>.Packed>();
+            w.ServerNetwork.Register<TagRemovedEvent, TagRemovedEvent.Packed>();
+            w.ClientNetwork.Register<TagRemovedEvent, TagRemovedEvent.Packed>();
 
             var server = new TestStack(w.ServerStream);
             var client = new TestStack(w.ClientStream);

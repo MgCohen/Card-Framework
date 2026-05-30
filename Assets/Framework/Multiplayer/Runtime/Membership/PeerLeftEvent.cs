@@ -3,7 +3,7 @@ using Scaffold.AutoPacker;
 
 namespace Framework.Multiplayer
 {
-    public partial class PeerLeftEvent : WireEvent<PeerLeftEvent.Packed>
+    public partial class PeerLeftEvent : WireEvent
     {
         [Packed] public int Seat;
     }

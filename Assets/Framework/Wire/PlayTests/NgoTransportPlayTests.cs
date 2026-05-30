@@ -57,7 +57,7 @@ namespace Framework.Wire.PlayTests
 
             _transport = new NgoTransport(_nm);
             var network = new Network(_transport);
-            var channel = network.Register<EntityCreatedEvent>();
+            var channel = network.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 
             EntityCreatedEvent received = null;
             channel.OnReceived += ev => received = ev;

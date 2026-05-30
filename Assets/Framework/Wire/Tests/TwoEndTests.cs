@@ -11,8 +11,8 @@ namespace Framework.Wire.Tests
             var serverNetwork = new Network(serverTransport);
             var clientNetwork = new Network(clientTransport);
 
-            serverNetwork.Register<EntityCreatedEvent>();
-            var clientChannel = clientNetwork.Register<EntityCreatedEvent>();
+            serverNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            var clientChannel = clientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 
             EntityCreatedEvent received = null;
             clientChannel.OnReceived += ev => received = ev;
@@ -30,8 +30,8 @@ namespace Framework.Wire.Tests
             var serverNetwork = new Network(serverTransport);
             var clientNetwork = new Network(clientTransport);
 
-            var serverChannel = serverNetwork.Register<EntityCreatedEvent>();
-            var clientChannel = clientNetwork.Register<EntityCreatedEvent>();
+            var serverChannel = serverNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            var clientChannel = clientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 
             EntityCreatedEvent received = null;
             clientChannel.OnReceived += ev => received = ev;
@@ -49,10 +49,10 @@ namespace Framework.Wire.Tests
             var serverNetwork = new Network(serverTransport);
             var clientNetwork = new Network(clientTransport);
 
-            serverNetwork.Register<EntityCreatedEvent>();
-            serverNetwork.Register<EntityDestroyedEvent>();
-            var clientDestroyChannel = clientNetwork.Register<EntityCreatedEvent>();
-            var clientCreateOrder = clientNetwork.Register<EntityDestroyedEvent>();
+            serverNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            serverNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
+            var clientDestroyChannel = clientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            var clientCreateOrder = clientNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
 
             int createdSeen = 0, destroyedSeen = 0;
             clientDestroyChannel.OnReceived += _ => createdSeen++;
@@ -72,8 +72,8 @@ namespace Framework.Wire.Tests
             var serverNetwork = new Network(serverTransport);
             var clientNetwork = new Network(clientTransport);
 
-            serverNetwork.Register<EntityCreatedEvent>();
-            clientNetwork.Register<EntityCreatedEvent>();
+            serverNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            clientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 
             int count = 0;
             clientNetwork.OnReceived += _ => count++;

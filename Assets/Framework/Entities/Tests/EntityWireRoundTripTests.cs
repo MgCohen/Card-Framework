@@ -13,8 +13,8 @@ namespace Framework.Entities.Tests
         public void EntityCreatedEvent_RoundTripsThroughWire()
         {
             var w = WireBridge.Connect();
-            w.ServerNetwork.Register<EntityCreatedEvent>();
-            w.ClientNetwork.Register<EntityCreatedEvent>();
+            w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 
             w.ServerStream.Emit(new EntityCreatedEvent
             {
@@ -34,8 +34,8 @@ namespace Framework.Entities.Tests
         public void EntityDestroyedEvent_RoundTripsThroughWire()
         {
             var w = WireBridge.Connect();
-            w.ServerNetwork.Register<EntityDestroyedEvent>();
-            w.ClientNetwork.Register<EntityDestroyedEvent>();
+            w.ServerNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
+            w.ClientNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
 
             w.ServerStream.Emit(new EntityDestroyedEvent { EntityId = 42 });
 

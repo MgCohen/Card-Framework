@@ -5,20 +5,46 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
+    // Three-layer hierarchy:
+    //
+    //   NetworkChannel              — non-generic base for the by-type registry and the
+    //                                 dispatcher's byte-id indexed array.
+    //
+    //   NetworkChannel<T>           — single-generic user-facing surface: subscribe to
+    //                                 OnReceived, call Send(ev). TPacked is hidden here so
+    //                                 callsites stay clean. Send is abstract and the typed
+    //                                 subclass implements it.
+    //
+    //   NetworkChannel<T, TPacked>  — concrete: owns the unsafe memcpy through
+    //                                 FastBufferWriter/Reader using TPacked. Only seen at
+    //                                 Network.Register<T, TPacked>().
+    //
+    // Why this shape: the unsafe pack/unpack body needs sizeof(TPacked) and (TPacked*) at
+    // compile time. Hiding TPacked in the concrete keeps subscribe/Send single-generic for
+    // the user while letting the body reach the typed interface (IPackable<TPacked>) via a
+    // direct constraint-method call — no virtual dispatch on the event, no inference puzzle.
     public abstract class NetworkChannel
     {
         internal abstract void SendBoxed(WireEvent ev);
         internal abstract WireEvent DeliverFromBytes(ref FastBufferReader reader);
     }
 
-    public sealed class NetworkChannel<T> : NetworkChannel where T : WireEvent, new()
+    public abstract class NetworkChannel<T> : NetworkChannel where T : WireEvent, new()
+    {
+        public event Action<T> OnReceived;
+        protected void RaiseReceived(T ev) => OnReceived?.Invoke(ev);
+
+        public abstract void Send(T ev);
+    }
+
+    public sealed class NetworkChannel<T, TPacked> : NetworkChannel<T>
+        where T : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>, new()
+        where TPacked : unmanaged, IPackedStruct
     {
         readonly byte _id;
         readonly Dispatcher _dispatcher;
         readonly IPackingHandler _handler;
         readonly int _sizeWithDisc;
-
-        public event Action<T> OnReceived;
 
         internal NetworkChannel(byte id, Dispatcher dispatcher, IPackingHandler handler)
         {
@@ -26,18 +52,19 @@ namespace Framework.Wire
             _dispatcher = dispatcher;
             _handler = handler;
 
-            // PackedSize is constant per closed type — probe once via throwaway instance.
-            var probe = new T();
-            _sizeWithDisc = 1 + probe.PackedSize;
+            // sizeof(TPacked) is a compile-time constant on the closed concrete — no
+            // probe instance needed, unlike the prior single-generic shape.
+            unsafe { _sizeWithDisc = 1 + sizeof(TPacked); }
         }
 
-        public void Send(T ev)
+        public override unsafe void Send(T ev)
         {
             var writer = new FastBufferWriter(_sizeWithDisc, Allocator.Temp);
             try
             {
                 writer.WriteByteSafe(_id);
-                ev.WriteToNetwork(ref writer, _handler);
+                var packed = ev.PackTyped(_handler);
+                writer.WriteBytesSafe((byte*)&packed, sizeof(TPacked));
                 _dispatcher.Send(in writer);
             }
             finally
@@ -48,11 +75,14 @@ namespace Framework.Wire
 
         internal override void SendBoxed(WireEvent ev) => Send((T)ev);
 
-        internal override WireEvent DeliverFromBytes(ref FastBufferReader reader)
+        internal override unsafe WireEvent DeliverFromBytes(ref FastBufferReader reader)
         {
+            TPacked packed;
+            reader.ReadBytesSafe((byte*)&packed, sizeof(TPacked));
+
             var ev = new T();
-            ev.ReadFromNetwork(ref reader, _handler);
-            OnReceived?.Invoke(ev);
+            ev.UnpackTyped(packed, _handler);
+            RaiseReceived(ev);
             return ev;
         }
     }
