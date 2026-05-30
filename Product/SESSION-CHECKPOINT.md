@@ -11,6 +11,30 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**Step 4 service-pattern — 4e reshape landed + docs updated (2026-05-30).** Branch `claude/step4-service-pattern-docs`, 4 commits pushed to origin. Closes the May 22 "service double-write" deferral: services are now **emit-only writers**, the per-type handler is the **sole writer on both sides**. `TagService` / `EntityService` / `GameEngine` register **server-only** — client cannot author state at the type level. Doc cascade ([definition-service-pattern.md](spikes/definition-service-pattern.md) + [step4-service-phases.md](spikes/step4-service-phases.md)) flipped to `status: active` and matches shipped reality.
+
+**Commits:**
+- `c94595e` (prior session) — DI-collected `HandlerRegistry` + force-resolved bridges. Fixed a silent wiring bug where `TagSetHandler<T>`'s `IAsyncInitializable.InitializeAsync` never ran (open-generic registration didn't trigger it). Exposed the latent double-write that 4e then closed.
+- `f7c8af4` — `Entity` is data-only (drop `TagService` back-ref). L9-debt discharge; prereq for the next commit.
+- `9d9d5c9` — services emit-only; role-gate `TagLayer`/`EntityLayer`; `GameEngine` reshape (server-only, carries stores + services). The 4e structural commit.
+- `e6d83fd` — docs match shipped reality; L2/L6/L9/L10/L11/Pattern Reproducibility/Convention Summary rewritten; new "Post-ship reshape (4e)" section in phases doc.
+
+**Architectural locks added** (informally — see [definition-service-pattern.md Convention Summary](spikes/definition-service-pattern.md) for full statements):
+- **L12 Handler is the sole writer on each side.** Services peek the store for dedup + discrimination but never call mutation methods. Synchronous handler dispatch does the only write. Same handler runs server-side (after service emit) and client-side (after wire delivery).
+- **L13 Services register server-only.** `TagService` / `EntityService` resolvable only on the server scope. `GameEngine` (composes the services) is server-only too. Client authoring is a compile-time impossibility, not discipline.
+- **L14 `GameEngine` is the server's discoverable surface; no `ClientEngine`.** Client code injects `EventStream` / `EntityStore` / `TagStore` directly; the layer files themselves document the client surface. A client-shaped handle will earn its name when the client acquires multiple coordinated concerns worth composing.
+
+**Verification:** 330/330 EditMode tests green. `MirrorIntegrationTests` is the load-bearing test for L12 (server `Entities.Create` / `Tags.Set` mirrors via wire to the client store — works only if the server-side handler did the write, because the service stopped).
+
+**Reshape sidequest:** mid-session, a `ServerEngine` / `ClientEngine` two-type split was implemented and then reverted after design pushback on pre-naming a `ClientEngine` shape with no caller. Rationale captured in [definition-service-pattern.md L11](spikes/definition-service-pattern.md). Memory note saved: re-confirm design forks before coding even when the user says "go for step N." See `feedback_confirm_before_implementing.md`.
+
+**Open follow-ups:**
+- **Step 5 — Request + State services**, from-scratch builds in `Framework/` under the new pattern (no canonical code exists today; only slice prior art). See § Active focus for the next-session plan.
+- **Animora stash@{0}** — separate concern, still pending decision.
+- **PR for `claude/step4-service-pattern-docs` → `main`** — not opened yet; user to open when ready.
+
+---
+
 **Framework.Multiplayer scope reshape — design pass + cascade landed (2026-05-20).** Mid-implementation pivot on `claude/basic-network-implementation-DOA3z`. The locked `Framework.Session` design treated Session as a host for gameplay channels (via a public `Network` property); user clarified scope is matchmaking-adjacent only — lobby, profiles, ready-up, match-start signalling, but never gameplay traffic. Walked 9 Qs in `/builder:design-pass` mode. Locked: **Q1 = C** full matchmaking scope with discovery as a later milestone; **Q2 = A** handoff seam via `session.NetworkManager` exposed (gameplay builds its own Wire `Network` on a separate `NgoTransport(nm, "Game")`); **Q3 = B** discovery decoupled from Session via the join-code primitive; **Q4 = B** umbrella feature `Framework.Multiplayer` with sub-asmdefs for opt-in deps (Relay/Lobby/Discovery as sub-features, not siblings); **Q5 = D + A** server-authoritative two-phase player data (clients submit `PlayerData` → host resolver builds `PlayerContext` → host broadcasts), extension via generic-typed `Session<TData, TContext>`; **Q6 = A** first-class ready API (`SetSelfReady`, `AllReady`, `ReadyChanged`); **Q7 = B** widened `SessionState` (`Connecting | InLobby | InMatch | Disconnected`) with generic `StateChanged` event, host-only `StartMatch()`; **Q8 = A** Solo as single-peer multiplayer (same API; "online solo" vs "local solo" are transport choices); **Q9 = C** no `EventStream` on Session, .NET events only.
 
 **Cascade landed on branch `claude/basic-network-implementation-DOA3z`:**
@@ -234,18 +258,36 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Framework.Multiplayer cascade landed — awaiting Editor verification.** Branch `claude/basic-network-implementation-DOA3z` carries the full reshape (see [§Where we stopped](#where-we-stopped) for commit-by-commit). Next thread is **pull the branch and run the EditMode tests in Unity** — confirms compile + the host-only Solo/DirectLoopback PlayTests pass. After that, three forks in priority order:
-1. **Decide on UGS-package inclusion** (`com.unity.services.{core, authentication, relay}` in `Packages/manifest.json`). If yes → I write the `Framework.Multiplayer.Relay` sub-asmdef + `Relay.cs` + `UnityServicesBoot.cs`. If defer → skip Relay until later.
-2. **Multi-NM-per-process empirical check.** Spin up two `NetworkManager`s in one Editor process to confirm NGO doesn't fight the singleton. Outcome decides whether PeerRosterTests / two-peer DirectLoopback / cross-peer PlayerDataTests get written against real NMs or fall back to single-NM protocol tests via Wire's `LoopbackTransport.Pair`.
-3. **`LobbyHarness.unity` scene file.** Drop the `LobbyHarness` MonoBehaviour onto a GameObject in a new scene; saves the asset. Manual cross-device verification deliverable.
+**Step 4 service-pattern complete; step 5 is the next thread.** Branch `claude/step4-service-pattern-docs` carries the 4e reshape (services emit-only; role-gated registration; `GameEngine` server-only) + doc cascade, pushed to origin. PR to `main` not opened yet — user to open when ready.
 
-OPEN-ITEMS / GLOSSARY housekeeping for `bl-polymorphic-wire-events` and the new Multiplayer terms is deferred per current session direction.
+**Next thread — step 5 from [wire-refoundation-roadmap.md](spikes/wire-refoundation-roadmap.md).** "Existing services reviewed" — but the framing is misleading: there's **zero** Request or State code in `Framework/` today (only slice prior art at `Assets/Spike/ECS/VerticalSlice/`). Step 5 is **from-scratch builds in `Framework/`**, informed by:
 
-**Slice main-loop reshape — uncommitted, awaiting in-editor test pass.** Prior session's work (engine pipeline + effect stack split, SBAs, PlayCard/OnCast, AsyncStack base, reaction split, Stack ownership of policy/resolution) sits as 20 modified + 8 new files on `claude/entity-based-architecture-pMNhU`. Trace through the major test paths says everything stays green, but the Unity Editor was held open across sessions so batch tests couldn't run. **Next thread: open Test Runner → EditMode → Run All**; if green, commit as one logical unit (suggested title in [§commit-ready summary](#commit-ready-summary) below); if red, fix forward.
+- ADR-0011 — `Request<TResponse>` / `Response` as state-linked service.
+- 2026-05-17 state-machine design pass — push-based service, immutable typed records per state-kind, three baseline states (`MatchNotStartedState` / `PlayingState` / `MatchEndedState`). Locked decisions, no code yet.
+- The new service pattern (Store + Service + per-type apply handler).
 
-After commit, the natural next step is concrete exercise of the `AsyncStack` pattern (a working MTG-priority subclass, or animation-pause demo) — currently sketched in docs only. UI work (draggable cards) and the Pile Counter sample remain queued behind that.
+**Order (lean):** Request first, then State.
 
-The broader Product workflow (FSM-arch ADRs 0009–0013, Pile Counter sample, vertical-slice plan) is unchanged from prior sessions; see prior entries below for that thread.
+| | Request (step 5a) | State (step 5b) |
+|---|---|---|
+| Design status | Locked (ADR-0011) | Locked (2026-05-17 design pass) |
+| Doc cascade | Light — ADR-0011 + Models already aligned | Heavy — new `features/states/` feature, ADR-0014, rewrite of `engine/07-match-state.md`, refresh of Models 01/03/08, ADR-0010/0011 audit, GLOSSARY/OPEN-ITEMS sweep |
+| Build scope | New `Framework.Requests` asmdef: Store + Service + handlers + Layer + wire events + tests + `GameEngine.Requests` | New `Framework.States` asmdef (similar shape) |
+| Estimate | 2–3 sessions | 3–4 sessions (mostly docs) |
+
+**Step 5a session plan (Request port):**
+1. **Ratify** — read ADR-0011 + slice's `RequestsService` + state-machine pass. Confirm Store+Service+Handler maps cleanly onto requests.
+2. **Spec** — short spike doc: wire events (`RequestOpenedEvent` / `RequestClosedEvent` / response seam), what `RequestStore` holds (open request rows + resolution state), what `RequestService` does.
+3. **Build** — `Framework.Requests` asmdef + RequestStore + RequestService + per-type apply handlers + RequestLayer + wire-event registration + tests + `GameEngine.Requests` property.
+4. **Verify** — at minimum a mirror test for open → respond → close round-trip across the wire.
+
+**Sidequest threads parked** (different branches, revisit when resumed):
+- **Framework.Multiplayer cascade** (`claude/basic-network-implementation-DOA3z`) — awaiting Editor verification + UGS-package decision. See prior "Where we stopped" entry.
+- **Slice main-loop reshape** (`claude/entity-based-architecture-pMNhU`) — uncommitted, awaiting in-editor test pass. See prior "Where we stopped" entry.
+- **State-machine model cascade** — design locked, doc cascade pending. Folded into step 5b above.
+- **`general/ARCHITECTURE.md` rewrite** — research-phase content; promote to "current locked architecture" anchored by ADRs 0005–0012. Real authoring lift.
+- **`support/samples/pile-counter.md` rewrite** + **PLANS/pile-counter-vertical-slice.md vocabulary refresh** — sibling tasks, post-cascade.
+- **Stale `[ADR-NNNN — *forthcoming*]` markers** — ~10 occurrences across feature/Models; mechanical sweep.
 
 Cascade summary (for reference):
 
@@ -254,14 +296,7 @@ Cascade summary (for reference):
 - ✅ **ADR-0011 — Effect orchestration + dispatch + requests** (landed 2026-05-11). D13–D17. Effects row stays at 4 (01 + 02 rewritten; 04 archived; new 05 + 06). Engine Models 01 + 03 patched (drain Phase 2; `Evaluate` drain-policy guards). Actions/01 patched (5-sibling family). Spikes/effect-pipeline.md archived.
 - ✅ **ADR-0012 — Presentation per-state ViewModels** (landed 2026-05-11). D6–D9. Presentation row 1→2 (new `01-match-state-view-model` + `02-view-model-registry`; old `01-presentation-loop` archived). Actions row drops `02-intent-mapper` + `05-available-actions-snapshot` (both archived). Feature root rewritten.
 - ✅ **FSM-arch consolidation** (landed 2026-05-11). Items 1–4 of the post-cascade plan: spike archived, GLOSSARY + OPEN-ITEMS swept, FEATURE-MAP cycle observation rewritten, ADR + Model path refs repointed.
-
-Deferred follow-ups (separate PRs, in order):
-
-- **State-machine model cascade** — design pass landed 2026-05-17 (F1 + Q3–Q7 locked). State stops being entity; becomes immutable typed record owned by `IStateService`; sibling to Requests. Cascade: ADR-0009 amendment/supersede (likely new ADR-0014); new `features/states/` feature; heavy rewrite of `engine/07-match-state.md`; refresh of engine Models 01 / 03 / 08; ADR-0012 per-state VM repoint to record dispatch; ADR-0010 / ADR-0011 audit; `state.md` + GLOSSARY + OPEN-ITEMS terminology sweep. Wire-format encoding deferred to its own pass. Queued behind the slice main-loop commit.
-- **`general/ARCHITECTURE.md` rewrite** — current content is research-phase; needs promotion to "current locked architecture" anchored by ADRs 0005–0012 + the 10 settled features. Real authoring lift (~500 lines of pre-cascade content).
-- **`support/samples/pile-counter.md` rewrite** — currently carries a "post-cascade rewrite pending" banner. Sibling task to the PLANS revision below.
-- **PLANS/pile-counter-vertical-slice.md vocabulary refresh** — repoint to landed ADRs (see Active focus above).
-- **Stale `[ADR-NNNN — *forthcoming*]` markers** — ~10 occurrences across `features/engine/engine.md`, `features/engine/models/01-game-engine.md`, `features/presentation/models/01-match-state-view-model.md`, `features/effects/models/06-request-system.md`, `features/actions/models/03-command-handler.md`, `features/actions/models/06-command-validator.md`. Predate the consolidation; each cascade PR left them in place. Mechanical sweep.
+- ✅ **Step 4 service-pattern + 4e reshape** (landed 2026-05-30, branch `claude/step4-service-pattern-docs`). See § Where we stopped for commit chain.
 
 ---
 
@@ -276,28 +311,6 @@ See [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) for the full list. After th
 New today (2026-05-10): `oq-targeting-pre-play`, `oq-validator-defaults`, `oq-effect-save-load`, `oq-drain-policy-composition` — all defer-tier or small.
 
 Closed today: `oq-runtime-as-state-evaluator`, `oq-fsm-game-state`, `oq-session-state-machine`, `oq-intent-template-lookup`, `oq-move-validation-execution-drift`.
-
----
-
-## Commit shape
-
-Saved as one logical unit covering the whole reshape:
-
-> **slice: engine pipeline + effect stack split — SBAs, PlayCard/OnCast, AsyncStack base**
->
-> Reshape the slice's main loop around two distinct collections (pipeline = FIFO commands, stack = LIFO effects) per the design-pass conclusion that the prior single Queue<Action> conflated them.
->
-> External entry is commands only — no more engine.Effects.Run. PlayCard.Apply moves the card to limbo and pushes its registered OnCast effect onto the stack; engine pops and resolves. Stack.OnCastResolved fires after the cast resolves; bootstrap moves the spell card to its owner's graveyard.
->
-> Stack owns its own policy + resolution (ShouldResolve / Resolve / OnCastResolved are stack-level concerns). Engine's Evaluate just runs SBAs, then asks Stack.TryResolveOne(), loops until stable. AsyncStack base added for game subclasses that need real Task-based async (animation, network) — engine API stays sync per P15.
->
-> ISBA introduced; DeathSBA moves 0-HP minions from battlefield to owner's graveyard, handling death cascades through the loop.
->
-> Reaction split: IHookScope.Schedule / ScheduleDirect push to stack with captured parentBlockId for causal wire threading; Run / FireDirect stay inline for Before-phase replacement. EffectService.Register<T>(phase, ...) auto-branches.
->
-> Files: ~30 touched. New: Stack, StackFrame, AsyncStack, ISBA in Engine/Pipeline; DeathSBA, OnCast, PlayCard in Sample; DeathSBATests. Modified: GameEngine, CommandService, EffectService, World, ICommandScope, IHookScope, CardEffectStore (Build public), DeathrattleBridge, Fireball (doc), SliceBootstrap, 9 test files (Effects.Run → Stack.Push).
->
-> All architectural locks P1–P17 hold; this session adds P18–P23 (informally — see SESSION-CHECKPOINT.md).
 
 ---
 
