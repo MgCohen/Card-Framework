@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-design
+status: active
 created: 2026-05-20
 references:
   - Product/spikes/wire-refoundation-roadmap.md
@@ -13,12 +13,11 @@ tags: [#spike, #wire, #blocks, #events, #causality, #presentation]
 
 # Wire Block Events — spike
 
-> **Status: in-design.** Captures the design walk from 2026-05-20. The
-> wire alphabet shipped with leaf mutations (`EntityCreatedEvent`,
-> `TagSetEvent<T>`, etc.) plus stub `BlockStartEvent` / `BlockEndEvent`
-> carrying only `Kind: byte`. This spike fills in the envelope shape
-> needed for step 5+ services (Command, Effect, Trigger, Request) to
-> bracket their causality on the wire.
+> **Status: active.** Design walk from 2026-05-20; envelope shape landed
+> 2026-05-30 as a pre-step-5 cut. Block + Request event families now
+> ship in `Framework.Wire` with the L1–L7 shape; round-trip tests cover
+> all six event types. Service emission (who-emits) remains deferred to
+> step 5 — services will adopt these events when they port.
 
 ## Where this slots
 
@@ -328,16 +327,22 @@ Defer to step 5+ when Request ships.
 | Reaction-as-distinct-Kind vs `Effect + ParentId` | TriggerService design |
 | Wire-level `SystemBlock` Kind | A clearly-system-attributed cause appears that doesn't fit Command |
 
-## When this lands
+## Landed (2026-05-30)
 
-This spike graduates to `status: active` when:
+The wire-shape graduation criteria are met:
 
-1. The Framework.Wire stub `BlockStartEvent` + `BlockEndEvent` files are
-   filled in with the L5 + L6 fields.
-2. `RequestOpenedEvent`, `RequestClosedEvent`, `ResponseEvent` are added.
-3. `BlockKind` and `BlockOutcome` enums land in `Framework.Wire`.
-4. Round-trip tests in `Framework.Wire.Tests` cover the new event types
-   under AutoPacker.
+1. ✅ `BlockStartEvent` reshaped — `Id / ParentId / Kind / SourceId` (L5).
+2. ✅ `BlockEndEvent` reshaped — `Id / Outcome` (L6).
+3. ✅ `BlockKind` enum (`None / Command / Effect / Trigger`) and
+   `BlockOutcome` enum (`None / Completed / Errored / Cancelled`) added
+   under `Assets/Framework/Wire/Runtime/Events/`.
+4. ✅ `RequestOpenedEvent`, `RequestClosedEvent`, `ResponseEvent` added.
+5. ✅ Round-trip tests in `Framework.Wire.Tests/RoundTripTests.cs` cover
+   all six event types under AutoPacker (block brackets, nested ParentId,
+   all three Outcomes, full Request open/close/response, non-cancellable
+   Request).
 
-Implementation slots naturally into the start of step 5: first feature
-to port (probably CommandService) needs these events to exist.
+**Still deferred** (lights up with step 5 services): who-emits
+(service-direct vs Emit handler — see Q5), option-leaf shapes
+(`PickOptionEvent` / `CancelOptionEvent` nullability under AutoPacker),
+match-end-with-open-Request encoding.

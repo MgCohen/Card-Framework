@@ -15,6 +15,9 @@ namespace Framework.Wire.Tests
             w.ServerNetwork.Register<EntityLabeledEvent>();   w.ClientNetwork.Register<EntityLabeledEvent>();
             w.ServerNetwork.Register<BlockStartEvent>();      w.ClientNetwork.Register<BlockStartEvent>();
             w.ServerNetwork.Register<BlockEndEvent>();        w.ClientNetwork.Register<BlockEndEvent>();
+            w.ServerNetwork.Register<RequestOpenedEvent>();   w.ClientNetwork.Register<RequestOpenedEvent>();
+            w.ServerNetwork.Register<RequestClosedEvent>();   w.ClientNetwork.Register<RequestClosedEvent>();
+            w.ServerNetwork.Register<ResponseEvent>();        w.ClientNetwork.Register<ResponseEvent>();
             return w;
         }
 
@@ -137,30 +140,99 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired();
 
-            w.ServerStream.Emit(new BlockStartEvent { Kind = 1 });
-            w.ServerStream.Emit(new BlockEndEvent   { Kind = 1 });
+            w.ServerStream.Emit(new BlockStartEvent { Id = 1, ParentId = 0, Kind = (byte)BlockKind.Command, SourceId = 7 });
+            w.ServerStream.Emit(new BlockEndEvent   { Id = 1, Outcome = (byte)BlockOutcome.Completed });
 
             Assert.IsInstanceOf<BlockStartEvent>(w.ClientStream[0]);
             Assert.IsInstanceOf<BlockEndEvent>(w.ClientStream[1]);
-            Assert.AreEqual(1, ((BlockStartEvent)w.ClientStream[0]).Kind);
-            Assert.AreEqual(1, ((BlockEndEvent)w.ClientStream[1]).Kind);
+
+            var start = (BlockStartEvent)w.ClientStream[0];
+            Assert.AreEqual(1, start.Id);
+            Assert.AreEqual(0, start.ParentId);
+            Assert.AreEqual((byte)BlockKind.Command, start.Kind);
+            Assert.AreEqual(7, start.SourceId);
+
+            var end = (BlockEndEvent)w.ClientStream[1];
+            Assert.AreEqual(1, end.Id);
+            Assert.AreEqual((byte)BlockOutcome.Completed, end.Outcome);
         }
 
         [Test]
-        public void Nested_Blocks_Preserve_Order_And_Kind()
+        public void Nested_Blocks_Preserve_Order_And_ParentId()
         {
             var w = NewWired();
 
-            w.ServerStream.Emit(new BlockStartEvent { Kind = 1 });
-            w.ServerStream.Emit(new BlockStartEvent { Kind = 2 });
-            w.ServerStream.Emit(new BlockEndEvent   { Kind = 2 });
-            w.ServerStream.Emit(new BlockEndEvent   { Kind = 1 });
+            w.ServerStream.Emit(new BlockStartEvent { Id = 1, ParentId = 0, Kind = (byte)BlockKind.Command, SourceId = 7 });
+            w.ServerStream.Emit(new BlockStartEvent { Id = 2, ParentId = 1, Kind = (byte)BlockKind.Effect,  SourceId = 7 });
+            w.ServerStream.Emit(new BlockEndEvent   { Id = 2, Outcome = (byte)BlockOutcome.Completed });
+            w.ServerStream.Emit(new BlockEndEvent   { Id = 1, Outcome = (byte)BlockOutcome.Completed });
 
             Assert.AreEqual(4, w.ClientStream.Count);
-            Assert.AreEqual(1, ((BlockStartEvent)w.ClientStream[0]).Kind);
-            Assert.AreEqual(2, ((BlockStartEvent)w.ClientStream[1]).Kind);
-            Assert.AreEqual(2, ((BlockEndEvent)  w.ClientStream[2]).Kind);
-            Assert.AreEqual(1, ((BlockEndEvent)  w.ClientStream[3]).Kind);
+
+            var outerStart = (BlockStartEvent)w.ClientStream[0];
+            var innerStart = (BlockStartEvent)w.ClientStream[1];
+            Assert.AreEqual(1, outerStart.Id);
+            Assert.AreEqual(0, outerStart.ParentId);
+            Assert.AreEqual(2, innerStart.Id);
+            Assert.AreEqual(1, innerStart.ParentId);
+            Assert.AreEqual((byte)BlockKind.Command, outerStart.Kind);
+            Assert.AreEqual((byte)BlockKind.Effect,  innerStart.Kind);
+
+            Assert.AreEqual(2, ((BlockEndEvent)w.ClientStream[2]).Id);
+            Assert.AreEqual(1, ((BlockEndEvent)w.ClientStream[3]).Id);
+        }
+
+        [Test]
+        public void BlockEnd_Outcomes_RoundTrip()
+        {
+            var w = NewWired();
+
+            w.ServerStream.Emit(new BlockEndEvent { Id = 1, Outcome = (byte)BlockOutcome.Completed });
+            w.ServerStream.Emit(new BlockEndEvent { Id = 2, Outcome = (byte)BlockOutcome.Errored   });
+            w.ServerStream.Emit(new BlockEndEvent { Id = 3, Outcome = (byte)BlockOutcome.Cancelled });
+
+            Assert.AreEqual((byte)BlockOutcome.Completed, ((BlockEndEvent)w.ClientStream[0]).Outcome);
+            Assert.AreEqual((byte)BlockOutcome.Errored,   ((BlockEndEvent)w.ClientStream[1]).Outcome);
+            Assert.AreEqual((byte)BlockOutcome.Cancelled, ((BlockEndEvent)w.ClientStream[2]).Outcome);
+        }
+
+        [Test]
+        public void Request_Open_Close_Response_RoundTrip()
+        {
+            var w = NewWired();
+
+            w.ServerStream.Emit(new RequestOpenedEvent { Id = 3, ParentId = 2, SourceId = 7, ResponderId = 42, OptionCount = 3, IsCancellable = true });
+            w.ServerStream.Emit(new RequestClosedEvent { Id = 3 });
+            w.ServerStream.Emit(new ResponseEvent      { RequestId = 3, Picked = 1 });
+
+            Assert.AreEqual(3, w.ClientStream.Count);
+
+            var opened = (RequestOpenedEvent)w.ClientStream[0];
+            Assert.AreEqual(3,    opened.Id);
+            Assert.AreEqual(2,    opened.ParentId);
+            Assert.AreEqual(7,    opened.SourceId);
+            Assert.AreEqual(42,   opened.ResponderId);
+            Assert.AreEqual(3,    opened.OptionCount);
+            Assert.IsTrue(opened.IsCancellable);
+
+            var closed = (RequestClosedEvent)w.ClientStream[1];
+            Assert.AreEqual(3, closed.Id);
+
+            var response = (ResponseEvent)w.ClientStream[2];
+            Assert.AreEqual(3, response.RequestId);
+            Assert.AreEqual(1, response.Picked);
+        }
+
+        [Test]
+        public void Request_NonCancellable_RoundTrips()
+        {
+            var w = NewWired();
+
+            w.ServerStream.Emit(new RequestOpenedEvent { Id = 5, ParentId = 0, SourceId = 0, ResponderId = 99, OptionCount = 1, IsCancellable = false });
+
+            var opened = (RequestOpenedEvent)w.ClientStream[0];
+            Assert.IsFalse(opened.IsCancellable);
+            Assert.AreEqual(1, opened.OptionCount);
         }
 
         [Test]
@@ -168,13 +240,13 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired(new SimplePackingHandler());
 
-            w.ServerStream.Emit(new BlockStartEvent     { Kind = 1 });
+            w.ServerStream.Emit(new BlockStartEvent     { Id = 1, ParentId = 0, Kind = (byte)BlockKind.Command, SourceId = 0 });
             w.ServerStream.Emit(new EntityCreatedEvent  { EntityId = 1 });
             w.ServerStream.Emit(new EntityCreatedEvent  { EntityId = 2 });
             w.ServerStream.Emit(new EntityMovedEvent    { EntityId = 1, Position = new Vec3(10, 20, 30) });
             w.ServerStream.Emit(new EntityLabeledEvent  { EntityId = 1, Label = "hero" });
             w.ServerStream.Emit(new EntityDestroyedEvent { EntityId = 1 });
-            w.ServerStream.Emit(new BlockEndEvent       { Kind = 1 });
+            w.ServerStream.Emit(new BlockEndEvent       { Id = 1, Outcome = (byte)BlockOutcome.Completed });
 
             Assert.AreEqual(7, w.ClientStream.Count);
             Assert.IsInstanceOf<BlockStartEvent>    (w.ClientStream[0]);
