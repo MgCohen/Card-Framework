@@ -16,9 +16,12 @@ tags: [#spike, #requests, #wire, #service, #async]
 
 > **Status: in-design.** Captures the 2026-05-30 fork-by-fork design walk on
 > the Request service. Step 5a of the wire-refoundation roadmap. Builds on
-> the step-4 service pattern (Store + Service + per-type apply handler) and
-> the AutoPacker fix (2026-05-30) that enables `[Packed]` field inheritance
-> across generic-forwarding intermediates.
+> the step-4 service pattern (Store + Service + per-type apply handler), the
+> AutoPacker fix that enables `[Packed]` field inheritance through generic
+> intermediates, and the WireEvent flatten (commit `19c76c3`) that dropped
+> the `WireEvent<TPacked>` typed intermediate in favor of AutoPacker emitting
+> typed interfaces directly on each leaf. TPacked now appears only at
+> `Network.Register<T, TPacked>()`.
 
 ## TL;DR
 
@@ -72,8 +75,9 @@ and the typed-response delivery would still need a separate mechanism.
 ### L2 — Request and Response ARE wire events (single-class shape)
 
 No separate "Request data class + RequestWireEvent." The Request class
-itself extends `WireEvent<TPacked>` and is what travels on the wire. Same
-for Response. AutoPacker handles serialization via `[Packed]` fields.
+itself extends `WireEvent` and is what travels on the wire. Same for
+Response. AutoPacker handles serialization via `[Packed]` fields and emits
+typed `IPackable<T.Packed>` / `IUnpackable<T.Packed>` on each leaf.
 
 Replaces the wire-block-events thin envelopes — `RequestOpenedEvent`,
 `RequestClosedEvent`, `ResponseEvent` are removed in favor of per-game
@@ -84,72 +88,79 @@ Consequence: the wire alphabet grows by **two events per request kind**
 
 ### L3 — Base classes with shared `[Packed]` fields (DRY via inheritance)
 
-Framework provides abstract base classes that carry shared metadata:
+Framework provides a two-level hierarchy for Request and a single
+non-generic base for Response. `[Packed]` only works on fields (not
+properties), so the shared metadata lives as plain public fields on the
+non-generic base — direct access works on both sides, no interface
+ceremony required.
 
 ```csharp
-public interface IRequest
+// Non-generic Request base — holds the shared [Packed] fields. Used as
+// the dictionary key type in RequestStore (Dictionary<int, Request>)
+// and as the bound for service signatures that don't need TResponse.
+public abstract partial class Request : WireEvent
 {
-    int  Id { get; set; }
-    Type ResponseType { get; }
-}
-
-public interface IResponse
-{
-    int RequestId { get; set; }
-}
-
-public abstract partial class Request<TPacked, TResponse>
-    : WireEvent<TPacked>, IRequest
-    where TPacked   : unmanaged, IPackedStruct
-    where TResponse : IResponse
-{
-    [Packed] public int  Id { get; set; }
+    [Packed] public int  Id;
     [Packed] public int  ParentId;
     [Packed] public int  SourceId;
     [Packed] public int  ResponderId;
     [Packed] public bool IsCancellable;
+}
 
+// Generic wrapper — adds TResponse for typed inference at the service
+// surface (`Open<TResponse>(Request<TResponse>) → Task<TResponse>`).
+// No [Packed] fields of its own.
+public abstract partial class Request<TResponse> : Request
+    where TResponse : Response
+{
     public Type ResponseType => typeof(TResponse);
 }
 
-public abstract partial class Response<TPacked>
-    : WireEvent<TPacked>, IResponse
-    where TPacked : unmanaged, IPackedStruct
+// Single non-generic Response base — holds the RequestId correlator.
+// No TResponse-style wrapper needed since Response isn't parameterized
+// on a return type.
+public abstract partial class Response : WireEvent
 {
-    [Packed] public int RequestId { get; set; }
+    [Packed] public int RequestId;
 }
 ```
 
 Concrete leaves add only kind-specific fields:
 
 ```csharp
-public partial class PickCardsRequest
-    : Request<PickCardsRequest.Packed, PickCardsResponse>
+public partial class PickCardsRequest : Request<PickCardsResponse>
 {
     [Packed] public int PickCount;
     // CardIds — see Deferred / int[] handler
 }
 
-public partial class PickCardsResponse : Response<PickCardsResponse.Packed>
+public partial class PickCardsResponse : Response
 {
+    [Packed] public int Picked;
     // SelectedIds — see Deferred / int[] handler
 }
 ```
 
-**Requires** the AutoPacker fix landed 2026-05-30 (`MgCohen/Scaffold`
-commit `86b336b4`) — `[Packed]` field aggregation through generic
-intermediates. Pre-fix, this shape did not compile; leaves would have had
-to repeat the five metadata fields each.
+**Requirements:** AutoPacker must support `[Packed]` field aggregation
+through abstract intermediates (the `BaseStamped → DerivedStamped`
+pattern, extended to a generic wrapper between them). Both behaviors
+are verified — AutoPacker fix commit `86b336b4` covered the original
+case; the WireEvent flatten in `19c76c3` simplified the chain so the
+intermediate no longer forwards TPacked at all.
 
-`IRequest` / `IResponse` interfaces exist for non-generic dispatch
-(`Dictionary<int, IRequest>` shape, service signatures that don't need
-TResponse). Game-author code rarely touches them directly.
+**Why no interfaces:** an earlier draft used `IRequest`/`IResponse`
+markers, but `[Packed]` requires fields (not properties), and interfaces
+can't declare fields. Implementing the interface contract via property
+accessors that delegate to backing fields adds ceremony for no payoff —
+the non-generic base classes give us the same polymorphic-dispatch
+surface (`Dictionary<int, Request>`) with cleaner game-side ergonomics
+(direct field access on shared metadata).
 
 ### L4 — Thin RequestStore on both sides; server-only Dictionary for live TCS state
 
-`RequestStore` holds `Dictionary<int, IRequest>` keyed by `Request.Id`.
-Reconstructable purely from the Request wire event — both server and
-client share the shape.
+`RequestStore` holds `Dictionary<int, Request>` keyed by `Request.Id`
+(`Request` is the non-generic base from L3). Reconstructable purely from
+the Request wire event — both server and client share the shape.
 
 Server-only `RequestService` keeps an additional
 `Dictionary<int, IPendingRequest>` for live Request + TCS state:
@@ -158,7 +169,7 @@ Server-only `RequestService` keeps an additional
 internal interface IPendingRequest { void Cancel(); }
 
 internal sealed class PendingRequest<TResponse> : IPendingRequest
-    where TResponse : IResponse
+    where TResponse : Response
 {
     public TaskCompletionSource<TResponse> Tcs { get; } = new();
     public void Cancel() => Tcs.TrySetCanceled();
@@ -207,18 +218,14 @@ handle. Client code that needs to read open requests goes through
 ### Wire-level (framework, in `Framework.Requests`)
 
 ```csharp
-public interface IRequest  { int Id { get; set; }  Type ResponseType { get; } }
-public interface IResponse { int RequestId { get; set; } }
+public abstract partial class Request : WireEvent
+{ /* per L3 — five shared [Packed] fields: Id, ParentId, SourceId, ResponderId, IsCancellable */ }
 
-public abstract partial class Request<TPacked, TResponse>
-    : WireEvent<TPacked>, IRequest
-    where TPacked   : unmanaged, IPackedStruct
-    where TResponse : IResponse
-{ /* per L3 — five shared [Packed] fields + ResponseType property */ }
+public abstract partial class Request<TResponse> : Request
+    where TResponse : Response
+{ /* ResponseType => typeof(TResponse) — no [Packed] of its own */ }
 
-public abstract partial class Response<TPacked>
-    : WireEvent<TPacked>, IResponse
-    where TPacked : unmanaged, IPackedStruct
+public abstract partial class Response : WireEvent
 { /* per L3 — RequestId [Packed] field */ }
 ```
 
@@ -235,10 +242,8 @@ public sealed class RequestService
     public RequestService(RequestStore store, IEventEmitter events)
     { _store = store; _events = events; }
 
-    public Task<TResponse> Open<TPacked, TResponse>(
-        Request<TPacked, TResponse> request)
-        where TPacked   : unmanaged, IPackedStruct
-        where TResponse : class, IResponse
+    public Task<TResponse> Open<TResponse>(Request<TResponse> request)
+        where TResponse : Response
     {
         request.Id = _nextId++;
         var pending = new PendingRequest<TResponse>();
@@ -248,7 +253,7 @@ public sealed class RequestService
     }
 
     internal void Complete<TResponse>(TResponse response)
-        where TResponse : class, IResponse
+        where TResponse : Response
     {
         if (!_pending.Remove(response.RequestId, out var pending)) return;
         ((PendingRequest<TResponse>)pending).Tcs.TrySetResult(response);
@@ -267,15 +272,15 @@ public sealed class RequestService
 ```csharp
 public sealed class RequestStore
 {
-    private readonly Dictionary<int, IRequest> _open = new();
+    private readonly Dictionary<int, Request> _open = new();
 
-    public IReadOnlyDictionary<int, IRequest> Open => _open;
+    public IReadOnlyDictionary<int, Request> Open => _open;
 
-    public T Get<T>(int id) where T : class, IRequest =>
+    public T Get<T>(int id) where T : Request =>
         _open.TryGetValue(id, out var req) ? req as T : null;
 
-    internal void Insert(IRequest req) => _open[req.Id] = req;
-    internal void Remove(int id)       => _open.Remove(id);
+    internal void Insert(Request req) => _open[req.Id] = req;
+    internal void Remove(int id)      => _open.Remove(id);
 }
 ```
 
@@ -418,13 +423,13 @@ batch this — left as a follow-up if game-side bootstrap gets verbose.
 Step 5a build (phase 3) ships:
 
 1. `Framework.Requests` asmdef (Runtime + Tests).
-2. `IRequest` / `IResponse` interfaces.
-3. `Request<TPacked, TResponse>` / `Response<TPacked>` abstract base classes.
-4. `RequestStore` / `RequestService` / `PendingRequest<T>`.
-5. `RequestLayer` + `FrameworkAppFlowRoot` registration + role-gating.
-6. `GameEngine.Requests` property (server-only).
-7. Test fixture — concrete Request/Response pair + apply handlers + mirror
-   round-trip test.
+2. `Request` (non-generic) + `Request<TResponse>` (typed wrapper) + `Response` (non-generic) abstract base classes.
+3. `RequestStore` / `RequestService` / `PendingRequest<T>`.
+4. `RequestLayer` + `FrameworkAppFlowRoot` registration + role-gating.
+5. `GameEngine.Requests` property (server-only).
+6. Test fixture — concrete Request/Response pair + apply handlers + per-pair
+   `Network.Register<TRequest, TRequest.Packed>()` / `<TResponse, TResponse.Packed>()`
+   + mirror round-trip test.
 
 Status flips `in-design → active` when the build passes, the mirror test
 is green, and this doc tightens to "Landed" with any shape adjustments
