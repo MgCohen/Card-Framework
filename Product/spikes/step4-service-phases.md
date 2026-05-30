@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-design
+status: active
 created: 2026-05-20
 references:
   - Product/spikes/wire-refoundation-roadmap.md
@@ -15,21 +15,65 @@ tags: [#spike, #services, #phasing, #session-handoff, #handlers]
 > Session-handoff record. The 7-step refoundation roadmap names step 4 as
 > "Service pattern"; the locked design lives in
 > [`definition-service-pattern.md`](definition-service-pattern.md). Step 4
-> ships **the scaffold + `EntityService` worked example with the
-> service-emit + per-type Apply-handler pattern**; specific services
-> (Commands, Effects, Triggers, Request, State) get the pattern applied
-> in step 5+.
+> shipped **the scaffold + `EntityService` worked example**, then a
+> post-ship reshape (4e) closed the "service-side double-write" deferral:
+> services are emit-only, handlers are the sole writer on both sides, and
+> command services / `GameEngine` register on the server only.
 
 ## Phase breakdown
 
 | Phase | Scope | Status | Commit |
 |---|---|---|---|
-| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#, `GameEngine` with `Stream` + `Network` properties); `Framework.Bootstrap` (Unity-coupled, two `AppFlowRoot` subclasses + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` gains typed-bucket `Register<T>` + typed `Emit<T>` + non-generic `Emit(WireEvent)`; `IWireEventHandler<T>` lands in `Framework.Wire`** | 🧪 verify | `3c1ed43` |
-| 4b | `EntityStore` + `EntityService` worked example — repository (store) + command/emit (service) split; same classes both sides; per-type Apply handlers depend on `EntityStore`; `WireForwarder` (server, `IWireEventHandler<T>`-shaped) + `NetworkInboundBridge` (client, one-liner) cross the Network ↔ EventStream boundary; sandbox extends to "create card on server → mirror in sync on client" | ⏳ | — |
-| 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; finalize convention summary; resolve any "felt forced" items | ⏳ | — |
-| 4d | Closure — phasing rows → ✅ with commit hashes; definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ⏳ | — |
+| 4a | Scaffold — VContainer + Appflow in manifest; `Framework.Engine` (pure C#); `Framework.Bootstrap` (Unity-coupled, `FrameworkAppFlowRoot` + `EngineLayer` + sandbox scene); IMGUI says "Engine bootstrapped"; **`EventStream` typed dispatch surface lands** | ✅ | `3c1ed43` |
+| 4b | `EntityStore` + `EntityService` worked example — repository (store) + service split; per-type Apply handlers; `WireForwarder` (server) + `NetworkInboundBridge` (client) cross the Network ↔ EventStream boundary; sandbox "create card on server → mirror in sync on client" | ✅ | `3c1ed43` (initial) → `ba2c011` (pre-audit) → `c94595e` (DI-collected `HandlerRegistry` + force-resolved bridges; fixed silent wiring bug) |
+| 4e | Post-ship reshape — services emit-only; `EntityStore.AllocateId()`; `Entity` is data-only (drop `TagService` back-ref); `TagLayer` / `EntityLayer` take `isServer` and gate the service registrations; `GameEngine` becomes server-only and carries stores + services. Closes the May 22 double-write deferral. | ✅ | `f7c8af4` (Entity data-only) → `9d9d5c9` (services emit-only + role-gate + `GameEngine` reshape) |
+| 4c | Pattern doc validation — read `definition-service-pattern.md` against the shipped code; reflect the 4e reshape in L2 / L6 / L9 / L11 / Pattern Reproducibility / Convention Summary | ✅ | _(this commit)_ |
+| 4d | Closure — definition doc `status: in-design → active`; cross-link from `wire-refoundation-roadmap.md` step 4 line | ✅ | _(this commit)_ |
 
 > **Status legend.** ⏳ not started · 🧪 code landed, awaiting Unity batch verification · ✅ verified green.
+
+## Post-ship reshape (4e) — why it happened
+
+The 4b deliverable shipped the service pattern as originally specified:
+service writes through the store, then emits; apply handlers run on both
+sides and re-execute the same write (idempotent no-op on the server). The
+`c94595e` wiring fix made handlers actually run end-to-end, which exposed
+the double-write: every server-side mutation hit the store twice. The May
+22 design pass had flagged this as a "revisit once wiring is solid"
+deferral; 4e is that revisit.
+
+The reshape collapses two questions:
+
+1. **Who writes?** Handler-as-sole-writer. The service peeks the store for
+   dedup and to decide which event to emit (`TagSet` vs `TagChange`),
+   then emits. The synchronous dispatch runs the handler which does the
+   actual store write. Same path both sides. Equality short-circuit still
+   short-circuits, but on a peek-not-a-write.
+2. **Who calls the service?** Server only. The client never authors;
+   making "client can call `TagService.Set`" a compile error eliminates a
+   class of latent bugs (today nothing calls it, but nothing stops it
+   either). `GameEngine` — which composes the authoring services — moves
+   server-only too.
+
+Implications:
+
+- `Entity` becomes data-only — no `TagService` back-ref. The fluent
+  `entity.Set(...)` chain is gone (it required the back-ref). End-user
+  authoring is `engine.Tags.Set(entity.Id, key, value)`.
+- `EntityStore.Insert(type, def)` (auto-id) is no longer used by
+  production; kept as a direct-store convenience for tests. Production
+  goes through `EntityService.Create`, which `AllocateId()`s and emits.
+- Client side: `TagLayer` / `EntityLayer` register only the store + the
+  handlers + `RegisterTagValueType<T>`. No service, no engine. The layer
+  files are the documented client surface.
+- `GameEngine` exposes `EntityStore` + `TagStore` (so server reads share
+  the same handle as authoring), `EventStream`, `Network`, and the two
+  services.
+
+`MirrorIntegrationTests` is the load-bearing verification: server
+`Entities.Create` / `Tags.Set` mutates client `EntityStore` / `TagStore`
+via the wire, which only works if the server handler is doing the write
+(because the service stopped).
 
 After 4d: scaffold + `EntityStore`/`EntityService` operational with
 full event-sourced round-trip. Bootstrap the sandbox scene (two

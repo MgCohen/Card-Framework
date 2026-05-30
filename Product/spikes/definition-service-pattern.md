@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-design
+status: active
 created: 2026-05-20
 references:
   - Product/spikes/wire-refoundation-roadmap.md
@@ -12,17 +12,13 @@ tags: [#spike, #services, #pattern, #architecture, #bootstrap, #handlers]
 
 # Service pattern (step 4)
 
-> **Status: in-design.** Full design (L1–L11) locked through the
-> 2026-05-20 walk; all open Qs resolved (Q1–Q7). Repository-projection
-> split (B1c) confirmed: `EntityStore` is the repository, `EntityService`
-> is the command/emit wrapper, apply handlers depend on the store.
-> `EventStream` exposes two scoped interfaces — `IEventEmitter` (emit
-> only) and `IHandlerRegistry` (register only) — for Interface
-> Segregation. **NB:** `IEventEmitter` is a surface narrowing with a
-> single impl (`EventStream`), *not* the per-side toggle from an earlier
-> draft; there is no `NoOp` variant. Flip to `status: active` once
-> 4a + 4b have shipped and the convention stabilizes against actual
-> code.
+> **Status: active.** L1–L11 shipped through 4a + 4b. The 4e post-ship
+> reshape (see [`step4-service-phases.md`](step4-service-phases.md))
+> closed the "service double-write" deferral and tightened L2/L6:
+> services are emit-only writers (handler is the sole writer on both
+> sides); `TagService` / `EntityService` / `GameEngine` register only
+> on the server scope. L1, L3–L5, L7, L8, L10 carry through unchanged.
+> This doc reflects shipped reality as of `9d9d5c9`.
 
 ## What step 4 is
 
@@ -60,17 +56,34 @@ and is registered into a VContainer scope by a layer's `Install`. There
 is no `IService` marker, no `ServiceBase`, no shared virtual lifecycle
 hooks. Each service has the surface it needs and no ceremony.
 
-### L2 — Services are side-agnostic; asymmetry lives in which classes are registered
+### L2 — No `IsServer` / `IsClient` runtime checks; asymmetry lives in registration
 
-Same service class is registered in any scope. No `IsServer` /
-`IsClient` runtime check inside service code. Per-side behavior comes
-from **which other classes are registered alongside** the service —
-specifically, which bridge (`WireForwarder` on server, `NetworkInboundBridge`
-on client) is installed. Apply handlers and the storage layer (`EntityStore`)
-register on both sides; bouncing is structurally impossible because
-handlers depend on the store, not the service.
+No service has an "am I server?" branch in its method bodies. Per-side
+behavior comes from **which classes are registered** in each scope:
 
-Everything else flows from layer composition.
+- **Stores + apply handlers**: register on both sides. Same code reads
+  + reconstructs state identically on server and client.
+- **Command services** (`TagService`, `EntityService`): register on the
+  **server only**. The client cannot author state — making that a
+  compile-time impossibility removes a class of latent bugs.
+- **`GameEngine`** (composes the authoring services): server only.
+- **Bridges**: `WireForwarder` (server) or `NetworkInboundBridge`
+  (client) — exactly one per scope.
+
+The no-bounce invariant has two layers:
+
+1. **Service is emit-only.** `TagService.Set` peeks the store for dedup,
+   then emits — it never writes. The synchronous dispatch runs the
+   per-type handler, which is the sole writer. Same writer on both
+   sides; no double-write on the server.
+2. **Handlers don't hold an emit-capable reference.** They ctor-inject
+   the store only. Calling `Emit` from inside a handler is a type
+   error.
+
+Together: events flow author → service → emit → handler → store. Same
+graph both sides. Diff is who initiates: on the server, end-user code
+calls the service. On the client, the wire delivers the event into the
+local `EventStream`.
 
 ### L3 — DI substrate: VContainer + Scaffold.Appflow
 
@@ -122,36 +135,39 @@ Phases 4a–4d (see [`step4-service-phases.md`](step4-service-phases.md)):
 - **4c — Pattern doc validation.** Read this doc against shipped code.
 - **4d — Step 4 closure.** Status flip, handoff for step 5+.
 
-### L6 — `EntityStore` + `EntityService` split; both sides install both
+### L6 — Stores + handlers install on both sides; services install server-only; handler is the sole writer
 
-Storage and command/emit are different concerns. They live in different
-classes:
+Storage, command/emit, and apply are three concerns in three places:
 
-- **`EntityStore`** — the in-memory repository (`Dictionary<int, Entity>`
-  + `_nextId`). Pure mutation API: `Insert`, `SetTag`, `RemoveTag`, `Get`.
-  Never emits.
-- **`EntityService`** — the command surface. Holds an `EntityStore` +
-  `EventStream`. Public `Create` / `Set` / `Remove` delegate to the
-  store and emit on the stream.
+- **`EntityStore`** (`TagStore`) — the in-memory repository. Pure
+  mutation API. Never emits. **Registers on both sides.**
+- **`EntityService`** (`TagService`) — the command surface. Peeks the
+  store (for dedup + to pick the right event), then emits. Never
+  writes. **Registers on the server only.**
+- **Apply handlers** (`EntityCreatedHandler`, `TagSetHandler<T>`,
+  `TagChangeHandler<T>`, `TagRemovedHandler`) — per-type writers that
+  ctor-inject the store only. Each handler's `Apply` is the only path
+  that mutates the store on its respective side. **Register on both
+  sides.**
 
-Both classes register on **both** sides. The per-side asymmetry is one
-bridge each:
+The per-side asymmetry is one bridge each:
 
 - Server scope installs `WireForwarder` (subscribes to `EventStream`,
-  pushes to `Network`).
-- Client scope installs `NetworkInboundBridge` (subscribes to `Network`,
-  emits into `EventStream`).
+  pushes every appended event to `Network`).
+- Client scope installs `NetworkInboundBridge` (subscribes to
+  `Network.OnReceived`, emits the decoded event into the client's
+  `EventStream`).
 
-Apply handlers register on both sides — and depend on `EntityStore`, not
-`EntityService`. They physically cannot emit because they don't hold an
-emit-capable reference. Type-system-enforced no-bounce.
+**No double-write on the server.** The service emits; the synchronous
+dispatch runs the handler; the handler does the only write. Wire
+forwarding (server) and inbound emit (client) are decoupled from apply
+— they cross the network boundary in parallel to the handler chain on
+each side.
 
-On the server, apply handlers still fire (every emission fans out to all
-registered handlers, including local ones) but they re-apply state that's
-already there. `EntityStore.Insert` is idempotent for explicit-id inserts;
-`SetTag` / `RemoveTag` are idempotent by nature. Wasted work, structurally
-safe. (If hot-path cost shows up later, gate handler registration per
-side. Not in step 4.)
+**Equality short-circuit lives in the service.** `TagService.Set`
+reads the store to compare prev vs new — reads aren't mutations, this
+is fine. If equal, the service returns without emitting; no event, no
+client traffic, no handler fire.
 
 The asymmetric `EntityService` + separate `EntityMirror` shape was
 considered and rejected (Q1 Option A) on these grounds:
@@ -161,11 +177,20 @@ considered and rejected (Q1 Option A) on these grounds:
 - Type-count saving was overstated
 
 The `IEventEmitter` + `NoOpEventEmitter` *per-side toggle* was
-considered and rejected: it was a way to silence echo, but the
-store/service split eliminates echo structurally, so the toggle adds
-no value. (The `IEventEmitter` interface that ships in L8 is a
-different concept — single impl, ISP narrowing of `EventStream`, no
-NoOp variant.)
+considered and rejected: it was a way to silence echo on the server.
+The current shape eliminates echo structurally a different way — the
+service doesn't write (so there's nothing to echo) and the client
+doesn't have a service (so no client-originated emit exists). The
+`IEventEmitter` interface that ships in L8 is a different concept —
+single impl, ISP narrowing of `EventStream`, no NoOp variant.
+
+**Reshape note (4e).** The original L6 design had services register on
+both sides; server-side handler runs were idempotent no-ops because the
+service had already written. The wiring fix in `c94595e` made handlers
+actually run end-to-end, which exposed the wasted server-side write.
+The 4e reshape (`f7c8af4` + `9d9d5c9`) moved to emit-only services +
+role-gated registration — the shape this section now describes. The
+"register both, no-op on server" rationale no longer applies.
 
 ### L7 — `World` does not exist as a separate substrate
 
@@ -296,8 +321,11 @@ projection**:
 | Event log / bus      | Event stream        | `EventStream`          |
 | Outbound replication | Outbox / transport  | `WireForwarder` + `Network` |
 
-**`EntityStore`** is a plain repository over the entity dictionary.
-Reads + raw writes; no events.
+**`EntityStore`** (and `TagStore`) is a plain repository. Reads + raw
+writes; never emits. After 4e, the store also owns id allocation:
+`AllocateId()` reserves the next id without inserting, so the service
+can emit-first and the handler does the actual insert under the
+reserved id.
 
 ```csharp
 public sealed class EntityStore
@@ -305,117 +333,119 @@ public sealed class EntityStore
     readonly Dictionary<int, Entity> _byId = new();
     int _nextId = 1;
 
-    public Entity Get(int id) => _byId.GetValueOrDefault(id);
-    public IReadOnlyCollection<Entity> All => _byId.Values;
+    public int AllocateId() => _nextId++;
 
-    public Entity Insert(EntityType type, int defId)
-    {
-        var entity = new Entity(_nextId++, type, defId);
-        _byId[entity.Id] = entity;
-        return entity;
-    }
+    // Auto-id insert — direct-store convenience for tests. Production
+    // authoring goes through EntityService.Create (which AllocateId + emits).
+    public Entity Insert(EntityType type, int defId = 0) { ... }
 
-    // Explicit-id insert is idempotent — apply handlers can re-run safely.
-    public Entity Insert(int id, EntityType type, int defId)
-    {
-        if (_byId.TryGetValue(id, out var existing)) return existing;
-        var entity = new Entity(id, type, defId);
-        _byId[id] = entity;
-        if (id >= _nextId) _nextId = id + 1;
-        return entity;
-    }
+    // Explicit-id insert — idempotent. The handler path.
+    public Entity Insert(int id, EntityType type, int defId) { ... }
 
-    public void SetTag<T>(int id, int slot, T value) where T : unmanaged
-        => _byId[id].SetSlotRaw(slot, value);
-
-    public void RemoveTag(int id, int slot)
-        => _byId[id].RemoveSlotRaw(slot);
+    public Entity ById(int id);
+    public bool   TryGetById(int id, out Entity entity);
 }
 ```
 
-**`EntityService`** is the command surface. Wraps the store; emits via
-`IEventEmitter` (scoped narrowing of `EventStream`). Public `Create` /
-`Set` / `Remove` are the only mutation methods external code can see.
+```csharp
+public sealed class TagStore
+{
+    public T    Get<T>(int entityId, int slot) where T : unmanaged;
+    public bool Has(int entityId, int slot);
+    public void Set<T>(int entityId, int slot, T value) where T : unmanaged;
+    public bool Remove(int entityId, int slot);
+}
+```
+
+**`EntityService`** / **`TagService`** are the command surfaces.
+Emit-only. They never call store mutation methods (`Insert`, `Set`,
+`Remove`) — only read methods (`AllocateId`, `Has`, `Get`). The
+synchronous handler dispatch runs the per-type handler, which is the
+sole writer.
 
 ```csharp
 public sealed class EntityService
 {
     readonly EntityStore _store;
-    readonly IEventEmitter _events;   // scoped — emit only, no Register
+    readonly IEventEmitter _events;
 
     public EntityService(EntityStore store, IEventEmitter events)
     { _store = store; _events = events; }
 
-    public Entity Get(int id) => _store.Get(id);
-
-    public Entity Create(EntityType type, int defId = 0)
+    public Entity Create(EntityType type, int definitionId = 0)
     {
-        var entity = _store.Insert(type, defId);
+        var id = _store.AllocateId();
         _events.Emit(new EntityCreatedEvent {
-            EntityId = entity.Id, TypeSlot = type.Slot, DefinitionId = defId
+            EntityId = id, TypeSlot = type.Slot, DefinitionId = definitionId,
         });
-        return entity;
+        return _store.ById(id);   // handler ran synchronously; entity exists.
     }
+
+    public Entity ById(int id) => _store.ById(id);
+    public bool   TryGetById(int id, out Entity entity) => _store.TryGetById(id, out entity);
+}
+```
+
+```csharp
+public sealed class TagService
+{
+    readonly TagStore _store;
+    readonly IEventEmitter _events;
+
+    public TagService(TagStore store, IEventEmitter events)
+    { _store = store; _events = events; }
+
+    public T    Get<T>(int entityId, TagKey<T> key) where T : unmanaged
+        => _store.Get<T>(entityId, key.Slot);
+    public bool Has(int entityId, TagKey key) => _store.Has(entityId, key.Slot);
 
     public void Set<T>(int entityId, TagKey<T> key, T value) where T : unmanaged
     {
-        var entity = _store.Get(entityId);
-        if (entity.TryGetSlotRaw<T>(key.Slot, out var prev))
+        if (_store.Has(entityId, key.Slot))
         {
-            if (EqualityComparer<T>.Default.Equals(prev, value)) return;
-            _store.SetTag(entityId, key.Slot, value);
+            var prev = _store.Get<T>(entityId, key.Slot);
+            if (EqualityComparer<T>.Default.Equals(prev, value)) return;   // peek-only dedup
             _events.Emit(new TagChangeEvent<T> {
-                EntityId = entityId, Slot = key.Slot, Prev = prev, Next = value
+                EntityId = entityId, Slot = key.Slot, Prev = prev, Next = value,
             });
         }
         else
         {
-            _store.SetTag(entityId, key.Slot, value);
             _events.Emit(new TagSetEvent<T> {
-                EntityId = entityId, Slot = key.Slot, Value = value
+                EntityId = entityId, Slot = key.Slot, Value = value,
             });
         }
+    }
+
+    public bool Remove(int entityId, TagKey key)
+    {
+        if (!_store.Has(entityId, key.Slot)) return false;
+        _events.Emit(new TagRemovedEvent { EntityId = entityId, Slot = key.Slot });
+        return true;   // dispatch is synchronous; handler removed by now.
     }
 }
 ```
 
-**`Entity`** is data + bag. No service ref, no emit ref. Public readers,
-internal raw setters that only `EntityStore` calls.
+**`Entity`** is data-only. No service back-ref, no slot-mutation methods.
+Tag storage lives in `TagStore` keyed by `(entityId, slot)` — `Entity`
+doesn't own its own slots.
 
 ```csharp
 public sealed class Entity
 {
-    readonly Dictionary<int, object> _slots = new();
+    public int        Id           { get; }
+    public EntityType Type         { get; }
+    public int        DefinitionId { get; }
 
-    public int Id { get; }
-    public EntityType Type { get; }
-    public int DefinitionId { get; }
-
-    internal Entity(int id, EntityType type, int defId)
-    { Id = id; Type = type; DefinitionId = defId; }
-
-    public T? Get<T>(TagKey<T> key) where T : unmanaged
-        => _slots.TryGetValue(key.Slot, out var raw) ? (T)raw : default;
-
-    internal bool TryGetSlotRaw<T>(int slot, out T value) where T : unmanaged
-    {
-        if (_slots.TryGetValue(slot, out var raw)) { value = (T)raw; return true; }
-        value = default; return false;
-    }
-
-    internal void SetSlotRaw<T>(int slot, T value) where T : unmanaged
-        => _slots[slot] = value;
-
-    internal void RemoveSlotRaw(int slot)
-        => _slots.Remove(slot);
+    internal Entity(int id, EntityType type, int definitionId) { ... }
 }
 ```
 
-**End-user authoring** goes through `EntityService`:
+**End-user authoring** (server side) goes through the services:
 
 ```csharp
-var card = engine.Entities.Create(EntityTypes.Card, defId: 101);
-engine.Entities.Set(card.Id, SampleTags.Health, 30);
+var card = engine.Entities.Create(EntityTypes.Card, definitionId: 101);
+engine.Tags.Set(card.Id, SampleTags.Health, 30);
 ```
 
 The fluent `entity.Set(...)` chain from step 3 is gone — its
@@ -424,8 +454,9 @@ separation now, no Pattern-B fluency on Entity. If the call-site verbosity
 bites, we can re-add a typed handle (`EntityHandle` struct wrapping
 `(id, service)`) without touching `Entity` itself.
 
-**Apply handlers** depend on `EntityStore`, not `EntityService`. They
-physically cannot emit — the type system enforces no-bounce. See L10
+**Apply handlers** depend on the store, not the service. They physically
+cannot emit — the type system enforces no-bounce. After 4e they're also
+the **sole writer** on each side (the service stopped writing). See L10
 for the handler shape.
 
 ### L10 — `Network` and `EventStream` don't reference each other; two bridge classes cross
@@ -442,74 +473,43 @@ Network.OnReceived: Action<WireEvent>; // inbound — already typed-decoded
 Channels are a serialization detail — not exposed structurally.
 
 Two thin bridge classes cross the `Network` ↔ `EventStream` boundary,
-both registered by boot layers:
+both registered by boot layers. The shipped shape subscribes via the
+single `EventStream.OnAppended` / `Network.OnReceived` events rather
+than per-type `IWireEventHandler` registration — fewer moving parts,
+no per-T forwarder enumeration. Ctor side-effect; eager-resolved at
+container build via `RegisterBuildCallback`.
 
-- **`WireForwarder`** (server only) — a single class that implements
-  `IWireEventHandler<T>` for every replicated event type. Ctor-injects
-  `IHandlerRegistry` (scoped — register only) + `Network`. Registers
-  itself for each `T` during `InitializeAsync`. Each `Apply` is a
-  one-liner that calls `Network.Send(ev)`. Shape is symmetric with apply
-  handlers — same registration API, same `Apply` contract.
+- **`WireForwarder`** (server only) — every event appended to the local
+  `EventStream` goes to `Network`.
 
 ```csharp
-internal sealed class WireForwarder :
-    IWireEventHandler<EntityCreatedEvent>,
-    IWireEventHandler<TagSetEvent<int>>,
-    IWireEventHandler<TagSetEvent<bool>>,
-    IWireEventHandler<TagChangeEvent<int>>,
-    IWireEventHandler<TagChangeEvent<bool>>,
-    IWireEventHandler<TagRemovedEvent>,
-    IAsyncInitializable
+internal sealed class WireForwarder
 {
-    readonly IHandlerRegistry _handlers;
-    readonly Network _network;
-
-    public WireForwarder(IHandlerRegistry handlers, Network network)
-    { _handlers = handlers; _network = network; }
-
-    public UniTask InitializeAsync(CancellationToken ct)
-    {
-        _handlers.Register<EntityCreatedEvent>(this);
-        _handlers.Register<TagSetEvent<int>>(this);
-        _handlers.Register<TagSetEvent<bool>>(this);
-        _handlers.Register<TagChangeEvent<int>>(this);
-        _handlers.Register<TagChangeEvent<bool>>(this);
-        _handlers.Register<TagRemovedEvent>(this);
-        return UniTask.CompletedTask;
-    }
-
-    public void Apply(EntityCreatedEvent ev)   => _network.Send(ev);
-    public void Apply(TagSetEvent<int> ev)     => _network.Send(ev);
-    public void Apply(TagSetEvent<bool> ev)    => _network.Send(ev);
-    public void Apply(TagChangeEvent<int> ev)  => _network.Send(ev);
-    public void Apply(TagChangeEvent<bool> ev) => _network.Send(ev);
-    public void Apply(TagRemovedEvent ev)      => _network.Send(ev);
-
-    public void Unapply<T>(T ev) => throw new NotImplementedException();
+    public WireForwarder(EventStream stream, Network network)
+        => stream.OnAppended += network.Send;
 }
 ```
 
-- **`NetworkInboundBridge`** (client only) — ctor-injects `IEventEmitter`
-  (scoped — emit only) + `Network`. Subscribes to `Network.OnReceived`
-  and forwards the decoded event into `IEventEmitter.Emit(WireEvent)`
-  (non-generic overload). One line, no per-`T` switch.
+- **`NetworkInboundBridge`** (client only) — every event delivered by
+  `Network.OnReceived` is emitted into the local `EventStream`, where
+  Apply handlers dispatch by runtime type.
 
 ```csharp
-internal sealed class NetworkInboundBridge : IAsyncInitializable
+internal sealed class NetworkInboundBridge
 {
-    readonly IEventEmitter _events;
-    readonly Network _network;
-
-    public NetworkInboundBridge(IEventEmitter events, Network network)
-    { _events = events; _network = network; }
-
-    public UniTask InitializeAsync(CancellationToken ct)
-    {
-        _network.OnReceived += _events.Emit;
-        return UniTask.CompletedTask;
-    }
+    public NetworkInboundBridge(Network network, IEventEmitter emitter)
+        => network.OnReceived += emitter.Emit;
 }
 ```
+
+**`HandlerRegistry`** (not a bridge, but the same shape) — collects
+every `IWireEventHandler` registered in the scope via DI list injection,
+subscribes to `EventStream.OnAppended` once, and dispatches by runtime
+type. Handlers themselves are POCOs that ctor-inject their store; no
+`IAsyncInitializable` ceremony per handler. See `c94595e` for the
+rationale (the prior `IAsyncInitializable` self-registration pattern
+silently no-op'd because open-generic registration didn't trigger
+init).
 
 Neither `Network` nor `EventStream` names the other. Boot wires them at
 scope init. The same two bridge classes serve every feature; per-event
@@ -517,36 +517,51 @@ ceremony lives in the per-type Apply handlers, not in the bridges. The
 typed-bucket dispatch (L8) means the inbound bridge needs no switch
 statement — the bucket carries the type information.
 
-### L11 — `GameEngine` is a composition-shaped surface
+### L11 — `GameEngine` is a server-only composition handle
 
-`GameEngine` in `Framework.Engine` is a typed handle to the framework's
-services. Each framework-feature service is exposed as a concrete
-property:
+`GameEngine` in `Framework.Engine` is a typed handle that exposes the
+substrate + the authoring services for end-user server-side game code.
+It's **registered only on the server scope** — the client has nothing
+to compose under it (its `EventStream` + stores inject cleanly on their
+own; the layer files themselves are the documented client surface).
 
 ```csharp
 public sealed class GameEngine
 {
-    public EventStream Stream { get; }
-    public Network Network { get; }
-    public EntityService Entities { get; }
+    public EventStream   Stream      { get; }
+    public Network       Network     { get; }
+    public EntityStore   EntityStore { get; }
+    public TagStore      TagStore    { get; }
+    public EntityService Entities    { get; }
+    public TagService    Tags        { get; }
     // step 5+ adds: Requests, Commands, Effects, Triggers, MatchState, ...
-
-    public GameEngine(EventStream stream, Network network, EntityService entities)
-    {
-        Stream = stream; Network = network; Entities = entities;
-    }
 }
 ```
 
-- **End-user / call-site code** prefers `engine.Entities.Create(...)`,
-  `engine.Stream.Emit(...)`. Discoverable, typed surface.
+- **End-user server game code** prefers `engine.Entities.Create(...)`,
+  `engine.Tags.Set(...)`, `engine.EntityStore.TryGetById(...)`,
+  `engine.Stream.OnAppended += ...`. Discoverable, typed surface.
 - **Internal plumbing** (handlers, bridges, framework-internal services)
-  ctor-injects each service directly. `GameEngine` is for ergonomics,
-  not for plumbing.
+  ctor-injects pieces directly. `GameEngine` is for ergonomics, not for
+  plumbing.
+- **Client code** uses `[Inject] EventStream`, `[Inject] EntityStore`,
+  `[Inject] TagStore` directly. There is no `ClientEngine` — when the
+  client acquires multiple coordinated concerns (input, request reader,
+  connection state), each will live in its own service; whether a
+  client-shaped handle earns its name will be a real question then.
 
 The type changes whenever a framework service ships — `Framework.Engine`
 gains a new property + ctor param. Stability is traded for
 discoverability; accepted.
+
+**Reshape note (4e).** L11 originally had `GameEngine` registered on
+both sides and exposing only services (not stores). The 4e role-gating
+made server-only the natural answer (it composes services the client
+doesn't have), and stores were added as properties so server reads
+share the same handle as authoring. The two-engine split
+(`ServerEngine` + `ClientEngine`) was considered and rejected: the
+client had nothing to put on its engine that wasn't already
+injectable; pre-naming a shape with no caller earns nothing.
 
 ## Bootstrap shape
 
@@ -725,20 +740,32 @@ settles during 4a's `EventStream` work.
 
 ## Pattern reproducibility
 
-The same store-plus-service split applies to every future feature:
+The same store + service + handler split applies to every future
+feature. The role split is consistent across the table:
 
-| Feature | Repository (store) | Command service (emits) | Per-type Apply handlers (depend on store) |
+| Feature | Store (both sides) | Service (server only, emit-only) | Apply handlers (both sides, sole writer) |
 |---|---|---|---|
-| **Entities** (step 4) | `EntityStore` | `EntityService` | `EntityCreatedHandler`, `TagSetHandler<T>`, ... |
+| **Entities** (step 4) | `EntityStore`, `TagStore` | `EntityService`, `TagService` | `EntityCreatedHandler`, `TagSetHandler<T>`, `TagChangeHandler<T>`, `TagRemovedHandler` |
 | **Requests** (step 5+) | `RequestStore` | `RequestService` | `RequestOpenedHandler`, `RequestClosedHandler` |
 | **Commands** (step 5+) | `CommandStore` (open-block tracking) | `CommandService` | `BlockStartHandler`, `BlockEndHandler` |
 | **Effects** (step 5+) | shared with commands | `EffectService` | shared handlers |
 
-Each store is pure C# (repository contract: reads + raw writes, no
-events). Each service ctor-injects its store + `EventStream`. Apply
-handlers ctor-inject the store. Server scope adds `WireForwarder` rows
-per replicated event type; client scope's `NetworkInboundBridge` is the
-same one-liner for every feature.
+Each **store** is pure C# (repository contract: reads + raw writes, no
+events). Registers on both sides.
+
+Each **service** ctor-injects its store + `IEventEmitter`. Peeks the
+store to decide what to emit; emits only; never writes. Registers on
+the server scope only (layer takes `isServer` and gates the
+registration). Surfaces on `GameEngine` as a property.
+
+Each **apply handler** ctor-injects the store only (no
+`IEventEmitter`). Performs the matching store mutation. Registers on
+both sides — same handler is the sole writer on the server (where the
+service emitted) and on the client (where the wire delivered the
+event).
+
+The `WireForwarder` (server) and `NetworkInboundBridge` (client) are
+universal — one line each, no per-feature additions.
 
 ## Resolved questions
 
@@ -840,45 +867,50 @@ the handler.
 | `Unapply` real implementations (preview / rollback) | When the speculation feature is designed |
 | View-model layer | Step 7 |
 
-## Convention summary (preliminary; finalizes in 4c)
+## Convention summary
 
 > **The pattern is event sourcing with an in-memory repository
-> projection.** For each feature, three classes:
+> projection.** For each feature, three classes with a strict role split:
 >
 > - **Store** — the repository. Holds state + pure mutation API.
->   Never emits. Same class both sides.
+>   Never emits. **Registers on both sides** (same class).
 > - **Service** — the command surface. Ctor-injects the store +
->   `IEventEmitter`. Public methods mutate via the store and emit
->   inline. Same class both sides.
-> - **Apply handlers** — per-type classes implementing
->   `IWireEventHandler<T>` with `Apply` + `Unapply`. Ctor-inject the
->   **store** + `IHandlerRegistry` (never the service, never the
->   emitter), register themselves during
->   `IAsyncInitializable.InitializeAsync`, and re-execute the store's
->   mutation API. Cannot emit by construction. Step 4 ships `Apply`
->   only.
+>   `IEventEmitter`. **Emit-only**: peeks the store for dedup +
+>   discrimination, then emits. Never writes. **Registers on the
+>   server only**; the layer takes `isServer` and gates the
+>   registration. Surfaces on `GameEngine` as a property.
+> - **Apply handlers** — per-type classes deriving from
+>   `WireEventHandler<T>`. Ctor-inject the **store only** (no
+>   `IEventEmitter`, no service). Perform the matching mutation. POCOs;
+>   collected via DI list injection into `HandlerRegistry`, which
+>   subscribes to `EventStream.OnAppended` once and dispatches by
+>   runtime type. **Sole writer on each side** — same handler code runs
+>   on the server (where the service emitted) and on the client (where
+>   the wire delivered the event). **Registers on both sides.**
 >
-> **Scoped stream interfaces.** `EventStream` implements two scoped
-> interfaces — `IEventEmitter` (emit only) and `IHandlerRegistry`
-> (register only). Each caller's ctor surface narrows to what it
-> actually needs; the type system blocks the wrong direction. Single
-> impl, no NoOp variant — the narrowing is for Interface Segregation,
-> not behavior toggling.
+> **Scoped stream interface.** `EventStream` implements `IEventEmitter`
+> (emit-only) — services and the inbound bridge see this narrower
+> surface. The full `EventStream` (with `OnAppended` + history) is
+> resolvable too; handlers + the registry use it directly. Single impl;
+> no NoOp variant.
 >
-> **Side-agnostic.** Same store + service + handler classes register in
-> any scope. Per-side asymmetry is one bridge each: `WireForwarder`
-> (server, stream → network) and `NetworkInboundBridge` (client,
-> network → stream). No `IsServer` / `IsClient` checks anywhere.
+> **No runtime `IsServer` checks.** Asymmetry lives in registration: the
+> service is missing from the client scope; `GameEngine` is missing
+> from the client scope; the bridge type differs (`WireForwarder` server,
+> `NetworkInboundBridge` client). Method bodies never branch on side.
+>
+> **No double-write on the server.** The service doesn't write; the
+> handler does. The equality short-circuit lives in the service (reads
+> aren't writes); when it triggers, no event is emitted at all.
 >
 > **`Network` and `EventStream` don't reference each other.** The two
 > bridges cross the boundary. The bucket-typed `EventStream` exposes
-> both `Emit<T>` (typed fast path for services + the server-side
-> forwarder) and `Emit(WireEvent)` (type-routing path for the inbound
-> bridge).
+> both `Emit<T>` (typed fast path) and `Emit(WireEvent)` (type-routing
+> path for the inbound bridge).
 >
-> **Lifecycle.** Stores + services + handlers live for the VContainer
-> scope's lifetime. Async init via `IAsyncInitializable`; teardown via
-> `IAsyncDisposable`. Reset = dispose + reconstruct the scope (Appflow
-> `Host.PopAsync` + `PushAsync`).
-
-(Finalizes when 4c's validation pass runs.)
+> **Lifecycle.** Stores + services + handlers + bridges live for the
+> VContainer scope's lifetime. `HandlerRegistry` + bridges wire via
+> ctor side-effects and are eager-resolved at container build via
+> `RegisterBuildCallback`. No per-handler `IAsyncInitializable`
+> ceremony. Teardown = dispose the scope (Appflow `Host.PopAsync` +
+> `PushAsync`).
