@@ -1,4 +1,5 @@
 using Framework.Entities;
+using Framework.Requests;
 using Framework.Tags;
 using Framework.Wire;
 
@@ -9,29 +10,33 @@ namespace Framework.Engine
     // internal plumbing still ctor-injects pieces directly.
     //
     // No client equivalent: the client is dumb today (events → handlers → stores) and the
-    // pieces it needs (EventStream, EntityStore, TagStore) inject cleanly on their own.
-    // When the client acquires multiple coordinated concerns worth composing, that's when
-    // a client-shaped handle will earn its name — not before.
+    // pieces it needs (EventStream, EntityStore, TagStore, RequestStore) inject cleanly on
+    // their own. When the client acquires multiple coordinated concerns worth composing,
+    // that's when a client-shaped handle will earn its name — not before.
     public sealed class GameEngine
     {
-        public EventStream   Stream      { get; }
-        public Network       Network     { get; }
-        public EntityStore   EntityStore { get; }
-        public TagStore      TagStore    { get; }
-        public EntityService Entities    { get; }
-        public TagService    Tags        { get; }
+        public EventStream    Stream       { get; }
+        public Network        Network      { get; }
+        public EntityStore    EntityStore  { get; }
+        public TagStore       TagStore     { get; }
+        public RequestStore   RequestStore { get; }
+        public EntityService  Entities     { get; }
+        public TagService     Tags         { get; }
+        public RequestService Requests     { get; }
 
         public GameEngine(
             EventStream stream, Network network,
-            EntityStore entityStore, TagStore tagStore,
-            EntityService entities, TagService tags)
+            EntityStore entityStore, TagStore tagStore, RequestStore requestStore,
+            EntityService entities, TagService tags, RequestService requests)
         {
-            Stream      = stream;
-            Network     = network;
-            EntityStore = entityStore;
-            TagStore    = tagStore;
-            Entities    = entities;
-            Tags        = tags;
+            Stream       = stream;
+            Network      = network;
+            EntityStore  = entityStore;
+            TagStore     = tagStore;
+            RequestStore = requestStore;
+            Entities     = entities;
+            Tags         = tags;
+            Requests     = requests;
         }
     }
 }

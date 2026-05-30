@@ -1,5 +1,6 @@
 using Framework.Engine;
 using Framework.Entities;
+using Framework.Requests;
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
@@ -9,10 +10,10 @@ using VContainer.Unity;
 
 namespace Framework.Bootstrap.Tests
 {
-    // Verifies that Engine + Tag + Entity layers compose cleanly via DI on each side.
-    // Server scope resolves GameEngine + command services + stores. Client scope resolves
-    // only the substrate (EventStream, stores, handlers) — no engine, no services. The
-    // "client cannot author state" rule is enforced structurally by what's registered.
+    // Verifies that Engine + Tag + Entity + Request layers compose cleanly via DI on each
+    // side. Server scope resolves GameEngine + command services + stores. Client scope
+    // resolves only the substrate (EventStream, stores, handlers) — no engine, no services.
+    // The "client cannot author state" rule is enforced structurally by what's registered.
     public class EngineLayerTests
     {
         LifetimeScope _scope;
@@ -24,6 +25,7 @@ namespace Framework.Bootstrap.Tests
                 new EngineLayer(isServer).Install(builder);
                 new TagLayer(isServer).Install(builder);
                 new EntityLayer(isServer).Install(builder);
+                new RequestLayer(isServer).Install(builder);
             }, name);
             if (scope.Container == null) scope.Build();
             return scope;
@@ -53,8 +55,10 @@ namespace Framework.Bootstrap.Tests
             Assert.IsNotNull(engine.Network);
             Assert.IsNotNull(engine.EntityStore);
             Assert.IsNotNull(engine.TagStore);
+            Assert.IsNotNull(engine.RequestStore);
             Assert.IsNotNull(engine.Entities);
             Assert.IsNotNull(engine.Tags);
+            Assert.IsNotNull(engine.Requests);
         }
 
         [Test]
@@ -66,19 +70,22 @@ namespace Framework.Bootstrap.Tests
             var stream   = _scope.Container.Resolve<EventStream>();
             var entities = _scope.Container.Resolve<EntityService>();
             var tags     = _scope.Container.Resolve<TagService>();
+            var requests = _scope.Container.Resolve<RequestService>();
 
             Assert.AreSame(stream,   engine.Stream);
             Assert.AreSame(entities, engine.Entities);
             Assert.AreSame(tags,     engine.Tags);
+            Assert.AreSame(requests, engine.Requests);
         }
 
         [Test]
-        public void Server_EntityStore_And_TagStore_Are_Singletons()
+        public void Server_Stores_Are_Singletons()
         {
             _scope = BuildScope(isServer: true, "ServerScope");
 
-            Assert.AreSame(_scope.Container.Resolve<EntityStore>(), _scope.Container.Resolve<EntityStore>());
-            Assert.AreSame(_scope.Container.Resolve<TagStore>(),    _scope.Container.Resolve<TagStore>());
+            Assert.AreSame(_scope.Container.Resolve<EntityStore>(),  _scope.Container.Resolve<EntityStore>());
+            Assert.AreSame(_scope.Container.Resolve<TagStore>(),     _scope.Container.Resolve<TagStore>());
+            Assert.AreSame(_scope.Container.Resolve<RequestStore>(), _scope.Container.Resolve<RequestStore>());
         }
 
         // --- Client scope -----------------------------------------------------
@@ -93,6 +100,7 @@ namespace Framework.Bootstrap.Tests
             Assert.IsNotNull(_scope.Container.Resolve<Network>());
             Assert.IsNotNull(_scope.Container.Resolve<EntityStore>());
             Assert.IsNotNull(_scope.Container.Resolve<TagStore>());
+            Assert.IsNotNull(_scope.Container.Resolve<RequestStore>());
         }
 
         [Test]
@@ -102,6 +110,7 @@ namespace Framework.Bootstrap.Tests
 
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<EntityService>());
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<TagService>());
+            Assert.Throws<VContainerException>(() => _scope.Container.Resolve<RequestService>());
         }
 
         [Test]

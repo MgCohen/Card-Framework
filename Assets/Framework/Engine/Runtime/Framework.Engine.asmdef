@@ -4,7 +4,8 @@
     "references": [
         "Framework.Wire",
         "Framework.Tags",
-        "Framework.Entities"
+        "Framework.Entities",
+        "Framework.Requests"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

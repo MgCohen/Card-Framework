@@ -17,6 +17,7 @@ namespace Framework.Bootstrap
             yield return new EngineLayer(_isServer);
             yield return new TagLayer(_isServer);
             yield return new EntityLayer(_isServer);
+            yield return new RequestLayer(_isServer);
         }
     }
 }

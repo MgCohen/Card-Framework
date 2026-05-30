@@ -1,0 +1,25 @@
+{
+    "name": "Framework.Requests.Tests",
+    "rootNamespace": "Framework.Requests.Tests",
+    "references": [
+        "Framework.Requests",
+        "Framework.Wire",
+        "Scaffold.Autopacker"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

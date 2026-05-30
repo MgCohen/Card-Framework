@@ -5,6 +5,7 @@
         "Framework.Bootstrap",
         "Framework.Engine",
         "Framework.Entities",
+        "Framework.Requests",
         "Framework.Tags",
         "Framework.Wire",
         "Scaffold.AppFlow",
