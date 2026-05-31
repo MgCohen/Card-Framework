@@ -1,9 +1,10 @@
 ---
 type: spike
-status: accepted
+status: in-design
 supersedes: Product/spikes/match-state-redesign.md
 references:
   - Product/spikes/framework-architecture.md
+  - Product/spikes/request-service.md
   - Product/decisions/0009-engine-as-fsm.md
 sandbox: Assets/Spike/ECS/StateMachine/
 tags: [#spike, #state, #fsm, #state-service, #service-first]
@@ -11,11 +12,44 @@ tags: [#spike, #state, #fsm, #state-service, #service-first]
 
 # State Service — game-state FSM on a service-first substrate
 
-> **Status: accepted (decisions locked, patch cascade pending).** Defines the state-specific shape of the framework's FSM layer, sitting on top of the substrate locked in [`framework-architecture.md`](framework-architecture.md). Supersedes [`match-state-redesign.md`](match-state-redesign.md), which walked the six-sketch design evolution (v1 polymorphic slice → v6 stateless records) and surfaced the framework-foundational questions that are now answered separately. This doc is short on purpose — the substrate questions live in framework-arch; what remains here is just the state pieces.
+> **Status: in-design (step 5b — being tightened to the post-step-4 wire substrate before build; flips to `active` when the build lands).** Defines the state-specific shape of the framework's FSM layer, sitting on top of the substrate locked in [`framework-architecture.md`](framework-architecture.md). Supersedes [`match-state-redesign.md`](match-state-redesign.md), which walked the six-sketch design evolution (v1 polymorphic slice → v6 stateless records) and surfaced the framework-foundational questions that are now answered separately. This doc is short on purpose — the substrate questions live in framework-arch; what remains here is just the state pieces.
+>
+> **Structural twin of [`request-service.md`](request-service.md).** State is the sister service to Requests (step 5a): same Store + Service + per-type apply handler pattern on the same wire substrate. Read that doc's "Locked decisions" (L1–L6) for the substrate conventions this one inherits; this doc only states the state-specific deltas.
 
 ## TL;DR
 
-**State is a typed identity, not a data container.** Each FSM state is a zero-data record subclass of `GameState` with virtual methods (`Actions`, `OnEnter`, `OnExit`, `IsCompleted`). An `IStateService` owns the current state and projects from `StatePushEvent`. Transitions flow through `PushStateCommand`. The wire emits a single 2-byte `StatePushEvent` per transition. All data that would have lived on a state lives on entities (per-card tags) or `MatchService` (turn, active player, outcome).
+**State is a typed identity, not a data container.** Each FSM state is a zero-data record subclass of `GameState`. The current cursor lives on `StateStore` (both sides, reconstructable purely from the wire); the server-only `StateService.Push(next)` emits a single 2-byte `StatePushEvent`; the framework's `StatePushHandler` is the sole writer of `Current` on both sides. Transitions are wire events, not a parallel path. All data that would have lived on a state lives on entities (per-card tags) or `MatchService` (turn, active player, outcome).
+
+The behavior surface that makes states *do* things — `Actions`, `OnEnter`, `OnExit`, `IsCompleted`, the engine `Evaluate` hook, `IStateFlow`, `PushStateCommand` — lands in **step 5c** alongside the command/effect pipeline those pieces depend on. Step 5b ships the cursor skeleton (see below).
+
+## Step 5b build scope — what ships now vs 5c
+
+Step 5b mirrors exactly what step 5a (Requests) shipped: **wire event + store + service + apply handler + layer + engine handle, no command pipeline.** The FSM behavior surface defers to 5c because `GameAction`, `IStateScope`/`ICommandScope`, and the engine `Evaluate` loop don't exist in `Framework/` yet — minting placeholders for them now would pre-name shapes 5c owns for real.
+
+**Ships in 5b (`Framework.States`):**
+
+| Piece | Shape |
+|---|---|
+| `GameState` | abstract record, **zero members** — identity is the type |
+| baseline states | `MatchNotStartedState` (kind 0), `PlayingState` (1), `MatchEndedState` (2) |
+| `StatePushEvent : WireEvent` | `[Packed] byte NewKind, byte PrevKind` (post-flatten — inherits `WireEvent` directly) |
+| `IStateRegistry` / `StateRegistry` | byte ↔ Type map; framework reserves kinds 0–9, games start at 10 |
+| `StateStore` | holds `Current` (both sides); initialized to `MatchNotStartedState` |
+| `StateService` | **server-only**; `Push(GameState)` peeks `Current` for prevKind, emits `StatePushEvent` |
+| `StatePushHandler` | framework-shipped sole writer; `Apply` sets `Current = registry.Resolve(NewKind)`; registered both sides |
+| `StateLayer` | role-gated registration; baseline kinds + handler registered both sides, service server-only |
+| `GameEngine.States` / `GameEngine.StateStore` | server-only discoverable handles |
+
+**Defers to 5c (needs the command/effect pipeline):**
+
+- `GameState` virtuals — `Actions`, `OnEnter(scope)`, `OnExit(scope)`, `IsCompleted(action, result, scope)`.
+- `IStateScope` — the narrow read view passed to those virtuals.
+- `IStateFlow.NextAfter` — successor map; zero-dependency to *define*, but its only consumer is the `Evaluate` hook.
+- `PushStateCommand` + `PushStateHandler` (command) — routing a transition *through* the dispatch path. In 5b, `StateService.Push` emits the wire event directly (mirrors `RequestService.Open`).
+- Engine `Evaluate` hook — auto-advance after each command resolves.
+- **Zero-input deadlock** (Open items) — can't occur until there's an auto-advance loop to deadlock; the three-option pick gets made in 5c with the real scope types in hand.
+
+The locked fork picks for 5b: **(1)** skeleton-only scope; **(2)** zero-member `GameState`; **(3)** defer `IStateFlow`; **(4)** initial `Current = MatchNotStartedState`.
 
 ## Why this exists
 
@@ -38,43 +72,85 @@ Short doc. Read top to bottom. If you haven't read [`framework-architecture.md`]
 
 ## The shape
 
-### `GameState` — zero-data record
+> **Step 5b shape.** The blocks below marked **[5b]** ship now. Blocks marked **[5c]** are the FSM behavior surface, reproduced here for the full picture but deferred per § Step 5b build scope.
+
+### `GameState` — zero-data record **[5b]**
 
 ```csharp
+public abstract record GameState;
+
+public sealed record MatchNotStartedState : GameState;
+public sealed record PlayingState         : GameState;
+public sealed record MatchEndedState      : GameState;
+```
+
+Identity is the type. Same-kind comparison is `is`; structural equality is trivially true (zero fields). No mutable fields, no constructor parameters, no wire payload — the record carries nothing. The virtual behavior surface (`Actions`/`OnEnter`/`OnExit`/`IsCompleted`) is added in **5c** when `GameAction`/`IStateScope` exist:
+
+```csharp
+// [5c] — added once the command/effect pipeline lands
 public abstract record GameState
 {
-    public virtual IReadOnlyList<Type>        Actions   => [];
-    public virtual IReadOnlyList<GameAction>  OnEnter(IStateScope scope) => [];
-    public virtual IReadOnlyList<GameAction>  OnExit (IStateScope scope) => [];
+    public virtual IReadOnlyList<Type>       Actions => [];
+    public virtual IReadOnlyList<GameAction> OnEnter(IStateScope scope) => [];
+    public virtual IReadOnlyList<GameAction> OnExit (IStateScope scope) => [];
     public virtual bool IsCompleted(GameAction action, CommandResult result, IStateScope scope) => false;
 }
 ```
 
-Identity is the type. Same-kind comparison is `is`; same-instance equality is structural and always true (zero fields). No mutable fields. No constructor parameters. No payload on the wire because the record carries no payload.
+### `StateStore` — owner of the cursor **[5b]**
 
-### `IStateService` — owner of the cursor
+Post-step-4, the cursor lives on a **both-sides store**, not on the service. The store is reconstructable purely from the wire; the per-type apply handler is its sole writer (the L12 contract from the service-pattern reshape).
 
 ```csharp
-public interface IStateService
+public sealed class StateStore
 {
-    GameState Current { get; }
-    void Push(GameState next);   // sugar — constructs + dispatches PushStateCommand
-}
+    public GameState Current { get; private set; } = new MatchNotStartedState();
 
-public sealed class StateService : IStateService, IProjection<StatePushEvent>
-{
-    public GameState Current { get; private set; }
-
-    public void Push(GameState next) => _engine.Enqueue(new PushStateCommand(next));
-
-    public void Apply  (StatePushEvent ev) => Current = _registry.Resolve(ev.NewKind);
-    public void Unapply(StatePushEvent ev) => Current = _registry.Resolve(ev.PrevKind);
+    internal void Set(GameState state) => Current = state;
 }
 ```
 
-`Apply`/`Unapply` are the only path that mutates `Current` (per framework-arch F4). Same code runs on the server (via the handler's `stream.Append` dispatch) and on the client (via wire arrival).
+### `StateService` — the Push surface **[5b]**
 
-### `IStateRegistry` — byte ↔ Type
+Server-only, mirrors `RequestService`. `Push` doesn't write `Current` — it **peeks** the store for the previous kind and emits the wire event; the handler does the write (same on both sides).
+
+```csharp
+public sealed class StateService
+{
+    readonly StateStore     _store;
+    readonly IStateRegistry _registry;
+    readonly IEventEmitter  _events;
+
+    public StateService(StateStore store, IStateRegistry registry, IEventEmitter events)
+    { _store = store; _registry = registry; _events = events; }
+
+    public void Push(GameState next) => _events.Emit(new StatePushEvent
+    {
+        NewKind  = _registry.KindOf(next),
+        PrevKind = _registry.KindOf(_store.Current),
+    });
+}
+```
+
+### `StatePushHandler` — sole writer **[5b]**
+
+One handler, framework-shipped (unlike Requests, where games author per-type handlers — there's exactly one `StatePushEvent`). Registered on both sides via `StateLayer`. Same `Apply` runs server-side (after `Push` emits) and client-side (after wire delivery).
+
+```csharp
+public sealed class StatePushHandler : WireEventHandler<StatePushEvent>
+{
+    readonly StateStore     _store;
+    readonly IStateRegistry _registry;
+
+    public StatePushHandler(StateStore store, IStateRegistry registry)
+    { _store = store; _registry = registry; }
+
+    public override void Apply(StatePushEvent ev) => _store.Set(_registry.Resolve(ev.NewKind));
+    // Unapply (rollback via PrevKind) lights up with scrubbing tooling — same posture as the Wire base.
+}
+```
+
+### `IStateRegistry` — byte ↔ Type **[5b]**
 
 ```csharp
 public interface IStateRegistry
@@ -87,7 +163,7 @@ public interface IStateRegistry
 
 Manual byte assignment for replay stability across versions. Framework reserves kinds **0–9**; game-authored kinds start at **10**. A `[StateKind(N)]` attribute or source-gen approach is a later ergonomics improvement.
 
-### `IStateFlow` — successor map
+### `IStateFlow` — successor map **[5c]**
 
 ```csharp
 public interface IStateFlow
@@ -96,9 +172,9 @@ public interface IStateFlow
 }
 ```
 
-Game-defined. Replaces ADR-0009's `ITurnFlow`. Returns `null` for terminal states.
+Game-defined. Replaces ADR-0009's `ITurnFlow`. Returns `null` for terminal states. Deferred to 5c — zero-dependency to define, but its only consumer is the `Evaluate` hook, so it ships with that hook.
 
-### `IStateScope` — narrow read view for virtual methods
+### `IStateScope` — narrow read view for virtual methods **[5c]**
 
 ```csharp
 public interface IStateScope
@@ -111,7 +187,9 @@ public interface IStateScope
 
 Predicates (`IsCompleted`) and generators (`OnEnter`/`OnExit`) don't mutate state directly — they return commands, which the handler enqueues. The scope is read-only by design.
 
-### `PushStateCommand` + `PushStateHandler`
+### `PushStateCommand` + `PushStateHandler` **[5c]**
+
+> Deferred to 5c. In 5b, `StateService.Push` emits `StatePushEvent` directly (mirrors `RequestService.Open` emitting the Request — no command pipeline). The command-routed form below replaces that direct emit once the dispatch path and `OnEnter`/`OnExit` generators exist.
 
 ```csharp
 public sealed record PushStateCommand(GameState NewState) : GameAction;
@@ -144,19 +222,19 @@ public sealed class PushStateHandler : ICommandHandler<PushStateCommand, PushSta
 
 The handler never writes `_state.Current` directly. It computes the event, hands it to the stream, and lets the projection mutate. This is the F4 contract from framework-arch.
 
-### `StatePushEvent` — 2-byte wire payload
+### `StatePushEvent` — 2-byte wire payload **[5b]**
 
 ```csharp
-public sealed class StatePushEvent : WireEvent
+public partial class StatePushEvent : WireEvent
 {
-    public byte NewKind  { get; }
-    public byte PrevKind { get; }
+    [Packed] public byte NewKind;
+    [Packed] public byte PrevKind;
 }
 ```
 
-Self-mirror per the event design rule. `Apply` uses `NewKind`; `Unapply` uses `PrevKind`. No polymorphism on the wire because the record itself carries zero data.
+`[Packed]` requires fields (not properties); `partial` lets AutoPacker emit the nested `Packed` struct + typed `IPackable<StatePushEvent.Packed>` / `IUnpackable<…>` on the leaf. Inherits `WireEvent` directly (post-flatten convention — no `WireEvent<TPacked>` intermediate). `Network.Register<StatePushEvent, StatePushEvent.Packed>()` on both sides. `Apply` uses `NewKind`; rollback (when it lands) uses `PrevKind`. No polymorphism on the wire because the record carries zero data.
 
-### Engine's `Evaluate` hook
+### Engine's `Evaluate` hook **[5c]**
 
 After every command resolves, the engine asks the current state whether to advance:
 
@@ -175,7 +253,9 @@ private void Evaluate(GameAction action, CommandResult result)
 
 ---
 
-## Push lifecycle
+## Push lifecycle **[5c]**
+
+> The OnExit → Append → OnEnter generator lifecycle below is the 5c shape. In 5b the lifecycle is just: `StateService.Push` → emit `StatePushEvent` → `StatePushHandler.Apply` sets `StateStore.Current`. No generators.
 
 ```
    handler receives PushStateCommand
@@ -351,12 +431,12 @@ Every wire event is a known small concrete class. State pushes are 2 bytes each.
 
 ## Open items (state-specific only)
 
-- **Zero-input deadlock.** A pure-resolution state (no `Actions`, OnEnter generates no commands when the world is empty) can deadlock — `IsCompleted` only fires after a command, but no command arrives. Pinned in `StatelessStateProofTests.CombatDamage_WithZeroAttackers_AutoCompletes`. Three viable fixes:
+- **Zero-input deadlock. [pick deferred to 5c]** A pure-resolution state (no `Actions`, OnEnter generates no commands when the world is empty) can deadlock — `IsCompleted` only fires after a command, but no command arrives. Pinned in `StatelessStateProofTests.CombatDamage_WithZeroAttackers_AutoCompletes`. Three viable fixes:
   - Re-evaluate after the push lands (vacuous completion advances flow).
   - Contract: pure-resolution states must emit ≥1 command in OnEnter.
   - Auto-emit a `NoOpCommand` when OnEnter returns empty.
 
-  Settle before graduating to feature.
+  **The deadlock can't occur until the `Evaluate` auto-advance loop exists (5c)** — there's nothing to stall in the 5b cursor skeleton. The pick gets made in 5c with the real `IStateScope`/`GameAction`/`Evaluate` types in hand, rather than guessed now.
 
 - **Match-end condition path.** `IStateFlow.NextAfter(MatchEndedState)` returns null; no game-over check sits in the flow itself. The framework needs an auto-emit pattern for game-over detection — likely a `MatchService` observer or an `EndMatchCommand` triggered when `Outcome != Undecided`. Out of scope for `IStateService`.
 
