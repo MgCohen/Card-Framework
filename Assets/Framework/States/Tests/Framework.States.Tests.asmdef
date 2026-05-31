@@ -1,0 +1,25 @@
+{
+    "name": "Framework.States.Tests",
+    "rootNamespace": "Framework.States.Tests",
+    "references": [
+        "Framework.States",
+        "Framework.Wire",
+        "Scaffold.Autopacker"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

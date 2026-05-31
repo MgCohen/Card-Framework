@@ -1,5 +1,6 @@
 using Framework.Entities;
 using Framework.Requests;
+using Framework.States;
 using Framework.Tags;
 using Framework.Wire;
 
@@ -20,23 +21,27 @@ namespace Framework.Engine
         public EntityStore    EntityStore  { get; }
         public TagStore       TagStore     { get; }
         public RequestStore   RequestStore { get; }
+        public StateStore     StateStore   { get; }
         public EntityService  Entities     { get; }
         public TagService     Tags         { get; }
         public RequestService Requests     { get; }
+        public StateService   States       { get; }
 
         public GameEngine(
             EventStream stream, Network network,
-            EntityStore entityStore, TagStore tagStore, RequestStore requestStore,
-            EntityService entities, TagService tags, RequestService requests)
+            EntityStore entityStore, TagStore tagStore, RequestStore requestStore, StateStore stateStore,
+            EntityService entities, TagService tags, RequestService requests, StateService states)
         {
             Stream       = stream;
             Network      = network;
             EntityStore  = entityStore;
             TagStore     = tagStore;
             RequestStore = requestStore;
+            StateStore   = stateStore;
             Entities     = entities;
             Tags         = tags;
             Requests     = requests;
+            States       = states;
         }
     }
 }

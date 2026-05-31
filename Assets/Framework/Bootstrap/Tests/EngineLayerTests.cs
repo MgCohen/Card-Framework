@@ -1,6 +1,7 @@
 using Framework.Engine;
 using Framework.Entities;
 using Framework.Requests;
+using Framework.States;
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
@@ -26,6 +27,7 @@ namespace Framework.Bootstrap.Tests
                 new TagLayer(isServer).Install(builder);
                 new EntityLayer(isServer).Install(builder);
                 new RequestLayer(isServer).Install(builder);
+                new StateLayer(isServer).Install(builder);
             }, name);
             if (scope.Container == null) scope.Build();
             return scope;
@@ -56,9 +58,11 @@ namespace Framework.Bootstrap.Tests
             Assert.IsNotNull(engine.EntityStore);
             Assert.IsNotNull(engine.TagStore);
             Assert.IsNotNull(engine.RequestStore);
+            Assert.IsNotNull(engine.StateStore);
             Assert.IsNotNull(engine.Entities);
             Assert.IsNotNull(engine.Tags);
             Assert.IsNotNull(engine.Requests);
+            Assert.IsNotNull(engine.States);
         }
 
         [Test]
@@ -71,11 +75,13 @@ namespace Framework.Bootstrap.Tests
             var entities = _scope.Container.Resolve<EntityService>();
             var tags     = _scope.Container.Resolve<TagService>();
             var requests = _scope.Container.Resolve<RequestService>();
+            var states   = _scope.Container.Resolve<StateService>();
 
             Assert.AreSame(stream,   engine.Stream);
             Assert.AreSame(entities, engine.Entities);
             Assert.AreSame(tags,     engine.Tags);
             Assert.AreSame(requests, engine.Requests);
+            Assert.AreSame(states,   engine.States);
         }
 
         [Test]
@@ -86,6 +92,7 @@ namespace Framework.Bootstrap.Tests
             Assert.AreSame(_scope.Container.Resolve<EntityStore>(),  _scope.Container.Resolve<EntityStore>());
             Assert.AreSame(_scope.Container.Resolve<TagStore>(),     _scope.Container.Resolve<TagStore>());
             Assert.AreSame(_scope.Container.Resolve<RequestStore>(), _scope.Container.Resolve<RequestStore>());
+            Assert.AreSame(_scope.Container.Resolve<StateStore>(),   _scope.Container.Resolve<StateStore>());
         }
 
         // --- Client scope -----------------------------------------------------
@@ -101,6 +108,7 @@ namespace Framework.Bootstrap.Tests
             Assert.IsNotNull(_scope.Container.Resolve<EntityStore>());
             Assert.IsNotNull(_scope.Container.Resolve<TagStore>());
             Assert.IsNotNull(_scope.Container.Resolve<RequestStore>());
+            Assert.IsNotNull(_scope.Container.Resolve<StateStore>());
         }
 
         [Test]
@@ -111,6 +119,7 @@ namespace Framework.Bootstrap.Tests
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<EntityService>());
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<TagService>());
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<RequestService>());
+            Assert.Throws<VContainerException>(() => _scope.Container.Resolve<StateService>());
         }
 
         [Test]
