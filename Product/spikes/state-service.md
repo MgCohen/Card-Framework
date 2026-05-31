@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-design
+status: active
 supersedes: Product/spikes/match-state-redesign.md
 references:
   - Product/spikes/framework-architecture.md
@@ -12,13 +12,13 @@ tags: [#spike, #state, #fsm, #state-service, #service-first]
 
 # State Service — game-state FSM on a service-first substrate
 
-> **Status: in-design (step 5b — being tightened to the post-step-4 wire substrate before build; flips to `active` when the build lands).** Defines the state-specific shape of the framework's FSM layer, sitting on top of the substrate locked in [`framework-architecture.md`](framework-architecture.md). Supersedes [`match-state-redesign.md`](match-state-redesign.md), which walked the six-sketch design evolution (v1 polymorphic slice → v6 stateless records) and surfaced the framework-foundational questions that are now answered separately. This doc is short on purpose — the substrate questions live in framework-arch; what remains here is just the state pieces.
+> **Status: active (step 5b cursor skeleton shipped 2026-05-31, commit `92bee77`).** Defines the state-specific shape of the framework's FSM layer, sitting on top of the substrate locked in [`framework-architecture.md`](framework-architecture.md). The 5b build (`Framework.States`) ships the Store + Service + per-type apply handler cursor; the FSM behavior surface defers to 5c (see § Step 5b build scope and § Landed). Supersedes [`match-state-redesign.md`](match-state-redesign.md), which walked the six-sketch design evolution (v1 polymorphic slice → v6 stateless records) and surfaced the framework-foundational questions that are now answered separately. This doc is short on purpose — the substrate questions live in framework-arch; what remains here is just the state pieces.
 >
 > **Structural twin of [`request-service.md`](request-service.md).** State is the sister service to Requests (step 5a): same Store + Service + per-type apply handler pattern on the same wire substrate. Read that doc's "Locked decisions" (L1–L6) for the substrate conventions this one inherits; this doc only states the state-specific deltas.
 
 ## TL;DR
 
-**State is a typed identity, not a data container.** Each FSM state is a zero-data record subclass of `GameState`. The current cursor lives on `StateStore` (both sides, reconstructable purely from the wire); the server-only `StateService.Push(next)` emits a single 2-byte `StatePushEvent`; the framework's `StatePushHandler` is the sole writer of `Current` on both sides. Transitions are wire events, not a parallel path. All data that would have lived on a state lives on entities (per-card tags) or `MatchService` (turn, active player, outcome).
+**State is a typed identity, not a data container.** Each FSM state is a zero-data record subclass of `GameState`. The current cursor lives on `StateStore` (both sides, reconstructable purely from the wire); the server-only `StateService.Push<TState>()` emits a generic `StatePushEvent<TState>` whose **type parameter is the payload** (one network channel per state, mirroring `TagSetEvent<T>` — no byte/registry encoding); the framework's `StatePushHandler<TState>` is the sole writer of `Current` on both sides. Transitions are wire events, not a parallel path. All data that would have lived on a state lives on entities (per-card tags) or `MatchService` (turn, active player, outcome).
 
 The behavior surface that makes states *do* things — `Actions`, `OnEnter`, `OnExit`, `IsCompleted`, the engine `Evaluate` hook, `IStateFlow`, `PushStateCommand` — lands in **step 5c** alongside the command/effect pipeline those pieces depend on. Step 5b ships the cursor skeleton (see below).
 
@@ -31,13 +31,13 @@ Step 5b mirrors exactly what step 5a (Requests) shipped: **wire event + store + 
 | Piece | Shape |
 |---|---|
 | `GameState` | abstract record, **zero members** — identity is the type |
-| baseline states | `MatchNotStartedState` (kind 0), `PlayingState` (1), `MatchEndedState` (2) |
-| `StatePushEvent : WireEvent` | `[Packed] byte NewKind, byte PrevKind` (post-flatten — inherits `WireEvent` directly) |
-| `IStateRegistry` / `StateRegistry` | byte ↔ Type map; framework reserves kinds 0–9, games start at 10 |
+| baseline states | `MatchNotStartedState`, `PlayingState`, `MatchEndedState` |
+| `StatePushEvent<TState>` | generic wire event, **zero `[Packed]` fields** — the type param is the payload (mirrors `TagSetEvent<T>`); each closed `StatePushEvent<PlayingState>` is its own channel. Inherits `WireEvent` directly |
 | `StateStore` | holds `Current` (both sides); initialized to `MatchNotStartedState` |
-| `StateService` | **server-only**; `Push(GameState)` peeks `Current` for prevKind, emits `StatePushEvent` |
-| `StatePushHandler` | framework-shipped sole writer; `Apply` sets `Current = registry.Resolve(NewKind)`; registered both sides |
-| `StateLayer` | role-gated registration; baseline kinds + handler registered both sides, service server-only |
+| `StateService` | **server-only**; `Push<TState>()` emits `new StatePushEvent<TState>()` |
+| `StatePushHandler<TState>` | framework-shipped sole writer; `Apply` sets `Current = new TState()`; registered both sides per state |
+| `RegisterStateType<TState>()` | DI sugar (sibling to `RegisterTagValueType<T>`) — wires the per-state handler |
+| `StateLayer` | role-gated; store + per-state handlers both sides, service server-only |
 | `GameEngine.States` / `GameEngine.StateStore` | server-only discoverable handles |
 
 **Defers to 5c (needs the command/effect pipeline):**
@@ -50,6 +50,8 @@ Step 5b mirrors exactly what step 5a (Requests) shipped: **wire event + store + 
 - **Zero-input deadlock** (Open items) — can't occur until there's an auto-advance loop to deadlock; the three-option pick gets made in 5c with the real scope types in hand.
 
 The locked fork picks for 5b: **(1)** skeleton-only scope; **(2)** zero-member `GameState`; **(3)** defer `IStateFlow`; **(4)** initial `Current = MatchNotStartedState`.
+
+**Wire encoding — typed channels, not a byte registry.** An earlier draft of this doc carried a single `StatePushEvent` with a `[Packed] byte NewKind/PrevKind` plus an `IStateRegistry` (byte ↔ Type, `Func<T>` factories). That's the pre-typed-wire shape. The framework already discriminates wire events by *type* via per-closed-generic network channels (`TagSetEvent<int>` vs `<bool>`), so state uses the same mechanism: `StatePushEvent<TState>` per state, the closed type *is* the discriminator. No bytes, no registry, no manual kind assignment. This depends on AutoPacker emitting a valid empty `Packed` for a concrete zero-`[Packed]`-field leaf (shipped in `com.scaffold.autopacker` `15f5e5d`, retiring the `byte Reserved` workaround).
 
 ## Why this exists
 
@@ -110,58 +112,48 @@ public sealed class StateStore
 }
 ```
 
+### `StatePushEvent<TState>` — typed transition channel **[5b]**
+
+Generic wire event, **zero `[Packed]` fields** — the type parameter is the payload. One network channel per closed state type (mirrors `TagSetEvent<T>`); `Send`/dispatch discriminate by `GetType()`. Inherits `WireEvent` directly (post-flatten); `partial` so AutoPacker emits the (empty) nested `Packed` + typed interfaces on each closed leaf.
+
+```csharp
+public partial class StatePushEvent<TState> : WireEvent where TState : GameState, new() { }
+```
+
+Register one channel per state, both sides: `Network.Register<StatePushEvent<PlayingState>, StatePushEvent<PlayingState>.Packed>()`.
+
 ### `StateService` — the Push surface **[5b]**
 
-Server-only, mirrors `RequestService`. `Push` doesn't write `Current` — it **peeks** the store for the previous kind and emits the wire event; the handler does the write (same on both sides).
+Server-only, mirrors `RequestService`. `Push` doesn't write `Current` and needs no registry/store — state is zero-data, so the type *is* the value. It just emits the typed event; the handler does the write (same on both sides).
 
 ```csharp
 public sealed class StateService
 {
-    readonly StateStore     _store;
-    readonly IStateRegistry _registry;
-    readonly IEventEmitter  _events;
+    readonly IEventEmitter _events;
 
-    public StateService(StateStore store, IStateRegistry registry, IEventEmitter events)
-    { _store = store; _registry = registry; _events = events; }
+    public StateService(IEventEmitter events) { _events = events; }
 
-    public void Push(GameState next) => _events.Emit(new StatePushEvent
-    {
-        NewKind  = _registry.KindOf(next),
-        PrevKind = _registry.KindOf(_store.Current),
-    });
+    public void Push<TState>() where TState : GameState, new()
+        => _events.Emit(new StatePushEvent<TState>());
 }
 ```
 
-### `StatePushHandler` — sole writer **[5b]**
+### `StatePushHandler<TState>` — sole writer **[5b]**
 
-One handler, framework-shipped (unlike Requests, where games author per-type handlers — there's exactly one `StatePushEvent`). Registered on both sides via `StateLayer`. Same `Apply` runs server-side (after `Push` emits) and client-side (after wire delivery).
+One handler per state type, framework-shipped and registered both sides via `StateLayer.RegisterStateType<TState>()` (sibling to `RegisterTagValueType<T>`). Same `Apply` runs server-side (after `Push` emits) and client-side (after wire delivery). State is zero-data, so `Apply` reconstructs the cursor as `new TState()`.
 
 ```csharp
-public sealed class StatePushHandler : WireEventHandler<StatePushEvent>
+internal sealed class StatePushHandler<TState> : WireEventHandler<StatePushEvent<TState>>
+    where TState : GameState, new()
 {
-    readonly StateStore     _store;
-    readonly IStateRegistry _registry;
-
-    public StatePushHandler(StateStore store, IStateRegistry registry)
-    { _store = store; _registry = registry; }
-
-    public override void Apply(StatePushEvent ev) => _store.Set(_registry.Resolve(ev.NewKind));
-    // Unapply (rollback via PrevKind) lights up with scrubbing tooling — same posture as the Wire base.
+    readonly StateStore _store;
+    public StatePushHandler(StateStore store) { _store = store; }
+    public override void Apply(StatePushEvent<TState> ev) => _store.Set(new TState());
+    // Unapply (rollback) lights up with scrubbing tooling — same posture as the Wire base.
 }
 ```
 
-### `IStateRegistry` — byte ↔ Type **[5b]**
-
-```csharp
-public interface IStateRegistry
-{
-    void      Register<T>(byte kind, Func<T> factory) where T : GameState;
-    GameState Resolve(byte kind);
-    byte      KindOf(GameState state);
-}
-```
-
-Manual byte assignment for replay stability across versions. Framework reserves kinds **0–9**; game-authored kinds start at **10**. A `[StateKind(N)]` attribute or source-gen approach is a later ergonomics improvement.
+No `IStateRegistry`. Discrimination is by closed type via the network channel, not a byte map — see the wire-encoding note under § Step 5b build scope. A `[StateKind]`/source-gen ergonomic for batch-registering a game's states is a later improvement; today each state is one `RegisterStateType<TState>()` call.
 
 ### `IStateFlow` — successor map **[5c]**
 
@@ -220,19 +212,7 @@ public sealed class PushStateHandler : ICommandHandler<PushStateCommand, PushSta
 }
 ```
 
-The handler never writes `_state.Current` directly. It computes the event, hands it to the stream, and lets the projection mutate. This is the F4 contract from framework-arch.
-
-### `StatePushEvent` — 2-byte wire payload **[5b]**
-
-```csharp
-public partial class StatePushEvent : WireEvent
-{
-    [Packed] public byte NewKind;
-    [Packed] public byte PrevKind;
-}
-```
-
-`[Packed]` requires fields (not properties); `partial` lets AutoPacker emit the nested `Packed` struct + typed `IPackable<StatePushEvent.Packed>` / `IUnpackable<…>` on the leaf. Inherits `WireEvent` directly (post-flatten convention — no `WireEvent<TPacked>` intermediate). `Network.Register<StatePushEvent, StatePushEvent.Packed>()` on both sides. `Apply` uses `NewKind`; rollback (when it lands) uses `PrevKind`. No polymorphism on the wire because the record carries zero data.
+The handler never writes `_state.Current` directly. It computes the event, hands it to the stream, and lets the apply handler mutate. This is the F4 contract from framework-arch — and in 5c the transition still rides `StatePushEvent<TState>` (the wire form locked in § The shape), just emitted from inside `PushStateHandler` instead of `StateService.Push`.
 
 ### Engine's `Evaluate` hook **[5c]**
 
@@ -262,9 +242,9 @@ private void Evaluate(GameAction action, CommandResult result)
         │
         ├─► prev.OnExit(scope)           → enqueue generated commands
         │
-        ├─► stream.Append(StatePushEvent)
-        │      └─ dispatches projection.Apply
-        │           └─ state.Current = registry.Resolve(NewKind)
+        ├─► emit StatePushEvent<TNext>
+        │      └─ dispatches StatePushHandler<TNext>.Apply
+        │           └─ store.Current = new TNext()
         │
         ├─► next.OnEnter(scope)          → enqueue generated commands
         │
@@ -282,13 +262,13 @@ public sealed record MatchNotStartedState : GameState;
 public sealed record PlayingState         : GameState;
 public sealed record MatchEndedState      : GameState;
 
-// framework reserves kinds 0–9
-registry.Register<MatchNotStartedState>(0, () => new MatchNotStartedState());
-registry.Register<PlayingState>        (1, () => new PlayingState());
-registry.Register<MatchEndedState>     (2, () => new MatchEndedState());
+// StateLayer wires the framework baselines on both sides; games add their own.
+builder.RegisterStateType<MatchNotStartedState>();
+builder.RegisterStateType<PlayingState>();
+builder.RegisterStateType<MatchEndedState>();
 ```
 
-A simplest game (e.g., Pile Counter) uses these three as-is: `NotStarted → Playing → Ended`. A phase-structured game (MTG / Hearthstone flavor) authors additional states starting at kind 10.
+A simplest game (e.g., Pile Counter) uses these three as-is: `NotStarted → Playing → Ended`. A phase-structured game (MTG / Hearthstone flavor) authors additional `GameState` records and one `RegisterStateType<TState>()` call each.
 
 ---
 
@@ -448,7 +428,7 @@ Every wire event is a known small concrete class. State pushes are 2 bytes each.
 
 - **Hierarchy / pushdown / parallel regions.** Flat FSM for now. Tag-grouping handles "this state is combat-flavored" without hierarchy. Pushdown (push/pop interrupts for menus, modal decisions) deferred until a game forces it. Parallel regions stay as per-actor tag conventions (e.g., mulligan tags per Player) rather than parallel state machines.
 
-- **Kind cardinality > 256.** `byte` covers 256 state kinds; phase-flavored games cap around 15. If a real game exceeds 256, switch to `ushort`. Not a structural change.
+- **Channel cardinality.** No per-state byte kind anymore — each state is a network channel. The cap is the Wire-level channel-id space (`Network._nextId` is a `byte`), shared across *all* wire event types (tags + entities + requests + states). Phase-flavored games add ~15 states; nowhere near the shared 256 ceiling. If the total ever approaches it, widening the channel id is a Wire-layer change, not a state concern.
 
 ---
 
@@ -462,7 +442,7 @@ Lands together with framework-arch's cascade:
 4. **Refresh — `features/engine/models/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; remove slice references.
 5. **Refresh — ADR-0012 + `features/presentation/models/01-match-state-view-model.md`** — dispatch on `GameState` record type, not slice polymorphism.
 6. **Sweep — `features/state/state.md`** — heavy rewrite or absorb into new feature folder.
-7. **Glossary sweep** — retire `MatchState`, `MatchStateSlice`, `TransitionStateCommand`; add `GameState`, `IStateService`, `IStateFlow`, `IStateRegistry`, `StatePushEvent`, `PushStateCommand`.
+7. **Glossary sweep** — retire `MatchState`, `MatchStateSlice`, `TransitionStateCommand`; add `GameState`, `StateStore`, `StateService`, `StatePushEvent<TState>`, `IStateFlow` (5c), `PushStateCommand` (5c). (No `IStateRegistry` — typed channels replaced it.)
 8. **Sandbox refactor** — `MatchSingleton` on the spike's `World` becomes `MatchService` per framework-arch F1.
 
 ---
@@ -470,5 +450,23 @@ Lands together with framework-arch's cascade:
 ## Notes
 
 - The earlier six-sketch walk (v1 polymorphic slice → v6 stateless records) lives in [`match-state-redesign.md`](match-state-redesign.md), now superseded. The historical evolution is preserved there for archeology — readers who want to see *why* v1–v5 were rejected can read that doc.
-- The sandbox at `Assets/Spike/ECS/StateMachine/` is the current implementation. It still carries `MatchSingleton` on a spike-local `World` (pre-framework-arch shape) and will be refactored to `MatchService` when the patch cascade lands.
-- No code edits made by this spike. Locked decisions only.
+- The sandbox at `Assets/Spike/ECS/StateMachine/` is the original prototype. It carries `MatchSingleton` on a spike-local `World` (pre-framework-arch shape); the graduated implementation now lives in `Assets/Framework/States/` (see § Landed), and the spike sandbox is superseded.
+
+---
+
+## Landed (2026-05-31, commit `92bee77`)
+
+Step 5b cursor skeleton shipped to `Framework.States`, structurally mirroring `Framework.Requests`:
+
+1. ✅ `Framework.States` asmdef (Runtime + Tests).
+2. ✅ `GameState` zero-data abstract record + `MatchNotStartedState` / `PlayingState` / `MatchEndedState` baselines.
+3. ✅ `StatePushEvent<TState>` generic wire event (zero `[Packed]` fields — type param is the payload, one channel per closed state; mirrors `TagSetEvent<T>`). Depends on the AutoPacker empty-`Packed` codegen, landed in `com.scaffold.autopacker` `15f5e5d` (commit `0b178a0` bumps the lock).
+4. ✅ `StateStore` (`Current`, both sides, init `MatchNotStartedState`) / `StateService` (server-only `Push<TState>()`) / `StatePushHandler<TState>` (sole writer, both sides).
+5. ✅ `RegisterStateType<TState>` DI sugar + `StateLayer` role-gating (store + handlers both sides, service server-only) + `FrameworkAppFlowRoot` registration. `GameEngine` grows `States` + `StateStore` (server-only handles).
+6. ✅ Test fixture — `StateServiceTests` (5 scenarios): store starts on `MatchNotStarted`; push mirrors `Current` to both sides; sequential pushes advance both cursors; re-push stays converged; each state type is a distinct channel (also proves the empty-`Packed` codegen emitted). `EngineLayerTests` extended: server resolves `States` / `StateStore`; client has `StateStore` but `StateService` throws.
+
+**353/353 EditMode tests pass** (+5 from `StateServiceTests`; +0 net from the extended `EngineLayerTests` assertions).
+
+The build matched this spec's 5b scope without shape surprises. Everything under **[5c]** (FSM behavior surface, `IStateFlow`, `Evaluate` hook, `PushStateCommand`, zero-input-deadlock pick) remains deferred to the command/effect pipeline step. The heavier doc cascade (new ADR, `engine/07-match-state.md` rewrite, Models 01/03/08 refresh, GLOSSARY/OPEN-ITEMS sweep) is tracked in SESSION-CHECKPOINT and may land across follow-up sessions.
+
+- No further sandbox edits; the spike prototype is superseded by `Framework.States`.

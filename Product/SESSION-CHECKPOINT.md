@@ -11,6 +11,28 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
+**Step 5b State service — build landed (2026-05-31).** Branch `claude/step5b-state-service`, cut from `main` (`aef41e6`). New `Framework.States` asmdef ships the FSM **cursor skeleton** on the post-step-4 Store + Service + per-type apply handler pattern, structurally mirroring `Framework.Requests`. **353/353 EditMode green** (+5 `StateServiceTests`).
+
+**Key design correction mid-build:** dropped the spec's original byte-kind + `IStateRegistry` + `Func<T>` factory encoding in favor of **typed channels** — `StatePushEvent<TState>` generic wire event (zero `[Packed]` fields, the type param is the payload), one network channel per closed state, mirroring `TagSetEvent<T>`. No bytes, no registry, no manual kind assignment. This required AutoPacker to emit a valid empty `Packed` for concrete zero-`[Packed]`-field leaves — the user shipped the fix on Scaffold `main`; pulled in locally.
+
+**Commits (on the feature branch):**
+- `f0049af` — spec `accepted → in-design` (5b/5c split, fork picks). *(This + the next commit first landed on local `main` by mistake and were moved to the feature branch; `main` reset to `origin/main`.)*
+- `0b178a0` — bump `com.scaffold.autopacker` lock `86b336b4 → 15f5e5d` (empty-`Packed` codegen; retires the `MatchStartEvent` `byte Reserved` workaround).
+- `92bee77` — `feat(states)`: `Framework.States` (GameState + `StatePushEvent<TState>` + StateStore/StateService/`StatePushHandler<TState>` + `RegisterStateType` + StateLayer + GameEngine handles + `StateServiceTests`; `EngineLayerTests` extended).
+- `<docs>` — spec `in-design → active` + "Landed" section; this checkpoint.
+
+**Locked fork picks (5b):** skeleton-only scope; zero-member `GameState`; defer `IStateFlow`; initial `Current = MatchNotStartedState`; typed channels over byte registry.
+
+**Deferred to 5c (needs the command/effect pipeline):** `GameState` virtuals (`Actions`/`OnEnter`/`OnExit`/`IsCompleted`), `IStateScope`, `IStateFlow` + `Evaluate` hook, `PushStateCommand`, and the **zero-input-deadlock** three-option pick (can't deadlock until the auto-advance loop exists).
+
+**Doc cascade still pending** (heavier than Requests; may span follow-up sessions): new ADR-0014 locking the post-step-4 State shape; rewrite `features/engine/models/07-match-state.md`; refresh Models 01/03/08; audit ADR-0010/0011 for `MatchStateSlice` refs; GLOSSARY/OPEN-ITEMS sweep (retire `MatchState`/`MatchStateSlice`; add `GameState`, `StateStore`, `StateService`, `StatePushEvent<TState>`). `IStateRegistry` is **not** a term to add — typed channels replaced it.
+
+**Open follow-ups:**
+- **PR/merge for `claude/step5b-state-service`** — awaiting merge-approach confirmation (FF-merge vs PR).
+- Step 5c — command/effect pipeline, which lights up the deferred FSM surface above.
+
+---
+
 **Step 5a request service — spec + build + tests landed (2026-05-30).** Branch `claude/step5a-request-service`, 5 commits, FF-merged to `main`. `Framework.Requests` asmdef ships with typed async player decisions: `RequestService.Open<TResponse>(Request<TResponse>) → Task<TResponse>` on the server emits a Request wire event, parks a TCS, resolves when the matching Response wire event arrives. Stores on both sides; service server-only; `GameEngine.Requests` is the discoverable composition handle. Spec [`request-service.md`](spikes/request-service.md) is `status: active`.
 
 **Commits (now on `main`):**
