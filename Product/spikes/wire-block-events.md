@@ -13,11 +13,16 @@ tags: [#spike, #wire, #blocks, #events, #causality, #presentation]
 
 # Wire Block Events — spike
 
-> **Status: active.** Design walk from 2026-05-20; envelope shape landed
-> 2026-05-30 as a pre-step-5 cut. Block + Request event families now
-> ship in `Framework.Wire` with the L1–L7 shape; round-trip tests cover
-> all six event types. Service emission (who-emits) remains deferred to
-> step 5 — services will adopt these events when they port.
+> **Status: active (partial).** Block event family ships as designed. The
+> Request bracket family (L2 + the thin `RequestOpenedEvent` /
+> `RequestClosedEvent` / `ResponseEvent` envelope) was **subsequently
+> superseded** by the step 5a request-service design (2026-05-30): typed
+> Request and Response events on the wire, no envelope, no separate
+> close event. See [`request-service.md`](request-service.md) L2 for the
+> retracted-L2 rationale. The three thin events were removed from
+> `Framework.Wire` and replaced with per-game typed Request/Response
+> wire events. **Read L1–L7 below knowing L2/L6/L7 apply to Block only;
+> the Request half is historical.**
 
 ## Where this slots
 
@@ -93,6 +98,13 @@ subclasses. Presentation derives "what's about to happen" from
 
 ### L2 — Block and Request are parallel bracket families
 
+> **Superseded 2026-05-30 by [request-service.md](request-service.md) L2.**
+> Typed wire (Request and Response ARE wire events per request kind)
+> makes the request-side bracket pattern redundant — the typed Request
+> IS the open, the typed Response IS the close-and-answer combined.
+> Block bracket family stays as designed (Command/Effect/Trigger
+> envelopes around mutation leaves).
+
 Two separate event families on the wire alphabet, each with their own
 opener/closer pair. Forcing them into one envelope means
 `BlockStartEvent` accumulates per-Kind optional fields (`ResponderId`
@@ -157,7 +169,18 @@ declaration. The actual outcome of a request arrives in the separate
 `ResponseEvent` (and a player cancellation is encoded as picking the
 `CancelOption` leaf, not as a close-outcome).
 
+> **`RequestClosed` half superseded 2026-05-30:** Under typed request-wire,
+> there's no separate RequestClosed event — the typed Response event
+> implicitly closes the request (the store removes the entry by
+> `RequestId` correlation). `BlockEnd.Outcome` stays as specified.
+
 ### L7 — Mutation leaves shared; option leaves Request-only
+
+> **Option-leaf half superseded 2026-05-30:** Typed Request events
+> carry their option data directly via `[Packed]` fields (e.g.,
+> `PickCardsRequest { int[] CardIds; int PickCount }`). No separate
+> option-leaf events. The "Mutation leaves shared across Block kinds"
+> half stays as specified.
 
 Mutation leaves (`EntityCreatedEvent`, `EntityDestroyedEvent`,
 `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`) can appear
@@ -329,20 +352,29 @@ Defer to step 5+ when Request ships.
 
 ## Landed (2026-05-30)
 
-The wire-shape graduation criteria are met:
+Block side of the wire-shape graduation criteria — fully landed and active:
 
 1. ✅ `BlockStartEvent` reshaped — `Id / ParentId / Kind / SourceId` (L5).
 2. ✅ `BlockEndEvent` reshaped — `Id / Outcome` (L6).
 3. ✅ `BlockKind` enum (`None / Command / Effect / Trigger`) and
    `BlockOutcome` enum (`None / Completed / Errored / Cancelled`) added
    under `Assets/Framework/Wire/Runtime/Events/`.
-4. ✅ `RequestOpenedEvent`, `RequestClosedEvent`, `ResponseEvent` added.
-5. ✅ Round-trip tests in `Framework.Wire.Tests/RoundTripTests.cs` cover
-   all six event types under AutoPacker (block brackets, nested ParentId,
-   all three Outcomes, full Request open/close/response, non-cancellable
-   Request).
 
-**Still deferred** (lights up with step 5 services): who-emits
-(service-direct vs Emit handler — see Q5), option-leaf shapes
-(`PickOptionEvent` / `CancelOptionEvent` nullability under AutoPacker),
-match-end-with-open-Request encoding.
+Round-trip tests in `Framework.Wire.Tests/RoundTripTests.cs` cover
+block brackets, nested `ParentId`, all three Outcomes, and mixed-alphabet
+streams.
+
+### Request side — subsequently retracted
+
+4. ⚠️ `RequestOpenedEvent`, `RequestClosedEvent`, `ResponseEvent` landed
+   2026-05-30 and were **removed the same day** as part of the step 5a
+   request-service design walk. The thin-envelope pattern doesn't scale
+   to typed requests (Pick 2 of 3, Pick number 0–10, Yes/No, free-form
+   input). Replaced by per-game typed Request / Response wire events
+   inheriting `Framework.Requests.Request<TResponse>` / `Response`. See
+   [`request-service.md`](request-service.md).
+
+**Still deferred** (lights up later): who-emits Block events
+(service-direct vs Emit handler — see Q5 — applies to Block dispatch
+sites: CommandService / EffectService / TriggerService when they port),
+animation pre-roll model.

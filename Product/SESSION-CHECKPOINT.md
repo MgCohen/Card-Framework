@@ -11,7 +11,46 @@ tags: [#checkpoint]
 
 ## Where we stopped
 
-**Step 4 service-pattern — 4e reshape landed + docs updated (2026-05-30).** Branch `claude/step4-service-pattern-docs`, 4 commits pushed to origin. Closes the May 22 "service double-write" deferral: services are now **emit-only writers**, the per-type handler is the **sole writer on both sides**. `TagService` / `EntityService` / `GameEngine` register **server-only** — client cannot author state at the type level. Doc cascade ([definition-service-pattern.md](spikes/definition-service-pattern.md) + [step4-service-phases.md](spikes/step4-service-phases.md)) flipped to `status: active` and matches shipped reality.
+**Step 5a request service — spec + build + tests landed (2026-05-30).** Branch `claude/step5a-request-service`, 5 commits, FF-merged to `main`. `Framework.Requests` asmdef ships with typed async player decisions: `RequestService.Open<TResponse>(Request<TResponse>) → Task<TResponse>` on the server emits a Request wire event, parks a TCS, resolves when the matching Response wire event arrives. Stores on both sides; service server-only; `GameEngine.Requests` is the discoverable composition handle. Spec [`request-service.md`](spikes/request-service.md) is `status: active`.
+
+**Commits (now on `main`):**
+- `e7d9f2f` — initial step 5a spec capturing the fork-by-fork design walk (L1–L6).
+- `19c76c3` — WireEvent flatten + three-layer NetworkChannel refactor (user-pushed). Drops `WireEvent<TPacked>` intermediate; AutoPacker emits typed interfaces on each leaf; TPacked surfaces only at `Network.Register<T, TPacked>()`. Substrate simplification — 336/336 tests pass post-flatten.
+- `4cf1b07` — spec update to absorb the flatten (drop IRequest/IResponse interfaces; non-generic Request/Response bases hold shared `[Packed]` fields; `Open<TResponse>(Request<TResponse>)` simplifies the call site).
+- `8e03405` — build: Framework.Requests asmdef (Runtime + Tests), Request/Response base classes, RequestStore/RequestService/PendingRequest, RequestLayer (role-gated), `GameEngine.Requests` + `GameEngine.RequestStore` properties, test fixture (TestPickRequest/TestPickResponse + handlers), 6-scenario mirror round-trip test.
+- `f5ed251` — spike status flip `in-design → active`; "When this lands" → "Landed" with the commit hash.
+
+**Locks added (referenced from [request-service.md](spikes/request-service.md)):**
+- **L1** Resolution is async/typed: `Task<TResponse>` via TCS.
+- **L2** Request and Response ARE wire events (single-class shape; no separate data class + wire event split). Supersedes the wire-block-events thin `RequestOpenedEvent`/`RequestClosedEvent`/`ResponseEvent` (which were also removed in 8e03405).
+- **L3** Base classes carry shared `[Packed]` fields via AutoPacker inheritance. Non-generic `Request` for fields + store keying; generic `Request<TResponse>` for typed inference.
+- **L4** Thin `RequestStore` (`Dictionary<int, Request>`) on both sides; server-only `Dictionary<int, IPendingRequest>` for TCS state.
+- **L5** No AnswersStore — wire IS the audit trail.
+- **L6** Role-gated registration (server registers `RequestService`, both sides register `RequestStore`); `GameEngine.Requests` is the server-only composition handle.
+
+**Substrate change (cross-cutting):** WireEvent flatten in `19c76c3` removes the `WireEvent<TPacked>` typed intermediate from `Framework.Wire`. Every existing wire event (Tags, Entities, Block, Multiplayer) was updated to inherit `WireEvent` directly; AutoPacker emits typed `IPackable<T.Packed>` / `IUnpackable<T.Packed>` on each `[AutoPack]` leaf. NetworkChannel split into three layers: non-generic base (registry/dispatcher), single-generic `NetworkChannel<T>` (user-facing subscribe/send), two-generic `NetworkChannel<T, TPacked>` (typed memcpy body, only named at `Register<T, TPacked>()`).
+
+**Verification:** 342/342 EditMode tests green (+6 from new `RequestServiceTests`). Mirror round-trip covers: open inserts both sides, response drops both + resolves typed task, monotonic id allocation with out-of-order resolution, TResponse typing at the awaiter, `CancelAllPending` cancels parked TCSs, unmatched response is a no-op. `EngineLayerTests` updated to assert `Requests`/`RequestStore` on the server and `RequestService` throws on the client (structural "client cannot author requests").
+
+**Doc cascade (partial — deferred items folded into step 5b's larger cascade):**
+- ✅ [`spikes/request-service.md`](spikes/request-service.md) — written + flipped to `active`.
+- ✅ [`spikes/wire-block-events.md`](spikes/wire-block-events.md) — partial-supersession notes added on L2/L6/L7 + retracted-Request bullet in "Landed".
+- ✅ [`ledgers/GLOSSARY.md`](ledgers/GLOSSARY.md) — `Request` / `Request<TResponse>` / `Response` / `RequestId` / `RequestStore` / `RequestService` entries rewritten against ship reality; `RequestsSlice` retired to `RequestStore`; `AnswersSlice` entry retired (Fork D skip).
+- ⏸ Deferred to step 5b's cascade: [`ledgers/FEATURE-MAP.md`](ledgers/FEATURE-MAP.md) (add Framework.Requests row, sweep `effects` row), [`ledgers/OPEN-ITEMS.md`](ledgers/OPEN-ITEMS.md) (`oq-drain-policy-composition` + `oq-request-timeout-primitive` vocabulary refresh), [`spikes/wire-refoundation-roadmap.md`](spikes/wire-refoundation-roadmap.md) (step 5 framing fix), [`spikes/definition-service-pattern.md`](spikes/definition-service-pattern.md) (handler-name table row), [`decisions/0011-effect-orchestration-dispatch-requests.md`](decisions/0011-effect-orchestration-dispatch-requests.md) (divergence note at top).
+
+**Open follow-ups (per [`request-service.md`](spikes/request-service.md) Deferred items):**
+- `int[]` / variable-length field handler — mechanism validated via `[Packed(typeof(int))]` toy resolver; production handler design deferred.
+- Generic base apply handlers (collapse per-type boilerplate when 3+ Request types ship in any game).
+- Cancellation flow — how `IsCancellable=true` translates to a Cancel command/event.
+- Match-end pending cleanup — `RequestService.CancelAllPending()` hook integration when MatchService lands.
+- Response handler `Unapply` — needs cached request to re-insert; lights up with scrub tooling.
+- Client→server response delivery in production wire — today server simulates via direct emit; production needs a symmetric wire path or separate intent submission.
+
+**Sidequest during the build:** AutoPacker fix (commit `86b336b4` in `MgCohen/Scaffold`) to support `[Packed]` field aggregation through generic-forwarding intermediates. Verified via two probes (deleted after pass). User owns the Scaffold package; the fix was a one-session detour, not blocking.
+
+---
+
+**Step 4 service-pattern — 4e reshape landed + docs updated (2026-05-30).** Branch `claude/step4-service-pattern-docs`, 4 commits, FF-merged to `main`. Closes the May 22 "service double-write" deferral: services are now **emit-only writers**, the per-type handler is the **sole writer on both sides**. `TagService` / `EntityService` / `GameEngine` register **server-only** — client cannot author state at the type level. Doc cascade ([definition-service-pattern.md](spikes/definition-service-pattern.md) + [step4-service-phases.md](spikes/step4-service-phases.md)) flipped to `status: active` and matches shipped reality.
 
 **Commits:**
 - `c94595e` (prior session) — DI-collected `HandlerRegistry` + force-resolved bridges. Fixed a silent wiring bug where `TagSetHandler<T>`'s `IAsyncInitializable.InitializeAsync` never ran (open-generic registration didn't trigger it). Exposed the latent double-write that 4e then closed.
@@ -29,9 +68,8 @@ tags: [#checkpoint]
 **Reshape sidequest:** mid-session, a `ServerEngine` / `ClientEngine` two-type split was implemented and then reverted after design pushback on pre-naming a `ClientEngine` shape with no caller. Rationale captured in [definition-service-pattern.md L11](spikes/definition-service-pattern.md). Memory note saved: re-confirm design forks before coding even when the user says "go for step N." See `feedback_confirm_before_implementing.md`.
 
 **Open follow-ups:**
-- **Step 5 — Request + State services**, from-scratch builds in `Framework/` under the new pattern (no canonical code exists today; only slice prior art). See § Active focus for the next-session plan.
+- **Step 5b — State service**, see § Active focus for the next-session plan.
 - **Animora stash@{0}** — separate concern, still pending decision.
-- **PR for `claude/step4-service-pattern-docs` → `main`** — not opened yet; user to open when ready.
 
 ---
 
@@ -258,33 +296,34 @@ Earlier in the broader project: domain modeling design pass + patch cascade **bo
 
 ## 🎯 Active focus
 
-**Step 4 service-pattern complete; step 5 is the next thread.** Branch `claude/step4-service-pattern-docs` carries the 4e reshape (services emit-only; role-gated registration; `GameEngine` server-only) + doc cascade, pushed to origin. PR to `main` not opened yet — user to open when ready.
+**Step 5a request service landed; step 5b — state service — is the next thread.** Step 5a's build matched its spec without forcing shape adjustments; the WireEvent flatten that landed mid-flow simplified the substrate for everything downstream. Step 5b is its structural twin: same Store + Service + per-type apply handler pattern, mirror round-trip verification, role-gated registration, `GameEngine.States` handle.
 
-**Next thread — step 5 from [wire-refoundation-roadmap.md](spikes/wire-refoundation-roadmap.md).** "Existing services reviewed" — but the framing is misleading: there's **zero** Request or State code in `Framework/` today (only slice prior art at `Assets/Spike/ECS/VerticalSlice/`). Step 5 is **from-scratch builds in `Framework/`**, informed by:
+**Next thread — step 5b from [`state-service.md`](spikes/state-service.md).** Spec is `status: accepted` from the 2026-05-17 design pass — pre-dates the step-4 service-pattern reshape, so a phase-2 spec update is needed to translate slice/projection vocabulary into the post-step-4 Store + Service + Handler shape that Requests just shipped.
 
-- ADR-0011 — `Request<TResponse>` / `Response` as state-linked service.
-- 2026-05-17 state-machine design pass — push-based service, immutable typed records per state-kind, three baseline states (`MatchNotStartedState` / `PlayingState` / `MatchEndedState`). Locked decisions, no code yet.
-- The new service pattern (Store + Service + per-type apply handler).
+**Step 5b session plan (State port):**
+1. **Ratify** — read [`state-service.md`](spikes/state-service.md) against the post-step-4 substrate; use [`request-service.md`](spikes/request-service.md) as the template. Confirm the Store + Service + per-type Apply Handler pattern fits.
+2. **Surface open forks** (the spec already flags these — pick before coding):
+   - **Zero-input deadlock**: pure-resolution states with no `Actions` and an empty OnEnter can stall. Three options in the spec — re-evaluate after push lands / contract requiring ≥1 OnEnter command / auto-emit NoOpCommand.
+   - **`OnEnter` / `OnExit` generators** return `IReadOnlyList<GameAction>` and take `IStateScope`. Neither `GameAction` nor `IEffectScope` exists yet (those land with Command/Effect service in step 5c+). Decide: stub the generator surface with a TODO, defer OnEnter/OnExit entirely for now, or build them against a placeholder scope.
+3. **Spec patch** — update `state-service.md` to absorb post-step-4 vocabulary (drop slice/projection terms; use Store/Service/Handler/Layer/GameEngine.States from the Requests prior art). Lock the open-fork picks.
+4. **Build** — `Framework.States` asmdef: `GameState` base record + `IStateRegistry` + `IStateFlow` + `StateStore` + `StateService` + `StatePushHandler` + `PushStateCommand` (if Command service stub needed) + `StateLayer` (role-gated) + baseline states (`MatchNotStartedState`, `PlayingState`, `MatchEndedState`) + `GameEngine.States` property + test fixture + mirror test.
+5. **Verify** — mirror round-trip: server pushes state, both sides converge on `Current`; round-trip the 2-byte `StatePushEvent`.
+6. **Close-out** — flip spike status `accepted → active`, FF-merge to `main`, update this checkpoint.
 
-**Order (lean):** Request first, then State.
+**Doc cascade for step 5b** (heavier than Requests per the locked spec):
+- new `features/states/` feature folder (or absorb `features/state/` if it exists)
+- ADR-0014 locking the post-step-4 State shape
+- rewrite `features/engine/models/07-match-state.md`
+- refresh Models 01 / 03 / 08 (engine pipeline, runtime, turn-flow)
+- audit ADR-0010 + ADR-0011 for references
+- GLOSSARY + OPEN-ITEMS sweep (retire `MatchState` / `MatchStateSlice`; add `GameState` / `IStateService` / `IStateFlow` / `IStateRegistry` / `StatePushEvent` / `PushStateCommand`)
+- Fold in the step-5a deferred cascade items: FEATURE-MAP row for `Framework.Requests`, OPEN-ITEMS vocabulary refresh, wire-refoundation-roadmap step 5 framing, definition-service-pattern handler-name table, ADR-0011 divergence note.
 
-| | Request (step 5a) | State (step 5b) |
-|---|---|---|
-| Design status | Locked (ADR-0011) | Locked (2026-05-17 design pass) |
-| Doc cascade | Light — ADR-0011 + Models already aligned | Heavy — new `features/states/` feature, ADR-0014, rewrite of `engine/07-match-state.md`, refresh of Models 01/03/08, ADR-0010/0011 audit, GLOSSARY/OPEN-ITEMS sweep |
-| Build scope | New `Framework.Requests` asmdef: Store + Service + handlers + Layer + wire events + tests + `GameEngine.Requests` | New `Framework.States` asmdef (similar shape) |
-| Estimate | 2–3 sessions | 3–4 sessions (mostly docs) |
-
-**Step 5a session plan (Request port):**
-1. **Ratify** — read ADR-0011 + slice's `RequestsService` + state-machine pass. Confirm Store+Service+Handler maps cleanly onto requests.
-2. **Spec** — short spike doc: wire events (`RequestOpenedEvent` / `RequestClosedEvent` / response seam), what `RequestStore` holds (open request rows + resolution state), what `RequestService` does.
-3. **Build** — `Framework.Requests` asmdef + RequestStore + RequestService + per-type apply handlers + RequestLayer + wire-event registration + tests + `GameEngine.Requests` property.
-4. **Verify** — at minimum a mirror test for open → respond → close round-trip across the wire.
+**Estimate:** 3–4 sessions (build is similar lift to Requests; doc cascade is the bulk).
 
 **Sidequest threads parked** (different branches, revisit when resumed):
 - **Framework.Multiplayer cascade** (`claude/basic-network-implementation-DOA3z`) — awaiting Editor verification + UGS-package decision. See prior "Where we stopped" entry.
 - **Slice main-loop reshape** (`claude/entity-based-architecture-pMNhU`) — uncommitted, awaiting in-editor test pass. See prior "Where we stopped" entry.
-- **State-machine model cascade** — design locked, doc cascade pending. Folded into step 5b above.
 - **`general/ARCHITECTURE.md` rewrite** — research-phase content; promote to "current locked architecture" anchored by ADRs 0005–0012. Real authoring lift.
 - **`support/samples/pile-counter.md` rewrite** + **PLANS/pile-counter-vertical-slice.md vocabulary refresh** — sibling tasks, post-cascade.
 - **Stale `[ADR-NNNN — *forthcoming*]` markers** — ~10 occurrences across feature/Models; mechanical sweep.
@@ -297,6 +336,7 @@ Cascade summary (for reference):
 - ✅ **ADR-0012 — Presentation per-state ViewModels** (landed 2026-05-11). D6–D9. Presentation row 1→2 (new `01-match-state-view-model` + `02-view-model-registry`; old `01-presentation-loop` archived). Actions row drops `02-intent-mapper` + `05-available-actions-snapshot` (both archived). Feature root rewritten.
 - ✅ **FSM-arch consolidation** (landed 2026-05-11). Items 1–4 of the post-cascade plan: spike archived, GLOSSARY + OPEN-ITEMS swept, FEATURE-MAP cycle observation rewritten, ADR + Model path refs repointed.
 - ✅ **Step 4 service-pattern + 4e reshape** (landed 2026-05-30, branch `claude/step4-service-pattern-docs`). See § Where we stopped for commit chain.
+- ✅ **Step 5a request service + WireEvent flatten** (landed 2026-05-30, branch `claude/step5a-request-service`). `Framework.Requests` asmdef + L1–L6 locks; WireEvent intermediate dropped; AutoPacker `[Packed]` field aggregation through generic intermediates enabled (MgCohen/Scaffold `86b336b4`). See § Where we stopped for commit chain.
 
 ---
 
