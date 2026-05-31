@@ -20,3 +20,5 @@ Modules and how they connect. Updated as features graduate.
 System-wide rules that span features. Edit with care — these are the load-bearing decisions.
 
 **Pipeline entry is `Enqueue`, not `Execute` / `Submit`.** External callers enqueue intents, actions, requests, or events into a single pipeline. The naming reflects the future shape — a multi-type pipeline routed by kind — not the current command-only state. Don't rename this even if "Execute" reads more naturally for command-only usage today.
+
+**Keyed lookups follow four named patterns.** Every registry, store, cursor, and dispatch table in `Assets/Framework/` is one of four shapes across two families — Registry and Router (frozen at composition) or Store and Cell (live, handler-written). See [lookup-patterns.md](lookup-patterns.md).
