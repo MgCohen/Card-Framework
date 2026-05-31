@@ -1,6 +1,6 @@
 ---
 type: spike
-status: in-design
+status: active
 created: 2026-05-30
 references:
   - Product/spikes/wire-refoundation-roadmap.md
@@ -14,8 +14,9 @@ tags: [#spike, #requests, #wire, #service, #async]
 
 # Request Service — typed async player decisions
 
-> **Status: in-design.** Captures the 2026-05-30 fork-by-fork design walk on
-> the Request service. Step 5a of the wire-refoundation roadmap. Builds on
+> **Status: active.** Design walk + build both landed 2026-05-30. The L1–L6
+> shape ships in `Framework.Requests` (commit `8e03405`); the mirror
+> round-trip is verified by `RequestServiceTests` (6 scenarios). Builds on
 > the step-4 service pattern (Store + Service + per-type apply handler), the
 > AutoPacker fix that enables `[Packed]` field inheritance through generic
 > intermediates, and the WireEvent flatten (commit `19c76c3`) that dropped
@@ -418,19 +419,36 @@ batch this — left as a follow-up if game-side bootstrap gets verbose.
 | Unapply for Response handlers — needs the original Request still in scope to re-insert | Replay/scrubbing tooling matures (currently neither side scrubs across a response) |
 | Client → server response delivery mechanism — the wire today is server → client one-direction (per WireForwarder/NetworkInboundBridge); responses need a symmetric path or separate intent submission | First multi-process integration test; tests today use loopback |
 
-## When this lands
+## Landed (2026-05-30, commit `8e03405`)
 
-Step 5a build (phase 3) ships:
+Step 5a build shipped exactly as scoped:
 
-1. `Framework.Requests` asmdef (Runtime + Tests).
-2. `Request` (non-generic) + `Request<TResponse>` (typed wrapper) + `Response` (non-generic) abstract base classes.
-3. `RequestStore` / `RequestService` / `PendingRequest<T>`.
-4. `RequestLayer` + `FrameworkAppFlowRoot` registration + role-gating.
-5. `GameEngine.Requests` property (server-only).
-6. Test fixture — concrete Request/Response pair + apply handlers + per-pair
-   `Network.Register<TRequest, TRequest.Packed>()` / `<TResponse, TResponse.Packed>()`
-   + mirror round-trip test.
+1. ✅ `Framework.Requests` asmdef (Runtime + Tests).
+2. ✅ `Request` (non-generic, holds shared `[Packed]` metadata) +
+   `Request<TResponse>` (typed wrapper) + `Response` (non-generic) abstract
+   base classes.
+3. ✅ `RequestStore` (`Dictionary<int, Request>`, both sides) /
+   `RequestService` (server-only Open / Complete / CancelAllPending) /
+   internal `PendingRequest<T>` + `IPendingRequest`.
+4. ✅ `RequestLayer` + `FrameworkAppFlowRoot` registration with
+   role-gating (matches `TagLayer` / `EntityLayer` shape).
+5. ✅ `GameEngine.Requests` + `GameEngine.RequestStore` properties
+   (server-only handle).
+6. ✅ Test fixture — `TestPickRequest` / `TestPickResponse` concrete pair,
+   `TestPickRequestHandler` / `TestPickResponseHandler` apply handlers,
+   `RequestServiceTests` with 6 scenarios:
+   - Open inserts request on both sides; task is pending.
+   - Response drops both stores + resolves typed task with the right payload.
+   - Monotonic id allocation; out-of-order resolution wakes the right awaiter.
+   - TResponse is typed at the call site (no cast / no dictionary).
+   - `CancelAllPending` cancels parked TCSs.
+   - Unmatched Response is a no-op.
 
-Status flips `in-design → active` when the build passes, the mirror test
-is green, and this doc tightens to "Landed" with any shape adjustments
-forced by implementation surprises.
+`EngineLayerTests` also updated: server scope resolves `Requests` /
+`RequestStore`; client scope has `RequestStore` but `RequestService`
+throws (the "client cannot author requests" structural rule).
+
+**342/342 EditMode tests pass** (+6 new from `RequestServiceTests`).
+
+Implementation matched the spec without forcing any shape adjustments —
+no shape surprises during the build.
