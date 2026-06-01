@@ -2,10 +2,16 @@ using Framework.Tags;
 
 namespace Framework.Entities.Tests
 {
+    // Sample game-side tag keys as records over Tag<T>. Exposed as static aliases so call
+    // sites read `SampleTags.Health` (the standard's "game-side static alias" ergonomic).
+    public sealed record HealthTag() : Tag<int>(1001);
+    public sealed record AttackTag() : Tag<int>(1002);
+    public sealed record IsCardTag() : Tag<bool>(1003);
+
     static class SampleTags
     {
-        public static readonly TagKey<int>  Health = new(1001);
-        public static readonly TagKey<int>  Attack = new(1002);
-        public static readonly TagKey<bool> IsCard = new(1003);
+        public static readonly Tag<int>  Health = new HealthTag();
+        public static readonly Tag<int>  Attack = new AttackTag();
+        public static readonly Tag<bool> IsCard = new IsCardTag();
     }
 }

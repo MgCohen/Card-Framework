@@ -1,27 +1,15 @@
-using System;
-using System.Collections.Generic;
+using Framework.Core;
 
 namespace Framework.Tags
 {
-    public static class TagRegistry
+    // Registry of tag keys — a scoped instance (never a static global). A thin SlotRegistry<Tag>;
+    // all behaviour is inherited (Register<T> / Register(member) / BySlot / Of<T>), including the
+    // dup-slot guard. The framework ships no baseline tag keys — games register their own here.
+    //
+    // No runtime reader yet: while the framework is being built out this is the authoring and
+    // slot-uniqueness surface. Value types T are recovered from the per-T wire channel, so the
+    // store never needs the registry to rehydrate a key.
+    public sealed class TagRegistry : SlotRegistry<Tag>
     {
-        static readonly Dictionary<int, TagKey> _bySlot = new();
-
-        public static void RegisterInstance(TagKey key)
-        {
-            if (_bySlot.TryGetValue(key.Slot, out var existing))
-            {
-                if (ReferenceEquals(existing, key)) return;
-                throw new InvalidOperationException(
-                    $"Slot {key.Slot} double-claimed (existing: {existing}, new: {key})");
-            }
-            _bySlot[key.Slot] = key;
-        }
-
-        public static TagKey BySlot(int slot) => _bySlot[slot];
-
-        public static bool TryGetBySlot(int slot, out TagKey key) => _bySlot.TryGetValue(slot, out key);
-
-        public static IReadOnlyCollection<TagKey> All => _bySlot.Values;
     }
 }
