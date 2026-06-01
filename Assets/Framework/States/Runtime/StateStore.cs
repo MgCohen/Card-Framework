@@ -4,7 +4,7 @@ namespace Framework.States
     // purely from the wire. StatePushHandler is the sole writer (server: after StateService.Push
     // emits; client: after the wire delivers) — no emit, no event awareness here. Initialized to
     // MatchNotStartedState so readers always have a cursor before the first push.
-    public sealed class StateStore
+    public sealed class StateStore : IReadOnlyStateStore
     {
         public GameState Current { get; private set; } = new MatchNotStartedState();
 

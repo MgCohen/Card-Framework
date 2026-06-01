@@ -254,6 +254,19 @@ public void Push<TState>() where TState : GameState, new()
 
 ## PR6 — Store discipline (visibility + allocation + verbs + engine surface)
 
+**Status: landed.** Scope refined during the design pass vs the original write-up below:
+- **Verb alignment collapsed to one rename** (`Catalog.GetById → ById`). The audit found the
+  inserts genuinely diverge by dup-contract (idempotent `EntityStore.Insert` / strict
+  `Catalog.Add` / overwrite `RequestStore.Insert`) and the typed `RequestStore.Get<T>` is a
+  different contract, not a misnamed read — so those names stay. `TryGetById` left as-is.
+- **No `Store<T>` base class.** Only the read pair is identical across stores; too thin to
+  justify a base over three different containers. Standardized by convention in
+  [lookup-patterns.md](lookup-patterns.md) instead (mirrors Router's "contract not class").
+- **No `InternalsVisibleTo` changes.** Wire's round-trip tests use their own fixture `Catalog`
+  (not the real `Catalog<TDef>`), and every real-store writer is same-asm or already IVT'd.
+- **Read-only views live per-feature** (`IReadOnlyEntityStore`, etc.), not in `Engine` — Engine
+  references the features, not vice-versa.
+
 **Goal:** enforce the Store contract uniformly. Closes **I4, G2**; aligns verbs; makes write-internal/read-public real. Best after stores have settled into their record/typed forms (PR3/4/5).
 
 **EntityStore allocation → service (I4)** ([Entities/Runtime/EntityStore.cs](Assets/Framework/Entities/Runtime/EntityStore.cs), [EntityService.cs](Assets/Framework/Entities/Runtime/EntityService.cs)):

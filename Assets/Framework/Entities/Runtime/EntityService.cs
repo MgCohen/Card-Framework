@@ -10,6 +10,7 @@ namespace Framework.Entities
     {
         readonly EntityStore _store;
         readonly IEventEmitter _events;
+        int _nextId = 1;
 
         public EntityService(EntityStore store, IEventEmitter events)
         {
@@ -19,7 +20,7 @@ namespace Framework.Entities
 
         public Entity Create(EntityType type, int definitionId = 0)
         {
-            var id = _store.AllocateId();
+            var id = _nextId++;
             _events.Emit(new EntityCreatedEvent
             {
                 EntityId     = id,

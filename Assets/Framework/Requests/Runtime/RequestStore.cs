@@ -8,7 +8,7 @@ namespace Framework.Requests
     // entirely from the wire — no server-only state lives here.
     //
     // Server-only TCS state lives on RequestService in a separate dictionary.
-    public sealed class RequestStore
+    public sealed class RequestStore : IReadOnlyRequestStore
     {
         readonly Dictionary<int, Request> _open = new();
 

@@ -39,13 +39,24 @@ Mutable, written **only** by wire handlers, reconstructable from the wire, ident
 
 A keyed repository of entries — definitions or live instances.
 
-- **Operations:** `Insert(id, …)`, `ById`, `TryById`, `Remove` (reverse `IdOf` only where genuinely needed).
+- **Reads are canonical:** `ById` (throws on miss), `TryById` / `TryGetById` (try-get). These
+  do the same thing everywhere, so they carry the same name.
+- **The write verb signals its dup-contract — don't force one word.** `Insert` is
+  idempotent/overwrite (apply-handlers re-run safely on wire replay); `Add` is strict (throws on
+  a duplicate — authored-once sets like `Catalog` where a dup is a config bug). A typed read
+  (`Get<T>` returning `null` on miss, e.g. `RequestStore`) is a genuinely different contract, not
+  a misnamed `ById`. Reverse lookup (`IdOf`/`GetId`) only where a store genuinely needs it.
+- **Standardize the contract, not the class** (as with Router). Stores back onto different
+  containers (plain `Dictionary`, composite `Map`, single Cell) and their write/dup-contracts
+  diverge by use case; the only identical surface is the read pair. That's too thin to justify a
+  shared base — there is **no `Store<T>` base**. Conform by convention, not inheritance.
 - **A Store never allocates ids.** The id comes from data (`def.Id`) or from a **server-only
-  authoring service** that owns the allocator.
+  authoring service** that owns the allocator (e.g. `EntityService`, `RequestService`).
 - **Writes are `internal` (apply-handlers only, via `InternalsVisibleTo`); reads are `public`.**
-  Game logic authors through services (which emit) and queries through read-only views; only
-  apply-handlers mutate the store. This is what makes "the handler is the sole writer" a
-  compile-time guarantee instead of a convention.
+  Game logic authors through services (which emit) and queries through read-only views
+  (`IReadOnlyEntityStore`, …, surfaced on `GameEngine`); only apply-handlers mutate the store.
+  This is what makes "the handler is the sole writer" a compile-time guarantee instead of a
+  convention.
 - **Today:** `EntityStore`, `Catalog`, `RequestStore`, `RequestService._pending`, `TagStore`.
   `TagStore` is a per-value-type set of typed maps (`Map<int,int,T>` keyed `(entityId, slot)`,
   one per registered value type) — values stored inline, **no boxing**.
@@ -110,12 +121,9 @@ collapses N channels/handlers down to one.
 
 ## Current gaps (code vs standard)
 
+The conformance PRs (PR1–PR6, see [conformance-plan.md](conformance-plan.md)) closed the registry,
+type-set-record, State-slot-wire, and Store-discipline gaps. One lookup remains off-standard:
+
 | Lookup | Pattern | Gap |
 |---|---|---|
-| `EntityTypeRegistry`, `TagRegistry` | Registry | static global → scoped instance; unify `Register<T>`/`Register(inst)`; drop `TagKey` ctor self-registration; drop `EntityType.Name` |
-| `EntityType`, tag keys | Registry member | struct/class → records over `TypeKey` (`EntityType`, `Tag<T>`); delete the `EntityTypes` static table |
-| State | Registry + Cell | type-discriminated → slot-discriminated wire (`StatePushEvent { int Slot }`) |
-| `EntityStore` | Store | remove `AllocateId` + auto-id `Insert`; allocation moves to `EntityService` |
-| `TagStore` | Store | `Map<int,int,object>` → per-value-type typed maps (no boxing) |
-| all Stores | Store | align verbs (`Insert`/`ById`/`TryById`/`Remove`); writes `internal`, reads `public` |
 | `Session._peers/_players/_ready` | Store (ad-hoc) | list + linear scan → keyed Stores (low priority, session-scoped) |

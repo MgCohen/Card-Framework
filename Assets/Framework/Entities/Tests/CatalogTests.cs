@@ -13,14 +13,14 @@ namespace Framework.Entities.Tests
             var def = new CardTestDef(101, 3);
 
             catalog.Add(def);
-            Assert.AreEqual(def, catalog.GetById(101));
+            Assert.AreEqual(def, catalog.ById(101));
         }
 
         [Test]
-        public void GetById_UnknownId_Throws()
+        public void ById_UnknownId_Throws()
         {
             var catalog = new Catalog<CardTestDef>();
-            Assert.Throws<KeyNotFoundException>(() => catalog.GetById(999));
+            Assert.Throws<KeyNotFoundException>(() => catalog.ById(999));
         }
 
         [Test]

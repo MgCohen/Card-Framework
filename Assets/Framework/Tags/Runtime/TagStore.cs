@@ -11,11 +11,11 @@ namespace Framework.Tags
     // The store is self-contained: it never consults TagRegistry. Set<T>/Get<T> route by T;
     // the non-generic Has/Remove probe the (few) typed maps, since a given (entityId, slot)
     // lives in exactly one map — its slot fixes the value type.
-    public sealed class TagStore
+    public sealed class TagStore : IReadOnlyTagStore
     {
         readonly Dictionary<Type, ITagMap> _byType = new();
 
-        public void Set<T>(int entityId, int slot, T value) where T : unmanaged
+        internal void Set<T>(int entityId, int slot, T value) where T : unmanaged
             => MapFor<T>().Set(entityId, slot, value);
 
         public T Get<T>(int entityId, int slot) where T : unmanaged
@@ -28,7 +28,7 @@ namespace Framework.Tags
             return false;
         }
 
-        public bool Remove(int entityId, int slot)
+        internal bool Remove(int entityId, int slot)
         {
             foreach (var map in _byType.Values)
                 if (map.Remove(entityId, slot)) return true;
