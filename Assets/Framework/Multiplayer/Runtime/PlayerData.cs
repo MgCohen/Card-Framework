@@ -2,7 +2,7 @@ namespace Framework.Multiplayer
 {
     public class PlayerData
     {
-        public ulong NetworkId;
-        public ulong PlayerId;
+        public ulong NetworkId { get; set; }
+        public ulong PlayerId { get; set; }
     }
 }
