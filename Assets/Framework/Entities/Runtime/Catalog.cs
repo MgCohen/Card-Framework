@@ -8,7 +8,7 @@ namespace Framework.Entities
         readonly Dictionary<int, TDef> _byId = new();
         readonly Dictionary<TDef, int> _byDef = new();
 
-        public void Add(TDef def)
+        internal void Add(TDef def)
         {
             if (def.Id == 0)
                 throw new InvalidOperationException("Definition Id must be non-zero; 0 is the defless sentinel.");
@@ -18,7 +18,7 @@ namespace Framework.Entities
             _byDef[def]   = def.Id;
         }
 
-        public TDef GetById(int id) => _byId[id];
+        public TDef ById(int id) => _byId[id];
 
         public bool TryGetById(int id, out TDef def) => _byId.TryGetValue(id, out def);
 

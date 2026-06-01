@@ -22,7 +22,7 @@ decided in the 2026-05-31 design pass.
 - Do **not** strip comments in these PRs (separate track, finding A1). Touch only what the stage scopes.
 - Leave the `Block*` events in Wire (concept, not yet earned — see Q1).
 
-**Dependency order:** PR1 (subtraction) → PR2 (foundation) → {PR3, PR4, PR5 siblings} → PR6 (store discipline) → PR7 (optional). PRs 3/4/5 may land in any order once PR2 is in.
+**Dependency order:** PR1 (subtraction) → PR2 (foundation) → {PR3, PR4, PR5 siblings} → PR6 (store discipline). PRs 3/4/5 may land in any order once PR2 is in. **The series is complete after PR6** — PR7 was reclassified out (see below).
 
 ---
 
@@ -254,6 +254,19 @@ public void Push<TState>() where TState : GameState, new()
 
 ## PR6 — Store discipline (visibility + allocation + verbs + engine surface)
 
+**Status: landed.** Scope refined during the design pass vs the original write-up below:
+- **Verb alignment collapsed to one rename** (`Catalog.GetById → ById`). The audit found the
+  inserts genuinely diverge by dup-contract (idempotent `EntityStore.Insert` / strict
+  `Catalog.Add` / overwrite `RequestStore.Insert`) and the typed `RequestStore.Get<T>` is a
+  different contract, not a misnamed read — so those names stay. `TryGetById` left as-is.
+- **No `Store<T>` base class.** Only the read pair is identical across stores; too thin to
+  justify a base over three different containers. Standardized by convention in
+  [lookup-patterns.md](lookup-patterns.md) instead (mirrors Router's "contract not class").
+- **No `InternalsVisibleTo` changes.** Wire's round-trip tests use their own fixture `Catalog`
+  (not the real `Catalog<TDef>`), and every real-store writer is same-asm or already IVT'd.
+- **Read-only views live per-feature** (`IReadOnlyEntityStore`, etc.), not in `Engine` — Engine
+  references the features, not vice-versa.
+
 **Goal:** enforce the Store contract uniformly. Closes **I4, G2**; aligns verbs; makes write-internal/read-public real. Best after stores have settled into their record/typed forms (PR3/4/5).
 
 **EntityStore allocation → service (I4)** ([Entities/Runtime/EntityStore.cs](Assets/Framework/Entities/Runtime/EntityStore.cs), [EntityService.cs](Assets/Framework/Entities/Runtime/EntityService.cs)):
@@ -285,15 +298,21 @@ public void Push<TState>() where TState : GameState, new()
 
 ---
 
-## PR7 — (low priority) Session lobby collections
+## PR7 — Session lobby collections — RECLASSIFIED (not a conformance gap)
 
-**Goal:** bring `Session`'s ad-hoc collections onto the Store shape. Closes the C-tier multiplayer note. Independent — defer freely.
+**Dropped from the conformance track.** The original framing — "bring `Session`'s ad-hoc
+collections onto the Store shape" — assumed the collections want to *be* Stores. They don't.
+Classification is by **responsibility, not structure** (see [lookup-patterns.md](lookup-patterns.md)
+→ "Classify by responsibility, not structure"): `Session`'s job is coordinating the network lobby
+lifecycle, the `_peers`/`_players`/`_ready` collections are internal bookkeeping, they can't carry
+the Store write-discipline (Session writes them itself in receive callbacks — no handler-sole-writer),
+and its public `Peers`/`Players` are read projections. Session is the boundary adapter onto Unity
+Netcode and is correctly outside this standard.
 
-- `_peers` (list + `IndexBySeat`/`IndexByNetworkId` linear scans), `_players`, `_ready` → keyed Stores (`seat → Peer/Context/bool`).
-- This also dovetails with **G1** (Session is 461 lines / not sealed) and **C4/C5/C7** (peer-removal dup, factory repetition, facade) — but those are a larger Session refactor on the separate cleanup track, not strictly lookup-conformance. Scope this PR to *just* the collections unless taking on the full Session split.
-
-**Touched test asms:** `Framework.Multiplayer.PlayTests` (play-mode — different harness; confirm run command).
-**Done when:** lobby lookups are keyed; Session play-tests green.
+So the lookup-conformance series **ends at PR6.** The only Session work left — collapsing the
+`_peers` List + `IndexBySeat`/`IndexByNetworkId` linear scans into seat-keyed lookups, deduping
+peer-removal — is *internal hygiene* on the separate Session-decomposition track (G1, C4, C5, C7),
+driven by Session's own size/dup pain, not by lookup conformance. Listed under "Out of scope" below.
 
 ---
 
@@ -301,4 +320,4 @@ public void Push<TState>() where TState : GameState, new()
 
 Tracked in [framework-review.md](framework-review.md) → Disposition:
 - **Comment strip (A1)** — own pass after conformance; strip headers, keep one-line invariant warnings inline.
-- **Non-lookup cleanups** — Wire (C1 dual Emit, C2 wiring paths, I1 unbounded history, I3 byte-id cap, H2), Session/Multiplayer (G1, C4, C5, C7, D4, D5), Bootstrap (C6, D6, I5), Entities/Requests (E8, F2, H3, H4, D3/H1). Each its own focused PR when prioritized.
+- **Non-lookup cleanups** — Wire (C1 dual Emit, C2 wiring paths, I1 unbounded history, I3 byte-id cap, H2), Session/Multiplayer (G1, C4, C5, C7, D4, D5, **+ lobby-collection keying** — the former PR7, now Session-hygiene), Bootstrap (C6, D6, I5), Entities/Requests (E8, F2, H3, H4, D3/H1). Each its own focused PR when prioritized.

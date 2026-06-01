@@ -85,10 +85,10 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 
 ## Disposition
 
-Status as of 2026-05-31, after the lookup-patterns design pass.
+Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out).
 
-### ✅ Decided — in the implementation backlog
-Resolved by the lookup-patterns standard; tracked in [lookup-patterns.md](lookup-patterns.md) gaps + the staged PR plan in [conformance-plan.md](conformance-plan.md).
+### ✅ Implemented — PR1–6 landed
+Resolved by the lookup-patterns standard and shipped across the staged PRs in [conformance-plan.md](conformance-plan.md); the standard itself is [lookup-patterns.md](lookup-patterns.md).
 
 - **B1** — TagStore boxing → per-value-type typed maps.
 - **C3 / I2** — two static registries → one scoped `SlotRegistry<T>` instance.
@@ -100,6 +100,7 @@ Resolved by the lookup-patterns standard; tracked in [lookup-patterns.md](lookup
 - **E4** — delete `Vec3`.
 - **G2** — GameEngine → services + read-only store views; store writes `internal`, reads `public`.
 - **I4** — EntityStore allocation → service (`EntityService` owns `_nextId`).
+- **F1** — `GameState.cs` four records → split per-file. Landed via PR5 (the State slot-wire PR) even though it sat outside the boundary set.
 
 ### 👍 Decided — keep / no action
 - **E5** — `TryBySlot` is *kept*: it's standard Registry surface, not dead.
@@ -115,4 +116,5 @@ Real but orthogonal to the lookup decisions; own pass later.
 - **Session / Multiplayer:** G1 (461-line class), C4 (peer-removal dup), C5 (factory repetition), C7 (facade dup), D4 (public fields), D5 (not sealed).
 - **Bootstrap:** C6 (`_isServer` boilerplate), D6 (handler-wiring asymmetry), I5 (`BootstrapStatusUI` in Runtime).
 - **Entities / Requests:** E8 (Catalog reference-equality key), F2 (two types in `PendingRequest.cs`), H3 (`RequestStore.Get` silent null), H4 (raw throws on miss), D3/H1 (emit-read-back fragility).
-- **States:** F1 (four records in `GameState.cs`) — naturally folds into the State slot-based PR.
+
+Verified finding-by-finding against the tree on 2026-06-01: every Implemented item is present in code; every item above is confirmed still untouched.

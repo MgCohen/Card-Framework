@@ -5,6 +5,24 @@ cursor, and dispatch table is one of **four named patterns** across **two famili
 on one axis: **frozen at composition** vs **live and handler-written**. Pick the pattern by
 what the lookup *is*, not by what's convenient at the call site.
 
+## Classify by responsibility, not structure
+
+A type belongs to one of these patterns because of *what it is for*, never because of what it
+holds. A `Dictionary` field does not make something a Registry; a `List` does not make something a
+Store. The test is **intent**: a Store's whole reason to exist is to be the queryable home of its
+entries — things author and read *through* it, and if you removed the storage the type would be
+gone. A Registry's reason to exist is to be the authority mapping kinds to canonical members.
+
+A type that merely *keeps* a collection in order to do some **other** job is **none of these
+patterns** — it has a lookup *facet*, not a lookup *identity*. `Session` (Multiplayer) is the
+worked example: it tracks `_peers` / `_players` / `_ready`, but its job is coordinating the network
+lobby lifecycle (connect → welcome → seat → transition → teardown). Those collections are internal
+bookkeeping, they can't carry the Store write-discipline (Session writes them itself in receive
+callbacks — no handler-sole-writer), and its public `Peers` / `Players` are read projections, not a
+Store surface. Session is the boundary adapter onto Unity Netcode, and is correctly **outside** this
+standard. Don't drag every class with a dictionary into "conform it" — classify by reason-to-change
+first, and most types won't be any of these patterns at all.
+
 ## Family A — Frozen maps
 
 Built once at composition, immutable after, hold no mutable session state.
@@ -39,13 +57,24 @@ Mutable, written **only** by wire handlers, reconstructable from the wire, ident
 
 A keyed repository of entries — definitions or live instances.
 
-- **Operations:** `Insert(id, …)`, `ById`, `TryById`, `Remove` (reverse `IdOf` only where genuinely needed).
+- **Reads are canonical:** `ById` (throws on miss), `TryById` / `TryGetById` (try-get). These
+  do the same thing everywhere, so they carry the same name.
+- **The write verb signals its dup-contract — don't force one word.** `Insert` is
+  idempotent/overwrite (apply-handlers re-run safely on wire replay); `Add` is strict (throws on
+  a duplicate — authored-once sets like `Catalog` where a dup is a config bug). A typed read
+  (`Get<T>` returning `null` on miss, e.g. `RequestStore`) is a genuinely different contract, not
+  a misnamed `ById`. Reverse lookup (`IdOf`/`GetId`) only where a store genuinely needs it.
+- **Standardize the contract, not the class** (as with Router). Stores back onto different
+  containers (plain `Dictionary`, composite `Map`, single Cell) and their write/dup-contracts
+  diverge by use case; the only identical surface is the read pair. That's too thin to justify a
+  shared base — there is **no `Store<T>` base**. Conform by convention, not inheritance.
 - **A Store never allocates ids.** The id comes from data (`def.Id`) or from a **server-only
-  authoring service** that owns the allocator.
+  authoring service** that owns the allocator (e.g. `EntityService`, `RequestService`).
 - **Writes are `internal` (apply-handlers only, via `InternalsVisibleTo`); reads are `public`.**
-  Game logic authors through services (which emit) and queries through read-only views; only
-  apply-handlers mutate the store. This is what makes "the handler is the sole writer" a
-  compile-time guarantee instead of a convention.
+  Game logic authors through services (which emit) and queries through read-only views
+  (`IReadOnlyEntityStore`, …, surfaced on `GameEngine`); only apply-handlers mutate the store.
+  This is what makes "the handler is the sole writer" a compile-time guarantee instead of a
+  convention.
 - **Today:** `EntityStore`, `Catalog`, `RequestStore`, `RequestService._pending`, `TagStore`.
   `TagStore` is a per-value-type set of typed maps (`Map<int,int,T>` keyed `(entityId, slot)`,
   one per registered value type) — values stored inline, **no boxing**.
@@ -110,12 +139,11 @@ collapses N channels/handlers down to one.
 
 ## Current gaps (code vs standard)
 
-| Lookup | Pattern | Gap |
-|---|---|---|
-| `EntityTypeRegistry`, `TagRegistry` | Registry | static global → scoped instance; unify `Register<T>`/`Register(inst)`; drop `TagKey` ctor self-registration; drop `EntityType.Name` |
-| `EntityType`, tag keys | Registry member | struct/class → records over `TypeKey` (`EntityType`, `Tag<T>`); delete the `EntityTypes` static table |
-| State | Registry + Cell | type-discriminated → slot-discriminated wire (`StatePushEvent { int Slot }`) |
-| `EntityStore` | Store | remove `AllocateId` + auto-id `Insert`; allocation moves to `EntityService` |
-| `TagStore` | Store | `Map<int,int,object>` → per-value-type typed maps (no boxing) |
-| all Stores | Store | align verbs (`Insert`/`ById`/`TryById`/`Remove`); writes `internal`, reads `public` |
-| `Session._peers/_players/_ready` | Store (ad-hoc) | list + linear scan → keyed Stores (low priority, session-scoped) |
+The conformance PRs (PR1–PR6, see [conformance-plan.md](conformance-plan.md)) closed every lookup
+gap — registries, type-set records, State slot-wire, and Store discipline. **No framework lookup is
+off-standard.**
+
+`Session`'s collections were once listed here as a gap. They're reclassified as *not a lookup* (see
+"Classify by responsibility, not structure" above) — Session is a coordinator, not a Store. Tidying
+its `_peers` List + linear-scan `IndexBy*` helpers into seat-keyed lookups is Session-decomposition
+hygiene (its own track), not conformance.
