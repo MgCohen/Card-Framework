@@ -2,15 +2,21 @@ using Framework.Wire;
 
 namespace Framework.States
 {
-    // Sole writer for StatePushEvent<TState> on both sides. Server: StateService.Push emits —
-    // this handler runs synchronously and writes the store. Client: the wire delivers the
-    // event — same handler, same write. State is zero-data, so Apply reconstructs the cursor
-    // as `new TState()` (identity is the type). Registered per state via RegisterStateType<TState>.
-    internal sealed class StatePushHandler<TState> : WireEventHandler<StatePushEvent<TState>>
-        where TState : GameState, new()
+    // Sole writer for StatePushEvent on both sides. Server: StateService.Push emits — this
+    // handler runs synchronously and writes the store. Client: the wire delivers the event —
+    // same handler, same write. One handler for all states: it resolves the cursor from the
+    // event's int slot via the injected registry.
+    internal sealed class StatePushHandler : WireEventHandler<StatePushEvent>
     {
         readonly StateStore _store;
-        public StatePushHandler(StateStore store) { _store = store; }
-        public override void Apply(StatePushEvent<TState> ev) => _store.Set(new TState());
+        readonly GameStateRegistry _registry;
+
+        public StatePushHandler(StateStore store, GameStateRegistry registry)
+        {
+            _store = store;
+            _registry = registry;
+        }
+
+        public override void Apply(StatePushEvent ev) => _store.Set(_registry.BySlot(ev.Slot));
     }
 }
