@@ -1,17 +1,13 @@
+using Framework.Core;
+
 namespace Framework.States
 {
-    // A position in the game's FSM ("Playing", "Combat", "Mulligan"). Zero-data: identity
-    // is the type, not any field. Same-kind comparison is `is`; structural equality is
-    // trivially true (no fields). No payload travels on the wire because the record carries
-    // none — the StatePushEvent<TState> channel discriminates by type.
+    // A position in the game's FSM ("Playing", "Combat", "Mulligan") — a Registry member over
+    // TypeKey. Identity is (record type, Slot); the wire carries only the int Slot and the
+    // receiver rehydrates the cursor via GameStateRegistry.BySlot. Zero data beyond the slot for
+    // now; the behaviour surface (Actions / OnEnter / OnExit) lands in 5c on the record itself.
     //
-    // The behavior surface (Actions / OnEnter / OnExit / IsCompleted) lands in step 5c with
-    // the command/effect pipeline those methods need.
-    public abstract record GameState;
-
-    // Framework baselines. The simplest game runs NotStarted -> Playing -> Ended as-is;
-    // phase-structured games author additional GameState records of their own.
-    public sealed record MatchNotStartedState : GameState;
-    public sealed record PlayingState         : GameState;
-    public sealed record MatchEndedState      : GameState;
+    // Phase-structured games author additional GameState records of their own and register them
+    // in a game layer. Baselines live one-per-file alongside.
+    public abstract record GameState(int Slot) : TypeKey(Slot);
 }

@@ -2,9 +2,11 @@
     "name": "Framework.States",
     "rootNamespace": "Framework.States",
     "references": [
+        "Framework.Core",
         "Framework.Wire",
         "Scaffold.Autopacker",
-        "Scaffold.AppFlow"
+        "Scaffold.AppFlow",
+        "Scaffold.Records"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

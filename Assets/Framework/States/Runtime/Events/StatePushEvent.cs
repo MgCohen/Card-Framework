@@ -1,11 +1,13 @@
 using Framework.Wire;
+using Scaffold.AutoPacker;
 
 namespace Framework.States
 {
-    // Transition event — one network channel per closed state type (mirrors TagSetEvent<T>).
-    // Zero [Packed] fields: the type parameter IS the payload, so AutoPacker emits an empty
-    // Packed struct for each concrete closed leaf (StatePushEvent<PlayingState>, ...). Inherits
-    // WireEvent directly (post-flatten convention). Register one channel per state, both sides:
-    // Network.Register<StatePushEvent<PlayingState>, StatePushEvent<PlayingState>.Packed>().
-    public partial class StatePushEvent<TState> : WireEvent where TState : GameState, new() { }
+    // Transition event — one slot-discriminated channel for all states (replaces the per-type
+    // StatePushEvent<TState>, which spent one channel + handler per state). The wire carries the
+    // int Slot; the receiver rehydrates the cursor via GameStateRegistry.BySlot.
+    public partial class StatePushEvent : WireEvent
+    {
+        [Packed] public int Slot;
+    }
 }

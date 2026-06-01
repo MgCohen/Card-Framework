@@ -2,6 +2,7 @@
     "name": "Framework.States.Tests",
     "rootNamespace": "Framework.States.Tests",
     "references": [
+        "Framework.Core",
         "Framework.States",
         "Framework.Wire",
         "Scaffold.Autopacker"
