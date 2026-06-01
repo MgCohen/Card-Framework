@@ -5,6 +5,24 @@ cursor, and dispatch table is one of **four named patterns** across **two famili
 on one axis: **frozen at composition** vs **live and handler-written**. Pick the pattern by
 what the lookup *is*, not by what's convenient at the call site.
 
+## Classify by responsibility, not structure
+
+A type belongs to one of these patterns because of *what it is for*, never because of what it
+holds. A `Dictionary` field does not make something a Registry; a `List` does not make something a
+Store. The test is **intent**: a Store's whole reason to exist is to be the queryable home of its
+entries — things author and read *through* it, and if you removed the storage the type would be
+gone. A Registry's reason to exist is to be the authority mapping kinds to canonical members.
+
+A type that merely *keeps* a collection in order to do some **other** job is **none of these
+patterns** — it has a lookup *facet*, not a lookup *identity*. `Session` (Multiplayer) is the
+worked example: it tracks `_peers` / `_players` / `_ready`, but its job is coordinating the network
+lobby lifecycle (connect → welcome → seat → transition → teardown). Those collections are internal
+bookkeeping, they can't carry the Store write-discipline (Session writes them itself in receive
+callbacks — no handler-sole-writer), and its public `Peers` / `Players` are read projections, not a
+Store surface. Session is the boundary adapter onto Unity Netcode, and is correctly **outside** this
+standard. Don't drag every class with a dictionary into "conform it" — classify by reason-to-change
+first, and most types won't be any of these patterns at all.
+
 ## Family A — Frozen maps
 
 Built once at composition, immutable after, hold no mutable session state.
@@ -121,9 +139,11 @@ collapses N channels/handlers down to one.
 
 ## Current gaps (code vs standard)
 
-The conformance PRs (PR1–PR6, see [conformance-plan.md](conformance-plan.md)) closed the registry,
-type-set-record, State-slot-wire, and Store-discipline gaps. One lookup remains off-standard:
+The conformance PRs (PR1–PR6, see [conformance-plan.md](conformance-plan.md)) closed every lookup
+gap — registries, type-set records, State slot-wire, and Store discipline. **No framework lookup is
+off-standard.**
 
-| Lookup | Pattern | Gap |
-|---|---|---|
-| `Session._peers/_players/_ready` | Store (ad-hoc) | list + linear scan → keyed Stores (low priority, session-scoped) |
+`Session`'s collections were once listed here as a gap. They're reclassified as *not a lookup* (see
+"Classify by responsibility, not structure" above) — Session is a coordinator, not a Store. Tidying
+its `_peers` List + linear-scan `IndexBy*` helpers into seat-keyed lookups is Session-decomposition
+hygiene (its own track), not conformance.
