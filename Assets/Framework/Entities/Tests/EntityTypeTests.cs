@@ -2,40 +2,34 @@ using NUnit.Framework;
 
 namespace Framework.Entities.Tests
 {
+    // EntityType is now a record over TypeKey — identity is (record type, Slot), not a Name
+    // field. These cover the record semantics the rest of the feature relies on.
     public class EntityTypeTests
     {
         [Test]
-        public void Construction_SetsSlotAndName()
+        public void SameKind_AreEqual()
         {
-            var type = new EntityType(42, "Test");
-            Assert.AreEqual(42, type.Slot);
-            Assert.AreEqual("Test", type.Name);
+            Assert.AreEqual(new Card(), new Card());
         }
 
         [Test]
-        public void Equality_ComparesOnSlotOnly()
+        public void DifferentKind_AreNotEqual()
         {
-            var a = new EntityType(7, "Alpha");
-            var b = new EntityType(7, "Beta");
-            var c = new EntityType(8, "Alpha");
-
-            Assert.AreEqual(a, b);
-            Assert.AreNotEqual(a, c);
+            Assert.AreNotEqual(new Card(), new Zone());
         }
 
         [Test]
-        public void GetHashCode_UsesSlotOnly()
+        public void Slot_MatchesDeclaration()
         {
-            var a = new EntityType(7, "Alpha");
-            var b = new EntityType(7, "Beta");
-            Assert.AreEqual(a.GetHashCode(), b.GetHashCode());
+            Assert.AreEqual(4, new Card().Slot);
+            Assert.AreEqual(0, new Unknown().Slot);
         }
 
         [Test]
-        public void ToString_UsesName()
+        public void ToString_IncludesTypeName()
         {
-            var type = new EntityType(42, "Test");
-            Assert.AreEqual("Test", type.ToString());
+            // The record type name is the identity; ToString() is free and carries it.
+            StringAssert.Contains("Card", new Card().ToString());
         }
     }
 }

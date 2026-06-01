@@ -2,6 +2,7 @@
     "name": "Framework.Bootstrap",
     "rootNamespace": "Framework.Bootstrap",
     "references": [
+        "Framework.Core",
         "Framework.Engine",
         "Framework.Entities",
         "Framework.Requests",

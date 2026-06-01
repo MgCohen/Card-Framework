@@ -1,50 +1,37 @@
 using System;
-using System.Collections.Generic;
 using NUnit.Framework;
 
 namespace Framework.Entities.Tests
 {
+    // EntityType-specific registry behaviour. Generic SlotRegistry mechanics (BySlot/TryBySlot/
+    // dup-slot) are covered in Framework.Core.Tests; here we cover baseline loading, the Of<T>
+    // code path, and game-side extension on top of the baselines.
     public class EntityTypeRegistryTests
     {
+        sealed record CustomKind() : EntityType(8000);
+
         [Test]
-        public void Register_ReturnsTheNewEntityType()
+        public void WithBaselines_ResolvesByType()
         {
-            var type = EntityTypeRegistry.Register(8000, "TestType8000");
-            Assert.AreEqual(8000, type.Slot);
-            Assert.AreEqual("TestType8000", type.Name);
+            var registry = EntityTypeRegistry.WithBaselines();
+            Assert.AreEqual(new Card(), registry.Of<Card>());
         }
 
         [Test]
-        public void BySlot_ReturnsRegisteredInstance()
+        public void Register_GameKind_ResolvesBySlotAndType()
         {
-            var registered = EntityTypeRegistry.Register(8001, "TestType8001");
-            Assert.AreEqual(registered, EntityTypeRegistry.BySlot(8001));
+            var registry = EntityTypeRegistry.WithBaselines();
+            registry.Register<CustomKind>();
+
+            Assert.AreEqual(new CustomKind(), registry.BySlot(8000));
+            Assert.AreEqual(new CustomKind(), registry.Of<CustomKind>());
         }
 
         [Test]
-        public void Register_DuplicateSlot_Throws()
+        public void Register_OverBaselineSlot_Throws()
         {
-            EntityTypeRegistry.Register(8002, "First8002");
-            Assert.Throws<InvalidOperationException>(() => EntityTypeRegistry.Register(8002, "Second8002"));
-        }
-
-        [Test]
-        public void BySlot_UnregisteredSlot_Throws()
-        {
-            Assert.Throws<KeyNotFoundException>(() => EntityTypeRegistry.BySlot(9999));
-        }
-
-        [Test]
-        public void TryGetBySlot_ReturnsTrue_ForRegistered()
-        {
-            EntityTypeRegistry.Register(8003, "TestType8003");
-            Assert.IsTrue(EntityTypeRegistry.TryGetBySlot(8003, out _));
-        }
-
-        [Test]
-        public void TryGetBySlot_ReturnsFalse_ForUnregistered()
-        {
-            Assert.IsFalse(EntityTypeRegistry.TryGetBySlot(9998, out _));
+            var registry = EntityTypeRegistry.WithBaselines();
+            Assert.Throws<InvalidOperationException>(() => registry.Register<Card>());
         }
     }
 }

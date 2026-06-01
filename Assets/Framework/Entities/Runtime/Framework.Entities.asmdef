@@ -2,10 +2,12 @@
     "name": "Framework.Entities",
     "rootNamespace": "Framework.Entities",
     "references": [
+        "Framework.Core",
         "Framework.Tags",
         "Framework.Wire",
         "Scaffold.AppFlow",
-        "Scaffold.Autopacker"
+        "Scaffold.Autopacker",
+        "Scaffold.Records"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

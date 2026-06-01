@@ -2,44 +2,37 @@ using NUnit.Framework;
 
 namespace Framework.Entities.Tests
 {
+    // The framework's reserved entity-kind slots and their presence in a baseline registry.
+    // Slot 1 is intentionally left unclaimed.
     public class EngineReservedSlotsTests
     {
         [Test]
         public void EngineReserved_SlotsMatchClosure()
         {
-            Assert.AreEqual(0, EntityTypes.Unknown.Slot);
-            Assert.AreEqual(2, EntityTypes.Player.Slot);
-            Assert.AreEqual(3, EntityTypes.Zone.Slot);
-            Assert.AreEqual(4, EntityTypes.Card.Slot);
-            Assert.AreEqual(5, EntityTypes.Modifier.Slot);
+            Assert.AreEqual(0, new Unknown().Slot);
+            Assert.AreEqual(2, new Player().Slot);
+            Assert.AreEqual(3, new Zone().Slot);
+            Assert.AreEqual(4, new Card().Slot);
+            Assert.AreEqual(5, new Modifier().Slot);
         }
 
         [Test]
-        public void EngineReserved_RegisteredInRegistry()
+        public void EngineReserved_RegisteredInBaselines()
         {
-            _ = EntityTypes.Card;
+            var registry = EntityTypeRegistry.WithBaselines();
 
-            Assert.AreEqual(EntityTypes.Unknown,  EntityTypeRegistry.BySlot(0));
-            Assert.AreEqual(EntityTypes.Player,   EntityTypeRegistry.BySlot(2));
-            Assert.AreEqual(EntityTypes.Zone,     EntityTypeRegistry.BySlot(3));
-            Assert.AreEqual(EntityTypes.Card,     EntityTypeRegistry.BySlot(4));
-            Assert.AreEqual(EntityTypes.Modifier, EntityTypeRegistry.BySlot(5));
-        }
-
-        [Test]
-        public void EngineReserved_NamesReadable()
-        {
-            Assert.AreEqual("Unknown",  EntityTypes.Unknown.Name);
-            Assert.AreEqual("Player",   EntityTypes.Player.Name);
-            Assert.AreEqual("Zone",     EntityTypes.Zone.Name);
-            Assert.AreEqual("Card",     EntityTypes.Card.Name);
-            Assert.AreEqual("Modifier", EntityTypes.Modifier.Name);
+            Assert.AreEqual(new Unknown(),  registry.BySlot(0));
+            Assert.AreEqual(new Player(),   registry.BySlot(2));
+            Assert.AreEqual(new Zone(),     registry.BySlot(3));
+            Assert.AreEqual(new Card(),     registry.BySlot(4));
+            Assert.AreEqual(new Modifier(), registry.BySlot(5));
         }
 
         [Test]
         public void Slot1_IsReserved_NotPreRegistered()
         {
-            Assert.IsFalse(EntityTypeRegistry.TryGetBySlot(1, out _));
+            var registry = EntityTypeRegistry.WithBaselines();
+            Assert.IsFalse(registry.TryBySlot(1, out _));
         }
     }
 }
