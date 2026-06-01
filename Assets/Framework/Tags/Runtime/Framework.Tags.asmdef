@@ -2,10 +2,12 @@
     "name": "Framework.Tags",
     "rootNamespace": "Framework.Tags",
     "references": [
+        "Framework.Core",
         "Framework.Wire",
         "Scaffold.Autopacker",
         "Scaffold.AppFlow",
         "Scaffold.Maps",
+        "Scaffold.Records",
         "Unity.Netcode.Runtime"
     ],
     "includePlatforms": [],

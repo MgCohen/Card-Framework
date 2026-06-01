@@ -23,7 +23,7 @@ namespace Framework.Entities.Tests
         {
             var stack = new TestStack();
             var entity = stack.EntityStore.Insert(new Card());
-            var health = new TagKey<int>(9200);
+            var health = SampleTags.Health;
 
             stack.Tags.Set(entity.Id, health, 30);
             Assert.AreEqual(30, stack.Tags.Get(entity.Id, health));
@@ -34,7 +34,7 @@ namespace Framework.Entities.Tests
         {
             var stack = new TestStack();
             var entity = stack.EntityStore.Insert(new Card());
-            var health = new TagKey<int>(9201);
+            var health = SampleTags.Attack;
 
             Assert.IsFalse(stack.Tags.Has(entity.Id, health));
             stack.Tags.Set(entity.Id, health, 5);

@@ -16,6 +16,7 @@ namespace Framework.Bootstrap
         public void Install(IContainerBuilder builder)
         {
             builder.Register<TagStore>(Lifetime.Singleton);
+            builder.Register<TagRegistry>(Lifetime.Singleton);
             if (_isServer) builder.Register<TagService>(Lifetime.Singleton);
 
             builder.RegisterHandler<TagRemovedHandler>();

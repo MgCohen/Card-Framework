@@ -18,12 +18,12 @@ namespace Framework.Tags
             _events = events;
         }
 
-        public T Get<T>(int entityId, TagKey<T> key) where T : unmanaged
+        public T Get<T>(int entityId, Tag<T> key) where T : unmanaged
             => _store.Get<T>(entityId, key.Slot);
 
-        public bool Has(int entityId, TagKey key) => _store.Has(entityId, key.Slot);
+        public bool Has(int entityId, Tag key) => _store.Has(entityId, key.Slot);
 
-        public void Set<T>(int entityId, TagKey<T> key, T value) where T : unmanaged
+        public void Set<T>(int entityId, Tag<T> key, T value) where T : unmanaged
         {
             if (_store.Has(entityId, key.Slot))
             {
@@ -48,7 +48,7 @@ namespace Framework.Tags
             }
         }
 
-        public bool Remove(int entityId, TagKey key)
+        public bool Remove(int entityId, Tag key)
         {
             if (!_store.Has(entityId, key.Slot)) return false;
             _events.Emit(new TagRemovedEvent { EntityId = entityId, Slot = key.Slot });
