@@ -85,9 +85,11 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 
 ## Disposition
 
-Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out).
+Status as of 2026-06-01 — lookup conformance (PR1–6) landed; comment strip (A1) landed;
+the non-lookup cleanup wave shipped across PRs #167–#171 (in review). **Session decomposition
+is the only open track.**
 
-### ✅ Implemented — PR1–6 landed
+### ✅ Implemented — lookup conformance (PR1–6)
 Resolved by the lookup-patterns standard and shipped across the staged PRs in [conformance-plan.md](conformance-plan.md); the standard itself is [lookup-patterns.md](lookup-patterns.md).
 
 - **B1** — TagStore boxing → per-value-type typed maps.
@@ -101,20 +103,34 @@ Resolved by the lookup-patterns standard and shipped across the staged PRs in [c
 - **G2** — GameEngine → services + read-only store views; store writes `internal`, reads `public`.
 - **I4** — EntityStore allocation → service (`EntityService` owns `_nextId`).
 - **F1** — `GameState.cs` four records → split per-file. Landed via PR5 (the State slot-wire PR) even though it sat outside the boundary set.
+- **A1** — rationale-header strip; one-line invariant warnings kept inline. Landed `2a6d4ab` (own post-conformance pass).
+
+### ✅ Implemented — non-lookup cleanup wave (PRs #167–#171)
+Orthogonal to the lookup decisions; cleared one focused PR at a time, each EditMode-green (349/349).
+
+- **C1, C2, H2** — Wire emit/wiring dedup + `NullTransport` discard removed. [#167](https://github.com/MgCohen/Card-Framework/pull/167)
+- **C6, I5** — `BootstrapLayer` base for `_isServer`; `BootstrapStatusUI` → `Framework.Bootstrap.Sample` slice. [#168](https://github.com/MgCohen/Card-Framework/pull/168)
+- **H3, H4** — store-miss diagnostics: messages on `ById`/`Get` misses; `RequestStore.Get<T>` throws on wrong-type instead of silent null. [#169](https://github.com/MgCohen/Card-Framework/pull/169)
+- **F2** — one-type-per-file rule codified in [coding-standards.md](coding-standards.md); `PendingRequest.cs` split. [#170](https://github.com/MgCohen/Card-Framework/pull/170)
+- **I3** — channel-id overflow guard + unregistered-inbound-id guard; capacity is one shared const. [#171](https://github.com/MgCohen/Card-Framework/pull/171)
 
 ### 👍 Decided — keep / no action
 - **E5** — `TryBySlot` is *kept*: it's standard Registry surface, not dead.
 - **B3, C8, E6, E7, F3, J1** — confirmed as notes; nothing to change.
+- **D6** — handler asymmetry is *correct*: `TagRemovedHandler` is type-agnostic (registered once), Set/Change are per-`T`. Leave.
+- **I1** — `EventStream` history is match-scoped and freed at match end; compaction premature without a memory-pressure signal.
+- **B2** — wire events are heap `class`es; deferred until event rates climb.
+- **E8** — `Catalog._byDef` reference-equality key *stays* (`GetId` is used); noted as fragile, not actioned.
+- **D3 / H1** — emit-then-read-back fragility is tied to synchronous dispatch; its own track, not a cleanup.
 
-### ✍️ Separate track — comment strip
-- **A1** — strip headers, keep one-line invariant warnings inline. Its own pass once conformance lands.
+### 📋 Open — Session decomposition (own design pass)
+The single remaining cluster, all in [Session.cs](Assets/Framework/Multiplayer/Runtime/Session.cs). Treated as a focused design effort, not a mechanical pass — it carries real decisions (how to split responsibilities; is `Session` meant to be subclassed; get-only vs get/set on the player records).
 
-### 📋 Open — non-lookup cleanups (not yet scheduled)
-Real but orthogonal to the lookup decisions; own pass later.
+- **G1** — 461-line `Session<TData,TContext>`, ≥3 responsibilities (NetworkManager lifecycle · channel register+subscribe · membership · lobby/ready/start · session FSM). The split that pulls the rest with it.
+- **C4** — peer-removal duplicated (`HostOnClientDisconnected` / `OnPeerLeftReceived`); `IndexBySeat` / `IndexByNetworkId` same loop.
+- **C5** — static factories repeat new-up / set-fields / register / subscribe across `StartSolo` / `StartHost` / `Join`.
+- **C7** — static `Session` facade re-declares six forwarding signatures.
+- **D4** — `PlayerData` / `PlayerContext` expose bare public fields vs the codebase's `{ get; }` properties.
+- **D5** — `Session` is `public class`, not `sealed` — confirm whether subclassing is intended.
 
-- **Wire:** C1 (dual `Emit`), C2 (two wiring paths), B2 (event allocs), I1 (unbounded history), I3 (byte-id cap / null deref), H2 (`NullTransport` judo).
-- **Session / Multiplayer:** G1 (461-line class), C4 (peer-removal dup), C5 (factory repetition), C7 (facade dup), D4 (public fields), D5 (not sealed).
-- **Bootstrap:** C6 (`_isServer` boilerplate), D6 (handler-wiring asymmetry), I5 (`BootstrapStatusUI` in Runtime).
-- **Entities / Requests:** E8 (Catalog reference-equality key), F2 (two types in `PendingRequest.cs`), H3 (`RequestStore.Get` silent null), H4 (raw throws on miss), D3/H1 (emit-read-back fragility).
-
-Verified finding-by-finding against the tree on 2026-06-01: every Implemented item is present in code; every item above is confirmed still untouched.
+Verified finding-by-finding against the tree on 2026-06-01.
