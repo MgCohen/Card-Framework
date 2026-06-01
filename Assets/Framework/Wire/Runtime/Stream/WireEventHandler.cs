@@ -2,8 +2,6 @@ using System;
 
 namespace Framework.Wire
 {
-    // Author handlers by deriving from this. Supplies the non-generic IWireEventHandler
-    // members so subclasses write only the typed Apply (and optionally Unapply).
     public abstract class WireEventHandler<T> : IWireEventHandler where T : WireEvent
     {
         public Type EventType => typeof(T);

@@ -5,24 +5,6 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
-    // Three-layer hierarchy:
-    //
-    //   NetworkChannel              — non-generic base for the by-type registry and the
-    //                                 dispatcher's byte-id indexed array.
-    //
-    //   NetworkChannel<T>           — single-generic user-facing surface: subscribe to
-    //                                 OnReceived, call Send(ev). TPacked is hidden here so
-    //                                 callsites stay clean. Send is abstract and the typed
-    //                                 subclass implements it.
-    //
-    //   NetworkChannel<T, TPacked>  — concrete: owns the unsafe memcpy through
-    //                                 FastBufferWriter/Reader using TPacked. Only seen at
-    //                                 Network.Register<T, TPacked>().
-    //
-    // Why this shape: the unsafe pack/unpack body needs sizeof(TPacked) and (TPacked*) at
-    // compile time. Hiding TPacked in the concrete keeps subscribe/Send single-generic for
-    // the user while letting the body reach the typed interface (IPackable<TPacked>) via a
-    // direct constraint-method call — no virtual dispatch on the event, no inference puzzle.
     public abstract class NetworkChannel
     {
         internal abstract void SendBoxed(WireEvent ev);
@@ -52,8 +34,7 @@ namespace Framework.Wire
             _dispatcher = dispatcher;
             _handler = handler;
 
-            // sizeof(TPacked) is a compile-time constant on the closed concrete — no
-            // probe instance needed, unlike the prior single-generic shape.
+            // sizeof(TPacked) is a compile-time constant on the closed concrete.
             unsafe { _sizeWithDisc = 1 + sizeof(TPacked); }
         }
 

@@ -4,7 +4,6 @@ using Unity.Netcode;
 
 namespace Framework.Wire
 {
-    // Synchronous delivery — no Pump step. Send on one peer invokes OnReceived on the other.
     public sealed class LoopbackTransport : ITransport
     {
         LoopbackTransport _peer;

@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace Framework.Bootstrap
 {
-    // Single root for both server and client scopes. `_isServer` flows down into every layer
-    // that has a per-side delta: EngineLayer (ServerEngine vs ClientEngine + bridge),
-    // TagLayer and EntityLayer (gate the command-service registrations).
     [DefaultExecutionOrder(-1000)]
     public sealed class FrameworkAppFlowRoot : AppFlowRoot
     {

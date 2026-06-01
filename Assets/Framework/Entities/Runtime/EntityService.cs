@@ -2,10 +2,6 @@ using Framework.Wire;
 
 namespace Framework.Entities
 {
-    // Command surface over EntityStore. Allocates an id, emits EntityCreatedEvent, returns
-    // the entity the handler synchronously inserted. The store write happens exclusively
-    // through the EntityCreatedHandler — same path on server (this scope) and on the client
-    // (via the wire). No double-write.
     public sealed class EntityService
     {
         readonly EntityStore _store;

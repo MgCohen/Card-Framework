@@ -4,9 +4,6 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    // EntityStore + EntityCreatedHandler register on both sides — both need to read /
-    // reconstruct entity state. EntityService — the command surface — is server-only;
-    // the client never allocates ids or authors entities.
     public sealed class EntityLayer : IScopeLayer
     {
         readonly bool _isServer;

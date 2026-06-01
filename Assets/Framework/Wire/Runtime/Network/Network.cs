@@ -20,10 +20,6 @@ namespace Framework.Wire
             _dispatcher.OnAnyReceived += ev => OnReceived?.Invoke(ev);
         }
 
-        // Two type args: T is the leaf event class, TPacked is its AutoPacker-generated
-        // nested Packed struct (i.e. T.Packed). The pair is required exactly here — every
-        // downstream surface (Send(ev), the OnReceived event, the returned NetworkChannel<T>)
-        // hides TPacked behind the single-generic NetworkChannel<T>.
         public NetworkChannel<T> Register<T, TPacked>()
             where T : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>, new()
             where TPacked : unmanaged, IPackedStruct

@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace Framework.Wire
 {
-    // Builds a Type → handlers dispatch table once from the DI-collected handler list.
-    // Subscribes to EventStream.OnAppended in the constructor — no separate init step.
-    // Multiple handlers per event type allowed (logging/metrics future-proofing).
     public sealed class HandlerRegistry
     {
         readonly Dictionary<Type, List<IWireEventHandler>> _byType = new();

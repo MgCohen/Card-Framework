@@ -3,12 +3,6 @@ using System.Collections.Generic;
 
 namespace Framework.Core
 {
-    // Family A / Registry: discriminator -> domain identity. A scoped instance (never a static
-    // global) so tests and server/client scopes stay isolated. Two authoring paths, both
-    // explicit at the composition root:
-    //   Register<T>()      — code member; also enables Of<T>() and is-pattern use.
-    //   Register(member)   — data member (asset -> instance); identity only, no Of<T>.
-    // Reads: BySlot / TryBySlot / Of<T>. Slots are unique — a clash throws at registration.
     public class SlotRegistry<TKey> where TKey : TypeKey
     {
         readonly Dictionary<int, TKey>  _bySlot = new();

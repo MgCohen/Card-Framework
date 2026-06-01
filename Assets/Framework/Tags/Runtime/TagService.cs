@@ -3,10 +3,6 @@ using Framework.Wire;
 
 namespace Framework.Tags
 {
-    // Command surface over TagStore. Peeks the store to dedupe + pick the right event,
-    // then emits. The store write happens exclusively through TagSetHandler<T> /
-    // TagChangeHandler<T> / TagRemovedHandler — same path on server (this scope) and on
-    // the client (via the wire). No double-write.
     public sealed class TagService
     {
         readonly TagStore _store;

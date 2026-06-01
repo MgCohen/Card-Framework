@@ -5,14 +5,6 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    // Engine substrate + the side-asymmetric wire bridge. The build callback forces resolve
-    // on HandlerRegistry and the bridge — both classes do their work in their ctors
-    // (subscription wiring). VContainer's RegisterEntryPoint alone wouldn't trigger them
-    // because they don't implement any VContainer lifecycle interface.
-    //
-    // GameEngine registers only on the server — it composes the authoring services, which
-    // the client doesn't have. Client UI code injects EventStream / EntityStore / TagStore
-    // directly; the layer file itself is the documented surface of what's available.
     public sealed class EngineLayer : IScopeLayer
     {
         readonly bool _isServer;
@@ -40,7 +32,7 @@ namespace Framework.Bootstrap
                 builder.Register<NetworkInboundBridge>(Lifetime.Singleton);
             }
 
-            // Force eager resolve at container build — these classes wire via ctor side-effects.
+            // Eager resolve: these classes wire via ctor side-effects, not a lifecycle interface.
             builder.RegisterBuildCallback(c => c.Resolve<HandlerRegistry>());
             if (_isServer) builder.RegisterBuildCallback(c => c.Resolve<WireForwarder>());
             else           builder.RegisterBuildCallback(c => c.Resolve<NetworkInboundBridge>());

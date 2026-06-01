@@ -6,15 +6,6 @@ using Framework.Wire;
 
 namespace Framework.Engine
 {
-    // Server-only composition handle. Exposes the substrate (Stream, Network), the command
-    // services that author state, and read-only views of the stores for query. Writes go
-    // through the services → emit → handler; the engine surface never hands out a writable
-    // store, so the write-internal/read-public contract holds at the seam too.
-    //
-    // No client equivalent: the client is dumb today (events → handlers → stores) and the
-    // pieces it needs (EventStream, EntityStore, TagStore, RequestStore) inject cleanly on
-    // their own. When the client acquires multiple coordinated concerns worth composing,
-    // that's when a client-shaped handle will earn its name — not before.
     public sealed class GameEngine
     {
         public EventStream          Stream       { get; }

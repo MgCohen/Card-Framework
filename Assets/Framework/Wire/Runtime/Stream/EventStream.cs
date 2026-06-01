@@ -3,10 +3,6 @@ using System.Collections.Generic;
 
 namespace Framework.Wire
 {
-    // Append-only event history + fan-out point. Dispatch lives in HandlerRegistry, which
-    // subscribes to OnAppended in its ctor. Wire-side bridges (WireForwarder /
-    // NetworkInboundBridge) also subscribe via OnAppended on the server / via Network on
-    // the client. EventStream itself knows nothing about handlers.
     public sealed class EventStream : IEventEmitter
     {
         readonly List<WireEvent> _events = new();

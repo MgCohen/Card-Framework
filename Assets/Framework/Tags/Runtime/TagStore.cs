@@ -4,17 +4,11 @@ using Scaffold.Maps;
 
 namespace Framework.Tags
 {
-    // Pure repository over (entityId, slot) -> value, stored inline per value type — no boxing.
-    // One Map<int,int,T> per value type, created lazily on first Set<T>. No emit, no event
-    // awareness. Apply handlers write through here; TagService reads through it.
-    //
-    // The store is self-contained: it never consults TagRegistry. Set<T>/Get<T> route by T;
-    // the non-generic Has/Remove probe the (few) typed maps, since a given (entityId, slot)
-    // lives in exactly one map — its slot fixes the value type.
     public sealed class TagStore : IReadOnlyTagStore
     {
         readonly Dictionary<Type, ITagMap> _byType = new();
 
+        // Sole writers (Set/Remove): apply-handlers only.
         internal void Set<T>(int entityId, int slot, T value) where T : unmanaged
             => MapFor<T>().Set(entityId, slot, value);
 
@@ -45,7 +39,6 @@ namespace Framework.Tags
             return (TagMap<T>)map;
         }
 
-        // Implementation of one store — nested deliberately, not free-floating types.
         interface ITagMap
         {
             bool Has(int entityId, int slot);
