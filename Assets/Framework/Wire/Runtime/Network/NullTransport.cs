@@ -7,8 +7,8 @@ namespace Framework.Wire
     {
         public event Action<FastBufferReader> OnReceived
         {
-            add { _ = value; }
-            remove { _ = value; }
+            add { }
+            remove { }
         }
 
         public void Send(in FastBufferWriter writer) { }

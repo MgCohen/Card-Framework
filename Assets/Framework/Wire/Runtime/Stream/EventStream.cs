@@ -12,12 +12,6 @@ namespace Framework.Wire
         public int Count => _events.Count;
         public WireEvent this[int index] => _events[index];
 
-        public void Emit<TEvent>(TEvent ev) where TEvent : WireEvent
-        {
-            _events.Add(ev);
-            OnAppended?.Invoke(ev);
-        }
-
         public void Emit(WireEvent ev)
         {
             _events.Add(ev);

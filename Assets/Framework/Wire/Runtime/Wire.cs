@@ -12,8 +12,9 @@ namespace Framework.Wire
             var serverStream  = new EventStream();
             var clientStream  = new EventStream();
 
-            serverStream.OnAppended  += serverNetwork.Send;
-            clientNetwork.OnReceived += clientStream.Emit;
+            // Bridges subscribe in their ctor; no reference is kept (same as EngineLayer's DI wiring).
+            _ = new WireForwarder(serverStream, serverNetwork);
+            _ = new NetworkInboundBridge(clientNetwork, clientStream);
 
             return new WireConnection(serverStream, clientStream, serverNetwork, clientNetwork);
         }
