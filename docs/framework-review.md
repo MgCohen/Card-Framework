@@ -85,10 +85,10 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 
 ## Disposition
 
-Status as of 2026-05-31, after the lookup-patterns design pass.
+Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out).
 
-### ✅ Decided — in the implementation backlog
-Resolved by the lookup-patterns standard; tracked in [lookup-patterns.md](lookup-patterns.md) gaps + the staged PR plan in [conformance-plan.md](conformance-plan.md).
+### ✅ Implemented — PR1–6 landed
+Resolved by the lookup-patterns standard and shipped across the staged PRs in [conformance-plan.md](conformance-plan.md); the standard itself is [lookup-patterns.md](lookup-patterns.md).
 
 - **B1** — TagStore boxing → per-value-type typed maps.
 - **C3 / I2** — two static registries → one scoped `SlotRegistry<T>` instance.
