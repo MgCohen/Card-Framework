@@ -88,7 +88,7 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 Status as of 2026-05-31, after the lookup-patterns design pass.
 
 ### ✅ Decided — in the implementation backlog
-Resolved by the lookup-patterns standard; tracked in [lookup-patterns.md](lookup-patterns.md) gaps + the staged PR plan.
+Resolved by the lookup-patterns standard; tracked in [lookup-patterns.md](lookup-patterns.md) gaps + the staged PR plan in [conformance-plan.md](conformance-plan.md).
 
 - **B1** — TagStore boxing → per-value-type typed maps.
 - **C3 / I2** — two static registries → one scoped `SlotRegistry<T>` instance.
