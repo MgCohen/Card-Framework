@@ -1,0 +1,16 @@
+{
+    "name": "Framework.Bootstrap.Sample",
+    "rootNamespace": "Framework.Bootstrap.Sample",
+    "references": [
+        "Scaffold.AppFlow"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
