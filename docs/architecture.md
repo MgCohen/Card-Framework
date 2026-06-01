@@ -20,3 +20,9 @@ Modules and how they connect. Updated as features graduate.
 System-wide rules that span features. Edit with care — these are the load-bearing decisions.
 
 **Pipeline entry is `Enqueue`, not `Execute` / `Submit`.** External callers enqueue intents, actions, requests, or events into a single pipeline. The naming reflects the future shape — a multi-type pipeline routed by kind — not the current command-only state. Don't rename this even if "Execute" reads more naturally for command-only usage today.
+
+**Keyed lookups follow four named patterns.** Every registry, store, cursor, and dispatch table in `Assets/Framework/` is one of four shapes across two families — Registry and Router (frozen at composition) or Store and Cell (live, handler-written). See [lookup-patterns.md](lookup-patterns.md).
+
+**Wire carries no domain types.** Domain events live with their owning feature; `Framework.Wire` is a pure transport substrate (event stream + network + dispatch) holding no domain event types. Events travel by `int` id/slot, not C# type, wherever a slot suffices. (`Block*` is a recognized exception — it stays in Wire as a concept until the command-pipeline feature graduates and gives it structure.)
+
+**Author through services, read through views.** The server engine handle (`GameEngine`) exposes authoring *services* and *read-only* store views — never writable stores. Store mutators are `internal` (apply-handlers only, via `InternalsVisibleTo`); readers are `public`. This makes "the handler is the sole writer" a compile-time guarantee. See [lookup-patterns.md](lookup-patterns.md).
