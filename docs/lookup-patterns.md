@@ -42,8 +42,13 @@ A keyed repository of entries — definitions or live instances.
 - **Operations:** `Insert(id, …)`, `ById`, `TryById`, `Remove` (reverse `IdOf` only where genuinely needed).
 - **A Store never allocates ids.** The id comes from data (`def.Id`) or from a **server-only
   authoring service** that owns the allocator.
-- **Today:** `EntityStore`, `Catalog`, `RequestStore`, `RequestService._pending`,
-  `TagStore` (composite key `(entityId, slot)`).
+- **Writes are `internal` (apply-handlers only, via `InternalsVisibleTo`); reads are `public`.**
+  Game logic authors through services (which emit) and queries through read-only views; only
+  apply-handlers mutate the store. This is what makes "the handler is the sole writer" a
+  compile-time guarantee instead of a convention.
+- **Today:** `EntityStore`, `Catalog`, `RequestStore`, `RequestService._pending`, `TagStore`.
+  `TagStore` is a per-value-type set of typed maps (`Map<int,int,T>` keyed `(entityId, slot)`,
+  one per registered value type) — values stored inline, **no boxing**.
 
 ### Cell — a single value
 
@@ -58,19 +63,39 @@ Type-sets — the things a Registry holds — are declared as **records over a s
 `TypeKey(int Slot)` base** and registered at the composition root. Two authoring paths,
 always both available:
 
-- **Code:** `record Card : EntityType(4)` → `Register<Card>()`. Gets generics
-  (`Create<Card>()`, `Of<Card>()`, `is Card`) and may add behavior or a value dimension.
+- **Code:** `record Card : EntityType(4)` → `Register<Card>()`. The record *is* the identity —
+  usable as `Of<Card>()` and `is Card`, and (for zero-data sets like State) as a generic verb,
+  e.g. `Push<PlayingState>()`.
 - **Data:** asset → instance → `Register(instance)`. Identity only.
 
-Code authoring is the **superset**; data authoring is **identity-only** — a thing that
-doesn't exist at compile time can't be a generic argument, and that's the only thing it gives
-up. The wire carries only the `int` slot; receivers rehydrate via `BySlot`. Registration is
-**explicit** at the composition root (framework baselines in Bootstrap layers, game types in
-game layers) — no constructor side-effects, no static field-init.
+Code authoring is the **superset**; data authoring is **identity-only** — a thing that doesn't
+exist at compile time can't be a generic argument, and that's the only thing it gives up. The
+wire carries only the `int` slot; receivers rehydrate via `BySlot`. Registration is **explicit**
+at the composition root (framework baselines in Bootstrap layers, game types in game layers) —
+no constructor side-effects, no static field-init.
+
+**Members are not creation APIs.** The standard governs *storage, identity, and registration* —
+not how instances are made. Entities, for example, are created from their *definition* (which
+carries its `EntityType`), not via a `Create<Card>()` generic; the kind comes from the data. Add
+a per-set verb only where a real consumer needs one (State's `Push<TState>()`), never for symmetry.
+
+### Tags carry a value dimension
+
+A `Tag<T> : Tag : TypeKey` adds an irreducible value type on top of identity. Two consequences:
+
+- **No single-generic call form.** `Set<Power>(eid, value)` is *not expressible* in C# — the
+  value type can't be inferred from the tag type alone (would need C# 11 static-abstract members,
+  unavailable in Unity). Use instance-based ops where `T` infers from the key:
+  `Set<T>(eid, Tag<T> key, T value)`, `Get<T>(eid, Tag<T> key)`; `Has`/`Remove` take the
+  non-generic base key. Keys resolve via `Of<Power>()` (or game-side static aliases).
+- **Value types are code-only** (each needs a wire channel + handler + the per-`T` store map).
+  **Tag keys are code or data** — a key is `(slot, value-type)` with the value type chosen from
+  the code-registered set.
 
 > **Rule of thumb:** a type-set is data-authorable iff its wire discriminates by `int` slot,
-> not by C# `Type`. Identity-only sets (`EntityType`, `Tag` keys) extend in both code and
-> data; behavior-bearing sets lean code.
+> not by C# `Type`. Identity-only sets (`EntityType`, `Tag` keys) extend in both code and data;
+> behavior-bearing sets (`State`) lean code. For Tags: data adds keys over existing value types;
+> new value types are code.
 
 ## State conforms
 
@@ -88,11 +113,9 @@ collapses N channels/handlers down to one.
 | Lookup | Pattern | Gap |
 |---|---|---|
 | `EntityTypeRegistry`, `TagRegistry` | Registry | static global → scoped instance; unify `Register<T>`/`Register(inst)`; drop `TagKey` ctor self-registration; drop `EntityType.Name` |
-| `EntityType` | Registry member | `readonly struct` → record over `TypeKey`; delete the `EntityTypes` static table |
-| State | Registry + Cell | type-discriminated → slot-discriminated wire |
+| `EntityType`, tag keys | Registry member | struct/class → records over `TypeKey` (`EntityType`, `Tag<T>`); delete the `EntityTypes` static table |
+| State | Registry + Cell | type-discriminated → slot-discriminated wire (`StatePushEvent { int Slot }`) |
 | `EntityStore` | Store | remove `AllocateId` + auto-id `Insert`; allocation moves to `EntityService` |
-| all Stores | Store | align verbs on `Insert` / `ById` / `TryById` / `Remove` |
+| `TagStore` | Store | `Map<int,int,object>` → per-value-type typed maps (no boxing) |
+| all Stores | Store | align verbs (`Insert`/`ById`/`TryById`/`Remove`); writes `internal`, reads `public` |
 | `Session._peers/_players/_ready` | Store (ad-hoc) | list + linear scan → keyed Stores (low priority, session-scoped) |
-
-Out of scope: `TagStore`'s value **boxing** (`Map<int,int,object>`) is a storage-representation
-issue tracked separately, not a pattern question.
