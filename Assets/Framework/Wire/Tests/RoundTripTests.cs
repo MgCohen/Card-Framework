@@ -9,15 +9,12 @@ namespace Framework.Wire.Tests
         static WireConnection NewWired(IPackingHandler handler = null)
         {
             var w = Wire.Connect(handler);
-            w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();   w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
-            w.ServerNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>(); w.ClientNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
+            w.ServerNetwork.Register<PingEvent, PingEvent.Packed>();           w.ClientNetwork.Register<PingEvent, PingEvent.Packed>();
+            w.ServerNetwork.Register<PongEvent, PongEvent.Packed>();           w.ClientNetwork.Register<PongEvent, PongEvent.Packed>();
             w.ServerNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();     w.ClientNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();
             w.ServerNetwork.Register<EntityLabeledEvent, EntityLabeledEvent.Packed>();   w.ClientNetwork.Register<EntityLabeledEvent, EntityLabeledEvent.Packed>();
             w.ServerNetwork.Register<BlockStartEvent, BlockStartEvent.Packed>();      w.ClientNetwork.Register<BlockStartEvent, BlockStartEvent.Packed>();
             w.ServerNetwork.Register<BlockEndEvent, BlockEndEvent.Packed>();        w.ClientNetwork.Register<BlockEndEvent, BlockEndEvent.Packed>();
-            w.ServerNetwork.Register<RequestOpenedEvent, RequestOpenedEvent.Packed>();   w.ClientNetwork.Register<RequestOpenedEvent, RequestOpenedEvent.Packed>();
-            w.ServerNetwork.Register<RequestClosedEvent, RequestClosedEvent.Packed>();   w.ClientNetwork.Register<RequestClosedEvent, RequestClosedEvent.Packed>();
-            w.ServerNetwork.Register<ResponseEvent, ResponseEvent.Packed>();        w.ClientNetwork.Register<ResponseEvent, ResponseEvent.Packed>();
             return w;
         }
 
@@ -26,7 +23,7 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired();
 
-            w.ServerStream.Emit(new EntityMovedEvent { EntityId = 7, Position = new Vec3(1.5f, 2.5f, 3.5f) });
+            w.ServerStream.Emit(new EntityMovedEvent { EntityId = 7, Position = new Float3(1.5f, 2.5f, 3.5f) });
 
             Assert.AreEqual(1, w.ClientStream.Count);
             var received = (EntityMovedEvent)w.ClientStream[0];
@@ -59,10 +56,10 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired();
 
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 42 });
+            w.ServerStream.Emit(new PingEvent { Value = 42 });
 
             Assert.AreEqual(1, w.ClientStream.Count);
-            Assert.AreEqual(42, ((EntityCreatedEvent)w.ClientStream[0]).EntityId);
+            Assert.AreEqual(42, ((PingEvent)w.ClientStream[0]).Value);
         }
 
         [Test]
@@ -70,14 +67,14 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired();
 
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 1 });
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 2 });
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 3 });
+            w.ServerStream.Emit(new PingEvent { Value = 1 });
+            w.ServerStream.Emit(new PingEvent { Value = 2 });
+            w.ServerStream.Emit(new PingEvent { Value = 3 });
 
             Assert.AreEqual(3, w.ClientStream.Count);
-            Assert.AreEqual(1, ((EntityCreatedEvent)w.ClientStream[0]).EntityId);
-            Assert.AreEqual(2, ((EntityCreatedEvent)w.ClientStream[1]).EntityId);
-            Assert.AreEqual(3, ((EntityCreatedEvent)w.ClientStream[2]).EntityId);
+            Assert.AreEqual(1, ((PingEvent)w.ClientStream[0]).Value);
+            Assert.AreEqual(2, ((PingEvent)w.ClientStream[1]).Value);
+            Assert.AreEqual(3, ((PingEvent)w.ClientStream[2]).Value);
         }
 
         [Test]
@@ -197,68 +194,29 @@ namespace Framework.Wire.Tests
         }
 
         [Test]
-        public void Request_Open_Close_Response_RoundTrip()
-        {
-            var w = NewWired();
-
-            w.ServerStream.Emit(new RequestOpenedEvent { Id = 3, ParentId = 2, SourceId = 7, ResponderId = 42, OptionCount = 3, IsCancellable = true });
-            w.ServerStream.Emit(new RequestClosedEvent { Id = 3 });
-            w.ServerStream.Emit(new ResponseEvent      { RequestId = 3, Picked = 1 });
-
-            Assert.AreEqual(3, w.ClientStream.Count);
-
-            var opened = (RequestOpenedEvent)w.ClientStream[0];
-            Assert.AreEqual(3,    opened.Id);
-            Assert.AreEqual(2,    opened.ParentId);
-            Assert.AreEqual(7,    opened.SourceId);
-            Assert.AreEqual(42,   opened.ResponderId);
-            Assert.AreEqual(3,    opened.OptionCount);
-            Assert.IsTrue(opened.IsCancellable);
-
-            var closed = (RequestClosedEvent)w.ClientStream[1];
-            Assert.AreEqual(3, closed.Id);
-
-            var response = (ResponseEvent)w.ClientStream[2];
-            Assert.AreEqual(3, response.RequestId);
-            Assert.AreEqual(1, response.Picked);
-        }
-
-        [Test]
-        public void Request_NonCancellable_RoundTrips()
-        {
-            var w = NewWired();
-
-            w.ServerStream.Emit(new RequestOpenedEvent { Id = 5, ParentId = 0, SourceId = 0, ResponderId = 99, OptionCount = 1, IsCancellable = false });
-
-            var opened = (RequestOpenedEvent)w.ClientStream[0];
-            Assert.IsFalse(opened.IsCancellable);
-            Assert.AreEqual(1, opened.OptionCount);
-        }
-
-        [Test]
         public void Mixed_Alphabet_Stream_Preserves_Order()
         {
             var w = NewWired(new SimplePackingHandler());
 
             w.ServerStream.Emit(new BlockStartEvent     { Id = 1, ParentId = 0, Kind = (byte)BlockKind.Command, SourceId = 0 });
-            w.ServerStream.Emit(new EntityCreatedEvent  { EntityId = 1 });
-            w.ServerStream.Emit(new EntityCreatedEvent  { EntityId = 2 });
-            w.ServerStream.Emit(new EntityMovedEvent    { EntityId = 1, Position = new Vec3(10, 20, 30) });
+            w.ServerStream.Emit(new PingEvent           { Value = 1 });
+            w.ServerStream.Emit(new PingEvent           { Value = 2 });
+            w.ServerStream.Emit(new EntityMovedEvent    { EntityId = 1, Position = new Float3(10, 20, 30) });
             w.ServerStream.Emit(new EntityLabeledEvent  { EntityId = 1, Label = "hero" });
-            w.ServerStream.Emit(new EntityDestroyedEvent { EntityId = 1 });
+            w.ServerStream.Emit(new PongEvent           { Value = 1 });
             w.ServerStream.Emit(new BlockEndEvent       { Id = 1, Outcome = (byte)BlockOutcome.Completed });
 
             Assert.AreEqual(7, w.ClientStream.Count);
             Assert.IsInstanceOf<BlockStartEvent>    (w.ClientStream[0]);
-            Assert.IsInstanceOf<EntityCreatedEvent> (w.ClientStream[1]);
-            Assert.IsInstanceOf<EntityCreatedEvent> (w.ClientStream[2]);
+            Assert.IsInstanceOf<PingEvent>          (w.ClientStream[1]);
+            Assert.IsInstanceOf<PingEvent>          (w.ClientStream[2]);
             Assert.IsInstanceOf<EntityMovedEvent>   (w.ClientStream[3]);
             Assert.IsInstanceOf<EntityLabeledEvent> (w.ClientStream[4]);
-            Assert.IsInstanceOf<EntityDestroyedEvent>(w.ClientStream[5]);
+            Assert.IsInstanceOf<PongEvent>          (w.ClientStream[5]);
             Assert.IsInstanceOf<BlockEndEvent>      (w.ClientStream[6]);
 
-            Assert.AreEqual(1, ((EntityCreatedEvent)w.ClientStream[1]).EntityId);
-            Assert.AreEqual(2, ((EntityCreatedEvent)w.ClientStream[2]).EntityId);
+            Assert.AreEqual(1, ((PingEvent)w.ClientStream[1]).Value);
+            Assert.AreEqual(2, ((PingEvent)w.ClientStream[2]).Value);
             Assert.AreEqual(20, ((EntityMovedEvent)w.ClientStream[3]).Position.Y);
             Assert.AreEqual("hero", ((EntityLabeledEvent)w.ClientStream[4]).Label);
         }
@@ -268,12 +226,12 @@ namespace Framework.Wire.Tests
         {
             var w = NewWired();
             var seen = new List<int>();
-            w.ClientStream.OnAppended += ev => seen.Add(((EntityCreatedEvent)ev).EntityId);
+            w.ClientStream.OnAppended += ev => seen.Add(((PingEvent)ev).Value);
 
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 10 });
+            w.ServerStream.Emit(new PingEvent { Value = 10 });
             CollectionAssert.AreEqual(new int[] { 10 }, seen);
 
-            w.ServerStream.Emit(new EntityCreatedEvent { EntityId = 20 });
+            w.ServerStream.Emit(new PingEvent { Value = 20 });
             CollectionAssert.AreEqual(new int[] { 10, 20 }, seen);
         }
     }

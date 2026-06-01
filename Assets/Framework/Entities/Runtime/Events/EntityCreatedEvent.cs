@@ -1,6 +1,7 @@
+using Framework.Wire;
 using Scaffold.AutoPacker;
 
-namespace Framework.Wire
+namespace Framework.Entities
 {
     public partial class EntityCreatedEvent : WireEvent
     {

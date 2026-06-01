@@ -4,7 +4,7 @@ namespace Framework.Wire.Tests
 {
     public partial class EntityMovedEvent : WireEvent
     {
-        [Packed] public long EntityId;
-        [Packed] public Vec3 Position;
+        [Packed] public long   EntityId;
+        [Packed] public Float3 Position;
     }
 }

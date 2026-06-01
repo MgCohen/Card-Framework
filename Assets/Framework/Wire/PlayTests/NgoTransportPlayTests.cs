@@ -57,18 +57,18 @@ namespace Framework.Wire.PlayTests
 
             _transport = new NgoTransport(_nm);
             var network = new Network(_transport);
-            var channel = network.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
+            var channel = network.Register<BlockEndEvent, BlockEndEvent.Packed>();
 
-            EntityCreatedEvent received = null;
+            BlockEndEvent received = null;
             channel.OnReceived += ev => received = ev;
 
-            network.Send(new EntityCreatedEvent { EntityId = 42 });
+            network.Send(new BlockEndEvent { Id = 42, Outcome = (byte)BlockOutcome.Completed });
 
             yield return null;
             yield return null;
 
             Assert.IsNotNull(received, "Channel should have received the broadcast event");
-            Assert.AreEqual(42, received.EntityId);
+            Assert.AreEqual(42, received.Id);
         }
     }
 }

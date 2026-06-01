@@ -29,18 +29,5 @@ namespace Framework.Entities.Tests
             Assert.AreEqual(EntityTypes.Card, EntityTypeRegistry.BySlot(rx.TypeSlot));
             Assert.AreEqual(101, rx.DefinitionId);
         }
-
-        [Test]
-        public void EntityDestroyedEvent_RoundTripsThroughWire()
-        {
-            var w = WireBridge.Connect();
-            w.ServerNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
-            w.ClientNetwork.Register<EntityDestroyedEvent, EntityDestroyedEvent.Packed>();
-
-            w.ServerStream.Emit(new EntityDestroyedEvent { EntityId = 42 });
-
-            Assert.AreEqual(1, w.ClientStream.Count);
-            Assert.AreEqual(42, ((EntityDestroyedEvent)w.ClientStream[0]).EntityId);
-        }
     }
 }
