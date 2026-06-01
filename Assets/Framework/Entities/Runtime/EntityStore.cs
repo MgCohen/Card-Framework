@@ -15,7 +15,8 @@ namespace Framework.Entities
             return entity;
         }
 
-        public Entity ById(int id) => _byId[id];
+        public Entity ById(int id)
+            => _byId.TryGetValue(id, out var entity) ? entity : throw new KeyNotFoundException($"No entity with id {id}.");
 
         public bool TryGetById(int id, out Entity entity) => _byId.TryGetValue(id, out entity);
     }
