@@ -1,16 +1,13 @@
 using Framework.Tags;
-using Scaffold.AppFlow;
 using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class TagLayer : IScopeLayer
+    public sealed class TagLayer : BootstrapLayer
     {
-        readonly bool _isServer;
+        public TagLayer(bool isServer) : base(isServer) { }
 
-        public TagLayer(bool isServer) { _isServer = isServer; }
-
-        public void Install(IContainerBuilder builder)
+        public override void Install(IContainerBuilder builder)
         {
             builder.Register<TagStore>(Lifetime.Singleton);
             builder.Register<TagRegistry>(Lifetime.Singleton);
