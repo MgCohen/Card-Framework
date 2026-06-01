@@ -12,6 +12,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void EntityCreatedEvent_RoundTripsThroughWire()
         {
+            var types = EntityTypeRegistry.WithBaselines();
             var w = WireBridge.Connect();
             w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
             w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
@@ -19,14 +20,14 @@ namespace Framework.Entities.Tests
             w.ServerStream.Emit(new EntityCreatedEvent
             {
                 EntityId     = 7,
-                TypeSlot     = EntityTypes.Card.Slot,
+                TypeSlot     = new Card().Slot,
                 DefinitionId = 101,
             });
 
             Assert.AreEqual(1, w.ClientStream.Count);
             var rx = (EntityCreatedEvent)w.ClientStream[0];
             Assert.AreEqual(7, rx.EntityId);
-            Assert.AreEqual(EntityTypes.Card, EntityTypeRegistry.BySlot(rx.TypeSlot));
+            Assert.AreEqual(new Card(), types.BySlot(rx.TypeSlot));
             Assert.AreEqual(101, rx.DefinitionId);
         }
     }

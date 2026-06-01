@@ -11,10 +11,10 @@ namespace Framework.Entities.Tests
         public void Construction_SetsIdTypeAndDefinitionId()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card, 101);
+            var entity = stack.EntityStore.Insert(new Card(), 101);
 
             Assert.AreEqual(1, entity.Id);
-            Assert.AreEqual(EntityTypes.Card, entity.Type);
+            Assert.AreEqual(new Card(), entity.Type);
             Assert.AreEqual(101, entity.DefinitionId);
         }
 
@@ -22,7 +22,7 @@ namespace Framework.Entities.Tests
         public void SetGetRoundTrip()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
             var health = new TagKey<int>(9200);
 
             stack.Tags.Set(entity.Id, health, 30);
@@ -33,7 +33,7 @@ namespace Framework.Entities.Tests
         public void HasAndRemove()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
             var health = new TagKey<int>(9201);
 
             Assert.IsFalse(stack.Tags.Has(entity.Id, health));
@@ -48,7 +48,7 @@ namespace Framework.Entities.Tests
         public void MultipleKeys_AreIndependent()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
 
             stack.Tags.Set(entity.Id, SampleTags.Health, 30);
             stack.Tags.Set(entity.Id, SampleTags.Attack, 7);
@@ -64,7 +64,7 @@ namespace Framework.Entities.Tests
         {
             // Equality short-circuit: writing the same value should not re-emit.
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
 
             stack.Tags.Set(entity.Id, SampleTags.Health, 30);  // emits TagSetEvent
             var countAfterFirst = stack.Stream.Count;
@@ -77,7 +77,7 @@ namespace Framework.Entities.Tests
         public void Set_ChangedValue_EmitsTagChangeEvent()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
 
             stack.Tags.Set(entity.Id, SampleTags.Health, 30);  // first set
             stack.Tags.Set(entity.Id, SampleTags.Health, 40);  // change
@@ -94,7 +94,7 @@ namespace Framework.Entities.Tests
         public void ToString_ContainsId()
         {
             var stack = new TestStack();
-            var entity = stack.EntityStore.Insert(EntityTypes.Card);
+            var entity = stack.EntityStore.Insert(new Card());
             Assert.AreEqual("Entity#1", entity.ToString());
         }
     }

@@ -2,6 +2,7 @@
     "name": "Framework.Entities.Tests",
     "rootNamespace": "Framework.Entities.Tests",
     "references": [
+        "Framework.Core",
         "Framework.Entities",
         "Framework.Tags",
         "Framework.Wire",

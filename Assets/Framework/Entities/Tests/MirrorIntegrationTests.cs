@@ -36,10 +36,10 @@ namespace Framework.Entities.Tests
         {
             var (server, client, _) = Build();
 
-            var serverCard = server.Entities.Create(EntityTypes.Card, definitionId: 101);
+            var serverCard = server.Entities.Create(new Card(), definitionId: 101);
 
             Assert.IsTrue(client.EntityStore.TryGetById(serverCard.Id, out var clientCard));
-            Assert.AreEqual(EntityTypes.Card, clientCard.Type);
+            Assert.AreEqual(new Card(), clientCard.Type);
             Assert.AreEqual(101, clientCard.DefinitionId);
         }
 
@@ -47,7 +47,7 @@ namespace Framework.Entities.Tests
         public void TagSet_Via_Server_Mirrors_To_Client_Tag_Store()
         {
             var (server, client, _) = Build();
-            var serverCard = server.Entities.Create(EntityTypes.Card, definitionId: 101);
+            var serverCard = server.Entities.Create(new Card(), definitionId: 101);
 
             server.Tags.Set(serverCard.Id, SampleTags.Health, 30);
 
@@ -58,7 +58,7 @@ namespace Framework.Entities.Tests
         public void TagChange_Carries_Prev_And_Next_To_Mirror()
         {
             var (server, client, _) = Build();
-            var serverCard = server.Entities.Create(EntityTypes.Card);
+            var serverCard = server.Entities.Create(new Card());
 
             server.Tags.Set(serverCard.Id, SampleTags.Health, 30);
             server.Tags.Set(serverCard.Id, SampleTags.Health, 25);  // change
@@ -70,7 +70,7 @@ namespace Framework.Entities.Tests
         public void TagRemoved_Clears_Mirror_Slot()
         {
             var (server, client, _) = Build();
-            var serverCard = server.Entities.Create(EntityTypes.Card);
+            var serverCard = server.Entities.Create(new Card());
 
             server.Tags.Set(serverCard.Id, SampleTags.Health, 30);
             Assert.IsTrue(client.TagStore.Has(serverCard.Id, SampleTags.Health.Slot));
@@ -84,8 +84,8 @@ namespace Framework.Entities.Tests
         {
             var (server, client, _) = Build();
 
-            var alice = server.Entities.Create(EntityTypes.Card, definitionId: 101);
-            var bob   = server.Entities.Create(EntityTypes.Card, definitionId: 102);
+            var alice = server.Entities.Create(new Card(), definitionId: 101);
+            var bob   = server.Entities.Create(new Card(), definitionId: 102);
 
             server.Tags.Set(alice.Id, SampleTags.Health, 30);
             server.Tags.Set(alice.Id, SampleTags.Attack, 5);
@@ -106,7 +106,7 @@ namespace Framework.Entities.Tests
             // Equality short-circuit: a redundant set on the server should not emit,
             // so the client should not observe a second event.
             var (server, client, w) = Build();
-            var serverCard = server.Entities.Create(EntityTypes.Card);
+            var serverCard = server.Entities.Create(new Card());
             server.Tags.Set(serverCard.Id, SampleTags.Health, 30);
 
             var clientCountBefore = w.ClientStream.Count;

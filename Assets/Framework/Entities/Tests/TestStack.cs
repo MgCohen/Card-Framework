@@ -15,6 +15,7 @@ namespace Framework.Entities.Tests
         public TagStore TagStore { get; }
         public TagService Tags { get; }
         public EntityStore EntityStore { get; }
+        public EntityTypeRegistry EntityTypes { get; }
         public EntityService Entities { get; }
         public HandlerRegistry Registry { get; }
 
@@ -26,11 +27,12 @@ namespace Framework.Entities.Tests
             TagStore = new TagStore();
             Tags = new TagService(TagStore, Stream);
             EntityStore = new EntityStore();
+            EntityTypes = EntityTypeRegistry.WithBaselines();
             Entities = new EntityService(EntityStore, Stream);
 
             var handlers = new List<IWireEventHandler>
             {
-                new EntityCreatedHandler(EntityStore),
+                new EntityCreatedHandler(EntityStore, EntityTypes),
                 new TagRemovedHandler(TagStore),
                 new TagSetHandler<int>(TagStore),
                 new TagChangeHandler<int>(TagStore),

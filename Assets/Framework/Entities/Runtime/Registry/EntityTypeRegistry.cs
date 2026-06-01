@@ -1,23 +1,24 @@
-using System;
-using System.Collections.Generic;
+using Framework.Core;
 
 namespace Framework.Entities
 {
-    public static class EntityTypeRegistry
+    // Registry of entity kinds — a scoped instance (never a static global), so tests and
+    // server/client scopes stay isolated. A thin SlotRegistry<EntityType> for DI/naming
+    // clarity; all behaviour is inherited (Register<T> / Register(member) / BySlot / Of<T>).
+    //
+    // WithBaselines() loads the framework kinds. Each composition root calls it explicitly
+    // (EntityLayer per scope, TestStack in tests); games register their own kinds on top.
+    public sealed class EntityTypeRegistry : SlotRegistry<EntityType>
     {
-        static readonly Dictionary<int, EntityType> _bySlot = new();
-
-        public static EntityType Register(int slot, string name)
+        public static EntityTypeRegistry WithBaselines()
         {
-            if (_bySlot.ContainsKey(slot))
-                throw new InvalidOperationException($"Slot {slot} claimed.");
-            var type = new EntityType(slot, name);
-            _bySlot[slot] = type;
-            return type;
+            var registry = new EntityTypeRegistry();
+            registry.Register<Unknown>();
+            registry.Register<Player>();
+            registry.Register<Zone>();
+            registry.Register<Card>();
+            registry.Register<Modifier>();
+            return registry;
         }
-
-        public static EntityType BySlot(int slot) => _bySlot[slot];
-
-        public static bool TryGetBySlot(int slot, out EntityType type) => _bySlot.TryGetValue(slot, out type);
     }
 }
