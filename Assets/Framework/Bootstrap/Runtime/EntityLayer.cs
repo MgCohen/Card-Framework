@@ -1,16 +1,13 @@
 using Framework.Entities;
-using Scaffold.AppFlow;
 using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class EntityLayer : IScopeLayer
+    public sealed class EntityLayer : BootstrapLayer
     {
-        readonly bool _isServer;
+        public EntityLayer(bool isServer) : base(isServer) { }
 
-        public EntityLayer(bool isServer) { _isServer = isServer; }
-
-        public void Install(IContainerBuilder builder)
+        public override void Install(IContainerBuilder builder)
         {
             builder.Register<EntityStore>(Lifetime.Singleton);
             builder.RegisterInstance(EntityTypeRegistry.WithBaselines());

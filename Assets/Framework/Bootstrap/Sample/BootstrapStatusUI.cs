@@ -1,7 +1,7 @@
 using Scaffold.AppFlow;
 using UnityEngine;
 
-namespace Framework.Bootstrap
+namespace Framework.Bootstrap.Sample
 {
     [RequireComponent(typeof(AppFlowRoot))]
     public sealed class BootstrapStatusUI : MonoBehaviour
