@@ -85,9 +85,9 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 
 ## Disposition
 
-Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out); A1 comment strip landed.
+Status as of 2026-06-02 — **all findings resolved.** Lookup conformance (PR1–6) + comment strip (A1) + the non-lookup cleanup wave (PRs #167–#175) are merged; everything else is a deliberate keep/no-action. **No open cleanups remain.**
 
-### ✅ Implemented — PR1–6 landed
+### ✅ Implemented — lookup conformance (PR1–6)
 Resolved by the lookup-patterns standard and shipped across the staged PRs in [conformance-plan.md](conformance-plan.md); the standard itself is [lookup-patterns.md](lookup-patterns.md).
 
 - **B1** — TagStore boxing → per-value-type typed maps.
@@ -100,21 +100,29 @@ Resolved by the lookup-patterns standard and shipped across the staged PRs in [c
 - **E4** — delete `Vec3`.
 - **G2** — GameEngine → services + read-only store views; store writes `internal`, reads `public`.
 - **I4** — EntityStore allocation → service (`EntityService` owns `_nextId`).
-- **F1** — `GameState.cs` four records → split per-file. Landed via PR5 (the State slot-wire PR) even though it sat outside the boundary set.
+- **F1** — `GameState.cs` four records → split per-file (PR5).
+- **A1** — rationale-header strip; one-line invariant warnings kept inline. Commit `2a6d4ab`.
+
+### ✅ Implemented — non-lookup cleanup wave (PRs #167–#175, merged 2026-06-02)
+Each landed as a focused PR, EditMode-green (and PlayMode-green for the Multiplayer ones).
+
+- **C1, C2, H2** — Wire emit/wiring dedup + `NullTransport` discard removed. [#167](https://github.com/MgCohen/Card-Framework/pull/167)
+- **C6, I5** — `BootstrapLayer` base for `_isServer`; `BootstrapStatusUI` → `Framework.Bootstrap.Sample`. [#168](https://github.com/MgCohen/Card-Framework/pull/168)
+- **H3, H4** — store-miss diagnostics: messages on `ById`/`Get` misses; `RequestStore.Get<T>` throws on wrong-type. [#169](https://github.com/MgCohen/Card-Framework/pull/169)
+- **F2** — one-type-per-file rule codified in [coding-standards.md](coding-standards.md); `PendingRequest.cs` split. [#170](https://github.com/MgCohen/Card-Framework/pull/170)
+- **I3** — channel-id overflow guard + unregistered-inbound-id guard; capacity one shared const. [#171](https://github.com/MgCohen/Card-Framework/pull/171)
+- **G1, C4, C5, D5** — extract `PeerRoster<TContext>` from `Session`; unified peer-removal; `Bind`/`BindNgo`; seal `Session`. [#173](https://github.com/MgCohen/Card-Framework/pull/173)
+- **D4** — `PlayerData`/`PlayerContext` fields → properties. [#174](https://github.com/MgCohen/Card-Framework/pull/174)
+- **E8** — drop `Catalog._byDef` redundant reverse map (`GetId` returns `def.Id`, id-validated). [#175](https://github.com/MgCohen/Card-Framework/pull/175)
 
 ### 👍 Decided — keep / no action
-- **E5** — `TryBySlot` is *kept*: it's standard Registry surface, not dead.
+- **E5** — `TryBySlot` is *kept*: standard Registry surface, not dead.
 - **B3, C8, E6, E7, F3, J1** — confirmed as notes; nothing to change.
+- **C7** — `Session` static-facade forwards: the minimal cost of a non-generic entry point over a generic type; every alternative (delete / inherit / `using` alias) loses ergonomics, leaks the generic return types, or breaks cross-assembly. Leave.
+- **D6** — `TagRemovedHandler` registered separately from `RegisterTagValueType<T>`: the asymmetry is correct — Removed is type-agnostic (registered once), Set/Change are per-`T`. Leave.
+- **I1** — `EventStream` history is match-scoped and freed at match end; compaction premature without a memory-pressure signal.
+- **B2** — wire events are heap `class`es, but they're retained by the history list, so the cost is memory growth (→ I1), not GC churn. Deferred.
+- **D3 / H1** — `EntityService.Create` emit-then-read-back is the correct way to return the handler-created canonical entity under handler-is-sole-writer; the synchronous-dispatch dependency is structural (server-local emit) and revisited when the step-5c command pipeline lands.
 
-### ✅ Separate track — comment strip (landed)
-- **A1** — headers stripped, one-line invariant warnings kept inline. Landed 2026-06-01 (commit `2a6d4ab`); ran as its own pass after conformance.
-
-### 📋 Open — non-lookup cleanups (not yet scheduled)
-Real but orthogonal to the lookup decisions; own pass later.
-
-- **Wire:** C1 (dual `Emit`), C2 (two wiring paths), B2 (event allocs), I1 (unbounded history), I3 (byte-id cap / null deref), H2 (`NullTransport` judo).
-- **Session / Multiplayer:** G1 (461-line class), C4 (peer-removal dup), C5 (factory repetition), C7 (facade dup), D4 (public fields), D5 (not sealed).
-- **Bootstrap:** C6 (`_isServer` boilerplate), D6 (handler-wiring asymmetry), I5 (`BootstrapStatusUI` in Runtime).
-- **Entities / Requests:** E8 (Catalog reference-equality key), F2 (two types in `PendingRequest.cs`), H3 (`RequestStore.Get` silent null), H4 (raw throws on miss), D3/H1 (emit-read-back fragility).
-
-Verified finding-by-finding against the tree on 2026-06-01: every Implemented item is present in code; every item above is confirmed still untouched.
+### 📋 Open
+None — every finding above is implemented or a recorded decision. Verified finding-by-finding against the merged tree on 2026-06-02 (EditMode 349/349, PlayMode 12/12).
