@@ -9,7 +9,7 @@ namespace Framework.Wire
         readonly Dispatcher _dispatcher;
         readonly IPackingHandler _handler;
         readonly Dictionary<Type, NetworkChannel> _byType = new();
-        byte _nextId;
+        int _nextId;
 
         public event Action<WireEvent> OnReceived;
 
@@ -24,7 +24,9 @@ namespace Framework.Wire
             where T : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>, new()
             where TPacked : unmanaged, IPackedStruct
         {
-            var id = _nextId++;
+            if (_nextId >= Dispatcher.Capacity)
+                throw new InvalidOperationException($"Wire channel registry full: {Dispatcher.Capacity} channels max (byte-sized ids).");
+            var id = (byte)_nextId++;
             var ch = new NetworkChannel<T, TPacked>(id, _dispatcher, _handler);
             _byType[typeof(T)] = ch;
             _dispatcher.Register(id, ch);
