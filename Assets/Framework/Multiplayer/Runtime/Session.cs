@@ -8,16 +8,14 @@ using UnityEngine;
 
 namespace Framework.Multiplayer
 {
-    public class Session<TData, TContext> : IDisposable
+    public sealed class Session<TData, TContext> : IDisposable
         where TData    : PlayerData,    new()
         where TContext : PlayerContext, new()
     {
         const float JoinTimeoutSeconds = 10f;
         const string LobbyMessageName = "Framework.Multiplayer";
 
-        readonly List<Peer> _peers = new();
-        readonly Dictionary<int, TContext> _players = new();
-        readonly Dictionary<int, bool> _ready = new();
+        readonly PeerRoster<TContext> _roster = new();
 
         NetworkManager _nm;
         NgoTransport _transport;
@@ -38,26 +36,15 @@ namespace Framework.Multiplayer
 
         bool _isHost;
         bool _disposed;
-        int _nextSeat = 1;
 
         public NetworkManager NetworkManager => _nm;
         public Peer Self { get; private set; }
-        public IReadOnlyList<Peer> Peers => _peers;
+        public IReadOnlyList<Peer> Peers => _roster.Peers;
         public bool IsHost => _isHost;
         public SessionState State { get; private set; }
-        public IReadOnlyDictionary<int, TContext> Players => _players;
-        public IReadOnlyDictionary<int, bool> ReadyStates => _ready;
-
-        public bool AllReady
-        {
-            get
-            {
-                if (_peers.Count == 0) return false;
-                foreach (var peer in _peers)
-                    if (!_ready.TryGetValue(peer.Seat, out var r) || !r) return false;
-                return true;
-            }
-        }
+        public IReadOnlyDictionary<int, TContext> Players => _roster.Players;
+        public IReadOnlyDictionary<int, bool> ReadyStates => _roster.ReadyStates;
+        public bool AllReady => _roster.AllReady;
 
         public event Action<Peer> PeerJoined;
         public event Action<Peer> PeerLeft;
@@ -76,12 +63,10 @@ namespace Framework.Multiplayer
                 _contextResolver = contextResolver ?? DefaultResolver,
                 _isHost = true,
             };
-            s._network = new Network(LoopbackTransport.Solo());
-            s.RegisterChannels();
-            s.SubscribeChannels();
+            s.Bind(new Network(LoopbackTransport.Solo()));
 
             s.Self = new Peer(seat: 0, networkId: 0, isLocal: true);
-            s._peers.Add(s.Self);
+            s._roster.Add(s.Self);
             s.TransitionTo(SessionState.InLobby);
             return UniTask.FromResult(s);
         }
@@ -143,13 +128,10 @@ namespace Framework.Multiplayer
                 throw new SessionStartupException("NetworkManager.StartHost() returned false");
             }
 
-            s._transport = new NgoTransport(nm, LobbyMessageName);
-            s._network = new Network(s._transport);
-            s.RegisterChannels();
-            s.SubscribeChannels();
+            s.BindNgo(nm);
 
             s.Self = new Peer(seat: 0, networkId: nm.LocalClientId, isLocal: true);
-            s._peers.Add(s.Self);
+            s._roster.Add(s.Self);
             s.TransitionTo(SessionState.InLobby);
 
             return UniTask.FromResult(s);
@@ -175,10 +157,7 @@ namespace Framework.Multiplayer
             s.TransitionTo(SessionState.Connecting);
 
             // Register synchronously so the host's first sends aren't lost.
-            s._transport = new NgoTransport(nm, LobbyMessageName);
-            s._network = new Network(s._transport);
-            s.RegisterChannels();
-            s.SubscribeChannels();
+            s.BindNgo(nm);
 
             try
             {
@@ -198,6 +177,19 @@ namespace Framework.Multiplayer
             }
 
             return s;
+        }
+
+        void BindNgo(NetworkManager nm)
+        {
+            _transport = new NgoTransport(nm, LobbyMessageName);
+            Bind(new Network(_transport));
+        }
+
+        void Bind(Network network)
+        {
+            _network = network;
+            RegisterChannels();
+            SubscribeChannels();
         }
 
         void RegisterChannels()
@@ -257,20 +249,20 @@ namespace Framework.Multiplayer
         {
             if (clientId == _nm.LocalClientId) return;
 
-            foreach (var existing in _peers)
+            foreach (var existing in _roster.Peers)
                 _network.Send(new PeerJoinedEvent { Seat = existing.Seat, NetworkId = existing.NetworkId });
 
-            var seat = _nextSeat++;
+            var seat = _roster.NextSeat();
             var peer = new Peer(seat: seat, networkId: clientId, isLocal: false);
-            _peers.Add(peer);
+            _roster.Add(peer);
 
             _network.Send(new PeerWelcomeEvent { YourSeat = seat, YourNetworkId = clientId });
             _network.Send(new PeerJoinedEvent { Seat = seat, NetworkId = clientId });
 
-            foreach (var ctx in _players.Values)
+            foreach (var ctx in _roster.Players.Values)
                 _network.Send(new PlayerContextEvent { Seat = ctx.Seat, NetworkId = ctx.NetworkId, PlayerId = ctx.PlayerId });
 
-            foreach (var entry in _ready)
+            foreach (var entry in _roster.ReadyStates)
                 _network.Send(new PeerReadyChangedEvent { Seat = entry.Key, Ready = entry.Value });
 
             PeerJoined?.Invoke(peer);
@@ -278,12 +270,8 @@ namespace Framework.Multiplayer
 
         void HostOnClientDisconnected(ulong clientId)
         {
-            var idx = IndexByNetworkId(clientId);
-            if (idx < 0) return;
-            var peer = _peers[idx];
-            _peers.RemoveAt(idx);
-            _players.Remove(peer.Seat);
-            _ready.Remove(peer.Seat);
+            if (!_roster.TryGetByNetworkId(clientId, out var peer)) return;
+            _roster.Remove(peer.Seat, out _);
 
             _network.Send(new PeerLeftEvent { Seat = peer.Seat });
             PeerLeft?.Invoke(peer);
@@ -307,17 +295,17 @@ namespace Framework.Multiplayer
             if (State != SessionState.Connecting) return;
 
             Self = new Peer(seat: ev.YourSeat, networkId: ev.YourNetworkId, isLocal: true);
-            _peers.Add(Self);
+            _roster.Add(Self);
             TransitionTo(SessionState.InLobby);
         }
 
         void OnPeerJoinedReceived(PeerJoinedEvent ev)
         {
             if (_nm != null && ev.NetworkId == _nm.LocalClientId) return;
-            if (IndexBySeat(ev.Seat) >= 0) return;
+            if (_roster.TryGetBySeat(ev.Seat, out _)) return;
 
             var peer = new Peer(seat: ev.Seat, networkId: ev.NetworkId, isLocal: false);
-            _peers.Add(peer);
+            _roster.Add(peer);
 
             if (State == SessionState.InLobby)
                 PeerJoined?.Invoke(peer);
@@ -325,12 +313,7 @@ namespace Framework.Multiplayer
 
         void OnPeerLeftReceived(PeerLeftEvent ev)
         {
-            var idx = IndexBySeat(ev.Seat);
-            if (idx < 0) return;
-            var peer = _peers[idx];
-            _peers.RemoveAt(idx);
-            _players.Remove(ev.Seat);
-            _ready.Remove(ev.Seat);
+            if (!_roster.Remove(ev.Seat, out var peer)) return;
             PeerLeft?.Invoke(peer);
         }
 
@@ -359,18 +342,18 @@ namespace Framework.Multiplayer
                 Seat      = ev.Seat,
                 PlayerId  = ev.PlayerId,
             };
-            _players[ev.Seat] = ctx;
-            var idx = IndexBySeat(ev.Seat);
-            PlayerContextChanged?.Invoke(idx >= 0 ? _peers[idx] : default, ctx);
+            _roster.SetContext(ev.Seat, ctx);
+            _roster.TryGetBySeat(ev.Seat, out var peer);
+            PlayerContextChanged?.Invoke(peer, ctx);
         }
 
         void OnReadyReceived(PeerReadyChangedEvent ev)
         {
-            if (_ready.TryGetValue(ev.Seat, out var prev) && prev == ev.Ready) return;
+            if (_roster.ReadyStates.TryGetValue(ev.Seat, out var prev) && prev == ev.Ready) return;
 
-            _ready[ev.Seat] = ev.Ready;
-            var idx = IndexBySeat(ev.Seat);
-            ReadyChanged?.Invoke(idx >= 0 ? _peers[idx] : default, ev.Ready);
+            _roster.SetReady(ev.Seat, ev.Ready);
+            _roster.TryGetBySeat(ev.Seat, out var peer);
+            ReadyChanged?.Invoke(peer, ev.Ready);
 
             if (_isHost)
                 _network.Send(new PeerReadyChangedEvent { Seat = ev.Seat, Ready = ev.Ready });
@@ -380,20 +363,6 @@ namespace Framework.Multiplayer
         {
             if (State != SessionState.InLobby) return;
             TransitionTo(SessionState.InMatch);
-        }
-
-        int IndexBySeat(int seat)
-        {
-            for (var i = 0; i < _peers.Count; i++)
-                if (_peers[i].Seat == seat) return i;
-            return -1;
-        }
-
-        int IndexByNetworkId(ulong networkId)
-        {
-            for (var i = 0; i < _peers.Count; i++)
-                if (_peers[i].NetworkId == networkId) return i;
-            return -1;
         }
 
         void TransitionTo(SessionState newState)
