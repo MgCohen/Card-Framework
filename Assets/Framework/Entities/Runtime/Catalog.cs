@@ -18,7 +18,8 @@ namespace Framework.Entities
             _byDef[def]   = def.Id;
         }
 
-        public TDef ById(int id) => _byId[id];
+        public TDef ById(int id)
+            => _byId.TryGetValue(id, out var def) ? def : throw new KeyNotFoundException($"No definition with id {id}.");
 
         public bool TryGetById(int id, out TDef def) => _byId.TryGetValue(id, out def);
 

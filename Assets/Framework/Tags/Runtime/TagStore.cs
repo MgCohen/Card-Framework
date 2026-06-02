@@ -13,7 +13,11 @@ namespace Framework.Tags
             => MapFor<T>().Set(entityId, slot, value);
 
         public T Get<T>(int entityId, int slot) where T : unmanaged
-            => ((TagMap<T>)_byType[typeof(T)]).Get(entityId, slot);
+        {
+            if (!_byType.TryGetValue(typeof(T), out var map))
+                throw new KeyNotFoundException($"No tag map registered for value type {typeof(T).Name}.");
+            return ((TagMap<T>)map).Get(entityId, slot);
+        }
 
         public bool Has(int entityId, int slot)
         {
