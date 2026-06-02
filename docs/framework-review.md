@@ -85,7 +85,7 @@ Numbered for reference. Severity: 🔴 worth fixing · 🟡 minor/judgment · �
 
 ## Disposition
 
-Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out).
+Status as of 2026-06-01 — lookup-conformance series complete (PR1–6 landed; PR7 reclassified out); A1 comment strip landed.
 
 ### ✅ Implemented — PR1–6 landed
 Resolved by the lookup-patterns standard and shipped across the staged PRs in [conformance-plan.md](conformance-plan.md); the standard itself is [lookup-patterns.md](lookup-patterns.md).
@@ -106,8 +106,8 @@ Resolved by the lookup-patterns standard and shipped across the staged PRs in [c
 - **E5** — `TryBySlot` is *kept*: it's standard Registry surface, not dead.
 - **B3, C8, E6, E7, F3, J1** — confirmed as notes; nothing to change.
 
-### ✍️ Separate track — comment strip
-- **A1** — strip headers, keep one-line invariant warnings inline. Its own pass once conformance lands.
+### ✅ Separate track — comment strip (landed)
+- **A1** — headers stripped, one-line invariant warnings kept inline. Landed 2026-06-01 (commit `2a6d4ab`); ran as its own pass after conformance.
 
 ### 📋 Open — non-lookup cleanups (not yet scheduled)
 Real but orthogonal to the lookup decisions; own pass later.
