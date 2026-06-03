@@ -31,6 +31,11 @@ namespace Framework.Bootstrap
 
             // Eager resolve: these classes wire via ctor side-effects, not a lifecycle interface.
             builder.RegisterBuildCallback(c => c.Resolve<HandlerRegistry>());
+
+            // Populate the wire channel table before anything can emit. Both server and
+            // client run the same registration so channel ids line up across the wire.
+            builder.RegisterBuildCallback(c => WireRegistrar.RegisterAll(c.Resolve<Network>()));
+
             if (_isServer) builder.RegisterBuildCallback(c => c.Resolve<WireForwarder>());
             else           builder.RegisterBuildCallback(c => c.Resolve<NetworkInboundBridge>());
         }
