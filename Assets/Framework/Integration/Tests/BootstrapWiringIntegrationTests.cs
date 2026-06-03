@@ -45,14 +45,18 @@ namespace Framework.Integration.Tests
                 // collected by HandlerRegistry's DI list injection alongside the framework set.
                 builder.RegisterHandler<DrawCardRequestHandler>();
                 builder.RegisterHandler<DrawCardResponseHandler>();
+
+                // Game-side command handlers — collected by CommandHandlerRegistry the same way.
+                builder.RegisterCommandHandler<SetHealthHandler>();
+                builder.RegisterCommandHandler<IntroduceCardHandler>();
             }, "IntegrationServerScope");
             if (_scope.Container == null) _scope.Build();
 
             var engine = _scope.Container.Resolve<GameEngine>();
 
-            // 1. Create + tag a player, through the container-built services.
+            // 1. Create a player, set its health through a DI-registered command handler.
             var player = engine.Entities.Create(new Player());
-            engine.Tags.Set(player.Id, SampleTags.Health, 30);
+            Assert.IsTrue(engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = 30 }).Accepted);
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health));
 
             // 2. Open a request — pending until answered.
@@ -67,10 +71,9 @@ namespace Framework.Integration.Tests
             Assert.AreEqual(0, engine.RequestStore.Open.Count, "store drops the request on answer");
             Assert.AreEqual(42, answer.CardDefinitionId);
 
-            // 4. On resolution: create the drawn card and tag it.
+            // 4. On resolution: create the drawn card, introduce it through a command handler.
             var card = engine.Entities.Create(new Card(), answer.CardDefinitionId);
-            engine.Tags.Set(card.Id, SampleTags.Cost, answer.Cost);
-            engine.Tags.Set(card.Id, SampleTags.IsCard, true);
+            engine.Commands.Execute(new IntroduceCard { EntityId = card.Id, Cost = answer.Cost });
 
             // 5. Final cross-store state, proven over the real DI graph.
             Assert.AreEqual(3, engine.Tags.Get(card.Id, SampleTags.Cost));

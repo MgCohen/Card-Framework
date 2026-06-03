@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Framework.Commands;
 using Framework.Engine;
@@ -36,7 +35,11 @@ namespace Framework.Integration.Tests
             var requests = new RequestService(Stream);
             var states   = new StateService(Stream);
             var commands = new CommandService(
-                new CommandHandlerRegistry(Array.Empty<ICommandHandler>()),
+                new CommandHandlerRegistry(new ICommandHandler[]
+                {
+                    new SetHealthHandler(tags),
+                    new IntroduceCardHandler(tags),
+                }),
                 new BlockScope(Stream));
 
             Engine = new GameEngine(

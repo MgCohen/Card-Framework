@@ -5,11 +5,11 @@ using NUnit.Framework;
 namespace Framework.Integration.Tests
 {
     // End-to-end spine: one flow that touches Wire (emit/dispatch), Entities (create),
-    // Tags (set/read across int + bool), and Requests (open / typed await / complete) — all
+    // Tags (set/read across int + bool), Requests (open / typed await / complete), and Commands
+    // (the tag mutations are authored by registered handlers, bracketed by Block events) — all
     // driven through the assembled GameEngine aggregate. Unlike the per-feature suites, this
     // proves the layers *compose*: every mutation rides the shared EventStream and is applied
-    // synchronously by a live handler before the next read. It's the characterization baseline
-    // the command pipeline will later let us express declaratively ("on response -> create").
+    // synchronously by a live handler before the next read.
     public class FullFlowIntegrationTests
     {
         [Test]
@@ -18,12 +18,12 @@ namespace Framework.Integration.Tests
             var stack  = new EngineStack();
             var engine = stack.Engine;
 
-            // 1. Create a player, tag it. emit EntityCreatedEvent -> handler inserts -> read back.
+            // 1. Create a player, then set its health through a command (handler authors the tag).
             var player = engine.Entities.Create(new Player());
             Assert.AreEqual(1, player.Id);
             Assert.AreEqual(new Player(), player.Type);
 
-            engine.Tags.Set(player.Id, SampleTags.Health, 30);
+            Assert.IsTrue(engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = 30 }).Accepted);
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health));
 
             // 2. Open a request: pending until a response arrives over the wire.
@@ -42,14 +42,14 @@ namespace Framework.Integration.Tests
             Assert.AreEqual(0, engine.RequestStore.Open.Count, "store drops the request on answer");
             Assert.AreEqual(42, answer.CardDefinitionId);
 
-            // 4. On resolution: create the drawn card and tag it — the "on return, do more" chain.
+            // 4. On resolution: create the drawn card, then introduce it through a command — one
+            //    handler authors both tags (cost + is-card) under a single Command block.
             var card = engine.Entities.Create(new Card(), answer.CardDefinitionId);
             Assert.AreEqual(2, card.Id, "second entity allocated after the player");
             Assert.AreEqual(new Card(), card.Type);
             Assert.AreEqual(42, card.DefinitionId);
 
-            engine.Tags.Set(card.Id, SampleTags.Cost, answer.Cost);
-            engine.Tags.Set(card.Id, SampleTags.IsCard, true);
+            Assert.IsTrue(engine.Commands.Execute(new IntroduceCard { EntityId = card.Id, Cost = answer.Cost }).Accepted);
 
             // 5. Final cross-store state: both entities live, tags intact across int + bool.
             Assert.AreEqual(3, engine.Tags.Get(card.Id, SampleTags.Cost));

@@ -3,8 +3,8 @@ using Framework.Tags;
 
 namespace Framework.Integration.Tests
 {
-    // Game-side stub commands + handlers, registered through DI like the wire handlers, used to
-    // drive mutations in the composed end-to-end flow. Two distinct types prove registry dispatch.
+    // Game-side stub commands + handlers used to drive the integration spines. Registered through
+    // DI in the (b) flow and hand-wired in the (a) harness — the same way wire handlers are.
     public sealed class SetHealth : Command
     {
         public int EntityId;
@@ -18,15 +18,20 @@ namespace Framework.Integration.Tests
         public override void Handle(SetHealth cmd) => _tags.Set(cmd.EntityId, SampleTags.Health, cmd.Value);
     }
 
-    public sealed class MarkCard : Command
+    public sealed class IntroduceCard : Command
     {
         public int EntityId;
+        public int Cost;
     }
 
-    sealed class MarkCardHandler : CommandHandler<MarkCard>
+    sealed class IntroduceCardHandler : CommandHandler<IntroduceCard>
     {
         readonly TagService _tags;
-        public MarkCardHandler(TagService tags) { _tags = tags; }
-        public override void Handle(MarkCard cmd) => _tags.Set(cmd.EntityId, SampleTags.IsCard, true);
+        public IntroduceCardHandler(TagService tags) { _tags = tags; }
+        public override void Handle(IntroduceCard cmd)
+        {
+            _tags.Set(cmd.EntityId, SampleTags.Cost, cmd.Cost);
+            _tags.Set(cmd.EntityId, SampleTags.IsCard, true);
+        }
     }
 }
