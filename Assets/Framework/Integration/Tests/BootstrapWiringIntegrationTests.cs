@@ -39,6 +39,7 @@ namespace Framework.Integration.Tests
                 new EntityLayer(isServer: true).Install(builder);
                 new RequestLayer(isServer: true).Install(builder);
                 new StateLayer(isServer: true).Install(builder);
+                new CommandLayer(isServer: true).Install(builder);
 
                 // The request/response wire handlers the Requests feature doesn't ship yet —
                 // collected by HandlerRegistry's DI list injection alongside the framework set.

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Framework.Commands;
 using Framework.Engine;
 using Framework.Entities;
 using Framework.Requests;
@@ -33,11 +35,14 @@ namespace Framework.Integration.Tests
             var entities = new EntityService(entityStore, Stream);
             var requests = new RequestService(Stream);
             var states   = new StateService(Stream);
+            var commands = new CommandService(
+                new CommandHandlerRegistry(Array.Empty<ICommandHandler>()),
+                new BlockScope(Stream));
 
             Engine = new GameEngine(
                 Stream, network,
                 entityStore, tagStore, requestStore, stateStore,
-                entities, tags, requests, states);
+                entities, tags, requests, states, commands);
 
             var handlers = new List<IWireEventHandler>
             {

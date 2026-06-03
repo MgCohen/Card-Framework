@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Integration.Tests",
     "references": [
         "Framework.Bootstrap",
+        "Framework.Commands",
         "Framework.Core",
         "Framework.Wire",
         "Framework.Tags",

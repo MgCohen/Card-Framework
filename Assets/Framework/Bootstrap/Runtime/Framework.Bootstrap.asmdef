@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Bootstrap",
     "references": [
         "Framework.Core",
+        "Framework.Commands",
         "Framework.Engine",
         "Framework.Entities",
         "Framework.Requests",

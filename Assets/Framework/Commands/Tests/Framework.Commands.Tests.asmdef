@@ -1,0 +1,25 @@
+{
+    "name": "Framework.Commands.Tests",
+    "rootNamespace": "Framework.Commands.Tests",
+    "references": [
+        "Framework.Commands",
+        "Framework.Wire",
+        "Framework.Tags",
+        "Framework.Core"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

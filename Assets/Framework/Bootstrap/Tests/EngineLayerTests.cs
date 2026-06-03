@@ -1,3 +1,4 @@
+using Framework.Commands;
 using Framework.Engine;
 using Framework.Entities;
 using Framework.Requests;
@@ -28,6 +29,7 @@ namespace Framework.Bootstrap.Tests
                 new EntityLayer(isServer).Install(builder);
                 new RequestLayer(isServer).Install(builder);
                 new StateLayer(isServer).Install(builder);
+                new CommandLayer(isServer).Install(builder);
             }, name);
             if (scope.Container == null) scope.Build();
             return scope;
@@ -63,6 +65,7 @@ namespace Framework.Bootstrap.Tests
             Assert.IsNotNull(engine.Tags);
             Assert.IsNotNull(engine.Requests);
             Assert.IsNotNull(engine.States);
+            Assert.IsNotNull(engine.Commands);
         }
 
         [Test]
@@ -76,12 +79,14 @@ namespace Framework.Bootstrap.Tests
             var tags     = _scope.Container.Resolve<TagService>();
             var requests = _scope.Container.Resolve<RequestService>();
             var states   = _scope.Container.Resolve<StateService>();
+            var commands = _scope.Container.Resolve<CommandService>();
 
             Assert.AreSame(stream,   engine.Stream);
             Assert.AreSame(entities, engine.Entities);
             Assert.AreSame(tags,     engine.Tags);
             Assert.AreSame(requests, engine.Requests);
             Assert.AreSame(states,   engine.States);
+            Assert.AreSame(commands, engine.Commands);
         }
 
         [Test]
@@ -120,6 +125,7 @@ namespace Framework.Bootstrap.Tests
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<TagService>());
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<RequestService>());
             Assert.Throws<VContainerException>(() => _scope.Container.Resolve<StateService>());
+            Assert.Throws<VContainerException>(() => _scope.Container.Resolve<CommandService>());
         }
 
         [Test]
