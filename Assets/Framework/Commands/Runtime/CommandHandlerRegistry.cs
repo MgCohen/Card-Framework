@@ -3,9 +3,6 @@ using System.Collections.Generic;
 
 namespace Framework.Commands
 {
-    // Maps command type -> its single authoritative handler, collected from DI.
-    // Mirrors Framework.Wire's HandlerRegistry, but a command has exactly one handler
-    // (unlike a wire event, which may fan out to many), so duplicate registration is an error.
     public sealed class CommandHandlerRegistry
     {
         readonly Dictionary<Type, ICommandHandler> _byType = new();

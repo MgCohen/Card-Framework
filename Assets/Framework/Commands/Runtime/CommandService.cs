@@ -2,10 +2,6 @@ using Framework.Wire;
 
 namespace Framework.Commands
 {
-    // Server-only intake: brackets a command's mutations with a Block (L2) and runs its
-    // handler inline + synchronously (L3). The handler calls the existing Tags/Entities/States
-    // services; THEIR mutation events are what cross the wire — the command never serializes
-    // (L1). Validation enters in Phase 1; for now every command is accepted.
     public sealed class CommandService
     {
         readonly CommandHandlerRegistry _handlers;

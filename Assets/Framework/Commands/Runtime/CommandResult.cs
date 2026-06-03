@@ -1,13 +1,9 @@
 namespace Framework.Commands
 {
-    // Thin, data-only outcome of Execute. Kept (over void) because Phase 1 adds rejection and
-    // the eventual client-submission path needs accepted-vs-rejected-and-why; it is also the
-    // seam the future evaluate-loop threads its outcome through. Factory methods (not an object
-    // initializer) keep it a true readonly struct without an init-only dependency.
     public readonly struct CommandResult
     {
         public readonly bool   Accepted;
-        public readonly string RejectReason;   // null when accepted
+        public readonly string RejectReason;
 
         CommandResult(bool accepted, string rejectReason)
         {

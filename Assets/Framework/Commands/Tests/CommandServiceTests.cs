@@ -6,16 +6,13 @@ using NUnit.Framework;
 
 namespace Framework.Commands.Tests
 {
-    // Phase 0 — the walking skeleton. Proves the command intake path end-to-end on the server:
-    // Execute opens a Command block, runs the handler (which calls a real service), the service's
-    // mutation lands on the stream, and Execute closes the block — in that order. Not a mirror
-    // test: the mutation already mirrors via the Tags tests; here we verify the bracket +
-    // orchestration shape (L1-L5).
+    // Proves the command intake path: Execute opens a Command block, runs the handler (which
+    // calls a real service), the mutation lands on the stream, and Execute closes the block —
+    // in that order. The mutation itself already mirrors via the Tags tests.
     public class CommandServiceTests
     {
-        // Builds a service over a captured stream. Handlers are constructed from the live
-        // TagService so any mutation they author lands on the very stream we assert against —
-        // bracket and mutation interleave in true emission order.
+        // Handlers are built from the live TagService so their mutation lands on the same stream
+        // the BlockScope emits on — bracket and mutation interleave in true emission order.
         static CommandService Build(out List<WireEvent> log, Func<TagService, ICommandHandler[]> handlers)
         {
             var stream   = new EventStream();
