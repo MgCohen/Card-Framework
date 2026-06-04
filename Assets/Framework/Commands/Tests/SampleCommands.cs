@@ -31,6 +31,44 @@ namespace Framework.Commands.Tests
         }
     }
 
+    // Phase 2 fixture: a read-modify-write command whose validator reads world state.
+    // SetHealth blind-sets; DealDamage reads the current value first — and its validator
+    // ctor-injects TagService to reject targets that have no Health tag at all. This is the
+    // shape Phase 1's payload-only SetHealthValidator never exercised: a validator with a
+    // service dependency, deciding on live state rather than the command's own fields.
+    public sealed class DealDamage : Command
+    {
+        public int EntityId;
+        public int Amount;
+    }
+
+    public sealed class DealDamageHandler : CommandHandler<DealDamage>
+    {
+        static readonly HealthTag Health = new();
+        readonly TagService _tags;
+
+        public DealDamageHandler(TagService tags) => _tags = tags;
+
+        public override void Handle(DealDamage cmd)
+            => _tags.Set(cmd.EntityId, Health, _tags.Get(cmd.EntityId, Health) - cmd.Amount);
+    }
+
+    public sealed class DealDamageValidator : CommandValidator<DealDamage>
+    {
+        static readonly HealthTag Health = new();
+        readonly TagService _tags;
+
+        public DealDamageValidator(TagService tags) => _tags = tags;
+
+        public override bool Validate(DealDamage cmd, out string reason)
+        {
+            if (cmd.Amount <= 0) { reason = "NonPositiveDamage"; return false; }        // payload
+            if (!_tags.Has(cmd.EntityId, Health)) { reason = "NotDamageable"; return false; } // world state
+            reason = null;
+            return true;
+        }
+    }
+
     public sealed class Boom : Command { }
 
     public sealed class BoomException : System.Exception { }

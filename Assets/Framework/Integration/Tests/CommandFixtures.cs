@@ -28,6 +28,36 @@ namespace Framework.Integration.Tests
         }
     }
 
+    // Phase 2: read-modify-write command whose validator reads world state (ctor-injects
+    // TagService). Drives the stateful-validation shape through both integration spines.
+    public sealed class DealDamage : Command
+    {
+        public int EntityId;
+        public int Amount;
+    }
+
+    sealed class DealDamageHandler : CommandHandler<DealDamage>
+    {
+        readonly TagService _tags;
+        public DealDamageHandler(TagService tags) { _tags = tags; }
+        public override void Handle(DealDamage cmd)
+            => _tags.Set(cmd.EntityId, SampleTags.Health,
+                         _tags.Get(cmd.EntityId, SampleTags.Health) - cmd.Amount);
+    }
+
+    public sealed class DealDamageValidator : CommandValidator<DealDamage>
+    {
+        readonly TagService _tags;
+        public DealDamageValidator(TagService tags) { _tags = tags; }
+        public override bool Validate(DealDamage cmd, out string reason)
+        {
+            if (cmd.Amount <= 0) { reason = "NonPositiveDamage"; return false; }
+            if (!_tags.Has(cmd.EntityId, SampleTags.Health)) { reason = "NotDamageable"; return false; }
+            reason = null;
+            return true;
+        }
+    }
+
     public sealed class IntroduceCard : Command
     {
         public int EntityId;

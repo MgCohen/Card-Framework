@@ -49,10 +49,14 @@ namespace Framework.Integration.Tests
 
                 // Game-side command handlers — collected by CommandHandlerRegistry the same way.
                 builder.RegisterCommandHandler<SetHealthHandler>();
+                builder.RegisterCommandHandler<DealDamageHandler>();
                 builder.RegisterCommandHandler<IntroduceCardHandler>();
 
                 // Game-side command validators — collected by CommandValidatorRegistry the same way.
+                // DealDamageValidator ctor-injects TagService: DI resolves the dependency the same
+                // way it does for handlers, proving stateful validators wire through the container.
                 builder.RegisterCommandValidator<SetHealthValidator>();
+                builder.RegisterCommandValidator<DealDamageValidator>();
             }, "IntegrationServerScope");
             if (_scope.Container == null) _scope.Build();
 
@@ -75,6 +79,11 @@ namespace Framework.Integration.Tests
             Assert.AreEqual(0, emitted, "a rejected command puts nothing on the wire");
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "rejected command left the tag untouched");
 
+            // 1c. DealDamage through the container: validator (TagService-injected) passes, handler
+            //     read-modify-writes. Proves a stateful validator resolves its dependency via DI. 30 -> 18.
+            Assert.IsTrue(engine.Commands.Execute(new DealDamage { EntityId = player.Id, Amount = 12 }).Accepted);
+            Assert.AreEqual(18, engine.Tags.Get(player.Id, SampleTags.Health));
+
             // 2. Open a request — pending until answered.
             Task<DrawCardResponse> draw = engine.Requests.Open(
                 new DrawCardRequest { ResponderId = player.Id, Count = 1 });
@@ -91,10 +100,22 @@ namespace Framework.Integration.Tests
             var card = engine.Entities.Create(new Card(), answer.CardDefinitionId);
             engine.Commands.Execute(new IntroduceCard { EntityId = card.Id, Cost = answer.Cost });
 
+            // 4b. Stateful reject over the DI graph: the card has no Health tag, so DealDamage's
+            //     container-resolved validator rejects on world state — zero wire traffic.
+            var damageEmitted = 0;
+            void CountDamage(WireEvent _) => damageEmitted++;
+            engine.Stream.OnAppended += CountDamage;
+            var noTarget = engine.Commands.Execute(new DealDamage { EntityId = card.Id, Amount = 5 });
+            engine.Stream.OnAppended -= CountDamage;
+
+            Assert.IsFalse(noTarget.Accepted);
+            Assert.AreEqual("NotDamageable", noTarget.RejectReason);
+            Assert.AreEqual(0, damageEmitted, "a state-rejected command puts nothing on the wire");
+
             // 5. Final cross-store state, proven over the real DI graph.
             Assert.AreEqual(3, engine.Tags.Get(card.Id, SampleTags.Cost));
             Assert.IsTrue(engine.Tags.Get(card.Id, SampleTags.IsCard));
-            Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "player tag survives the whole flow");
+            Assert.AreEqual(18, engine.Tags.Get(player.Id, SampleTags.Health), "player health reflects the mid-flow damage and survives the rest");
             Assert.IsTrue(engine.Entities.TryGetById(player.Id, out _));
             Assert.IsTrue(engine.Entities.TryGetById(card.Id, out _));
         }

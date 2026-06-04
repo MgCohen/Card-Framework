@@ -38,11 +38,13 @@ namespace Framework.Integration.Tests
                 new CommandHandlerRegistry(new ICommandHandler[]
                 {
                     new SetHealthHandler(tags),
+                    new DealDamageHandler(tags),
                     new IntroduceCardHandler(tags),
                 }),
                 new CommandValidatorRegistry(new ICommandValidator[]
                 {
                     new SetHealthValidator(),
+                    new DealDamageValidator(tags),
                 }),
                 new BlockScope(Stream));
 

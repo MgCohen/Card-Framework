@@ -15,16 +15,19 @@ namespace Framework.Commands.Tests
         // the BlockScope emits on — bracket and mutation interleave in true emission order.
         static CommandService Build(out List<WireEvent> log,
             Func<TagService, ICommandHandler[]> handlers,
-            ICommandValidator[] validators = null)
+            Func<TagService, ICommandValidator[]> validators = null)
         {
             var stream   = new EventStream();
             var captured = new List<WireEvent>();
             stream.OnAppended += captured.Add;
             log = captured;
 
+            // Validators take the same live TagService as handlers — a stateful validator must
+            // read the very store the handlers mutate, so both are built from one instance.
             var tags       = new TagService(new TagStore(), stream);
             var registry   = new CommandHandlerRegistry(handlers(tags));
-            var validation = new CommandValidatorRegistry(validators ?? Array.Empty<ICommandValidator>());
+            var validation = new CommandValidatorRegistry(
+                validators?.Invoke(tags) ?? Array.Empty<ICommandValidator>());
             var blocks     = new BlockScope(stream);
             return new CommandService(registry, validation, blocks);
         }
@@ -114,7 +117,7 @@ namespace Framework.Commands.Tests
         {
             var svc = Build(out var log,
                 tags => new ICommandHandler[] { new SetHealthHandler(tags) },
-                new ICommandValidator[] { new SetHealthValidator() });
+                _ => new ICommandValidator[] { new SetHealthValidator() });
 
             var result = svc.Execute(new SetHealth { EntityId = 1, Value = -5 });
 
@@ -128,12 +131,35 @@ namespace Framework.Commands.Tests
         {
             var svc = Build(out var log,
                 tags => new ICommandHandler[] { new SetHealthHandler(tags) },
-                new ICommandValidator[] { new SetHealthValidator() });
+                _ => new ICommandValidator[] { new SetHealthValidator() });
 
             var result = svc.Execute(new SetHealth { EntityId = 1, Value = 10 });
 
             Assert.IsTrue(result.Accepted);
             Assert.AreEqual(3, log.Count, "BlockStart, mutation, BlockEnd — validator accepted");
         }
+
+        [Test]
+        public void Stateful_Validator_Rejects_When_Target_Has_No_Health()
+        {
+            // The validator injects TagService and rejects an entity that carries no Health tag —
+            // a decision made on world state, not the command payload. Same zero-traffic invariant
+            // as a payload reject: no block opens, no handler runs.
+            var svc = Build(out var log,
+                tags => new ICommandHandler[] { new DealDamageHandler(tags) },
+                tags => new ICommandValidator[] { new DealDamageValidator(tags) });
+
+            var result = svc.Execute(new DealDamage { EntityId = 1, Amount = 5 });
+
+            Assert.IsFalse(result.Accepted);
+            Assert.AreEqual("NotDamageable", result.RejectReason);
+            Assert.IsEmpty(log, "a state-rejected command opens no block and runs no handler");
+        }
+
+        // The accept path for a stateful validator — and the handler's read-modify-write — needs an
+        // applied store (Set emits; the apply-handler writes the store). This harness wires no
+        // apply-loop, so that proof lives in the integration spines (EngineStack / BootstrapWiring),
+        // where DealDamage takes the player 30 -> 18 and the value is read back. Kept there on
+        // purpose rather than seeding the store here, which the unit suite never does.
     }
 }

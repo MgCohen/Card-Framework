@@ -39,6 +39,11 @@ namespace Framework.Integration.Tests
             Assert.AreEqual(0, emitted, "a rejected command puts nothing on the wire");
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "rejected command left the tag untouched");
 
+            // 1c. DealDamage: a read-modify-write command (reads current health, writes health-amount)
+            //     whose validator passes because the player carries a Health tag. 30 -> 18.
+            Assert.IsTrue(engine.Commands.Execute(new DealDamage { EntityId = player.Id, Amount = 12 }).Accepted);
+            Assert.AreEqual(18, engine.Tags.Get(player.Id, SampleTags.Health));
+
             // 2. Open a request: pending until a response arrives over the wire.
             Task<DrawCardResponse> draw = engine.Requests.Open(
                 new DrawCardRequest { ResponderId = player.Id, Count = 1 });
@@ -64,10 +69,22 @@ namespace Framework.Integration.Tests
 
             Assert.IsTrue(engine.Commands.Execute(new IntroduceCard { EntityId = card.Id, Cost = answer.Cost }).Accepted);
 
+            // 4b. Stateful reject: the card has no Health tag, so DealDamage's validator reads world
+            //     state and rejects — zero wire traffic, no mutation. (Distinct from 1b's payload reject.)
+            var damageEmitted = 0;
+            void CountDamage(WireEvent _) => damageEmitted++;
+            stack.Stream.OnAppended += CountDamage;
+            var noTarget = engine.Commands.Execute(new DealDamage { EntityId = card.Id, Amount = 5 });
+            stack.Stream.OnAppended -= CountDamage;
+
+            Assert.IsFalse(noTarget.Accepted);
+            Assert.AreEqual("NotDamageable", noTarget.RejectReason);
+            Assert.AreEqual(0, damageEmitted, "a state-rejected command puts nothing on the wire");
+
             // 5. Final cross-store state: both entities live, tags intact across int + bool.
             Assert.AreEqual(3, engine.Tags.Get(card.Id, SampleTags.Cost));
             Assert.IsTrue(engine.Tags.Get(card.Id, SampleTags.IsCard));
-            Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "player tag survives the whole flow");
+            Assert.AreEqual(18, engine.Tags.Get(player.Id, SampleTags.Health), "player health reflects the mid-flow damage and survives the rest");
             Assert.IsTrue(engine.Entities.TryGetById(player.Id, out _));
             Assert.IsTrue(engine.Entities.TryGetById(card.Id, out _));
         }
