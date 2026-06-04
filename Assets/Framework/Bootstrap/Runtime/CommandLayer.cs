@@ -14,6 +14,7 @@ namespace Framework.Bootstrap
 
             builder.Register<BlockScope>(Lifetime.Singleton);
             builder.Register<CommandHandlerRegistry>(Lifetime.Singleton);
+            builder.Register<CommandValidatorRegistry>(Lifetime.Singleton);
             builder.Register<CommandService>(Lifetime.Singleton);
         }
     }

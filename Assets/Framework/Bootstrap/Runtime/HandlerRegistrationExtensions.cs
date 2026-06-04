@@ -15,6 +15,10 @@ namespace Framework.Bootstrap
             where T : ICommandHandler
             => builder.Register<T>(Lifetime.Singleton).AsImplementedInterfaces();
 
+        public static RegistrationBuilder RegisterCommandValidator<T>(this IContainerBuilder builder)
+            where T : ICommandValidator
+            => builder.Register<T>(Lifetime.Singleton).AsImplementedInterfaces();
+
         public static IContainerBuilder RegisterTagValueType<T>(this IContainerBuilder builder)
             where T : unmanaged
         {

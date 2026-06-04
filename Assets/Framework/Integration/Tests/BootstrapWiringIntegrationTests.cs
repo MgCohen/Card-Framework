@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Framework.Bootstrap;
 using Framework.Engine;
 using Framework.Entities;
+using Framework.Wire;
 using NUnit.Framework;
 using UnityEngine;
 using VContainer;
@@ -49,6 +50,9 @@ namespace Framework.Integration.Tests
                 // Game-side command handlers — collected by CommandHandlerRegistry the same way.
                 builder.RegisterCommandHandler<SetHealthHandler>();
                 builder.RegisterCommandHandler<IntroduceCardHandler>();
+
+                // Game-side command validators — collected by CommandValidatorRegistry the same way.
+                builder.RegisterCommandValidator<SetHealthValidator>();
             }, "IntegrationServerScope");
             if (_scope.Container == null) _scope.Build();
 
@@ -58,6 +62,18 @@ namespace Framework.Integration.Tests
             var player = engine.Entities.Create(new Player());
             Assert.IsTrue(engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = 30 }).Accepted);
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health));
+
+            // 1b. A validator-rejected command emits nothing through the DI-composed engine.
+            var emitted = 0;
+            void Count(WireEvent _) => emitted++;
+            engine.Stream.OnAppended += Count;
+            var rejected = engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = -1 });
+            engine.Stream.OnAppended -= Count;
+
+            Assert.IsFalse(rejected.Accepted);
+            Assert.AreEqual("NegativeHealth", rejected.RejectReason);
+            Assert.AreEqual(0, emitted, "a rejected command puts nothing on the wire");
+            Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "rejected command left the tag untouched");
 
             // 2. Open a request — pending until answered.
             Task<DrawCardResponse> draw = engine.Requests.Open(

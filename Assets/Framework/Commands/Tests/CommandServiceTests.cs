@@ -13,17 +13,20 @@ namespace Framework.Commands.Tests
     {
         // Handlers are built from the live TagService so their mutation lands on the same stream
         // the BlockScope emits on — bracket and mutation interleave in true emission order.
-        static CommandService Build(out List<WireEvent> log, Func<TagService, ICommandHandler[]> handlers)
+        static CommandService Build(out List<WireEvent> log,
+            Func<TagService, ICommandHandler[]> handlers,
+            ICommandValidator[] validators = null)
         {
             var stream   = new EventStream();
             var captured = new List<WireEvent>();
             stream.OnAppended += captured.Add;
             log = captured;
 
-            var tags     = new TagService(new TagStore(), stream);
-            var registry = new CommandHandlerRegistry(handlers(tags));
-            var blocks   = new BlockScope(stream);
-            return new CommandService(registry, blocks);
+            var tags       = new TagService(new TagStore(), stream);
+            var registry   = new CommandHandlerRegistry(handlers(tags));
+            var validation = new CommandValidatorRegistry(validators ?? Array.Empty<ICommandValidator>());
+            var blocks     = new BlockScope(stream);
+            return new CommandService(registry, validation, blocks);
         }
 
         static CommandService Build(out List<WireEvent> log)
@@ -104,6 +107,33 @@ namespace Framework.Commands.Tests
             var svc = Build(out _, tags => Array.Empty<ICommandHandler>());
 
             Assert.Throws<InvalidOperationException>(() => svc.Execute(new SetHealth()));
+        }
+
+        [Test]
+        public void Rejected_Command_Emits_Nothing()
+        {
+            var svc = Build(out var log,
+                tags => new ICommandHandler[] { new SetHealthHandler(tags) },
+                new ICommandValidator[] { new SetHealthValidator() });
+
+            var result = svc.Execute(new SetHealth { EntityId = 1, Value = -5 });
+
+            Assert.IsFalse(result.Accepted);
+            Assert.AreEqual("NegativeHealth", result.RejectReason);
+            Assert.IsEmpty(log, "a rejected command opens no block and runs no handler");
+        }
+
+        [Test]
+        public void Accepted_Command_With_Validator_Brackets_Normally()
+        {
+            var svc = Build(out var log,
+                tags => new ICommandHandler[] { new SetHealthHandler(tags) },
+                new ICommandValidator[] { new SetHealthValidator() });
+
+            var result = svc.Execute(new SetHealth { EntityId = 1, Value = 10 });
+
+            Assert.IsTrue(result.Accepted);
+            Assert.AreEqual(3, log.Count, "BlockStart, mutation, BlockEnd — validator accepted");
         }
     }
 }

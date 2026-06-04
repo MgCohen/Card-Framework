@@ -18,6 +18,16 @@ namespace Framework.Integration.Tests
         public override void Handle(SetHealth cmd) => _tags.Set(cmd.EntityId, SampleTags.Health, cmd.Value);
     }
 
+    public sealed class SetHealthValidator : CommandValidator<SetHealth>
+    {
+        public override bool Validate(SetHealth cmd, out string reason)
+        {
+            if (cmd.Value < 0) { reason = "NegativeHealth"; return false; }
+            reason = null;
+            return true;
+        }
+    }
+
     public sealed class IntroduceCard : Command
     {
         public int EntityId;

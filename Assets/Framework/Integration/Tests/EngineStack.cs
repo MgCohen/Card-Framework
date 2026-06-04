@@ -40,6 +40,10 @@ namespace Framework.Integration.Tests
                     new SetHealthHandler(tags),
                     new IntroduceCardHandler(tags),
                 }),
+                new CommandValidatorRegistry(new ICommandValidator[]
+                {
+                    new SetHealthValidator(),
+                }),
                 new BlockScope(Stream));
 
             Engine = new GameEngine(

@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using Framework.Entities;
+using Framework.Wire;
 using NUnit.Framework;
 
 namespace Framework.Integration.Tests
@@ -25,6 +26,18 @@ namespace Framework.Integration.Tests
 
             Assert.IsTrue(engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = 30 }).Accepted);
             Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health));
+
+            // 1b. A command the validator rejects (negative health) emits nothing and leaves state intact.
+            var emitted = 0;
+            void Count(WireEvent _) => emitted++;
+            stack.Stream.OnAppended += Count;
+            var rejected = engine.Commands.Execute(new SetHealth { EntityId = player.Id, Value = -1 });
+            stack.Stream.OnAppended -= Count;
+
+            Assert.IsFalse(rejected.Accepted);
+            Assert.AreEqual("NegativeHealth", rejected.RejectReason);
+            Assert.AreEqual(0, emitted, "a rejected command puts nothing on the wire");
+            Assert.AreEqual(30, engine.Tags.Get(player.Id, SampleTags.Health), "rejected command left the tag untouched");
 
             // 2. Open a request: pending until a response arrives over the wire.
             Task<DrawCardResponse> draw = engine.Requests.Open(
