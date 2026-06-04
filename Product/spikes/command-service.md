@@ -267,7 +267,7 @@ Each phase lands green (headless batch run) before the next.
 | Phase | Ships | Proof | Resolves |
 |---|---|---|---|
 | **0 — Walking skeleton** ✅ **built (356/356 green)** | `Framework.Commands` asmdef; `Command`; `CommandService.Execute`; `ICommandHandler` + `CommandHandler<T>` + `CommandHandlerRegistry`; `BlockScope` in `Wire`; `GameEngine.Commands`; `CommandLayer`. One fixture command → one mutation. | A fixture command runs end-to-end: `Execute` → `BlockStart` → handler → one mutation → `BlockEnd`. Layer resolves, role-gated. | L1–L5 |
-| **1 — Validation** | `ICommandValidator<T>` + base + registry; a reject-capable validator; one system gate. | Illegal command → **zero** mutations, **zero** wire traffic; legal unchanged. | F4 (how many validation layers) |
+| **1 — Validation** ✅ **built (358/358 green)** | `ICommandValidator` + `CommandValidator<T>` + `CommandValidatorRegistry`; opt-in per command type (no validator → accept). **No system gate** — that belongs in the engine, not here. | Illegal command (negative health) → **zero** mutations, **zero** wire traffic, state untouched; legal unchanged. Woven into both integration spines. | F4 (validation layers) |
 | **2 — Contract-stubs** | Stub the real command + validator *shapes* (e.g. `MoveCard`, a damage command) with thin bodies. Surface locked, bodies empty. | Compiles; shapes consistent. | — |
 | **3 — Real commands** | Fill the bodies: multi-service orchestration in one `Execute`; real reject logic. | Multi-mutation atomicity + ordering on the wire from one `Execute`. | confirms L4 handler-scope under real load |
 
@@ -299,6 +299,36 @@ install the command surface. `CommandHandlerRegistry` resolves an **empty** hand
 cleanly in Phase 0 (no runtime commands ship yet) — VContainer's single-element-collection
 fallback returns an empty collection rather than throwing.
 
+### Phase 1 build notes (2026-06-04)
+
+Validation is the **opt-in single validator** shape (design-pass walk, 2026-06-04),
+deliberately narrower than the settled `Product/actions` reference (ADR-0010 +
+`features/actions/models/06-command-validator.md`). The reference is a *fan-out
+list* — every validator registered for a command's runtime type runs in
+registration order, short-circuit on first reject — with framework "gates"
+(`SessionGate`, `MatchStateActionGate`) registered against the **base** command
+type so they fire for everything. We took its **opt-in** core and nothing else:
+
+- **One validator per command, not a list.** `CommandValidatorRegistry` is a
+  verbatim copy of `CommandHandlerRegistry` (dict keyed by `CommandType`,
+  duplicate throws) — its **sole** divergence is `TryFor` (absent → accept)
+  instead of throw-on-miss, because validation is opt-in where handling is
+  mandatory. The fan-out list + base-type matching are deferred until a second
+  validator on one command actually earns them (the reference itself flags
+  base-type resolution as unconfirmed).
+- **No `ICommandGate`.** The cross-cutting system gate (is-match-playing,
+  is-it-your-turn) is **not** in the commands layer — it reads engine-owned
+  state and belongs in the engine evaluate-loop. Dropped here entirely rather
+  than stubbed.
+- **`Validate` runs before `BlockScope.Open`.** A reject returns
+  `CommandResult.Reject(reason)` having emitted nothing — the zero-traffic
+  invariant, asserted end-to-end (event-count `== 0`) in both the hand-wired
+  `EngineStack` flow and the DI `BootstrapWiring` flow, not a standalone test.
+- **Registration mirrors handlers 1:1.** `RegisterCommandValidator<T>` →
+  `Register().AsImplementedInterfaces()`, manual DI like
+  `RegisterCommandHandler<T>`. No reflection — the repo's reflection/source-gen
+  placeholder (`WireRegistrar`) is channel-discovery's, a different mechanism.
+
 ## Test fixture (Phase 0 verification surface)
 
 A trivial concrete command + handler lives in `Framework.Commands.Tests` and
@@ -313,7 +343,8 @@ exception propagating.
 
 | Item | Lights up when |
 |---|---|
-| **Validation model** — the full four-layer picture (gateway / system-gate / command-specific / before-fold-cancel); Phase 1 ships only command-specific + one system gate | Phase 1 (command-specific + system gate); the before-fold-cancel layer is reaction-era |
+| **Validation model** — the full four-layer picture (gateway / system-gate / command-specific / before-fold-cancel); Phase 1 shipped **only** command-specific (opt-in). System-gate moved to the engine; gateway is UI-time; before-fold-cancel is reaction-era | command-specific ✅ Phase 1; system-gate → engine evaluate-loop; gateway → presentation; before-fold-cancel → reaction era |
+| **Validator fan-out + base-type gates** — multiple validators per command (registration-order, short-circuit) and cross-cutting validators on base command types, per the `Product/actions` reference (ADR-0010) | A second validator on one command, or a genuine cross-cutting check, earns the list |
 | **Engine evaluate-loop + queue + async** — `Execute` gets wrapped by the pump; the queue (schedule reactions) and `Task` (await Requests mid-command) return here | The reaction/SBA layer (next step after commands) |
 | **Block nesting / parent-stack** — `BlockScope` gains the open-block stack so inner blocks get a real `ParentId` | Effects run inside commands (reaction era) |
 | **Block payload + source capture** — reflect command type/args + `SourceId` onto `BlockStart` for scrub/replay readability; `IPackingHandler` converts domain refs → ids | Scrub/replay tooling matures |
