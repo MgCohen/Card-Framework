@@ -85,23 +85,32 @@ harness. The baseline command scenarios have no RNG, so this is not yet binding 
 but the moment a scenario touches a shuffle/RNG, deterministic seeding becomes a
 hard requirement (an unseeded source means the scenario is not bindable).
 
-## Artifact layout (provisional — confirmed in Phase 1)
+## Artifact layout (settled in Phase 1)
+
+The suite lives **parallel to** `Framework/` — a sibling top-level assembly that
+*reads* the framework but that the framework never references (one-way dependency,
+the way `Scaffold.*` sits parallel). It is not a framework feature; it observes the
+whole framework from outside.
 
 ```
-Assets/Framework/Acceptance/
+Assets/Acceptance/
   Scenarios/                     # the pictures — NL, canonical spec
     _how-to-bind.md              # generator contract (the prompt, written once)
-    deal-damage-reduces-health.md
-  Tests/                         # generated deterministic NUnit bindings
-    DealDamageReducesHealth.cs
-  Harness/                       # MatchHarness (server-only at first; grows)
-  Framework.Acceptance.Tests.asmdef
+    set-health-records-the-value.md
+  Harness/
+    MatchHarness.cs              # boots the real composition root; the Execute seam
+    PictureAttribute.cs          # the picture↔test backlink
+  Tests/
+    Fixtures.cs                  # scenario-local sample command + tag
+    SetHealthRecordsTheValue.cs  # the deterministic binding
+  Acceptance.Tests.asmdef        # references framework runtime only
 ```
 
 Pictures live **with** the test assembly (versioned next to their bindings,
 discoverable), not in `Product/`. The generator contract (`_how-to-bind.md`) is the
 prose analog of BDD's step-definition library — stated **once**, reused by every
-picture.
+picture. The backlink is an explicit `[Picture("<file>.md")]` attribute (an NUnit
+property, so it surfaces in test results) — not a naming convention.
 
 ## Picture template
 
@@ -201,10 +210,10 @@ step, validated before the next.
 
 ## Open decisions
 
-- **Picture location** — provisional `Assets/Framework/Acceptance/Scenarios/`
-  (with the tests) vs `Product/`. Confirm in Phase 1.
-- **Backlink mechanism** — attribute (e.g. `[Picture("deal-damage-reduces-health.md")]`)
-  vs front-matter id. Pin in Phase 1; must be robust for the drift-check.
+- ~~**Picture location**~~ — settled in Phase 1: `Assets/Acceptance/Scenarios/`,
+  a sibling assembly parallel to `Framework/` (one-way dependency).
+- ~~**Backlink mechanism**~~ — settled in Phase 1: the `[Picture("<file>.md")]`
+  attribute (an NUnit property), not a naming convention.
 - **Scenario granularity** — "not too wide": **one command through the real flow**
   (baseline), growing to **one triggering intent + its full causal closure** once
   reactions land. A scenario is one coherent play, not a whole match.
