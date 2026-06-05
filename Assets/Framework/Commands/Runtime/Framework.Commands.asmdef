@@ -1,0 +1,16 @@
+{
+    "name": "Framework.Commands",
+    "rootNamespace": "Framework.Commands",
+    "references": [
+        "Framework.Wire"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

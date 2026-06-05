@@ -6,7 +6,8 @@
         "Framework.Tags",
         "Framework.Entities",
         "Framework.Requests",
-        "Framework.States"
+        "Framework.States",
+        "Framework.Commands"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

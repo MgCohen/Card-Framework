@@ -1,3 +1,4 @@
+using Framework.Commands;
 using Framework.Entities;
 using Framework.Requests;
 using Framework.States;
@@ -18,11 +19,13 @@ namespace Framework.Engine
         public TagService           Tags         { get; }
         public RequestService       Requests     { get; }
         public StateService         States       { get; }
+        public CommandService       Commands     { get; }
 
         public GameEngine(
             EventStream stream, Network network,
             EntityStore entityStore, TagStore tagStore, RequestStore requestStore, StateStore stateStore,
-            EntityService entities, TagService tags, RequestService requests, StateService states)
+            EntityService entities, TagService tags, RequestService requests, StateService states,
+            CommandService commands)
         {
             Stream       = stream;
             Network      = network;
@@ -34,6 +37,7 @@ namespace Framework.Engine
             Tags         = tags;
             Requests     = requests;
             States       = states;
+            Commands     = commands;
         }
     }
 }
