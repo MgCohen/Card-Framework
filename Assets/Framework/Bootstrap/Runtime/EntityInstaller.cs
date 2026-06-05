@@ -3,11 +3,13 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class EntityLayer : BootstrapLayer
+    public sealed class EntityInstaller : IInstaller
     {
-        public EntityLayer(bool isServer) : base(isServer) { }
+        readonly bool _isServer;
 
-        public override void Install(IContainerBuilder builder)
+        public EntityInstaller(bool isServer) { _isServer = isServer; }
+
+        public void Install(IContainerBuilder builder)
         {
             builder.Register<EntityStore>(Lifetime.Singleton);
             builder.RegisterInstance(EntityTypeRegistry.WithBaselines());

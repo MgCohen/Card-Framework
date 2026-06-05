@@ -11,8 +11,9 @@ using VContainer.Unity;
 namespace Framework.Integration.Tests
 {
     // (b): the same end-to-end spine as FullFlowIntegrationTests, but driven through the real
-    // VContainer composition root — the five Bootstrap layers installed in server mode, built,
-    // and resolved. Where the hand-wired (a) harness proves the *types* compose, this proves the
+    // VContainer composition root — the GameplayLayer installed in server mode (composing the
+    // engine's six system installers flat), built, and resolved. Where the hand-wired (a)
+    // harness proves the *types* compose, this proves the
     // *wiring* composes: DI registration, layer order, the server/client split, and the eager
     // HandlerRegistry resolve (EngineLayer's RegisterBuildCallback) that subscribes handlers to
     // the stream. A registration the layers forget would pass (a) and fail here.
@@ -35,12 +36,7 @@ namespace Framework.Integration.Tests
         {
             _scope = LifetimeScope.Create(builder =>
             {
-                new EngineLayer(isServer: true).Install(builder);
-                new TagLayer(isServer: true).Install(builder);
-                new EntityLayer(isServer: true).Install(builder);
-                new RequestLayer(isServer: true).Install(builder);
-                new StateLayer(isServer: true).Install(builder);
-                new CommandLayer(isServer: true).Install(builder);
+                new GameplayLayer(isServer: true).Install(builder);
 
                 // The request/response wire handlers the Requests feature doesn't ship yet —
                 // collected by HandlerRegistry's DI list injection alongside the framework set.

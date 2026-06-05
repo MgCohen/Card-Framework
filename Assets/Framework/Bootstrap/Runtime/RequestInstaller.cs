@@ -3,11 +3,13 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class RequestLayer : BootstrapLayer
+    public sealed class RequestInstaller : IInstaller
     {
-        public RequestLayer(bool isServer) : base(isServer) { }
+        readonly bool _isServer;
 
-        public override void Install(IContainerBuilder builder)
+        public RequestInstaller(bool isServer) { _isServer = isServer; }
+
+        public void Install(IContainerBuilder builder)
         {
             builder.Register<RequestStore>(Lifetime.Singleton);
             if (_isServer) builder.Register<RequestService>(Lifetime.Singleton);

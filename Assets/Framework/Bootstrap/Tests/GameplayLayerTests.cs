@@ -12,11 +12,12 @@ using VContainer.Unity;
 
 namespace Framework.Bootstrap.Tests
 {
-    // Verifies that Engine + Tag + Entity + Request layers compose cleanly via DI on each
-    // side. Server scope resolves GameEngine + command services + stores. Client scope
+    // Verifies that the GameplayLayer's system installers (Engine + Tag + Entity + Request +
+    // State + Command) compose cleanly via DI on each side. Server scope resolves GameEngine +
+    // command services + stores. Client scope
     // resolves only the substrate (EventStream, stores, handlers) — no engine, no services.
     // The "client cannot author state" rule is enforced structurally by what's registered.
-    public class EngineLayerTests
+    public class GameplayLayerTests
     {
         LifetimeScope _scope;
 
@@ -24,12 +25,7 @@ namespace Framework.Bootstrap.Tests
         {
             var scope = LifetimeScope.Create(builder =>
             {
-                new EngineLayer(isServer).Install(builder);
-                new TagLayer(isServer).Install(builder);
-                new EntityLayer(isServer).Install(builder);
-                new RequestLayer(isServer).Install(builder);
-                new StateLayer(isServer).Install(builder);
-                new CommandLayer(isServer).Install(builder);
+                new GameplayLayer(isServer).Install(builder);
             }, name);
             if (scope.Container == null) scope.Build();
             return scope;

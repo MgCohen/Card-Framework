@@ -9,7 +9,7 @@ using Framework.Wire;
 
 namespace Framework.Integration.Tests
 {
-    // Hand-wires the full server engine the way EngineLayer + the feature layers do in
+    // Hand-wires the full server engine the way the GameplayLayer's system installers do in
     // production, minus VContainer: one EventStream shared by every service, the standard
     // framework apply-handlers on the receiving end, plus the DrawCard request/response
     // fixtures. Constructing it exercises the GameEngine aggregate ctor (the Engine layer);
