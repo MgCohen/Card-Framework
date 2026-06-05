@@ -3,11 +3,13 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class TagLayer : BootstrapLayer
+    public sealed class TagInstaller : IInstaller
     {
-        public TagLayer(bool isServer) : base(isServer) { }
+        readonly bool _isServer;
 
-        public override void Install(IContainerBuilder builder)
+        public TagInstaller(bool isServer) { _isServer = isServer; }
+
+        public void Install(IContainerBuilder builder)
         {
             builder.Register<TagStore>(Lifetime.Singleton);
             builder.Register<TagRegistry>(Lifetime.Singleton);

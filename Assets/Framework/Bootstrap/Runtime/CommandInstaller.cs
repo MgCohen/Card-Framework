@@ -4,11 +4,13 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class CommandLayer : BootstrapLayer
+    public sealed class CommandInstaller : IInstaller
     {
-        public CommandLayer(bool isServer) : base(isServer) { }
+        readonly bool _isServer;
 
-        public override void Install(IContainerBuilder builder)
+        public CommandInstaller(bool isServer) { _isServer = isServer; }
+
+        public void Install(IContainerBuilder builder)
         {
             if (!_isServer) return;
 

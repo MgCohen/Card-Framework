@@ -11,12 +11,7 @@ namespace Framework.Bootstrap
 
         protected override IEnumerable<IScopeLayer> GetInitialLayers()
         {
-            yield return new EngineLayer(_isServer);
-            yield return new TagLayer(_isServer);
-            yield return new EntityLayer(_isServer);
-            yield return new RequestLayer(_isServer);
-            yield return new StateLayer(_isServer);
-            yield return new CommandLayer(_isServer);
+            yield return new GameplayLayer(_isServer);
         }
     }
 }

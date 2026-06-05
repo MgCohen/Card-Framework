@@ -3,11 +3,13 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    public sealed class StateLayer : BootstrapLayer
+    public sealed class StateInstaller : IInstaller
     {
-        public StateLayer(bool isServer) : base(isServer) { }
+        readonly bool _isServer;
 
-        public override void Install(IContainerBuilder builder)
+        public StateInstaller(bool isServer) { _isServer = isServer; }
+
+        public void Install(IContainerBuilder builder)
         {
             builder.Register<StateStore>(Lifetime.Singleton);
             builder.RegisterInstance(GameStateRegistry.WithBaselines());

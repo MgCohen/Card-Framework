@@ -4,7 +4,7 @@ using Framework.Wire;
 
 namespace Framework.Entities.Tests
 {
-    // Hand-wires the same shape EntityLayer + TagLayer would. Auto-registers the standard
+    // Hand-wires the same shape EntityInstaller + TagInstaller would. Auto-registers the standard
     // handler set (Entity + Tag<int> + Tag<bool>) and constructs the HandlerRegistry, so the
     // service-emit path has a live writer on the other end. Tests that exercise the
     // service-emit path use this; tests that hit the store directly can construct a bare

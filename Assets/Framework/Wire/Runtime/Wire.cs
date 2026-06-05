@@ -12,7 +12,7 @@ namespace Framework.Wire
             var serverStream  = new EventStream();
             var clientStream  = new EventStream();
 
-            // Bridges subscribe in their ctor; no reference is kept (same as EngineLayer's DI wiring).
+            // Bridges subscribe in their ctor; no reference is kept (same as EngineInstaller's DI wiring).
             _ = new WireForwarder(serverStream, serverNetwork);
             _ = new NetworkInboundBridge(clientNetwork, clientStream);
 

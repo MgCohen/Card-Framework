@@ -21,12 +21,9 @@ namespace Acceptance
             var match = new MatchHarness();
             match._scope = LifetimeScope.Create(builder =>
             {
-                new EngineLayer(isServer: true).Install(builder);
-                new TagLayer(isServer: true).Install(builder);
-                new EntityLayer(isServer: true).Install(builder);
-                new RequestLayer(isServer: true).Install(builder);
-                new StateLayer(isServer: true).Install(builder);
-                new CommandLayer(isServer: true).Install(builder);
+                // The same layer FrameworkAppFlowRoot installs "as if Play was pressed",
+                // composed flat into one scope so the scenario's handlers join it.
+                new GameplayLayer(isServer: true).Install(builder);
                 bindScenario(builder);
             }, "AcceptanceMatchScope");
             if (match._scope.Container == null) match._scope.Build();

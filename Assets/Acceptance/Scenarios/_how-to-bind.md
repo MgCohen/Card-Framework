@@ -29,11 +29,14 @@ Invariants:
 
 One picture ↔ one test, backlinked, deterministic. The test:
 
-1. **Boots the real composition root** via `MatchHarness.Start(...)` — the same six
-   Bootstrap layers `FrameworkAppFlowRoot` installs "as if Play was pressed." The
-   scenario's command handlers/validators are registered in the `bindScenario`
-   callback (`builder.RegisterCommandHandler<...>()`,
-   `builder.RegisterCommandValidator<...>()`).
+1. **Boots the real gameplay composition** via `MatchHarness.Start(...)` — the same
+   `GameplayLayer` `FrameworkAppFlowRoot` installs "as if Play was pressed," composed
+   flat into one scope. The harness builds that scope directly (`LifetimeScope.Create`)
+   rather than through `FrameworkAppFlowRoot`/`AppFlowHost`, so the scenario's
+   `bindScenario` registrations land in the same scope as the layer's installers — which
+   is where the command registries collect them. The scenario's command
+   handlers/validators are registered in the `bindScenario` callback
+   (`builder.RegisterCommandHandler<...>()`, `builder.RegisterCommandValidator<...>()`).
 2. **Seeds the Given** by writing world state directly through the engine's
    services (`match.Engine.Entities.Create(...)`, `match.Engine.Tags.Set(...)`).
    Setup is faked here — we start from the command, not from a player's intent.
@@ -58,7 +61,7 @@ test. One match per test; no shared state.
 - **Pictures are canonical** — the markdown is the spec; the test serves it.
 - **Determinism at run-time** — exact oracles only; any LLM step (generate,
   drift-check) is local/advisory and never gates CI.
-- **Through the real composition root** — never hand-wire what the layers provide.
+- **Through the real composition** — never hand-wire what the layer's installers provide.
 - **One picture ↔ one test** — exact expected state, no toolchain dependency.
 
 ## Not yet in scope (deferred layers)
