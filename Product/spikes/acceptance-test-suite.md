@@ -87,6 +87,12 @@ hard requirement (an unseeded source means the scenario is not bindable).
 
 ## Artifact layout (settled in Phase 1)
 
+> **Superseded (2026-06-05) by *Suite consolidation* below.** The Phase-1 sibling
+> layout (`Assets/Acceptance/`, parallel to `Framework/`) shipped as written and is
+> kept here as the historical baseline. The suite now folds into
+> `Assets/Framework/Testing/` with a shared `Support/` module; Acceptance keeps its
+> public-surface fence via asmdef references, not via top-level location.
+
 The suite lives **parallel to** `Framework/` — a sibling top-level assembly that
 *reads* the framework but that the framework never references (one-way dependency,
 the way `Scaffold.*` sits parallel). It is not a framework feature; it observes the
@@ -208,10 +214,173 @@ step, validated before the next.
   merit-based reorder we agreed: flow-fidelity grows on top of, not instead of, the
   isolated single-side proof.
 
+## Suite consolidation (Framework/Testing/)
+
+> Decided 2026-06-05, **before** implementation. Folds the two **global** test
+> tiers — Acceptance (intent) and Integration (mechanism) — under one
+> `Assets/Framework/Testing/` area sharing a neutral `Support/` DSL + fixtures
+> module. Per-feature unit assemblies and Spike tests are untouched.
+
+### The two axes — why we keep both patterns
+
+- **Axis 1 — what a test proves:** *intent/behavior* (a real gameplay moment reads
+  as the spec says) vs *mechanism/structure* (the parts wire/compose).
+- **Axis 2 — how it's authored:** prose **picture → generated binding → human
+  approves** (SDD) vs **hand-written code**.
+
+The patterns differ on Axis 2 **because** they differ on Axis 1 — a consequence,
+not an accident. Behavior maps onto a declarative spec through a **narrow, stable
+public seam** (`MatchHarness.Execute` + read facades): prose transcribes
+mechanically, the LLM has little latitude, and the spec survives refactors.
+Mechanism has no such seam — it asserts on construction, on negatives (a forgotten
+`Register` *throws*), and on reflection over the scope tree. Expressed as prose it
+becomes a paraphrase of the code, and a "spec" that must change every time the
+mechanism changes is a mirror, not a spec. So the rule: **if it can be a picture, it
+is one (Acceptance); what's left is hand-written because it's a tripwire on internals
+(Integration).** This is exactly what Phase 2's trim does — behavior that leaked into
+`BootstrapWiring` (the `30→18` oracle, etc.) moves out to pictures, leaving Integration
+as pure mechanism.
+
+### Prior art (so we don't re-derive it)
+
+Independent, credible sources land on this same split:
+
+- **[Acceptance Test Generation with LLMs — industrial case study (arXiv 2504.07244)](https://arxiv.org/html/2504.07244v1).**
+  Two-step pipeline (NL Gherkin scenario → executable script), mandatory human review
+  before keep, LLM generates static code and **never judges at run-time**, NL spec
+  canonical and guides implementation — our pipeline, beat-for-beat. Scoped to
+  acceptance only; explicitly notes "no research on the use of LLMs in integration
+  testing." The team that industrialized our exact workflow drew our exact line.
+- **[Cucumber — Writing better Gherkin](https://cucumber.io/docs/bdd/better-gherkin/)**
+  + **[Cucumber anti-patterns](https://cucumber.io/blog/bdd/cucumber-antipatterns-part-one/).**
+  "Scenarios should describe the intended behaviour … not the implementation";
+  implementation detail belongs in step-definition *code*. Using specs for
+  unit/technical tests "misses the intent of BDD." Deciding rule: human-readable spec
+  when a non-technical reader cares; code when it's developer-facing.
+- **[Farley — acceptance-testing four-layer model](https://thinkinglabs.io/notes/2021/07/18/acceptance-testing-for-continuous-delivery-dave-farley.html).**
+  *Specification → DSL → Driver → System*: specs decoupled via a domain DSL stay stable
+  across refactors. `MatchHarness` **is** that DSL layer (→ it belongs in `Support/`).
+- **[Fowler — practical test pyramid / subcutaneous test](https://martinfowler.com/articles/practical-test-pyramid.html).**
+  Our bindings are textbook subcutaneous (below UI, through a seam); acceptance is
+  orthogonal to the pyramid — confirming intent ≠ a higher layer of mechanism.
+- **Sharing:** share *construction tooling* (builders / DSL / sample types) across
+  tiers — endorsed ([GOOS](https://growing-object-oriented-software.com/),
+  [Test Data Builder](http://www.natpryce.com/articles/000714.html),
+  [Test Helper](http://xunitpatterns.com/Test%20Helper.html)). Never share
+  *constructed state* — the [Shared Fixture](http://xunitpatterns.com/Shared%20Fixture.html)
+  anti-pattern; each test builds its own ([Fresh Fixture](http://xunitpatterns.com/Fresh%20Fixture.html)).
+  → motivates the neutral `Support/` module.
+
+**Caveat (honest):** it's a value judgment, not a prohibition — Gherkin *can* drive
+any level; the objection is that spec-authoring loses its point with no non-technical
+reader and no business behavior. The "mechanism test = intentional tripwire" framing
+is our synthesis (aligned with "test behavior, not implementation"), not a quote.
+
+### Target structure
+
+```
+Assets/Framework/Testing/
+├── Support/                              # shared DSL + primitives — one neutral module both tiers build on
+│   ├── Framework.Testing.Support.asmdef        #   refs: public surface only (Bootstrap, Commands, Core, Wire,
+│   │                                            #   Tags, Entities, Engine, VContainer, nunit). NO Requests/States/Scaffold.
+│   ├── MatchHarness.cs                   #   the domain DSL/driver: Start(bind) → Execute(cmd) → read facades
+│   ├── PictureAttribute.cs               #   [Picture("x.md")] — backlinks a binding to its canonical spec
+│   ├── SampleTags.cs                     #   canonical sample tags (slots 2001-3; the 3001-3 set retired)
+│   └── SampleCommands.cs                 #   sample commands + handlers + validators (public)
+│
+├── Acceptance/                           # INTENT — prose-spec → generated binding, public seam only
+│   ├── Framework.Testing.Acceptance.Tests.asmdef   # refs: Support + public surface + runners.
+│   │                                            #   NO Requests/States/Scaffold, NO internals grant → fence compiler-enforced
+│   ├── Scenarios/                        #   the canonical specs — you write these; the LLM reads them
+│   │   ├── _how-to-bind.md               #     the generator contract (4 beats)
+│   │   ├── set-health-records-the-value.md
+│   │   ├── deal-damage-subtracts-from-health.md
+│   │   ├── illegal-command-emits-nothing.md
+│   │   └── one-command-applies-several-mutations.md
+│   └── Bindings/                         #   the derived deterministic tests — LLM-generated, you approve
+│       ├── SetHealthRecordsTheValue.cs
+│       ├── DealDamageSubtractsFromHealth.cs
+│       ├── IllegalCommandEmitsNothing.cs
+│       └── OneCommandAppliesSeveralMutations.cs
+│
+└── Integration/                          # MECHANISM — hand-written code, allowed to touch internals
+    ├── Framework.Testing.Integration.Tests.asmdef  # refs: Support + Requests, States, Scaffold.AppFlow,
+    │                                            #   Scaffold.Autopacker, AutoPackerContracts.dll + runners; receives the grant
+    ├── EngineStack.cs                    #   no-DI hand-wire (proves the types compose)
+    ├── FullFlowIntegrationTests.cs       #   end-to-end spine over EngineStack
+    ├── BootstrapWiringIntegrationTests.cs#   real-DI compose (Phase 2 trims the behavior oracles it shares with Acceptance)
+    ├── RealAppFlowRootCompositionTests.cs#   literal root via reflection — nesting-bug regression guard
+    └── DrawCardFixtures.cs               #   request/response machinery — keeps Requests/Scaffold confined here
+```
+
+`Scenarios/` vs `Bindings/` makes the *spec-is-canonical, test-is-derived* relation
+physical. Namespaces: `Framework.Testing` (Support), `Framework.Testing.Acceptance`
+(bindings), `Framework.Testing.Integration` (spines).
+
+### Assembly fences (the load-bearing boundaries)
+
+- **`Framework.Testing.Support`** — public surface only; **no** Requests/States/Scaffold,
+  **no** internals grant. Sample handlers/validators/`SampleTags` bumped to `public` so
+  cross-assembly tests can register/read them.
+- **`Framework.Testing.Acceptance.Tests`** — refs Support + public surface; **no**
+  Requests/States/Scaffold, **no** `InternalsVisibleTo` → the public-seam fence stays
+  **compiler-enforced** (the structural proof bindings are subcutaneous).
+- **`Framework.Testing.Integration.Tests`** — refs Support + Requests/States/Scaffold;
+  **receives** the four `InternalsVisibleTo` grants, renamed from `Framework.Integration.Tests`
+  (in `Commands`/`Entities`/`Requests`/`Tags` `Runtime/AssemblyInfo.cs`).
+
+### Execution plan
+
+Branch `claude/test-suite-consolidation`, cut from `main` after PR #181 merges → one
+PR back into `main`. Each phase = one commit; green (headless batch) before the next.
+
+- **Phase 0 — Sequence & baseline.** Merge #181 into `main`; cut the branch from fresh
+  `main`; headless baseline confirms **364/364** before touching anything.
+- **Phase 1 — Structural move + de-dup (zero assertion changes).** Create `Support/`
+  (asmdef + `MatchHarness`/`PictureAttribute` moved, namespace `Acceptance`→`Framework.Testing`);
+  consolidate the two duplicated fixtures into `Support/SampleTags.cs` + `SampleCommands.cs`
+  (slots 2001-3), **bump `SampleTags` + the three handlers + `DealDamageValidator` to public**,
+  delete both old fixture files; create `Acceptance/` (asmdef, `Scenarios/` + `Bindings/`),
+  create `Integration/` (asmdef, spines + `DrawCardFixtures`); **rename the four
+  `InternalsVisibleTo` grants**; delete the old `Assets/Acceptance/` and
+  `Assets/Framework/Integration/` trees. Headless **must still be 364/364**. Commit.
+- **Phase 2 — Redundancy trim.** Cut `BootstrapWiring` steps 1b/1c/4b (the `30→18`,
+  rejected-emits-nothing, `NotDamageable` oracles now owned by Acceptance); keep the
+  mechanism-only spine (compose → handlers/validators resolve → request open→answer→resolve).
+  Headless green. Commit.
+- **Phase 3 — Documentation + reusable authoring skill.** Write **`docs/testing.md`**
+  (taxonomy + decision rule "non-technical reader cares → picture; how it's wired →
+  integration"; the picture→binding→approve workflow; *what to touch vs not* — picture
+  is canonical, regenerate rather than hand-edit bindings, mechanism tests are tripwires;
+  **check `Support/` first** before inventing fixtures, Fresh-not-Shared; the asmdef
+  fences; rationale + the prior-art links above). Update `docs/feature-layout.md` and the
+  `CLAUDE.md` test section to point at `Framework/Testing/` + the new assembly names.
+  Add skill **`author-acceptance-test`** — operationalizes `_how-to-bind.md`: from a
+  described gameplay moment, scaffold the picture + binding (correct `[Picture]` backlink,
+  `MatchHarness` seam, exact oracle), then prompt to run headless + approve. *May split
+  into its own follow-up PR so the structural change merges clean.* Commit.
+- **Phase 4 — Verify & PR.** Full headless run + spot-check both new assemblies resolve;
+  open PR into `main` (summary, two-axis rationale, literature links, before/after tree).
+
+### Deferred (saved to memory, not in this PR)
+
+- **Test-freshness validator agent** — advisory drift check between pictures and bindings
+  (and `Support` fixtures vs their consumers); author-time only, never gates CI. Picks up
+  after this lands. (Recorded in user memory: `project_test_freshness_validator_deferred.md`.)
+
+### Untouched by design
+
+Per-feature `Framework/<Feature>/Tests/` assemblies keep their own local sample types —
+deliberate isolation, not duplication to fix (coupling a unit island to a global Support
+module would break standalone testability). All `Spike/` tests (incl. the Benchmark gate)
+and PlayMode tests (separate platform) are left alone.
+
 ## Open decisions
 
-- ~~**Picture location**~~ — settled in Phase 1: `Assets/Acceptance/Scenarios/`,
-  a sibling assembly parallel to `Framework/` (one-way dependency).
+- ~~**Picture location**~~ — settled in Phase 1 (`Assets/Acceptance/Scenarios/`,
+  sibling to `Framework/`); **re-settled 2026-06-05** by *Suite consolidation* to
+  `Assets/Framework/Testing/Acceptance/Scenarios/`. The public-surface fence now rides
+  on asmdef references (no internals grant), not on top-level location.
 - ~~**Backlink mechanism**~~ — settled in Phase 1: the `[Picture("<file>.md")]`
   attribute (an NUnit property), not a naming convention.
 - **Scenario granularity** — "not too wide": **one command through the real flow**
