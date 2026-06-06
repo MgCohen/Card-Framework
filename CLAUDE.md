@@ -12,7 +12,8 @@ Card Framework/
 ├── docs/
 │   ├── architecture.md        # Cross-cutting invariants and rationale (stub)
 │   ├── coding-standards.md    # C# / Unity conventions for code under Assets/
-│   └── feature-layout.md      # Feature structure, asmdefs, spike → framework promotion
+│   ├── feature-layout.md      # Feature structure, asmdefs, spike → framework promotion
+│   └── testing.md             # Test tiers (unit / acceptance / integration); which to write
 ├── Assets/
 │   ├── Framework/             # Graduated features (vertical slices)
 │   └── Spike/                 # Exploratory / prototype work; deletable
@@ -47,6 +48,8 @@ Read `Logs/test-results.xml` for pass/fail, `Logs/test.log` for compile errors a
 **Benchmarks are opt-in.** Tests tagged `[Category("Benchmark")]` (perf/allocation gates — currently in `Assets/Spike/ECS/VerticalSlice/QueryBench/`) are excluded by default via `-testCategory "!Benchmark"`. To run only them, swap to `-testCategory "Benchmark"`.
 
 **Adding or modifying a feature.** Follow [docs/feature-layout.md](docs/feature-layout.md).
+
+**Adding or modifying a test.** Follow [docs/testing.md](docs/testing.md) — it decides the tier (per-feature **unit** in `Framework.<Feature>.Tests`; global **acceptance**, intent-as-picture, in `Framework.Testing.Acceptance.Tests`; global **integration**, hand-written mechanism, in `Framework.Testing.Integration.Tests`) and the rules for keeping pictures canonical and reusing `Framework.Testing.Support`. For acceptance tests, the `author-acceptance-test` skill scaffolds the picture + binding.
 
 **Before inventing a pattern.** Read existing code in the target feature (or relevant spike) first. If no pattern fits, ask — don't quietly introduce a new style alongside an existing one.
 
