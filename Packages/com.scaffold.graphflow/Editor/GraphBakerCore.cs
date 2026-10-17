@@ -236,7 +236,8 @@ namespace Scaffold.GraphFlow.Editor
                         }
 
                         var portType = other.DataType;
-                        if (varType != null && portType != null && !portType.IsAssignableFrom(varType))
+                        // Unity 6.6+: ports declared without a data type report typeof(Untyped) instead of null.
+                        if (varType != null && portType != null && portType != typeof(Untyped) && !portType.IsAssignableFrom(varType))
                         {
                             result.LogError(
                                 $"Variable '{vn.Variable.Name}' ({varType.Name}) is incompatible with port {toEditor.GetType().Name}.{other.Name} ({portType.Name}).");

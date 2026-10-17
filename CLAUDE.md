@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project map
 
-Unity card-game framework. Unity version: `6000.4.0f1`.
+Unity card-game framework. Unity version: `6000.6.6f1`.
 
 ```
 Card Framework/
