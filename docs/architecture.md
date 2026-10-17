@@ -85,11 +85,10 @@ flowchart TD
 | `Engine/` | Server-only handle: services plus read-only store views. | `GameEngine` |
 | `Bootstrap/` | VContainer composition root. | `FrameworkAppFlowRoot`, `GameplayLayer`, `EngineInstaller`, `TagInstaller`, `EntityInstaller`, `RequestInstaller`, `StateInstaller`, `CommandInstaller` |
 | `Multiplayer/` | Lobby, peers, ready-up over NGO. Not connected to `GameplayLayer` yet. | `Session`, `PeerRoster`, `Peer`, `PlayerData`, `PlayerContext`, `NetworkManagerSetup` |
-| `Integration/` | Cross-feature test spines only. | `FullFlowIntegrationTests`, `BootstrapWiringIntegrationTests`, `RealAppFlowRootCompositionTests` |
+| `Testing/` | Global test tiers. `Support/` holds `MatchHarness` and shared fixtures. `Acceptance/` has picture-bound scenarios: each test has a `[Picture("x.md")]` that links to a scenario in `Scenarios/`. `Integration/` has cross-feature test spines. See [`testing.md`](testing.md). | `MatchHarness`, `FullFlowIntegrationTests`, `BootstrapWiringIntegrationTests`, `RealAppFlowRootCompositionTests` |
 
 Outside `Assets/Framework/`:
 
-- `Assets/Acceptance/` — acceptance tests. `MatchHarness` starts a real `GameplayLayer` on the server role. Each test has a `[Picture("x.md")]` that links to a scenario in `Scenarios/`.
 - `Assets/Spike/ECS/` — prototypes. `VerticalSlice` is the older complete game loop (effects, hooks, triggers, zones). It is the reference for the gameplay layer that the framework does not have yet.
 - `Packages/com.scaffold.graphflow/` — graph package on Unity Graph Toolkit. The framework does not use it yet.
 

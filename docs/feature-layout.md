@@ -7,6 +7,7 @@ Where Framework features live, how they're structured, and how spikes graduate i
 - **Graduated features** → `Assets/Framework/<Feature>/`. Locked design, used or planned for use.
 - **Exploratory work** → `Assets/Spike/<Spike>/`. Deletable by definition.
 - **Shared primitives** → `Assets/Framework/Core/` (IDs, math, attribute markers — pure data, zero behavior). If it has behavior, it belongs in a feature.
+- **Global tests** → `Assets/Framework/Testing/` (acceptance + integration tiers that span features, sharing a neutral `Support/` module). This is **not** a feature — it observes the framework from outside. A feature's own `Tests/` layer (below) stays per-feature and local. See [testing.md](testing.md).
 
 ## Vertical slice
 

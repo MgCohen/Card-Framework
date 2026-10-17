@@ -3,4 +3,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Framework.Bootstrap")]
 [assembly: InternalsVisibleTo("Framework.Engine")]
 [assembly: InternalsVisibleTo("Framework.Requests.Tests")]
-[assembly: InternalsVisibleTo("Framework.Integration.Tests")]
+[assembly: InternalsVisibleTo("Framework.Testing.Integration.Tests")]

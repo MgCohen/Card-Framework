@@ -4,4 +4,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Framework.Tags.Tests")]
 [assembly: InternalsVisibleTo("Framework.Entities")]
 [assembly: InternalsVisibleTo("Framework.Entities.Tests")]
-[assembly: InternalsVisibleTo("Framework.Integration.Tests")]
+[assembly: InternalsVisibleTo("Framework.Testing.Integration.Tests")]
