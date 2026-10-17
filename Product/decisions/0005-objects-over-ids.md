@@ -7,6 +7,8 @@ tags: [#adr, #general, #conventions, #api]
 
 # ADR-0005 — Objects over IDs in framework APIs
 
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
+
 Date: 2026-05-01
 Context-doc: Product/ledgers/GLOSSARY.md
 Proposal: session-20260501-1602-zone-model-internal-opens

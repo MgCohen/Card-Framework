@@ -1,11 +1,13 @@
 ---
 type: adr
 status: accepted
-references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
+references: [features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/02-view-model-registry.md, features/presentation/archive/presentation.md, features/actions/archive/01-command-pipeline.md, features/engine/archive/01-game-engine.md, features/engine/archive/03-game-rules-runtime.md, features/engine/archive/07-match-state.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
 tags: [#adr, #presentation, #engine, #fsm, #view-model, #intent]
 ---
 
 # ADR-0012 — Presentation as per-state polymorphic ViewModels; global `IIntentMapper` + `AffordanceMap` + `ActionTemplate` retired
+
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
 
 Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D6–D9; sub-ADR D of the FSM-arch cascade following ADR-0009 + ADR-0010 + ADR-0011)
 Context-docs: new Models `presentation/01-match-state-view-model.md`, `presentation/02-view-model-registry.md`, rewritten `presentation/presentation.md`, archived `actions/02-intent-mapper.md`, archived `actions/05-available-actions-snapshot.md`

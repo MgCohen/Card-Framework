@@ -33,5 +33,5 @@ Action vocabulary still loose; what is `Request` vs `Command` vs `Action`?
 - Promote: action-flow vocabulary (became session 02 work).
 
 ### References
-- Docs touched (now in Product/): `general/VISION.md`, `general/GAME-ARCHETYPES.md`, `general/CAPABILITY-MAP.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `spikes/scaffold-state-fit.md`, `features/actions/models/01-command-pipeline.md` (formerly doc 18).
+- Docs touched (now in Product/): `general/VISION.md`, `general/GAME-ARCHETYPES.md`, `general/CAPABILITY-MAP.md`, `general/ARCHITECTURE.md`, `general/ROADMAP.md`, `spikes/scaffold-state-fit.md`, `features/actions/archive/01-command-pipeline.md` (formerly doc 18).
 - Related: PR #1 (`c1a86bb`).

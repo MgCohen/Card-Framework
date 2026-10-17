@@ -165,4 +165,5 @@ System-wide rules that span features. Edit with care — these are the load-bear
 ## Where the design lives
 
 - Current design decisions: the spikes linked from the [roadmap](../Product/spikes/framework-roadmap.md) — `framework-architecture.md`, `definition-service-pattern.md`, `request-service.md`, `state-service.md`, `command-service.md`, `acceptance-test-suite.md`.
-- Warning: `Product/features/**`, ADR-0009 to 0013 and parts of `Product/ledgers/GLOSSARY.md` describe an older model (`MatchStateSlice`, `GameRulesRuntime`, Scaffold.State slices). The code does not use that model. The roadmap has a step to mark these docs superseded.
+- The state model is recorded in [ADR-0014](../Product/decisions/0014-service-first-state-model.md). Vocabulary is in [`Product/ledgers/GLOSSARY.md`](../Product/ledgers/GLOSSARY.md).
+- The old slice-based docs (`MatchStateSlice`, `GameRulesRuntime`, Scaffold.State slices) are archived: `Product/features/*/archive/` and `Product/_archive/ledgers/GLOSSARY-old-model.md`. ADR-0009 is superseded and ADR-0005, 0007 and 0010 to 0013 are superseded in part. Read them only for history or for the open questions behind unbuilt features.

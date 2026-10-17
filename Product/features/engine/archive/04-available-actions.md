@@ -1,14 +1,14 @@
 ---
 type: model
 status: superseded
-superseded_by: ../models/07-match-state.md
+superseded_by: 07-match-state.md
 archived_on: 2026-05-10
 reason: IAvailableActions service + AvailableActionsState slice retired per ADR-0009 (engine-as-FSM). MatchState.Actions: IReadOnlyList<Type> replaces the snapshot's role for the framework intake gate. Wire-form ActionTemplate and per-state UI projection reworked under ADR-0012 (presentation per-state ViewModels). Original content preserved below for historical record.
-references: [features/engine/models/03-game-rules-runtime.md, features/actions/models/05-available-actions-snapshot.md, features/effects/models/04-command-awaiter.md]
+references: [features/engine/archive/03-game-rules-runtime.md, features/actions/archive/05-available-actions-snapshot.md, features/effects/archive/04-command-awaiter.md]
 tags: [#engine, #snapshot, #available-actions, #archived]
 ---
 
-> **Archived 2026-05-10.** Status: Superseded by [`Match State`](../models/07-match-state.md) per [ADR-0009](../../../decisions/0009-engine-as-fsm.md). `IAvailableActions` service + `AvailableActionsState` slice retired. `MatchState.Actions: IReadOnlyList<Type>` replaces the snapshot's role for the framework intake gate; the wire-form `ActionTemplate` and presentation projection are reworked under ADR-0012 (presentation per-state ViewModels — *forthcoming*).
+> **Archived 2026-05-10.** Status: Superseded by [`Match State`](07-match-state.md) per [ADR-0009](../../../decisions/0009-engine-as-fsm.md). `IAvailableActions` service + `AvailableActionsState` slice retired. `MatchState.Actions: IReadOnlyList<Type>` replaces the snapshot's role for the framework intake gate; the wire-form `ActionTemplate` and presentation projection are reworked under ADR-0012 (presentation per-state ViewModels — *forthcoming*).
 > Original content preserved below for historical record.
 
 ---
@@ -17,7 +17,7 @@ tags: [#engine, #snapshot, #available-actions, #archived]
 
 ## What it is
 
-How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/05-available-actions-snapshot.md`](../../actions/models/05-available-actions-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
+How the available-actions snapshot is **produced** and **published**. The shape of `AvailableActionsSnapshot` is settled in [`actions/05-available-actions-snapshot.md`](../../actions/archive/05-available-actions-snapshot.md); this Model settles its production: the runtime constructs typed `ActionTemplate`s and writes them through the `IAvailableActions` service. Validation stays at dispatch unless the rule explicitly opts a template into pre-validation. Snapshot production is its own pipeline triggered when the rule (or an effect) decides — not auto-fired by the engine on drain.
 
 ```csharp
 public interface IAvailableActions

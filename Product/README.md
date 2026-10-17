@@ -58,7 +58,7 @@ You may not violate these without explicit human approval, even if asked.
 1. **Never write to `Product/` outside the prescribed structure.** If unsure where something belongs, write a Spike in `spikes/`. Don't number new docs at `Product/` root.
 2. **Front matter is mandatory.** Every doc starts with `type` and `status`. Models additionally require `references:` — a list of upstream paths or the literal `root`. Empty list (`[]`) is forbidden; `root` is the explicit "no upstream" signal. (No `last-updated:` field — git is the source of truth.)
 3. **Strict Model section order.** Every Model has the canonical sections (Problem, Concepts, Contracts, Invariants, Examples, Open follow-ups, divider, Options considered, Rationale, Consequences, optional ADR) in canonical order. Empty sections may carry the stub `*n/a — purely descriptive Model.*` but cannot be reordered or omitted. The linter (`/builder:lint`) validates structure.
-4. **Per-feature counters restart at `01`.** Filenames are bare (`01-command-pipeline.md`); the path is the prefix. Cross-references use full paths (`features/actions/models/01-command-pipeline.md`), never "doc 28".
+4. **Per-feature counters restart at `01`.** Filenames are bare (`01-command-pipeline.md`); the path is the prefix. Cross-references use full paths (`features/actions/archive/01-command-pipeline.md`), never "doc 28".
 5. **Cascade is detected, not tracked.** When you edit a Model, run `/builder:lint` (or `/builder:deps <path>`) to surface affected dependents. Fix in place. No ledger.
 6. **Feature-internal decisions stay in the Model's provenance section.** ADRs are project-wide / cross-cutting only and live at `Product/decisions/`. Don't create `features/<f>/decisions/`.
 7. **Status flips are deliberate human actions.** Never flip `draft → settled` or `settled → implemented` without checking the gate and confirming with the human.
@@ -181,7 +181,7 @@ Canonical layout lives at [`_workflow/PRODUCT-BUILDER.md` §Folder layout](_work
 
 1. **Locate the contract.** Search `features/actions/models/`. Found `01-command-pipeline.md`. Read it.
 2. **Edit the Model.** Update `## Contracts`, `## Invariants`, and the affected `## Examples`. If the change required weighing alternatives, add a sub-section under `## Options considered` capturing the decision.
-3. **Walk downstream.** Run `/builder:deps Product/features/actions/models/01-command-pipeline.md`. Reverse-graph output: two dependents (`features/effects/models/01-effect.md`, `support/samples/pile-counter.md`).
+3. **Walk downstream.** Run `/builder:deps Product/features/actions/archive/01-command-pipeline.md`. Reverse-graph output: two dependents (`features/effects/archive/01-effect.md`, `support/samples/pile-counter.md`).
 4. **Fix in place.** Open each dependent and reconcile to the new contract. If a dependent needs *design judgment* rather than mechanical edit, open an OPEN-ITEMS entry instead.
 5. **Status check.** If `01-command-pipeline.md` was `implemented`, the change creates drift against `Assets/` code — flag this to the human; either patch the code or revert the Model to `settled`. If `settled`, the edit is a deliberate cascade event but status stays.
 6. **Update CHECKPOINT.** Reflect the changed state in `SESSION-CHECKPOINT.md` if the active focus shifted.

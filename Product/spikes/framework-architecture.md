@@ -484,9 +484,9 @@ When this spike lands, downstream docs need updates (rough order):
 1. **New ADR (likely 0014)** — *"Service-first, event-sourced, projection-based architecture."* Supersedes parts of 0009 (D2), introduces F1–F6, points at this spike.
 2. **Refresh — `general/ARCHITECTURE.md`** — top-level architecture doc; rewrite around the five-primitive model.
 3. **New feature `features/services/`** (or absorbed into engine) — documents the projection contract, the watch API, the registration pattern.
-4. **Refresh — `features/engine/models/01-game-engine.md`** — engine as service registry + pump; remove world-data references.
-5. **Refresh — `features/engine/models/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; uses services.
-6. **Refresh — `features/state/state.md`** — point at new state-service feature; remove Scaffold-store references.
+4. **Refresh — `features/engine/archive/01-game-engine.md`** — engine as service registry + pump; remove world-data references.
+5. **Refresh — `features/engine/archive/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; uses services.
+6. **Refresh — `features/state/archive/state.md`** — point at new state-service feature; remove Scaffold-store references.
 7. **State-machine spike** — close out with framework-arch as a reference; keep only state-specific content.
 8. **Glossary sweep** — retire `World` (or redefine as *"causality coordinator, not data substrate"*); add `IProjection<T>`, `Watch API`, `Stream`.
 9. **OPEN-ITEMS sweep** — terminology + dangling references.

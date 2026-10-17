@@ -61,10 +61,10 @@ Patch §6 of `04-effect-flow.md` and cascade. Open one alignment-debt entry per 
 
 - `features/effects/models/04-effect-flow.md` §4.5–§6, §10–§11 — primary patch target
 - `features/engine/models/03-snapshot-pipeline.md` §4, §7, §9 — Scope drop, handler example update
-- `features/actions/models/01-command-pipeline.md` §3 — gateway stays decision-unaware
+- `features/actions/archive/01-command-pipeline.md` §3 — gateway stays decision-unaware
 - `features/actions/models/02-availability-snapshot.md` — snapshot shape (Scope removal)
 - `features/actions/decisions/0006-player-intent-mapper.md` — restored, not mutated
 - `features/actions/decisions/0007-five-validation-layers.md` — restored, not mutated
-- `features/presentation/models/01-presentation-loop.md` — boundary prose
+- `features/presentation/archive/01-presentation-loop.md` — boundary prose
 - `support/samples/pile-counter.md` — mapper constructor cleanup
 - Related sessions: 13 (effect-flow Model + scope-branch flagged), 14 (alignment-debt drained), 15 (this session)

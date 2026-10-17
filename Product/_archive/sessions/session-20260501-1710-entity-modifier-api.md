@@ -32,7 +32,7 @@ Patches applied:
 - `features/effects/models/04-effect-flow.md` §4.3 — `IEffectScope` gains `IEntityRegistry Entities` + `IModifierFactory Modifiers` so trigger-react closures can read entity variables and pre-build modifier entries for dispatched actions.
 - `features/effects/models/03-ongoing-effects.md` §5 — recorded the canonical `RemoveModifiersBySourcePayload(target.Id, new ModifierSource(attachment.Id))` cleanup pattern.
 - `features/effects/models/03-ongoing-effects.md` §2 — patched stale `HealOverTimeDefinition` example: `ctx.State.GetVariable` → `scope.Entities.Get<TDef>(self).GetVariable<int>(...)`; `SetVariableAction` → `DecrementTurnsRemainingAction` (handler does the `SetBaseValuePayload` write).
-- `features/actions/models/01-command-pipeline.md` §8 — patched stale `HealActorHandler` example: `scope.GetVariable<int>(Target, "life")` → `ctx.Entities.Get<ActorDefinition>(...).GetVariable<int>(Vars.Life)`; `SetVariableMutation<int>` → `SetBaseValuePayload`.
+- `features/actions/archive/01-command-pipeline.md` §8 — patched stale `HealActorHandler` example: `scope.GetVariable<int>(Target, "life")` → `ctx.Entities.Get<ActorDefinition>(...).GetVariable<int>(Vars.Life)`; `SetVariableMutation<int>` → `SetBaseValuePayload`.
 - `ledgers/OPEN-QUESTIONS.md` Core Model — struck `oq-entity-modifier-api` with resolution note pointing to entities/01.
 
 Then a doc-clarity inventory pass surfaced operations a game author needs but couldn't find a documented entry point for. Walked three batches of follow-ups:

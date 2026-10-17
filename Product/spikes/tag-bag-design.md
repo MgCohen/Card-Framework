@@ -13,7 +13,7 @@ tags: [#spike, #tag-bag, #refoundation]
 
 ## Context
 
-The framework currently runs on Scaffold State: a `Store` of immutable slices, per-payload `Mutator<TState, TPayload>` writers, and an entities-bridge that exposes per-instance variables (`Variable` + `VariableValue`) and layered modifiers (`VariableModifier<T>` over `EntityState.ModifierStacks`). Variables are `(Key: string, PayloadTypeId: string)` value objects authored on a per-game `Vars` catalog; reads land via `entity.Storage.GetVariable<int>(Vars.Health)` and writes synthesize `SetBaseValuePayload` (see [`features/entities/models/03-variable.md`](features/entities/models/03-variable.md), [`features/entities/models/04-modifier.md`](features/entities/models/04-modifier.md)).
+The framework currently runs on Scaffold State: a `Store` of immutable slices, per-payload `Mutator<TState, TPayload>` writers, and an entities-bridge that exposes per-instance variables (`Variable` + `VariableValue`) and layered modifiers (`VariableModifier<T>` over `EntityState.ModifierStacks`). Variables are `(Key: string, PayloadTypeId: string)` value objects authored on a per-game `Vars` catalog; reads land via `entity.Storage.GetVariable<int>(Vars.Health)` and writes synthesize `SetBaseValuePayload` (see [`features/entities/archive/03-variable.md`](features/entities/archive/03-variable.md), [`features/entities/archive/04-modifier.md`](features/entities/archive/04-modifier.md)).
 
 The team is weighing a pivot to a **Hearthstone-shaped, event-sourced** model. Under that pivot:
 
@@ -245,7 +245,7 @@ For framework code itself, **A/D** read better — `entity.Get<Atk, int>()` or `
 This is where typed shapes earn their boilerplate.
 
 - **A/D.** Rename `Atk` → `Attack` and the IDE renames every reference. Delete `Atk` and the compiler points at every dead call site. Move a tag between assemblies and the build catches it.
-- **B.** The string `"atk"` is opaque to the compiler. Rename is find/replace across strings; typos drift in silently; deleting `Tags.Atk` only fails the sites that read the field, not the sites that still type `"atk"` inline (the framework's existing convention discourages inline strings — see [`features/entities/models/03-variable.md`](features/entities/models/03-variable.md) §`Variable` — but discouragement isn't enforcement).
+- **B.** The string `"atk"` is opaque to the compiler. Rename is find/replace across strings; typos drift in silently; deleting `Tags.Atk` only fails the sites that read the field, not the sites that still type `"atk"` inline (the framework's existing convention discourages inline strings — see [`features/entities/archive/03-variable.md`](features/entities/archive/03-variable.md) §`Variable` — but discouragement isn't enforcement).
 - **C.** Rename is IDE-safe, delete is compile-time, but the enum is global. Adding a tag requires editing the framework if the enum is framework-owned; running parallel enums per game muddies the wire format (the int value of `MyGame.GameTag.HARVEST_COUNT` may collide with the framework's int value at the same ordinal).
 
 ### 2.3 JSON / binary serialization
@@ -271,7 +271,7 @@ All four are tolerable; **C is meaningfully worse for non-int tags** because the
 
 ### 2.5 Modifier-fold ergonomics
 
-This is the load-bearing axis for this framework specifically. The current shape (per [`04-modifier.md`](../features/entities/models/04-modifier.md)) is `effective = base + Σ(modifiers)`, with modifiers as a separate layered list keyed by `Variable`. The Hearthstone shape *eliminates* the base/modifier split: the bag stores the *current effective* value, and the system that adds a +3 buff writes `Atk = base + 3` into the bag, then writes `Atk = base` when the buff drops.
+This is the load-bearing axis for this framework specifically. The current shape (per [`04-modifier.md`](../features/entities/archive/04-modifier.md)) is `effective = base + Σ(modifiers)`, with modifiers as a separate layered list keyed by `Variable`. The Hearthstone shape *eliminates* the base/modifier split: the bag stores the *current effective* value, and the system that adds a +3 buff writes `Atk = base + 3` into the bag, then writes `Atk = base` when the buff drops.
 
 Both shapes work in any of A/B/C/D. The interesting question is **whether the chosen key shape forces a separate "modifier stack" structure or lets modifiers themselves be tags.**
 
@@ -315,7 +315,7 @@ For a multi-game framework (per [`general/VISION.md`](../general/VISION.md)), C'
 
 ### 2.8 Migration cost from the current `Variable`
 
-Today's variable shape (per [`03-variable.md`](../features/entities/models/03-variable.md)) is `(string Key, string PayloadTypeId)` with `VariableValue` subclasses. This is almost exactly **Option B** — same authoring pattern (`public static readonly Variable Attack = new("attack", "int")`), same call-site shape (`storage.GetVariable<int>(Vars.Attack)`).
+Today's variable shape (per [`03-variable.md`](../features/entities/archive/03-variable.md)) is `(string Key, string PayloadTypeId)` with `VariableValue` subclasses. This is almost exactly **Option B** — same authoring pattern (`public static readonly Variable Attack = new("attack", "int")`), same call-site shape (`storage.GetVariable<int>(Vars.Attack)`).
 
 - **B.** Trivial rename. `Variable` → `Tag`, `VariableValue` → drop in favor of plain `object` + type-checked accessors. Existing `Vars` catalogs port one-for-one.
 - **D.** Wrap the existing `Variable` in a typed class. The static catalog grows from one-line records to one-class-per-tag, but the wire format and call-site shape can stay close. Existing `GetVariable<int>(Vars.Foo)` becomes `Get(Foo.Instance)`. The transition can be incremental — typed wrappers and string-keyed access can coexist, and the framework can ship both surfaces until games migrate.

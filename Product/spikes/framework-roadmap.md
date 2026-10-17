@@ -44,7 +44,7 @@ flowchart LR
 
 | # | Phase | Status | Needs |
 |---|---|---|---|
-| 0 | Housekeeping | not started | — |
+| 0 | Housekeeping | in progress | — |
 | 1 | Engine loop | not started | 0 |
 | 2 | Client submit + convergence | not started | 1 |
 | 3 | Board: zones + players | not started | 1 |
@@ -60,11 +60,11 @@ flowchart LR
 
 **Goal.** Make `main`, the docs and the tools match the code before new work starts.
 
-- Merge PR #182 (test suite consolidation, `docs/testing.md`) and PR #183 (Unity 6000.6.6f1).
-- Close or move the stale PRs (#18, #19, #101, #148, #156, #159).
-- Refresh `Product/SESSION-CHECKPOINT.md` (it stops at 2026-05-31).
-- Mark the old-model docs superseded: `Product/features/**`, ADR-0009 to 0013 where the state model changed, the `MatchStateSlice` glossary entries. Write ADR-0014 for the service-first state model (deferred since step 5b).
-- Rename `CommandLayer` / `StateLayer` / `RequestLayer` to the `*Installer` names in the spikes that still use them.
+- ✅ Merge PR #182 (test suite consolidation, `docs/testing.md`) and PR #183 (Unity 6000.6.6f1). Merged 2026-10-18; EditMode 364/364 on 6000.6.6f1.
+- ✅ Close or move the stale PRs (#18, #19, #101, #148, #156, #159). Closed 2026-10-18, branches kept.
+- ✅ Refresh `Product/SESSION-CHECKPOINT.md` (it stops at 2026-05-31).
+- Mark the old-model docs superseded: `Product/features/**`, ADR-0009 to 0013 where the state model changed, the `MatchStateSlice` glossary entries. Write ADR-0014 for the service-first state model (deferred since step 5b). ✅ Done: [ADR-0014](../decisions/0014-service-first-state-model.md), feature docs archived, glossary replaced. Still open: sweep `ledgers/OPEN-ITEMS.md` and `general/ARCHITECTURE.md`.
+- ✅ Rename `CommandLayer` / `StateLayer` / `RequestLayer` to the `*Installer` names in the spikes that still use them.
 - Optional: CI that runs EditMode tests on each PR; `.editorconfig`; warnings as errors.
 
 **Done when.** The checkpoint, glossary and spike docs name only types that exist in code.
@@ -102,7 +102,7 @@ flowchart LR
 - Player entities linked to the Multiplayer `Peer` / `PlayerContext`.
 - Ownership and controller tags.
 
-**Inputs.** `VerticalSlice` zones and players (reference code), `features/zones/zones.md` and `features/players/` (old model — read for the questions, not the contract). Write a new spike for the zone store.
+**Inputs.** `VerticalSlice` zones and players (reference code), `features/zones/archive/zones.md` and `features/players/archive/` (old model — read for the questions, not the contract). Write a new spike for the zone store.
 **Done when.** A `MoveCard` command moves a card between zones on server and client, covered by an acceptance scenario.
 
 ### 4. Reactions: effects, hooks, triggers

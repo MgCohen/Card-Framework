@@ -29,5 +29,5 @@ Async decisions — how does the engine pause for player input mid-effect withou
 ## Part 2 — Links & open threads
 
 ### References
-- Docs touched: `features/triggers/models/01-trigger-fold.md` (new), `features/actions/models/01-command-pipeline.md` (alignment).
+- Docs touched: `features/triggers/models/01-trigger-fold.md` (new), `features/actions/archive/01-command-pipeline.md` (alignment).
 - Related: PR #5 (`cfa1c5e`), PR #8 (`811a37c`).

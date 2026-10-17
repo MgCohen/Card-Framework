@@ -1,7 +1,7 @@
 ---
 type: reference
 status: settled
-references: [features/state/state.md, features/entities/entities.md, features/zones/zones.md, features/cards/cards.md, features/players/players.md, features/actions/actions.md, features/triggers/triggers.md, features/effects/effects.md, features/engine/engine.md, features/presentation/presentation.md, decisions/0005-objects-over-ids.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0008-zone-visibility-model.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0012-presentation-per-state-view-models.md]
+references: [features/state/archive/state.md, features/entities/archive/entities.md, features/zones/archive/zones.md, features/cards/archive/cards.md, features/players/archive/players.md, features/actions/archive/actions.md, features/triggers/archive/triggers.md, features/effects/archive/effects.md, features/engine/archive/engine.md, features/presentation/archive/presentation.md, decisions/0005-objects-over-ids.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0008-zone-visibility-model.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#general, #architecture]
 ---
 
@@ -57,13 +57,13 @@ flowchart BT
 
 | Tier | Feature | Owns | Doesn't own |
 |---|---|---|---|
-| Foundation | [`state`](features/state/state.md) | `Store`, `BaseState`, `Mutator<,>`, `IStateScope`, subscription channels | Anything game-specific |
-| Entity bridge | [`entities`](features/entities/entities.md) | `EntityDefinition`, `InstanceWithSlices<TDef>`, `Variable`, `Modifier`, `Attachment` | Domain-shape specifics |
-| Domain shapes | [`zones`](features/zones/zones.md) · [`cards`](features/cards/cards.md) · [`players`](features/players/players.md) | Zone organization + visibility · `Card` + `CardRef` privacy · `Player` + `IActor` | Game-specific gameplay rules |
-| Dispatch | [`actions`](features/actions/actions.md) · [`triggers`](features/triggers/triggers.md) | `GameCommand` family, validators, handlers, history envelope · `Trigger<T>`, fold mechanic | Effect orchestration |
-| Orchestration | [`effects`](features/effects/effects.md) | `IEffect.Run`, `IEffectScope`, `PendingEffectsSlice`, request system | Command pipeline mechanics |
-| Engine | [`engine`](features/engine/engine.md) | `GameEngine`, FSM (`MatchState` + `ITurnFlow` + `ISBA`), `GameRulesRuntime<T>`, factory, session lifecycle | View concerns |
-| UI | [`presentation`](features/presentation/presentation.md) | Per-state `MatchStateViewModel<TState>`, `ViewModelRegistry`, presenter, `IntentGateway` boundary | Final gameplay legality |
+| Foundation | [`state`](features/state/archive/state.md) | `Store`, `BaseState`, `Mutator<,>`, `IStateScope`, subscription channels | Anything game-specific |
+| Entity bridge | [`entities`](features/entities/archive/entities.md) | `EntityDefinition`, `InstanceWithSlices<TDef>`, `Variable`, `Modifier`, `Attachment` | Domain-shape specifics |
+| Domain shapes | [`zones`](features/zones/archive/zones.md) · [`cards`](features/cards/archive/cards.md) · [`players`](features/players/archive/players.md) | Zone organization + visibility · `Card` + `CardRef` privacy · `Player` + `IActor` | Game-specific gameplay rules |
+| Dispatch | [`actions`](features/actions/archive/actions.md) · [`triggers`](features/triggers/archive/triggers.md) | `GameCommand` family, validators, handlers, history envelope · `Trigger<T>`, fold mechanic | Effect orchestration |
+| Orchestration | [`effects`](features/effects/archive/effects.md) | `IEffect.Run`, `IEffectScope`, `PendingEffectsSlice`, request system | Command pipeline mechanics |
+| Engine | [`engine`](features/engine/archive/engine.md) | `GameEngine`, FSM (`MatchState` + `ITurnFlow` + `ISBA`), `GameRulesRuntime<T>`, factory, session lifecycle | View concerns |
+| UI | [`presentation`](features/presentation/archive/presentation.md) | Per-state `MatchStateViewModel<TState>`, `ViewModelRegistry`, presenter, `IntentGateway` boundary | Final gameplay legality |
 
 Dashed nodes are **considered** — known gaps with deferred design (see §What's still considered).
 
@@ -209,7 +209,7 @@ Mutation discipline:
 - **Mutators are pure.** `(currentState, payload, scope) → newState`. No side effects.
 - **`ExecuteBatch`** for atomic multi-payload writes.
 
-Every slice writer is a mutator; every reader resolves through `IStateScope`. See [`state/state.md`](features/state/state.md) for the full Scaffold integration.
+Every slice writer is a mutator; every reader resolves through `IStateScope`. See [`state/state.md`](features/state/archive/state.md) for the full Scaffold integration.
 
 ## How presentation works
 
@@ -277,10 +277,10 @@ Each fires when a real consumer surfaces. None block v1 of the simulation core.
 If you're new to the project, read in this order:
 
 1. This document (top-down).
-2. [`features/engine/engine.md`](features/engine/engine.md) — the simulation core.
-3. [`features/actions/actions.md`](features/actions/actions.md) — the command pipeline.
-4. [`features/effects/effects.md`](features/effects/effects.md) — orchestration.
-5. [`features/state/state.md`](features/state/state.md) — the state primitive.
+2. [`features/engine/archive/engine.md`](features/engine/archive/engine.md) — the simulation core.
+3. [`features/actions/archive/actions.md`](features/actions/archive/actions.md) — the command pipeline.
+4. [`features/effects/archive/effects.md`](features/effects/archive/effects.md) — orchestration.
+5. [`features/state/archive/state.md`](features/state/archive/state.md) — the state primitive.
 6. Then individual Models on demand.
 
 For the locked design decisions, walk [`decisions/`](decisions/) in number order — `0005` (objects over IDs), `0006` (two-pipeline), `0007` (validation layers), `0008` (visibility), `0009`–`0012` (the FSM-arch cascade).

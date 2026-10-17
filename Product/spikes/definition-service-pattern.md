@@ -12,8 +12,10 @@ tags: [#spike, #services, #pattern, #architecture, #bootstrap, #handlers]
 
 # Service pattern (step 4)
 
+> **Update 2026-10-18 (phase 0 housekeeping).** PR #180 replaced the per-feature `*Layer` classes with flat installers under one `GameplayLayer`. Layer names below are renamed to their installers. The old server and client bridge layers no longer exist: `EngineInstaller` registers `WireForwarder` on the server and `NetworkInboundBridge` on the client. `ServerAppFlowRoot` / `ClientAppFlowRoot` became one role-aware `FrameworkAppFlowRoot`. See `docs/architecture.md` § Composition.
+
 > **Status: active.** L1–L11 shipped through 4a + 4b. The 4e post-ship
-> reshape (see [`step4-service-phases.md`](step4-service-phases.md))
+> reshape (see [`archive/step4-service-phases.md`](archive/step4-service-phases.md))
 > closed the "service double-write" deferral and tightened L2/L6:
 > services are emit-only writers (handler is the sole writer on both
 > sides); `TagService` / `EntityService` / `GameEngine` register only
@@ -110,14 +112,13 @@ Service-to-service dependencies = VContainer constructor injection.
   Unity coupling violation. No `GameEngineBuilder` (Q4).
 - `Framework.Bootstrap` — Unity-coupled. Holds the per-side
   `AppFlowRoot` subclasses (`ServerAppFlowRoot`, `ClientAppFlowRoot`),
-  layer installers (`EngineLayer`, `EntityLayer`, `ServerBridgeLayer`,
-  `ClientBridgeLayer`), sandbox scene + IMGUI status UI. Layers stack
-  additively — both roots install `EngineLayer` + `EntityLayer`; each
+  layer installers (`EngineInstaller`, `EntityInstaller`), sandbox scene + IMGUI status UI. Layers stack
+  additively — both roots install `EngineInstaller` + `EntityInstaller`; each
   adds its own tiny bridge layer.
 
 ### L5 — Step 4 ship scope
 
-Phases 4a–4d (see [`step4-service-phases.md`](step4-service-phases.md)):
+Phases 4a–4d (see [`archive/step4-service-phases.md`](archive/step4-service-phases.md)):
 
 - **4a — Scaffold.** Manifest, asmdefs, two `AppFlowRoot` subclasses,
   sandbox scene, "Engine bootstrapped" IMGUI. `EventStream` gains its
@@ -570,7 +571,7 @@ The sandbox scene runs server and client as **two separate
 `EventStream`, its own `GameEngine`. They communicate via `Network`
 instances wired to a shared in-memory transport at the scene level.
 
-Layers stack additively. The same `EngineLayer` + `EntityLayer` run on
+Layers stack additively. The same `EngineInstaller` + `EntityInstaller` run on
 both sides; the only delta is which tiny bridge layer is added on top.
 
 ```csharp
@@ -580,9 +581,9 @@ public sealed class ServerAppFlowRoot : AppFlowRoot
 {
     protected override IEnumerable<IScopeLayer> GetInitialLayers()
     {
-        yield return new EngineLayer();         // 4a — GameEngine + EventStream + Network
-        yield return new EntityLayer();         // 4b — EntityStore + EntityService + all Apply handlers
-        yield return new ServerBridgeLayer();   // 4b — WireForwarder only
+        yield return new EngineInstaller();         // 4a — GameEngine + EventStream + Network
+        yield return new EntityInstaller();         // 4b — EntityStore + EntityService + all Apply handlers
+        yield return new EngineInstaller();   // 4b — WireForwarder only
     }
 }
 
@@ -592,9 +593,9 @@ public sealed class ClientAppFlowRoot : AppFlowRoot
 {
     protected override IEnumerable<IScopeLayer> GetInitialLayers()
     {
-        yield return new EngineLayer();         // 4a — GameEngine + EventStream + Network
-        yield return new EntityLayer();         // 4b — EntityStore + EntityService + all Apply handlers
-        yield return new ClientBridgeLayer();   // 4b — NetworkInboundBridge only
+        yield return new EngineInstaller();         // 4a — GameEngine + EventStream + Network
+        yield return new EntityInstaller();         // 4b — EntityStore + EntityService + all Apply handlers
+        yield return new EngineInstaller();   // 4b — NetworkInboundBridge only
     }
 }
 ```
@@ -685,8 +686,8 @@ client).
 ### Layer registration
 
 ```csharp
-// EngineLayer — both sides (Framework.Bootstrap)
-internal sealed class EngineLayer : IScopeLayer
+// EngineInstaller — both sides (Framework.Bootstrap)
+internal sealed class EngineInstaller : IScopeLayer
 {
     public void Install(IContainerBuilder b)
     {
@@ -699,8 +700,8 @@ internal sealed class EngineLayer : IScopeLayer
     }
 }
 
-// EntityLayer — both sides (Framework.Bootstrap)
-internal sealed class EntityLayer : IScopeLayer
+// EntityInstaller — both sides (Framework.Bootstrap)
+internal sealed class EntityInstaller : IScopeLayer
 {
     public void Install(IContainerBuilder b)
     {
@@ -717,15 +718,15 @@ internal sealed class EntityLayer : IScopeLayer
     }
 }
 
-// ServerBridgeLayer — server only
-internal sealed class ServerBridgeLayer : IScopeLayer
+// EngineInstaller — server only
+internal sealed class EngineInstaller : IScopeLayer
 {
     public void Install(IContainerBuilder b)
         => b.RegisterEntryPoint<WireForwarder>(Lifetime.Singleton);
 }
 
-// ClientBridgeLayer — client only
-internal sealed class ClientBridgeLayer : IScopeLayer
+// EngineInstaller — client only
+internal sealed class EngineInstaller : IScopeLayer
 {
     public void Install(IContainerBuilder b)
         => b.RegisterEntryPoint<NetworkInboundBridge>(Lifetime.Singleton);

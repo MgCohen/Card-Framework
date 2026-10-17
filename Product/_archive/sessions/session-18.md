@@ -54,7 +54,7 @@ None routed beyond the Open → Resolved ledger transitions.
 - `Product/features/engine/models/01-evaluation-loop.md` — signatures updated (§3, §5, §6)
 - `Product/features/triggers/models/01-trigger-fold.md` — FoldResult and GameRules signatures updated (§2, §4)
 - `Product/features/engine/models/02-gamerules-contract.md` — `IHandlerRegistry.Validate` signature updated (§6)
-- `Product/features/presentation/models/01-presentation-loop.md` — Scope argument removed from code example
+- `Product/features/presentation/archive/01-presentation-loop.md` — Scope argument removed from code example
 - `Product/support/samples/pile-counter.md` — Scope field and cast corrections in §9.6
 
 ---

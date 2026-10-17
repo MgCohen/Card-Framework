@@ -1,18 +1,18 @@
 ---
 type: spike
 status: superseded
-superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md]
+superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/archive/01-effect.md, features/effects/archive/02-effect-scope.md, features/effects/archive/05-pending-effects.md, features/effects/archive/06-request-system.md]
 archived_on: 2026-05-11
 reason: "Wholly superseded by ADR-0011. The 2026-05-08 design pass's Q1 unification verdict (cast handlers + trigger fold both calling `IEffectPipeline.RunEffect`) is rolled back; the surviving Q2–Q10 verdicts are absorbed into the canonical Models — async-coroutine effects (`IEffect.Run(scope)`), single async `Dispatch` surface for the 5-sibling `GameCommand` family, engine-only effect firing via `PendingEffectsSlice`, state-linked request system. No design surface remains here that isn't reflected in the canonical Models."
 tags: [#spike, #effects, #effect-pipeline, #runtime, #scope, #archived]
 ---
 
 > **Archived 2026-05-11.** Superseded by [ADR-0011](../decisions/0011-effect-orchestration-dispatch-requests.md) and the cascade it lands. The canonical homes for everything in this spike are:
-> - **Async-coroutine `IEffect.Run`** — [`features/effects/models/01-effect.md`](../features/effects/models/01-effect.md)
-> - **Single async `Dispatch` surface for the 5-sibling family** — [`features/effects/models/02-effect-scope.md`](../features/effects/models/02-effect-scope.md)
-> - **`PendingEffectsSlice` universal queue + drain policy** — [`features/effects/models/05-pending-effects.md`](../features/effects/models/05-pending-effects.md)
-> - **State-linked request system** — [`features/effects/models/06-request-system.md`](../features/effects/models/06-request-system.md)
-> - **Validator / handler split + `IHandlerContext` retirement** — [`features/actions/models/06-command-validator.md`](../features/actions/models/06-command-validator.md), [`features/actions/models/03-command-handler.md`](../features/actions/models/03-command-handler.md) (per [ADR-0010](../decisions/0010-validator-handler-split.md))
+> - **Async-coroutine `IEffect.Run`** — [`features/effects/archive/01-effect.md`](../features/effects/models/01-effect.md)
+> - **Single async `Dispatch` surface for the 5-sibling family** — [`features/effects/archive/02-effect-scope.md`](../features/effects/models/02-effect-scope.md)
+> - **`PendingEffectsSlice` universal queue + drain policy** — [`features/effects/archive/05-pending-effects.md`](../features/effects/models/05-pending-effects.md)
+> - **State-linked request system** — [`features/effects/archive/06-request-system.md`](../features/effects/models/06-request-system.md)
+> - **Validator / handler split + `IHandlerContext` retirement** — [`features/actions/archive/06-command-validator.md`](../features/actions/models/06-command-validator.md), [`features/actions/archive/03-command-handler.md`](../features/actions/models/03-command-handler.md) (per [ADR-0010](../decisions/0010-validator-handler-split.md))
 >
 > The 2026-05-08 spike's Q1 unification verdict (cast handlers + trigger fold both calling `IEffectPipeline.RunEffect`) is rolled back by ADR-0011 lock 1; the surviving Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler) are absorbed into the canonical Models. Content below is preserved as historical record; treat the type sketches and flow diagrams as obsolete.
 
@@ -42,7 +42,7 @@ The locked context this sketch must respect:
 - Command pipeline is framework-FIFO; `engine.Dispatch(GameAction, out string? reason)` is try-get; `runtime` contract is `FilterTriggers + Evaluate`; no `OnIncomingCommand` / `OnQueueDrained` / `IIntakeQueue` / `Route` / etc.
 - `IEffectScope.Dispatch` runs `GameAction`s **inline** — pipeline.Execute → fold → handler → fold → envelope, awaited synchronously by the calling effect.
 - `engine.Dispatch` is queued — framework-FIFO, runs after current `pipeline.Execute` returns.
-- Mutation discipline (per [`effects.md` §Mutation discipline](features/effects/effects.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
+- Mutation discipline (per [`effects.md` §Mutation discipline](features/effects/archive/effects.md)) — only handlers invoke mutators (via `Store.Execute(payload)`); effects orchestrate, never mutate directly.
 - `IHandlerContext` exposes `Store`, `Actions` (snapshot writer), `Resolver` (decision awaiter), `Modifiers`. **No `RunEffect` surface today** — that's the documented gap this sketch closes.
 - ADR-0002 (refreshed) — runtime holds zero **gameplay** state. Engine-internal plumbing is fine on the engine; gameplay state lives in Scaffold slices.
 
@@ -951,12 +951,12 @@ Out of scope for this iteration:
 When iteration settles, propagate to canonical Models:
 
 - **New ADR:** `Product/decisions/0007-effect-pipeline-shape.md` — locks the architecture.
-- `Product/features/effects/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
-- `Product/features/effects/models/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
-- `Product/features/triggers/models/01-trigger.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
-- `Product/features/engine/models/03-game-rules-runtime.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
-- `Product/features/engine/models/01-game-engine.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
-- `Product/features/actions/models/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
-- `Product/features/actions/models/05-available-actions-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
+- `Product/features/effects/archive/effects.md` — substantial revision (new types, services, chain semantics, two execution verbs).
+- `Product/features/effects/archive/01-effect.md` — alignment with chain shape; resolves "Effect registration" + "Effect as first-class type" open questions.
+- `Product/features/triggers/archive/01-trigger.md` — `Trigger<T>` compiles into `EffectDefinition`; fold delegates to `IEffectPipeline.RunEffect`.
+- `Product/features/engine/archive/03-game-rules-runtime.md` — confirm runtime stays at two methods; remove "forthcoming effect-pipeline surface" forward-references.
+- `Product/features/engine/archive/01-game-engine.md` — `pipeline.Execute(action, chainScope?)` signature; envelope-as-atomicity-boundary semantic per D11.
+- `Product/features/actions/archive/01-command-pipeline.md` — drop `Validate` from `ICommandHandler`; pipeline gains `IValidator<TCmd>` resolution per D12.
+- `Product/features/actions/archive/05-available-actions-snapshot.md` — snapshot legality consumes `IValidator<TCmd>`s instead of handler-side `Validate`.
 - `Product/ledgers/OPEN-ITEMS.md` — resolve `oq-effect-pipeline` by deletion; add `oq-effect-authoring`, `oq-runtime-as-state-evaluator`, `oq-session-state-machine`.
 - `Product/ledgers/GLOSSARY.md` — entries for `EffectDefinition`, `EffectInstance`, `EffectBindings`, `IEffectPipeline`, chain scope, `Fired` set.

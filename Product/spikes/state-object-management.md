@@ -13,7 +13,7 @@ Two open questions drive this spike:
 1. **Object management.** Where do behavior-bearing instances live, given that store slices must be immutable / serializable? Adjacent registry? Middleware? Normalization?
 2. **Auto-registration on creation.** When an object is created, how does the framework guarantee its slice(s) are registered (and torn down) without manual wiring? Are there "recipes" for this?
 
-Today the framework already encodes some of the answers — see `features/entities/models/02-instance.md` (`StateEntity<TDef>`, `IEntityRegistry.Spawn`) and `features/engine/models/05-game-factory.md` (DI + factory split). This audit positions those choices against the wider ecosystem.
+Today the framework already encodes some of the answers — see `features/entities/archive/02-instance.md` (`StateEntity<TDef>`, `IEntityRegistry.Spawn`) and `features/engine/archive/05-game-factory.md` (DI + factory split). This audit positions those choices against the wider ecosystem.
 
 ---
 

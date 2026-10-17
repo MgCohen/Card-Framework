@@ -31,5 +31,5 @@ What's the snapshot's exact shape? `GameCommand` flat list doesn't scale to mult
 ## Part 2 — Links & open threads
 
 ### References
-- Docs touched: `support/samples/pile-counter.md`, `features/presentation/models/01-presentation-loop.md`, `features/engine/models/02-gamerules-contract.md`.
+- Docs touched: `support/samples/pile-counter.md`, `features/presentation/archive/01-presentation-loop.md`, `features/engine/models/02-gamerules-contract.md`.
 - Related: PR #11 (`38f6a8f`).

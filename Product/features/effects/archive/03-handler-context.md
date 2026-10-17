@@ -1,20 +1,20 @@
 ---
 type: model
 status: superseded
-superseded_by: [decisions/0010-validator-handler-split.md, features/actions/models/03-command-handler.md, features/actions/models/06-command-validator.md]
+superseded_by: [decisions/0010-validator-handler-split.md, features/actions/archive/03-command-handler.md, features/actions/archive/06-command-validator.md]
 archived_on: 2026-05-11
 reason: "`IHandlerContext` aggregator retired by ADR-0010. `Store` moves to property injection on the `GameCommandHandler<,>` base; `Modifiers` becomes per-handler constructor injection; `Actions` was already retired by ADR-0009 (the `IAvailableActions` snapshot writer is gone); `Resolver` (the `ICommandAwaiter` decision-await mechanism) is retired by ADR-0011 in favor of the request system. No remaining caller."
-references: [features/effects/models/02-effect-scope.md, features/effects/models/04-command-awaiter.md, features/actions/models/03-command-handler.md, features/state/state.md, features/entities/models/02-instance.md]
+references: [features/effects/archive/02-effect-scope.md, features/effects/archive/04-command-awaiter.md, features/actions/archive/03-command-handler.md, features/state/archive/state.md, features/entities/archive/02-instance.md]
 tags: [#effects, #model, #handler-context, #archived]
 ---
 
-> **Archived 2026-05-11.** Superseded by [ADR-0010](Product/decisions/0010-validator-handler-split.md). `IHandlerContext` is gone; handlers inherit from `GameCommandHandler<TCommand, TResult>` (property-injected `Store`) and constructor-inject any additional services. The canonical home for the new handler shape is [`features/actions/models/03-command-handler.md`](features/actions/models/03-command-handler.md); validation lives separately in [`features/actions/models/06-command-validator.md`](features/actions/models/06-command-validator.md). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
+> **Archived 2026-05-11.** Superseded by [ADR-0010](Product/decisions/0010-validator-handler-split.md). `IHandlerContext` is gone; handlers inherit from `GameCommandHandler<TCommand, TResult>` (property-injected `Store`) and constructor-inject any additional services. The canonical home for the new handler shape is [`features/actions/archive/03-command-handler.md`](features/actions/archive/03-command-handler.md); validation lives separately in [`features/actions/archive/06-command-validator.md`](features/actions/archive/06-command-validator.md). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
 
 # Handler Context — model
 
 ## What it is
 
-`IHandlerContext` is the runtime surface a `GameAction` handler (per [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md)) sees inside `Handle`. Wider than `IEffectScope`: handlers may mutate state via `Store.Execute(payload)`, write the available-actions snapshot, register decision awaits, and construct modifier entries.
+`IHandlerContext` is the runtime surface a `GameAction` handler (per [`actions/03-command-handler.md`](features/actions/archive/03-command-handler.md)) sees inside `Handle`. Wider than `IEffectScope`: handlers may mutate state via `Store.Execute(payload)`, write the available-actions snapshot, register decision awaits, and construct modifier entries.
 
 The contrast pins the layer separation: effects orchestrate (read + dispatch), handlers execute (read + mutate + await), mutators write.
 
@@ -33,13 +33,13 @@ public interface IHandlerContext
 ```
 
 - **`Store`** — concrete Scaffold `Store`. Read via `ctx.Store.Get<TState>()` (inherited from `IStateScope`); write via `ctx.Store.Execute(payload)`; resolve handles via `ctx.Store.Catalog.Resolve(ref)`; spawn entities via `ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension). Scaffold does not expose the execute methods on `IStoreScope`; the concrete class is the surface.
-- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for production semantics.
-- **`Resolver`** — `ICommandAwaiter`. Decision handlers call `ctx.Resolver.Wait<TCommand>()` to suspend until a matching command arrives (per [`04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)).
+- **`Actions`** — `IAvailableActions` service. Decision handlers and effects-mid-execution use `ctx.Actions.Set(snapshot)` to publish a fresh `AvailableActionsSnapshot`. See [`engine/04-available-actions.md`](features/engine/archive/04-available-actions.md) for production semantics.
+- **`Resolver`** — `ICommandAwaiter`. Decision handlers call `ctx.Resolver.Wait<TCommand>()` to suspend until a matching command arrives (per [`04-command-awaiter.md`](features/effects/archive/04-command-awaiter.md)).
 - **`Modifiers`** — modifier factory. `Create(key, modifier, source)` returns a fully-populated `ActiveModifier` with a deterministic `ModifierId` and optional source baked in. The id comes from an engine-owned counter (snapshotted, restored on `LoadSnapshot`). Constructing modifier ids ad-hoc via `Guid.NewGuid()` is forbidden in handler / framework code — it breaks replay and multiplayer determinism.
 
 ### Writes — through `ctx.Store.Execute(payload)`
 
-The `Store` / `Mutator<TState, TPayload>` mechanic (payload-keyed dispatch, fan-out, atomic commit, sibling reads via `IStateScope`) is owned by [`state/state.md`](features/state/state.md). Handler-side discipline:
+The `Store` / `Mutator<TState, TPayload>` mechanic (payload-keyed dispatch, fan-out, atomic commit, sibling reads via `IStateScope`) is owned by [`state/state.md`](features/state/archive/state.md). Handler-side discipline:
 
 - **Handlers are the only mutator caller.** Effects do not see `Store.Execute`.
 - **No `Mutate` helper on the context.** The handler issues `ctx.Store.Execute(payload)` / `ctx.Store.ExecuteBatch(...)` calls directly.
@@ -48,11 +48,11 @@ The `Store` / `Mutator<TState, TPayload>` mechanic (payload-keyed dispatch, fan-
 
 ### Entity-variable mutations
 
-For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-instance.md`](features/entities/models/02-instance.md).
+For modifier / variable / structural mutations against entity slices, prefer the `IEntityVariableStorage` surface on a handle obtained via `ctx.Store.Catalog.Resolve(ref)`. Build modifier entries through the `Modifiers` factory and pass them to `card.Storage.AddModifier(entry)`. Raw `ctx.Store.Execute(payload)` remains the documented fallback for batch authoring, history-replay tooling, and refless paths. Full handler-side surface in [`entities/02-instance.md`](features/entities/archive/02-instance.md).
 
 ### Spawn pathway
 
-`ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02-instance.md`](features/entities/models/02-instance.md).
+`ctx.Store.Spawn<TDef>(def)` (the `StoreEntities.Spawn` extension) allocates a deterministic `Ref<EntityInstance<TDef>>`, registers an empty `EntityState` slice, constructs the handle with `StoreVariableStorage`, and registers it in `ctx.Store.Catalog`. Returns `(instance, ref)`. Typed subclass spawn helpers (`Card.Spawn`) wrap this. See [`entities/02-instance.md`](features/entities/archive/02-instance.md).
 
 ## Invariants
 
@@ -64,7 +64,7 @@ For modifier / variable / structural mutations against entity slices, prefer the
 
 ## Decisions
 
-*n/a — no elevated ADR.* The context shape is the consumer side of layer separation (Effect / GameAction / CompositeAction), pinned in [`01-effect.md`](features/effects/models/01-effect.md).
+*n/a — no elevated ADR.* The context shape is the consumer side of layer separation (Effect / GameAction / CompositeAction), pinned in [`01-effect.md`](features/effects/archive/01-effect.md).
 
 ## Examples
 

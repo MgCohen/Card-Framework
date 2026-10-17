@@ -1,14 +1,16 @@
 ---
 type: adr
 status: accepted
-references: [features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, features/effects/models/05-pending-effects.md, features/effects/models/06-request-system.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, spikes/archive/fsm-architecture.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
+references: [features/effects/archive/01-effect.md, features/effects/archive/02-effect-scope.md, features/effects/archive/05-pending-effects.md, features/effects/archive/06-request-system.md, features/actions/archive/01-command-pipeline.md, features/engine/archive/01-game-engine.md, features/engine/archive/03-game-rules-runtime.md, spikes/archive/fsm-architecture.md, decisions/0006-two-pipeline-architecture.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md]
 tags: [#adr, #effects, #engine, #dispatch, #requests, #fsm]
 ---
 
 # ADR-0011 — Effect orchestration; unified `Dispatch`; `PendingEffectsSlice`; async-coroutine effects; request system
 
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
+
 Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D13–D17; sub-ADR C of the FSM-arch cascade following ADR-0009 + ADR-0010)
-Context-docs: `Product/features/effects/models/01-effect.md`, `Product/features/effects/models/02-effect-scope.md`, new Models `effects/05-pending-effects.md`, `effects/06-request-system.md`, `Product/features/actions/models/01-command-pipeline.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`
+Context-docs: `Product/features/effects/archive/01-effect.md`, `Product/features/effects/archive/02-effect-scope.md`, new Models `effects/05-pending-effects.md`, `effects/06-request-system.md`, `Product/features/actions/archive/01-command-pipeline.md`, `Product/features/engine/archive/01-game-engine.md`, `Product/features/engine/archive/03-game-rules-runtime.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 > **Refresh (2026-05-11, same-day) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md) + spike Q-walk locks.** Five refinements:
@@ -19,7 +21,7 @@ Proposal: `Product/spikes/archive/fsm-architecture.md`
 > 4. **Timeout deferred to post-v1; planned shape pinned.** `Request` will gain an optional `TimeSpan? Timeout` (data-only) when forced; framework `TimerService` schedules a default-response dispatch on expiry. Replay reproduces deterministically because the recorded `Response` envelope captures the cancellation. Tracked as `oq-request-timeout-primitive`.
 > 5. **Concurrent requests supported by `Task.WhenAll`; drain-pause clarified as state-transition-pause.** `RequestsSlice.Open` is a dictionary; multiple requests can be open simultaneously. Open requests pause **state transitions** (default `Evaluate` returns `Current`) but do **not** freeze the drain — effects park on their own awaits while other effects and commands proceed. Enables simultaneous mulligan, multi-actor response windows, parallel auctions.
 >
-> **D17 reaffirmed: all request / response / payload fields are data-only.** Pre-computed lists or resolver-id + serializable params; never `Func`/`Predicate`/delegate fields. Restated as a hard invariant in [`actions/01-command-pipeline.md`](Product/features/actions/models/01-command-pipeline.md) for breadth.
+> **D17 reaffirmed: all request / response / payload fields are data-only.** Pre-computed lists or resolver-id + serializable params; never `Func`/`Predicate`/delegate fields. Restated as a hard invariant in [`actions/01-command-pipeline.md`](Product/features/actions/archive/01-command-pipeline.md) for breadth.
 
 ## Context
 
@@ -91,7 +93,7 @@ public sealed record EffectInstance(
 );
 ```
 
-`ImmutableList<EffectInstance>` keeps the ordering decision in the runtime — most card games drain LIFO (stack-shaped) so the top of the list is next to fire; FIFO is also valid for queue-shaped games. The engine drains this slice when its drain-policy composition allows; canonical Model at [`features/effects/models/05-pending-effects.md`](features/effects/models/05-pending-effects.md).
+`ImmutableList<EffectInstance>` keeps the ordering decision in the runtime — most card games drain LIFO (stack-shaped) so the top of the list is next to fire; FIFO is also valid for queue-shaped games. The engine drains this slice when its drain-policy composition allows; canonical Model at [`features/effects/archive/05-pending-effects.md`](features/effects/archive/05-pending-effects.md).
 
 **Drain-policy composition.** Whether to drain the next pending effect is composed from state-linked services. The default `Evaluate` body (per ADR-0009) grows two pre-`ShouldExit` guards:
 
@@ -188,7 +190,7 @@ public interface IRequestService
 
 **Two slices, different lifecycles.** `RequestsSlice.Open` is "still asking" — clients subscribe to render pickers from this slice. `AnswersSlice.By` is "answered, awaiting consumer" — exists for replay (a recorded match can be re-played by re-dispatching the recorded responses against open requests in the same order). From the effect-author's POV, `AnswersSlice` is invisible — `await scope.Dispatch(request)` resolves directly with the typed `TResponse`. Match-end clears both slices.
 
-Canonical Model at [`features/effects/models/06-request-system.md`](features/effects/models/06-request-system.md).
+Canonical Model at [`features/effects/archive/06-request-system.md`](features/effects/archive/06-request-system.md).
 
 ## Consequences
 
@@ -202,13 +204,13 @@ Canonical Model at [`features/effects/models/06-request-system.md`](features/eff
 - **Constrains** `Request<TResponse>` and `Response` to carry only serializable references and values. No `Func` fields, no predicates, no delegates. Game-side logic computes the valid set before opening; the request is wire data.
 - **Constrains** effects to a strictly serial concurrency model per drain loop. Only one `Run` is in flight at a time. While an effect awaits a `Response`, the drain loop progresses (the response flows through the command pipeline), but `PendingEffectsSlice` does not pop a parallel sibling.
 - **Constrains** save/load to quiescent points (no effect's `Run` currently in flight). If a game later forces mid-effect save/load, would require state-machine effects — a separate spike (`oq-effect-save-load`).
-- **Retires** `ICommandAwaiter` and the canonical Model that documented it (`Product/features/effects/models/04-command-awaiter.md`) — archived. Decision routing lives on the request system; type-only routing is gone.
+- **Retires** `ICommandAwaiter` and the canonical Model that documented it (`Product/features/effects/archive/04-command-awaiter.md`) — archived. Decision routing lives on the request system; type-only routing is gone.
 - **Retires** the 2026-05-08 effect-pipeline spike (`Product/spikes/effect-pipeline.md`). The ADR + new Models inherit the still-locked Q2–Q10 verdicts (pure split, off-state subscription registry, definition catalog, chain scope, decisions-as-actions, envelope-as-atomicity, validators-off-handler); the Q1 unification verdict is rolled back per lock 1; everything else is reshaped by D13–D17.
 - **Reverts / replaces** the 2026-05-08 Q1 lock (cast handlers + trigger fold both calling `IEffectPipeline.RunEffect`). Lock 1 here is the rollback.
 - **Defers** the effect-authoring vocabulary (`oq-effect-authoring`). `IEffect.Run(scope) : Task` is the locked runtime contract; how a `CardDefinition` holds the *recipe* that constructs `IEffect` instances at cast time — code-side registration, serialized asset, definition editor, hybrid — is the authoring feature's concern.
 - **Defers** mid-effect cancellation token threading (`oq-effect-cancellation-on-match-end`). The locked resolution path threads `CancellationToken` through `IEffectScope.Dispatch`; engine cancels on match-end and GCs `RequestsSlice` / `AnswersSlice`. Implementation pass; no further design decisions needed.
 - **Defers** mid-effect save/load (`oq-effect-save-load`). Async-coroutine effects cannot serialize mid-`await`; if a game forces this, would force state-machine effects.
-- **Defers** drain-policy composition Model (`oq-drain-policy-composition`). The composition rule is documented in [`features/effects/models/05-pending-effects.md`](features/effects/models/05-pending-effects.md) §Drain policy; whether it grows into its own Model depends on how complex game-side overrides become.
+- **Defers** drain-policy composition Model (`oq-drain-policy-composition`). The composition rule is documented in [`features/effects/archive/05-pending-effects.md`](features/effects/archive/05-pending-effects.md) §Drain policy; whether it grows into its own Model depends on how complex game-side overrides become.
 - **Defers** pre-play targeting (`oq-targeting-pre-play`). A card whose play-condition requires a chosen target *before* the play-card command fires (the target is a parameter of the play, not a request inside the resolution) folds into a richer `PlayCardCommand(card, target)` whose cast validator accepts the target. Differs from mid-effect target requests; today's request system covers mid-effect only.
 
 ## Notes

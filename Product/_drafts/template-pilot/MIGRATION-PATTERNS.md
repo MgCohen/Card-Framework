@@ -51,7 +51,7 @@ Feature `## Invariants` lists feature-level rules that span Models or shape down
 
 ## P4 — Path convention: Product-root-relative
 
-All markdown link URLs and front-matter `references:` entries use Product-root-relative paths (`features/zones/models/01-zone-model.md`, not `../../zones/models/01-zone-model.md`). This works with the linter convention even though raw markdown renderers won't resolve them.
+All markdown link URLs and front-matter `references:` entries use Product-root-relative paths (`features/zones/archive/01-zone-model.md`, not `../../zones/models/01-zone-model.md`). This works with the linter convention even though raw markdown renderers won't resolve them.
 
 **Observed in:** universal across all 8 features. **Codify in spec.**
 

@@ -84,7 +84,7 @@ Before this spike, the framework already settled the following about state (ADR-
 - `ISBA` retired 2026-05-11 (Magic-specific pattern; framework no longer ships it).
 - Match-end auto-emit: framework ships `EndOfMatchState(MatchOutcome)`, engine auto-dispatches `EndMatchCommand` when transition lands there.
 
-References: [`decisions/0009-engine-as-fsm.md`](../decisions/0009-engine-as-fsm.md), [`features/engine/models/07-match-state.md`](../features/engine/models/07-match-state.md), [`features/engine/models/08-turn-flow.md`](../features/engine/models/08-turn-flow.md), [`features/engine/models/03-game-rules-runtime.md`](../features/engine/models/03-game-rules-runtime.md), [`features/state/state.md`](../features/state/state.md).
+References: [`decisions/0009-engine-as-fsm.md`](../decisions/0009-engine-as-fsm.md), [`features/engine/archive/07-match-state.md`](../features/engine/archive/07-match-state.md), [`features/engine/archive/08-turn-flow.md`](../features/engine/archive/08-turn-flow.md), [`features/engine/archive/03-game-rules-runtime.md`](../features/engine/archive/03-game-rules-runtime.md), [`features/state/archive/state.md`](../features/state/archive/state.md).
 
 The vertical-slice rebuild (P1–P23) doesn't yet have a state machine — it processes commands and effects but doesn't drive transitions. The shape from ADR-0009 was authored against the Scaffold-slice substrate; it doesn't translate directly to the rebuilt engine. That mismatch is what forced this redesign.
 
@@ -790,13 +790,13 @@ When v6 lands, these docs need updates (rough order):
 
 1. **New ADR (likely 0014)** — supersedes ADR-0009's D1–D3. Establishes stateless-record push-based service model + sibling pattern with Requests. References this spike.
 2. **New feature `features/states/`** (or absorbed into engine) — documents `IStateService`, `IStateScope`, `IStateRegistry`, `IStateFlow`, `GameState` base record, `PushStateCommand`/`PushStateResult`/`PushStateHandler`, `StatePushEvent`, the three baseline records, and the push lifecycle.
-3. **Heavy rewrite — `features/engine/models/07-match-state.md`** → `GameState` record shape, drop slice wrapper. Rename `MatchState` → `GameState`. Update all virtual-member signatures.
-4. **Refresh — `features/engine/models/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; remove `MatchStateSlice` references; default body composes `IsCompleted` + `IStateFlow.NextAfter`.
-5. **Refresh — `features/engine/models/01-game-engine.md`** — intake gate reads `Current.Actions` off record; transition is `PushStateCommand` not `TransitionStateCommand`; remove slice-based phrasing.
-6. **Refresh — `features/engine/models/08-turn-flow.md`** — `ITurnFlow` → `IStateFlow`; returns `GameState?`.
-7. **Refresh — ADR-0012 + `features/presentation/models/01-match-state-view-model.md` + `02-view-model-registry.md`** — dispatch on `GameState` record type, not slice polymorphism. Core idea survives; mechanics adjust.
+3. **Heavy rewrite — `features/engine/archive/07-match-state.md`** → `GameState` record shape, drop slice wrapper. Rename `MatchState` → `GameState`. Update all virtual-member signatures.
+4. **Refresh — `features/engine/archive/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; remove `MatchStateSlice` references; default body composes `IsCompleted` + `IStateFlow.NextAfter`.
+5. **Refresh — `features/engine/archive/01-game-engine.md`** — intake gate reads `Current.Actions` off record; transition is `PushStateCommand` not `TransitionStateCommand`; remove slice-based phrasing.
+6. **Refresh — `features/engine/archive/08-turn-flow.md`** — `ITurnFlow` → `IStateFlow`; returns `GameState?`.
+7. **Refresh — ADR-0012 + `features/presentation/archive/01-match-state-view-model.md` + `02-view-model-registry.md`** — dispatch on `GameState` record type, not slice polymorphism. Core idea survives; mechanics adjust.
 8. **Audit — ADR-0010 / ADR-0011** — any references to `MatchState`, `MatchStateSlice`, `TransitionStateCommand` get repointed.
-9. **Sweep — `features/state/state.md`** — heavy rewrite or absorb into the new feature. The Scaffold-Store-based shape doesn't survive.
+9. **Sweep — `features/state/archive/state.md`** — heavy rewrite or absorb into the new feature. The Scaffold-Store-based shape doesn't survive.
 10. **Sweep — `Product/ledgers/GLOSSARY.md`** — retire `MatchState`, `MatchStateSlice`, `TransitionStateCommand`; add `GameState`, `IStateService`, `IStateRegistry`, `IStateFlow`, `StatePushEvent`, `PushStateCommand`.
 11. **Sweep — `Product/ledgers/OPEN-ITEMS.md`** — terminology + dangling references.
 12. **Vertical slice integration** — current main-loop reshape (P18+) needs the `Evaluate` hook to call state-flow logic; need a state-service implementation; need the Match singleton.

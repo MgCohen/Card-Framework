@@ -1,7 +1,7 @@
 ---
 type: spike
 status: active
-forward-link: Product/features/presentation/presentation.md
+forward-link: Product/features/presentation/archive/presentation.md
 tags: [#spike, #presentation, #cards, #zones, #reactive, #ui]
 ---
 
@@ -71,7 +71,7 @@ Worked through this incrementally via design-pass sessions. Each step kept the p
 
 Active. The spike is a working prototype, not a settled design — but the architectural shape has converged enough that the eventual presentation model can absorb the locks above. Concrete graduation paths:
 
-- Fold the **reactive flow direction** + **smart diff-rebind** into `features/presentation/presentation.md` once the existing per-`MatchState` ViewModel work and the per-entity card VM here can be reconciled. They're at different scopes (state-shape vs. card-shape) but share the same "view subscribes to a slice, presenter rebuilds on change" pattern.
+- Fold the **reactive flow direction** + **smart diff-rebind** into `features/presentation/archive/presentation.md` once the existing per-`MatchState` ViewModel work and the per-entity card VM here can be reconciled. They're at different scopes (state-shape vs. card-shape) but share the same "view subscribes to a slice, presenter rebuilds on change" pattern.
 
 - The **zone-as-orchestrator** + **subclass-as-preset** pattern is a candidate for its own model under `features/presentation/models/`.
 

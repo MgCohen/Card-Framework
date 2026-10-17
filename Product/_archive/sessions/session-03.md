@@ -27,5 +27,5 @@ Apply settled renames everywhere — how big is the cascade?
 ## Part 2 — Links & open threads
 
 ### References
-- Docs touched: `features/actions/models/01-command-pipeline.md` (formerly doc 19, folded as semantics section).
+- Docs touched: `features/actions/archive/01-command-pipeline.md` (formerly doc 19, folded as semantics section).
 - Related: PR #3 (`00d4d37`).

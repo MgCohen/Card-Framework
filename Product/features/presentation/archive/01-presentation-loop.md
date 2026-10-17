@@ -1,17 +1,17 @@
 ---
 type: model
 status: superseded
-superseded_by: [decisions/0012-presentation-per-state-view-models.md, features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md]
+superseded_by: [decisions/0012-presentation-per-state-view-models.md, features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/02-view-model-registry.md, features/presentation/archive/presentation.md]
 archived_on: 2026-05-11
 reason: "Process-shaped title fails the model-template gates (per `_docs/model.md`). Content wholly superseded by ADR-0012: the four-layer loop (Store / IntentMapper / AffordanceMap / View) reshapes into Store / ViewModelRegistry / per-state MatchStateViewModel / View. `AffordanceMap` retires (VM observables replace it); global `IIntentMapper` retires (per-VM `Map(intent)` replaces it); `AvailableActionsSnapshot` / `ActionTemplate` wire form retires (`MatchState.Actions` + VM bindings replace it). The post-cascade loop synthesis lives on the rewritten `presentation/presentation.md` feature root; the canonical type homes are the two new Models cited above."
-references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/engine/models/07-match-state.md, features/effects/models/01-effect.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
+references: [features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/02-view-model-registry.md, features/engine/archive/07-match-state.md, features/effects/archive/01-effect.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#presentation, #loop, #available-actions, #model, #archived]
 ---
 
 > **Archived 2026-05-11.** Superseded by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md). The canonical homes for everything in this Model are:
-> - **Per-state polymorphic ViewModel** — [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md)
-> - **`ViewModelRegistry`** — [`features/presentation/models/02-view-model-registry.md`](Product/features/presentation/models/02-view-model-registry.md)
-> - **Loop synthesis (Store → registry → per-state VM → View)** — [`features/presentation/presentation.md`](Product/features/presentation/presentation.md) feature root
+> - **Per-state polymorphic ViewModel** — [`features/presentation/archive/01-match-state-view-model.md`](Product/features/presentation/archive/01-match-state-view-model.md)
+> - **`ViewModelRegistry`** — [`features/presentation/archive/02-view-model-registry.md`](Product/features/presentation/archive/02-view-model-registry.md)
+> - **Loop synthesis (Store → registry → per-state VM → View)** — [`features/presentation/archive/presentation.md`](Product/features/presentation/archive/presentation.md) feature root
 >
 > Pre-cascade vocabulary that retires: `AffordanceMap`, global `IIntentMapper`, `AvailableActionsSnapshot`, `ActionTemplate` (wire form), `PlayerChoice`. `PlayerIntent` survives as game-defined typed intent records consumed by the active VM's `Map`. The "process-shaped title" anti-pattern flagged by `_docs/model.md` is resolved by the rename: `presentation/01-presentation-loop` → `presentation/01-match-state-view-model` (filename = type name). Content below is preserved as historical record; treat code samples and references to retired types as obsolete.
 
@@ -66,7 +66,7 @@ Each row down is more game-specific than the one above. The framework provides e
 
 ### State shape
 
-The snapshot lives in `GameState` as a framework-owned slice (per [`state/state.md`](features/state/state.md)):
+The snapshot lives in `GameState` as a framework-owned slice (per [`state/state.md`](features/state/archive/state.md)):
 
 ```csharp
 // Framework-owned slice
@@ -74,7 +74,7 @@ public sealed record AvailableActionsState(
     AvailableActionsSnapshot Snapshot) : BaseState;
 ```
 
-`AvailableActionsSnapshot` carries a typed `ActionTemplate` list (no scope discriminator — see [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md) for the shape, [`engine/04-available-actions.md`](features/engine/models/04-available-actions.md) for production).
+`AvailableActionsSnapshot` carries a typed `ActionTemplate` list (no scope discriminator — see [`actions/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md) for the shape, [`engine/04-available-actions.md`](features/engine/archive/04-available-actions.md) for production).
 
 Treating the snapshot as state — not as a side-channel — has three consequences:
 
@@ -84,7 +84,7 @@ Treating the snapshot as state — not as a side-channel — has three consequen
 
 ### The snapshot's element type
 
-The snapshot stores **typed `ActionTemplate` subtypes** — not resolved commands, not intents, not game-specific affordances. Each command type has a paired template type (`MoveCardCommand` ↔ `MoveCardTemplate`, etc.) that declares the action's shape: source entity, target slots, modes, parameters. Resolution to a `GameCommand` happens at the `IIntentMapper` boundary when the player picks. Full reasoning in [`actions/05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md).
+The snapshot stores **typed `ActionTemplate` subtypes** — not resolved commands, not intents, not game-specific affordances. Each command type has a paired template type (`MoveCardCommand` ↔ `MoveCardTemplate`, etc.) that declares the action's shape: source entity, target slots, modes, parameters. Resolution to a `GameCommand` happens at the `IIntentMapper` boundary when the player picks. Full reasoning in [`actions/05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md).
 
 Reasoning:
 
@@ -207,7 +207,7 @@ Validation runs at multiple layers; each has a different purpose. The full proje
 
 The relationship between `AffordanceMap` and `handler.Validate`:
 
-- The snapshot is the runtime's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the runtime wants exhaustive coverage, but it's not the default ([`engine/04 §Validation posture`](features/engine/models/04-available-actions.md)).
+- The snapshot is the runtime's **best-effort approximation**: per-template eligibility filters whole-template suppression; per-binding `Validate` may run on demand if the runtime wants exhaustive coverage, but it's not the default ([`engine/04 §Validation posture`](features/engine/archive/04-available-actions.md)).
 - `AffordanceMap` is **prophylactic** — projects the snapshot to prevent obviously bad intents.
 - `handler.Validate` at dispatch is **authoritative** — single source of truth, catches stale bindings (state changed between snapshot publication and intent dispatch) and any bindings the runtime didn't pre-validate.
 
@@ -228,7 +228,7 @@ public override IReadOnlyList<GameAction> Evaluate(GameAction _, CommandResult _
 }
 ```
 
-The snapshot write is a service call — see [`engine/04 §The service-driven model`](features/engine/models/04-available-actions.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
+The snapshot write is a service call — see [`engine/04 §The service-driven model`](features/engine/archive/04-available-actions.md). The runtime never holds a `GameEngine` reference; it holds narrow capability services. Effects mid-execution override the snapshot through the same write path (target pickers, choose-one prompts).
 
 ## Invariants
 
