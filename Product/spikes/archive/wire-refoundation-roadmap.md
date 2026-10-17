@@ -1,17 +1,22 @@
 ---
 type: spike-roadmap
-status: active
+status: superseded
+superseded_by: ../framework-roadmap.md
+archived_on: 2026-10-17
+reason: Steps 1-5 landed; the remaining work is sequenced in the new framework roadmap.
 created: 2026-05-18
 tags: [#roadmap, #refoundation, #wire]
 ---
 
 # Wire-First Refoundation Roadmap
 
+> **Superseded by [`framework-roadmap.md`](../framework-roadmap.md) (2026-10-17).** Kept for record.
+
 Rebuild the framework outward from the wire layer. Wire is the most defining constraint and the hardest to retrofit; everything else can be designed against a stable foundation once it's locked. The original VerticalSlice locked everything *above* the wire while leaving the wire itself stubbed; this roadmap inverts that.
 
 ## Sequence
 
-1. **Wire (AutoPacker sample).** Send → pack → unpack → receive. Validates pack/unpack symmetry, handler injection, schema-version basics. All six original WireEvent families round-trip with realistic payloads. → [`wire-autopacker-sample.md`](wire-autopacker-sample.md).
+1. **Wire (AutoPacker sample).** Send → pack → unpack → receive. Validates pack/unpack symmetry, handler injection, schema-version basics. All six original WireEvent families round-trip with realistic payloads. → [`wire-autopacker-sample.md`](../wire-autopacker-sample.md).
 2. **Tag value + identity allocation.** Tag value typing redesigned against the new wire shape. Stable slot allocation (tag slots, entity type slots, definition ids) — the same registry problem solved once.
 3. **Entities + definitions + catalogs.** Single concrete `Entity` revalidated against the new tag shape. Definition layer + per-type catalogs included.
 4. **Service pattern.** Generalize the per-role service shape (command / effect / request / state). Decide what's load-bearing and what's incidental.

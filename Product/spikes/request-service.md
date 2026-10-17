@@ -3,7 +3,7 @@ type: spike
 status: active
 created: 2026-05-30
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-service-pattern.md
   - Product/spikes/wire-block-events.md
   - Product/spikes/state-service.md
@@ -36,7 +36,7 @@ AutoPacker inheritance. Stores on both sides; service server-only.
 
 ## Where this slots
 
-Step 5a of [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md).
+Step 5a of [`wire-refoundation-roadmap.md`](archive/wire-refoundation-roadmap.md).
 
 **Pre-step-5a landed:**
 - The service pattern — Store + Service + per-type apply handler

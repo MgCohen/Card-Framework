@@ -4,7 +4,7 @@ status: graduated
 forward-link: Framework.Wire (wire-refoundation-roadmap.md phase 5)
 references:
   - Product/spikes/wire-network-protocol.md
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
 tags: [#spike, #wire, #serialization, #typing, #source-gen, #tags]
 ---
 
@@ -493,4 +493,4 @@ These came out of the build but aren't blockers — flagged for when we revisit:
 
 ### Status note
 
-This spike has graduated; the findings live in `Framework.Wire` + `Framework.Tags`, tracked by [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md). New work on the wire — `BlockStart.Payload` migration, source-gen project, transport — lands as its own spike → model → ADR per workflow, not as further appends here.
+This spike has graduated; the findings live in `Framework.Wire` + `Framework.Tags`, tracked by [`wire-refoundation-roadmap.md`](archive/wire-refoundation-roadmap.md). New work on the wire — `BlockStart.Payload` migration, source-gen project, transport — lands as its own spike → model → ADR per workflow, not as further appends here.

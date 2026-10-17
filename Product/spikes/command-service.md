@@ -3,7 +3,7 @@ type: spike
 status: active
 created: 2026-06-03
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-service-pattern.md
   - Product/spikes/request-service.md
   - Product/spikes/state-service.md
@@ -39,7 +39,7 @@ returns a thin `CommandResult`.
 
 ## Where this slots
 
-Step 5c of [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md) — the
+Step 5c of [`wire-refoundation-roadmap.md`](archive/wire-refoundation-roadmap.md) — the
 front half of "engine reassembly." It builds directly on the shipped reactive
 layers and is the first consumer-facing *authoring* surface above them.
 

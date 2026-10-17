@@ -10,10 +10,11 @@ Unity card-game framework. Unity version: `6000.4.0f1`.
 Card Framework/
 ├── CLAUDE.md                  # This file — router + hard rules
 ├── docs/
-│   ├── architecture.md        # Cross-cutting invariants and rationale (stub)
+│   ├── architecture.md        # How the current Framework works: codemap, data flow, invariants
 │   ├── coding-standards.md    # C# / Unity conventions for code under Assets/
 │   ├── feature-layout.md      # Feature structure, asmdefs, spike → framework promotion
 │   └── testing.md             # Test tiers (unit / acceptance / integration); which to write
+├── Product/spikes/framework-roadmap.md  # Ordered plan for the remaining framework work
 ├── Assets/
 │   ├── Framework/             # Graduated features (vertical slices)
 │   └── Spike/                 # Exploratory / prototype work; deletable

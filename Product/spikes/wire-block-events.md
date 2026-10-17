@@ -3,7 +3,7 @@ type: spike
 status: active
 created: 2026-05-20
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-service-pattern.md
   - Product/spikes/wire-typed-payloads.md
   - Product/spikes/framework-architecture.md
@@ -27,7 +27,7 @@ tags: [#spike, #wire, #blocks, #events, #causality, #presentation]
 ## Where this slots
 
 Sits between step 4 (service pattern) and step 5 (existing services reviewed)
-in [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md). Step 5
+in [`wire-refoundation-roadmap.md`](archive/wire-refoundation-roadmap.md). Step 5
 ports CommandService / EffectService / TriggerService / RequestService /
 StateService onto the handler-based service pattern from
 [`definition-service-pattern.md`](definition-service-pattern.md); those
