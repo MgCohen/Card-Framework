@@ -3,7 +3,7 @@ type: spike
 status: active
 created: 2026-05-20
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-entity-setup.md
   - Product/spikes/step3-entity-phases.md
 sandbox: Assets/Framework/Engine/, Assets/Framework/Bootstrap/
@@ -22,7 +22,7 @@ tags: [#spike, #services, #pattern, #architecture, #bootstrap, #handlers]
 
 ## What step 4 is
 
-Step 4 in [`wire-refoundation-roadmap.md`](wire-refoundation-roadmap.md): *"Service
+Step 4 in [`wire-refoundation-roadmap.md`](archive/wire-refoundation-roadmap.md): *"Service
 pattern. Generalize the per-role service shape (command / effect / request /
 state). Decide what's load-bearing and what's incidental."*
 

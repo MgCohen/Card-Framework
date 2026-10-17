@@ -3,7 +3,7 @@ type: spike
 status: active
 created: 2026-05-18
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/wire-typed-payloads.md
 sandbox: Assets/Framework/Wire/
 tags: [#spike, #wire, #autopacker, #refoundation]

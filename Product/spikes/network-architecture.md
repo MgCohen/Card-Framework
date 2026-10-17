@@ -4,7 +4,7 @@ status: locked
 created: 2026-05-19
 references:
   - Product/spikes/wire-autopacker-sample.md
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/proposals/autopacker-typed-accessors.md
 sandbox: Assets/Framework/Wire/
 tags: [#spike, #wire, #network, #design]
