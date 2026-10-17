@@ -3,7 +3,7 @@ type: spike
 status: done
 created: 2026-05-19
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-entity-setup.md
   - Product/spikes/entity-identity-model.md
 sandbox: Assets/Framework/Entities/

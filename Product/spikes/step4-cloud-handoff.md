@@ -3,7 +3,7 @@ type: handoff
 status: in-progress
 created: 2026-05-20
 references:
-  - Product/spikes/wire-refoundation-roadmap.md
+  - Product/spikes/archive/wire-refoundation-roadmap.md
   - Product/spikes/definition-service-pattern.md
   - Product/spikes/step4-service-phases.md
   - Product/spikes/step3-entity-phases.md
