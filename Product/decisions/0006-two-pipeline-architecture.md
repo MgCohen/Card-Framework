@@ -1,14 +1,14 @@
 ---
 type: adr
 status: accepted
-references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/01-game-engine.md]
+references: [features/engine/archive/03-game-rules-runtime.md, features/engine/archive/01-game-engine.md]
 tags: [#adr, #general, #architecture, #engine, #effects, #triggers]
 ---
 
 # ADR-0006 — Two-pipeline architecture: framework command pipeline + game effect pipeline
 
 Date: 2026-05-07
-Context-doc: Product/features/engine/models/03-game-rules-runtime.md, Product/features/engine/models/01-game-engine.md
+Context-doc: Product/features/engine/archive/03-game-rules-runtime.md, Product/features/engine/archive/01-game-engine.md
 Proposal: session triggers+dispatch design pass (2026-05-07)
 
 > **Refresh (2026-05-11) per [ADR-0013](Product/decisions/0013-engine-pipeline-orchestration.md).** The two-pipeline framing stands. The *orchestration* of those pipelines moves explicitly to `engine` (was implicitly distributed across `actions` and the runtime). Pipeline features become single-concern services consumed by the engine. The "command pipeline is framework-owned" rule still holds — just held by `engine`, not `actions`.

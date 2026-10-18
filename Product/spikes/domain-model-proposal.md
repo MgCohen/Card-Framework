@@ -6,7 +6,7 @@ tags: [#spike, #domain-model, #slices, #definitions, #aggregates]
 
 # Domain Model Proposal — Slices, Definitions, Aggregates
 
-> **Status: superseded (2026-05-06).** Resolved by the domain modeling design pass; 13 questions locked and patched into the canonical Models. Locked decisions live in [`features/engine/models/06-game-definition.md`](features/engine/models/06-game-definition.md), [`features/players/models/01-player-model.md`](features/players/models/01-player-model.md), and the cascade across `entities/01`, `entities/02`, `cards/01`, `zones/01`, `engine/05`, plus glossary and ADR-0005 amendments. Key shifts from the proposal: the entities-bridge spike was resolved superseded (bridge stays); `Zone` and `Player` are on the bridge per cascade; `ISliceProvider` is parameterless and on both Definition and Instance (instance delegates to definition); `Actor` is `IActor` interface; ownership is two-tier (structural zone assignment + runtime `OwnershipState`); `MatchSetup` carries `(GameDefinition, Actors, Seed)` + three named overlays. Original proposal preserved below for historical context.
+> **Status: superseded (2026-05-06).** Resolved by the domain modeling design pass; 13 questions locked and patched into the canonical Models. Locked decisions live in [`features/engine/archive/06-game-definition.md`](features/engine/archive/06-game-definition.md), [`features/players/archive/01-player-model.md`](features/players/archive/01-player-model.md), and the cascade across `entities/01`, `entities/02`, `cards/01`, `zones/01`, `engine/05`, plus glossary and ADR-0005 amendments. Key shifts from the proposal: the entities-bridge spike was resolved superseded (bridge stays); `Zone` and `Player` are on the bridge per cascade; `ISliceProvider` is parameterless and on both Definition and Instance (instance delegates to definition); `Actor` is `IActor` interface; ownership is two-tier (structural zone assignment + runtime `OwnershipState`); `MatchSetup` carries `(GameDefinition, Actors, Seed)` + three named overlays. Original proposal preserved below for historical context.
 
 > **Original status: draft / exploratory.** Snapshot of the domain model proposal sketched during the `oq-game-definition` design pass after Q1 locked. **Not approved, not denied** — captured for iteration. Intended as the input to Stage 2 (per-kind `ISliceProvider` implementations) and Stage 3 (zone layout, `GameDefinition` shape, asset composition) of the suspended design pass.
 
@@ -271,9 +271,9 @@ Either:
 
 - [`Product/SESSION-CHECKPOINT.md`](SESSION-CHECKPOINT.md) — `oq-game-definition` design pass suspended after Q1 lock; this proposal is the input to Stages 2-3.
 - [`Product/spikes/entities-bridge-replacement.md`](spikes/entities-bridge-replacement.md) — sibling spike on whether to drop the entities + entities.states packages. Affects §1 hierarchy and §2.5 of this proposal if it lands.
-- [`Product/features/state/state.md`](features/state/state.md) — current slice tier model (framework-owned vs game-authored).
-- [`Product/features/engine/models/05-game-factory.md`](features/engine/models/05-game-factory.md) — current factory + `MatchSetup`; Q1 lock reshapes this.
-- [`Product/features/zones/models/01-zone-model.md`](features/zones/models/01-zone-model.md) — `ZoneDefinition` and per-zone-type runtime slices.
-- [`Product/features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `CardDefinition`, `CardMapState`, current entity-bridge wiring.
-- [`Product/features/entities/models/01-definition.md`](features/entities/models/01-definition.md) — definitions as authored base data; entity bridge mutation conventions.
+- [`Product/features/state/archive/state.md`](features/state/archive/state.md) — current slice tier model (framework-owned vs game-authored).
+- [`Product/features/engine/archive/05-game-factory.md`](features/engine/archive/05-game-factory.md) — current factory + `MatchSetup`; Q1 lock reshapes this.
+- [`Product/features/zones/archive/01-zone-model.md`](features/zones/archive/01-zone-model.md) — `ZoneDefinition` and per-zone-type runtime slices.
+- [`Product/features/cards/archive/01-card-model.md`](features/cards/archive/01-card-model.md) — `CardDefinition`, `CardMapState`, current entity-bridge wiring.
+- [`Product/features/entities/archive/01-definition.md`](features/entities/archive/01-definition.md) — definitions as authored base data; entity bridge mutation conventions.
 - [`Product/ledgers/GLOSSARY.md`](ledgers/GLOSSARY.md) — `Player`, `Actor`, `Zone`, `Card`, related vocabulary.

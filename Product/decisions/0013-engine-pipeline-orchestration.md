@@ -1,23 +1,25 @@
 ---
 type: adr
 status: accepted
-references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/actions/models/01-command-pipeline.md, features/actions/models/06-command-validator.md, features/triggers/triggers.md, features/triggers/models/01-trigger.md, features/triggers/models/02-trigger-pipeline.md, features/effects/models/01-effect.md, features/effects/models/02-effect-scope.md, spikes/runtime-walkthrough.md, decisions/0006-two-pipeline-architecture.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
+references: [features/engine/archive/01-game-engine.md, features/engine/archive/03-game-rules-runtime.md, features/actions/archive/01-command-pipeline.md, features/actions/archive/06-command-validator.md, features/triggers/archive/triggers.md, features/triggers/archive/01-trigger.md, features/triggers/archive/02-trigger-pipeline.md, features/effects/archive/01-effect.md, features/effects/archive/02-effect-scope.md, spikes/runtime-walkthrough.md, decisions/0006-two-pipeline-architecture.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md]
 tags: [#adr, #engine, #orchestration, #actions, #triggers, #effects, #dispatch]
 ---
 
 # ADR-0013 — Engine-driven pipeline orchestration; single `Dispatch` surface; per-type routing; `runtime.FilterTriggers` retires
 
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
+
 Date: 2026-05-11 (drafted from the runtime-walkthrough spike Q6 walk; refines the orchestration parts of ADR-0006, ADR-0010, ADR-0011)
-Context-docs: `Product/spikes/runtime-walkthrough.md`, `Product/features/engine/models/01-game-engine.md`, `Product/features/actions/models/01-command-pipeline.md`, `Product/features/triggers/triggers.md`, `Product/features/effects/models/02-effect-scope.md`
+Context-docs: `Product/spikes/runtime-walkthrough.md`, `Product/features/engine/archive/01-game-engine.md`, `Product/features/actions/archive/01-command-pipeline.md`, `Product/features/triggers/archive/triggers.md`, `Product/features/effects/archive/02-effect-scope.md`
 Source: `Product/spikes/runtime-walkthrough.md` Q6 design walk (2026-05-11)
 
 ## Context
 
 After ADR-0006 (two-pipeline architecture), ADR-0010 (validator/handler split), and ADR-0011 (effect orchestration with unified `Dispatch`), three layering tensions remained latent at the orchestration level:
 
-1. **The action pipeline held `ITriggerPipeline`.** Per the pre-cascade design ([`triggers/triggers.md`](features/triggers/triggers.md) §Pipeline integration: *"the action pipeline holds `ITriggerPipeline`"*), the actions feature consumed the triggers feature to run before/after fold inside its drain. Mechanically this works through an interface, but architecturally the *actions* concept is supposed to be "commands, validators, handlers, envelope shape" — knowing about triggers stretches its surface beyond single-concern.
+1. **The action pipeline held `ITriggerPipeline`.** Per the pre-cascade design ([`triggers/triggers.md`](features/triggers/archive/triggers.md) §Pipeline integration: *"the action pipeline holds `ITriggerPipeline`"*), the actions feature consumed the triggers feature to run before/after fold inside its drain. Mechanically this works through an interface, but architecturally the *actions* concept is supposed to be "commands, validators, handlers, envelope shape" — knowing about triggers stretches its surface beyond single-concern.
 2. **`runtime.FilterTriggers` was an upstream filter call from the action pipeline into the runtime.** It existed to let game-side eligibility ("am I on the battlefield?") gate which triggers fire. The mechanism worked but spread trigger eligibility logic across two layers — the trigger itself (its own `Validate`) and the runtime (a separate `FilterTriggers` pass). Two filter call-sites for one concept.
-3. **`scope.Emit(signal)` and `scope.Execute(composite)` bypassed `engine.Dispatch`.** Per [`triggers/triggers.md:121`](features/triggers/triggers.md): *"`scope.Emit` and `scope.Execute` are the scope-level equivalents of `engine.Dispatch` for non-queued types."* Three scope-level entry points for the five `GameCommand` siblings. The "single unified `Dispatch`" goal of ADR-0011 D14 didn't carry all the way through.
+3. **`scope.Emit(signal)` and `scope.Execute(composite)` bypassed `engine.Dispatch`.** Per [`triggers/triggers.md:121`](features/triggers/archive/triggers.md): *"`scope.Emit` and `scope.Execute` are the scope-level equivalents of `engine.Dispatch` for non-queued types."* Three scope-level entry points for the five `GameCommand` siblings. The "single unified `Dispatch`" goal of ADR-0011 D14 didn't carry all the way through.
 
 Pushed together, these mean: the orchestration of "what fires for which command type" lives in multiple places — the action pipeline owns drain + trigger fold + handler dispatch; the runtime owns trigger filtering; the scope owns three different emit pathways for the five sibling family. Reasoning about a single command's journey through the system requires reading code in three features at once.
 

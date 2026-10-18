@@ -156,12 +156,12 @@ Instantiate this for a new feature. Fill in placeholders; preserve section order
 
 ## Worked example
 
-A trimmed instance of the skeleton above. Frozen — does not track [`features/triggers/triggers.md`](features/triggers/triggers.md) if that drifts. Chosen as the worked example because it has multiple models *and* real cross-model story to fit into `## Synthesis`; single-model features (e.g. `cards`) stub Synthesis / Supporting elements with `*n/a — ...*` instead.
+A trimmed instance of the skeleton above. Frozen — does not track [`features/triggers/archive/triggers.md`](features/triggers/archive/triggers.md) if that drifts. Chosen as the worked example because it has multiple models *and* real cross-model story to fit into `## Synthesis`; single-model features (e.g. `cards`) stub Synthesis / Supporting elements with `*n/a — ...*` instead.
 
     ---
     type: feature
     status: settled
-    references: [features/actions/models/01-command-pipeline.md, features/engine/models/03-game-rules-runtime.md, features/effects/models/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
+    references: [features/actions/archive/01-command-pipeline.md, features/engine/archive/03-game-rules-runtime.md, features/effects/archive/02-effect-scope.md, decisions/0006-two-pipeline-architecture.md]
     tags: ["#triggers"]
     ---
 
@@ -199,8 +199,8 @@ A trimmed instance of the skeleton above. Frozen — does not track [`features/t
 
     | Model | Role |
     |---|---|
-    | [`models/01-trigger.md`](features/triggers/models/01-trigger.md) | `Trigger<T>` (the reaction class); `ITriggerSystem` subscription surface; `AbilityDefinition.Register/Unregister` per-instance lifecycle; closure-capture for per-instance data |
-    | [`models/02-trigger-pipeline.md`](features/triggers/models/02-trigger-pipeline.md) | `ITriggerPipeline` (the fold orchestrator); `TriggerFoldResult`, `TriggerMatch`, `TriggerPhase` supports; three before-fold outcomes; replacement-of-replacements; priority + ordering; `FifoPipeline` default |
+    | [`models/01-trigger.md`](features/triggers/archive/01-trigger.md) | `Trigger<T>` (the reaction class); `ITriggerSystem` subscription surface; `AbilityDefinition.Register/Unregister` per-instance lifecycle; closure-capture for per-instance data |
+    | [`models/02-trigger-pipeline.md`](features/triggers/archive/02-trigger-pipeline.md) | `ITriggerPipeline` (the fold orchestrator); `TriggerFoldResult`, `TriggerMatch`, `TriggerPhase` supports; three before-fold outcomes; replacement-of-replacements; priority + ordering; `FifoPipeline` default |
 
     ## Synthesis
 
@@ -228,7 +228,7 @@ A trimmed instance of the skeleton above. Frozen — does not track [`features/t
 
     ### History when replaced
 
-    When command A is replaced by B in the before-fold: A's envelope is closed and published with `CommandResult.Replaced` — appears in history as a command that was dispatched but did not execute. B is dispatched fresh via `engine.Dispatch`, gets its own full fold from scratch, and produces a sibling envelope. The causal link between them is preserved via `OriginCommandId` threading if A and B share the originating intent. See [`actions/04-history-envelope.md`](features/actions/models/04-history-envelope.md) for envelope shape.
+    When command A is replaced by B in the before-fold: A's envelope is closed and published with `CommandResult.Replaced` — appears in history as a command that was dispatched but did not execute. B is dispatched fresh via `engine.Dispatch`, gets its own full fold from scratch, and produces a sibling envelope. The causal link between them is preserved via `OriginCommandId` threading if A and B share the originating intent. See [`actions/04-history-envelope.md`](features/actions/archive/04-history-envelope.md) for envelope shape.
 
     ### Emitting `GameSignal`s and `CompositeAction`s from a handler
 
@@ -241,7 +241,7 @@ A trimmed instance of the skeleton above. Frozen — does not track [`features/t
 
     ### Pipeline integration
 
-    The full `pipeline.Execute(action)` shape (envelope open → filter → before-fold → handler → after-fold → envelope close) is owned by [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/models/01-command-pipeline.md). Trigger-side notes: the action pipeline holds `ITriggerPipeline`; card abilities hold `ITriggerSystem`; one class implements both. Before/after folds run only the filtered `available` list — the upstream filter is `GameRulesRuntime.FilterTriggers` ([`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md)). Replacement-of-replacement is fold-natural: each step's condition checks the *current* command, so substituting `DealDamageAction → HealAction` automatically routes through `HealAction`-watching triggers and skips `DealDamageAction`-watching ones.
+    The full `pipeline.Execute(action)` shape (envelope open → filter → before-fold → handler → after-fold → envelope close) is owned by [`actions/01-command-pipeline.md` §Pipeline mechanics](features/actions/archive/01-command-pipeline.md). Trigger-side notes: the action pipeline holds `ITriggerPipeline`; card abilities hold `ITriggerSystem`; one class implements both. Before/after folds run only the filtered `available` list — the upstream filter is `GameRulesRuntime.FilterTriggers` ([`engine/03-game-rules-runtime.md`](features/engine/archive/03-game-rules-runtime.md)). Replacement-of-replacement is fold-natural: each step's condition checks the *current* command, so substituting `DealDamageAction → HealAction` automatically routes through `HealAction`-watching triggers and skips `DealDamageAction`-watching ones.
 
     ## Supporting elements
 

@@ -1,14 +1,14 @@
 ---
 type: model
 status: superseded
-superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/models/06-request-system.md, features/effects/models/02-effect-scope.md]
+superseded_by: [decisions/0011-effect-orchestration-dispatch-requests.md, features/effects/archive/06-request-system.md, features/effects/archive/02-effect-scope.md]
 archived_on: 2026-05-11
 reason: "`ICommandAwaiter` retired by ADR-0011. The mechanism (type-only routing for player-decision awaits inside handler bodies) is wholly replaced by the state-linked request system (`Request<TResponse>` / `Response` / `RequestsSlice` / `AnswersSlice` / `IRequestService`); decision routing moves from handler `await` to effect `await scope.Dispatch(request)`. Handler bodies become atomic from the player-input POV per ADR-0010, and player decisions ride the request system through the single `IEffectScope.Dispatch` surface."
-references: [features/effects/models/01-effect.md, features/effects/models/06-request-system.md, features/effects/models/02-effect-scope.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md]
+references: [features/effects/archive/01-effect.md, features/effects/archive/06-request-system.md, features/effects/archive/02-effect-scope.md, features/actions/archive/01-command-pipeline.md, features/engine/archive/01-game-engine.md]
 tags: [#effects, #model, #awaiter, #decisions, #archived]
 ---
 
-> **Archived 2026-05-11.** Superseded by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md). `ICommandAwaiter` is gone; the type-only routing pattern documented here is replaced by the state-linked request system. Decision routing moves from handler-side `await ctx.Resolver.Wait<TCommand>()` to effect-side `await scope.Dispatch(request)`; the canonical home for the new shape is [`features/effects/models/06-request-system.md`](features/effects/models/06-request-system.md) (request mechanism) and [`features/effects/models/02-effect-scope.md`](features/effects/models/02-effect-scope.md) (the unified `Dispatch` surface). The `IHandlerContext` references throughout this Model are also stale — per [ADR-0010](Product/decisions/0010-validator-handler-split.md) the aggregator is gone (archived at `Product/features/effects/archive/03-handler-context.md`). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
+> **Archived 2026-05-11.** Superseded by [ADR-0011](Product/decisions/0011-effect-orchestration-dispatch-requests.md). `ICommandAwaiter` is gone; the type-only routing pattern documented here is replaced by the state-linked request system. Decision routing moves from handler-side `await ctx.Resolver.Wait<TCommand>()` to effect-side `await scope.Dispatch(request)`; the canonical home for the new shape is [`features/effects/archive/06-request-system.md`](features/effects/archive/06-request-system.md) (request mechanism) and [`features/effects/archive/02-effect-scope.md`](features/effects/archive/02-effect-scope.md) (the unified `Dispatch` surface). The `IHandlerContext` references throughout this Model are also stale — per [ADR-0010](Product/decisions/0010-validator-handler-split.md) the aggregator is gone (archived at `Product/features/effects/archive/03-handler-context.md`). Content below is preserved as historical record; treat code samples and contract descriptions as obsolete.
 
 # Command Awaiter — model
 
@@ -48,7 +48,7 @@ public interface ICommandAwaiter
 - **`Wait<TCommand>(ct)`** — registers a closure-captured `cmd is TCommand` predicate backed by a `TaskCompletionSource<TCommand>`. Returns the `Task`. Used by decision handlers to pause until a matching command arrives. Single-open per type-hierarchy is a runtime assert.
 - **`TryResolve(cmd)`** — pattern-matches `cmd` against every registered predicate. On a match, completes the associated TCS with the concrete command; returns `true`. Returns `false` if no predicate matches (the engine falls through to the normal pipeline). Called by the engine's pre-pipeline check on every `Dispatch`.
 
-The awaiter is exposed on `IHandlerContext` (per [`03-handler-context.md`](features/effects/models/03-handler-context.md)). Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
+The awaiter is exposed on `IHandlerContext` (per [`03-handler-context.md`](features/effects/archive/03-handler-context.md)). Decision handlers call `Wait`; effects never see this surface directly — they observe decisions only through `scope.Dispatch` returning a `CommandResult`.
 
 ### Decision routing — type-only
 
@@ -68,7 +68,7 @@ The gateway / intake layer treats all player input identically. Every intent map
 intent → IntentMapper.Map(template, choice) → GameCommand → engine.Dispatch
 ```
 
-`IIntentMapper.Map` (per [`actions/02-intent-mapper.md`](features/actions/models/02-intent-mapper.md)) switches on the typed template subtype only:
+`IIntentMapper.Map` (per [`actions/02-intent-mapper.md`](features/actions/archive/02-intent-mapper.md)) switches on the typed template subtype only:
 
 ```csharp
 public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
@@ -83,7 +83,7 @@ No snapshot scope inspection. The mapper produces `SelectTargetCommand` whether 
 
 ### Engine-level pre-pipeline awaiter check
 
-On every `engine.Dispatch`, the engine runs the awaiter check **before** the normal pipeline (per [`engine/01-game-engine.md`](features/engine/models/01-game-engine.md)):
+On every `engine.Dispatch`, the engine runs the awaiter check **before** the normal pipeline (per [`engine/01-game-engine.md`](features/engine/archive/01-game-engine.md)):
 
 ```csharp
 // Engine.Dispatch (simplified)
@@ -138,7 +138,7 @@ HistoryEnvelope
 
 ### `ICommandHandler.Handle` returns `Task<TResult>`
 
-For decision handlers to await `Resolver.Wait<TCommand>()`, the handler signature must be async-capable. The signature is owned by [`actions/03-command-handler.md`](features/actions/models/03-command-handler.md); most handlers complete synchronously and return `Task.FromResult(...)`. Only decision handlers genuinely await.
+For decision handlers to await `Resolver.Wait<TCommand>()`, the handler signature must be async-capable. The signature is owned by [`actions/03-command-handler.md`](features/actions/archive/03-command-handler.md); most handlers complete synchronously and return `Task.FromResult(...)`. Only decision handlers genuinely await.
 
 ## Invariants
 

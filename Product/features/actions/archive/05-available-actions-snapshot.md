@@ -1,14 +1,14 @@
 ---
 type: model
 status: superseded
-superseded_by: [decisions/0012-presentation-per-state-view-models.md, decisions/0009-engine-as-fsm.md, features/engine/models/07-match-state.md, features/presentation/models/01-match-state-view-model.md]
+superseded_by: [decisions/0012-presentation-per-state-view-models.md, decisions/0009-engine-as-fsm.md, features/engine/archive/07-match-state.md, features/presentation/archive/01-match-state-view-model.md]
 archived_on: 2026-05-11
 reason: "`AvailableActionsSnapshot` + `ActionTemplate` wire form retired across two cascade steps. ADR-0009 retired the `IAvailableActions` service and the `AvailableActionsState` slice, moving valid command types to `MatchState.Actions: IReadOnlyList<Type>`. ADR-0012 finishes the retirement of the *richer* descriptor (typed `ActionTemplate` per command, `TargetSlot`, `ModeOption`, `ParameterSpec`, `PlayerChoice`) — these are absorbed into per-state ViewModel observables. No central wire-form snapshot survives. The richer cross-process wire form (replay viewer, network thin client) is deferred until a real consumer surfaces."
-references: [features/engine/models/07-match-state.md, features/presentation/models/01-match-state-view-model.md, features/presentation/presentation.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
+references: [features/engine/archive/07-match-state.md, features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/presentation.md, decisions/0009-engine-as-fsm.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#actions, #snapshot, #templates, #model, #archived]
 ---
 
-> **Archived 2026-05-11.** Superseded by [ADR-0009](Product/decisions/0009-engine-as-fsm.md) (moved valid command types to `MatchState.Actions`) and [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) (finished retiring the typed-descriptor wire form in favor of per-state VM observables). Canonical homes: [`features/engine/models/07-match-state.md`](Product/features/engine/models/07-match-state.md) for command-type intake gating; [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md) for per-action UI projection. Content below is preserved as historical record; treat `AvailableActionsSnapshot`, `ActionTemplate`, `TargetSlot`, `ModeOption`, `ParameterSpec`, `PlayerChoice` as obsolete.
+> **Archived 2026-05-11.** Superseded by [ADR-0009](Product/decisions/0009-engine-as-fsm.md) (moved valid command types to `MatchState.Actions`) and [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md) (finished retiring the typed-descriptor wire form in favor of per-state VM observables). Canonical homes: [`features/engine/archive/07-match-state.md`](Product/features/engine/archive/07-match-state.md) for command-type intake gating; [`features/presentation/archive/01-match-state-view-model.md`](Product/features/presentation/archive/01-match-state-view-model.md) for per-action UI projection. Content below is preserved as historical record; treat `AvailableActionsSnapshot`, `ActionTemplate`, `TargetSlot`, `ModeOption`, `ParameterSpec`, `PlayerChoice` as obsolete.
 
 # Available Actions Snapshot — model
 
@@ -276,4 +276,4 @@ Q1's typed-base + per-command subtype shape gives compile-time `IIntentMapper` s
 
 - **Enables:** compile-time `IIntentMapper` safety; `ActionId` retirement (the `Type` is the identifier); snapshot builds at floor-game cost; opt-in exhaustive checks for games that demand them; rule-controlled validation cost.
 - **Constrains:** every new command type ships a paired template; presentation must accept that "template offered" is weaker than "guaranteed valid"; `AffordanceMap` layer absorbs UI-side gating.
-- **Cascade:** `IIntentMapper` consumes typed templates (per [`02-intent-mapper`](features/actions/models/02-intent-mapper.md)); `IAvailableActions` writes the snapshot (per `engine/03`); `AffordanceMap` reads the snapshot (per `presentation/01`).
+- **Cascade:** `IIntentMapper` consumes typed templates (per [`02-intent-mapper`](features/actions/archive/02-intent-mapper.md)); `IAvailableActions` writes the snapshot (per `engine/03`); `AffordanceMap` reads the snapshot (per `presentation/01`).

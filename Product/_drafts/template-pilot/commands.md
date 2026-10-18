@@ -1,7 +1,7 @@
 ---
 type: feature
 status: draft
-references: [features/triggers/triggers.md, features/state/state.md, features/entities/entities.md]
+references: [features/triggers/archive/triggers.md, features/state/archive/state.md, features/entities/archive/entities.md]
 tags: [#commands]
 ---
 

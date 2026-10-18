@@ -45,7 +45,7 @@ The migration was carried out in this same commit: `git mv` of folders and files
 ## Consequences
 
 - **Enables:** clean conceptual separation between workflow definition, workflow-defined working files, and project content. Daily ops touch `ledgers/`, `decisions/`, `features/`, `sessions/`. Workflow-rules debate touches `_workflow/`. Two distinct folders, two distinct cadences.
-- **Enables:** `features/<f>/models/` reads self-documenting in cross-references — `features/actions/models/01-command-pipeline.md` literally says "the command-pipeline model in the actions feature."
+- **Enables:** `features/<f>/models/` reads self-documenting in cross-references — `features/actions/archive/01-command-pipeline.md` literally says "the command-pipeline model in the actions feature."
 - **Constrains:** every cross-reference in every existing doc had to be rewritten in this commit. The Tier 1 builder commands at `.claude/commands/builder/*.md` were updated as part of the migration.
 - **Constrains:** future workflow renames of canonical folders (`_workflow/`, `ledgers/`, `decisions/`, `general/`, `features/`) carry the same migration cost.
 - **Reverts/replaces:** partially supersedes ADR-0001 (`decisions/0001-adopt-workflow.md`) — specifically the folder-layout choice in option C of that ADR. The rest of ADR-0001 (workflow adoption, doc types, status gates, three ledgers, cascade discipline) stands unchanged. ADR-0001 retains `status: accepted`; only the folder-layout subset is refined here.

@@ -263,7 +263,7 @@ Once that lands, the domain modeling pass and `oq-game-definition` Stages 2-3 bu
 ## Related
 
 - [`Product/spikes/scaffold-state-fit.md`](spikes/scaffold-state-fit.md) — original Scaffold-package mapping spike that locked in the bridge direction.
-- [`Product/features/entities/models/01-definition.md`](features/entities/models/01-definition.md) — current entity / definition / instance model, references the bridge.
-- [`Product/features/entities/models/02-instance.md`](features/entities/models/02-instance.md) — current runtime surface; the doc most affected if we drop the bridge.
-- [`Product/features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) — `Card : StateEntity<CardDefinition>` inherits the bridge; would change.
+- [`Product/features/entities/archive/01-definition.md`](features/entities/archive/01-definition.md) — current entity / definition / instance model, references the bridge.
+- [`Product/features/entities/archive/02-instance.md`](features/entities/archive/02-instance.md) — current runtime surface; the doc most affected if we drop the bridge.
+- [`Product/features/cards/archive/01-card-model.md`](features/cards/archive/01-card-model.md) — `Card : StateEntity<CardDefinition>` inherits the bridge; would change.
 - [`Product/SESSION-CHECKPOINT.md`](SESSION-CHECKPOINT.md) — where the `oq-game-definition` design pass is suspended; this spike is upstream of resuming it.

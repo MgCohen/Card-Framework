@@ -1,14 +1,14 @@
 ---
 type: model
 status: superseded
-superseded_by: [decisions/0012-presentation-per-state-view-models.md, features/presentation/models/01-match-state-view-model.md]
+superseded_by: [decisions/0012-presentation-per-state-view-models.md, features/presentation/archive/01-match-state-view-model.md]
 archived_on: 2026-05-11
 reason: "Global `IIntentMapper` retired by ADR-0012. The single game-supplied switch over every `ActionTemplate` subtype is replaced by per-state `MatchStateViewModel<TState>.Map(intent) → GameCommand`. Each VM owns a mode-scoped intent map; adding a phase adds a VM registration instead of growing a central table. `PlayerIntent` survives as a game-defined typed intent base (records like `TapCardIntent`, `DonePressedIntent`); `PlayerChoice` retires with the wire-form snapshot (the choice is encoded in the typed intent record). `IntentGateway` survives as a presentation-feature-root concept routing raw gestures → typed `PlayerIntent` → active VM."
-references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md, decisions/0012-presentation-per-state-view-models.md]
+references: [features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/02-view-model-registry.md, features/presentation/archive/presentation.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#actions, #model, #intent, #archived]
 ---
 
-> **Archived 2026-05-11.** Superseded by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md). The global `IIntentMapper` retires; per-state ViewModels own intent mapping. Canonical home: [`features/presentation/models/01-match-state-view-model.md`](Product/features/presentation/models/01-match-state-view-model.md). `PlayerIntent` and `IntentGateway` vocabulary moves to [`features/presentation/presentation.md`](Product/features/presentation/presentation.md). Content below is preserved as historical record; treat the `IIntentMapper` / `PlayerChoice` shapes as obsolete.
+> **Archived 2026-05-11.** Superseded by [ADR-0012](Product/decisions/0012-presentation-per-state-view-models.md). The global `IIntentMapper` retires; per-state ViewModels own intent mapping. Canonical home: [`features/presentation/archive/01-match-state-view-model.md`](Product/features/presentation/archive/01-match-state-view-model.md). `PlayerIntent` and `IntentGateway` vocabulary moves to [`features/presentation/archive/presentation.md`](Product/features/presentation/archive/presentation.md). Content below is preserved as historical record; treat the `IIntentMapper` / `PlayerChoice` shapes as obsolete.
 
 # Intent Mapper — model
 
@@ -41,7 +41,7 @@ Examples: drag instance A from zone X to zone Y; play card A; activate ability o
 
 ### `PlayerChoice`
 
-The data the player committed to: target list, parameter values, mode selections. Bound by `IIntentMapper` against an `ActionTemplate` (defined in [`05-available-actions-snapshot.md`](features/actions/models/05-available-actions-snapshot.md)) to produce a `GameCommand`.
+The data the player committed to: target list, parameter values, mode selections. Bound by `IIntentMapper` against an `ActionTemplate` (defined in [`05-available-actions-snapshot.md`](features/actions/archive/05-available-actions-snapshot.md)) to produce a `GameCommand`.
 
 ### `IntentGateway`
 
@@ -78,7 +78,7 @@ public interface IIntentMapper
 }
 ```
 
-The mapper switches on the typed `ActionTemplate` subtype to produce a well-formed command. **Each game ships its own implementation.** **Decision-unaware** — produces the same command shape whether or not a decision is open. The engine's pre-pipeline awaiter check (per [`effects/04-command-awaiter.md`](features/effects/models/04-command-awaiter.md)) intercepts decision-matching commands before the normal pipeline runs.
+The mapper switches on the typed `ActionTemplate` subtype to produce a well-formed command. **Each game ships its own implementation.** **Decision-unaware** — produces the same command shape whether or not a decision is open. The engine's pre-pipeline awaiter check (per [`effects/04-command-awaiter.md`](features/effects/archive/04-command-awaiter.md)) intercepts decision-matching commands before the normal pipeline runs.
 
 ```csharp
 public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template switch
@@ -89,7 +89,7 @@ public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template
 };
 ```
 
-`IIntentMapper.Map` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — it gates well-formedness, not legality. Authoritative legality is the registered validator chain at dispatch (per [ADR-0010](Product/decisions/0010-validator-handler-split.md); see [`06-command-validator.md`](features/actions/models/06-command-validator.md)).
+`IIntentMapper.Map` is one of the five validation layers ([ADR-0007](Product/decisions/0007-five-validation-layers.md)) — it gates well-formedness, not legality. Authoritative legality is the registered validator chain at dispatch (per [ADR-0010](Product/decisions/0010-validator-handler-split.md); see [`06-command-validator.md`](features/actions/archive/06-command-validator.md)).
 
 > **Rework pending.** This Model is superseded by [ADR-0012 — *forthcoming*] — the global `IIntentMapper` retires in favor of per-state `MatchStateViewModel<TState>.Map(intent)`. Content here is preserved as the pre-ADR-0012 shape; for the post-cascade picture see the ADR when it lands.
 
@@ -98,7 +98,7 @@ public GameCommand Map(ActionTemplate template, PlayerChoice choice) => template
 - **UI creates intents, not state changes.** `PlayerIntent` is the boundary; everything beyond is framework / game logic.
 - **Mapper is decision-unaware.** No snapshot scope inspection. The mapper produces `SelectTargetCommand` whether or not a decision is open — it does not know.
 - **Each game ships its own mapper and gateway.** The framework provides only the `IIntentMapper` contract.
-- **Mapper output is well-formed but not yet legal.** Authoritative legality is the registered validator chain at dispatch (per [`06-command-validator.md`](features/actions/models/06-command-validator.md) and [ADR-0010](Product/decisions/0010-validator-handler-split.md)).
+- **Mapper output is well-formed but not yet legal.** Authoritative legality is the registered validator chain at dispatch (per [`06-command-validator.md`](features/actions/archive/06-command-validator.md) and [ADR-0010](Product/decisions/0010-validator-handler-split.md)).
 
 ## Decisions
 
@@ -106,7 +106,7 @@ Linked: [`Product/decisions/0007-five-validation-layers.md`](Product/decisions/0
 
 ## Examples
 
-For an end-to-end worked mapper (typed templates, switch on template type, `IStateScope` for state-driven mapping like locating the card's source pile), see the `PileCounterIntentMapper` in [`engine/04-available-actions.md` §IntentMapper becomes typed](features/engine/models/04-available-actions.md). The mapper there exercises both the typed-template switch and the decision-unaware property — it never queries "is a decision open?", just maps templates to commands.
+For an end-to-end worked mapper (typed templates, switch on template type, `IStateScope` for state-driven mapping like locating the card's source pile), see the `PileCounterIntentMapper` in [`engine/04-available-actions.md` §IntentMapper becomes typed](features/engine/archive/04-available-actions.md). The mapper there exercises both the typed-template switch and the decision-unaware property — it never queries "is a decision open?", just maps templates to commands.
 
 ## Open follow-ups
 

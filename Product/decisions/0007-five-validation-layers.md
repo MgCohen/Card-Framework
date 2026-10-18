@@ -1,15 +1,17 @@
 ---
 type: adr
 status: accepted
-references: [features/actions/models/01-command-pipeline.md, features/presentation/models/01-presentation-loop.md, features/engine/models/03-game-rules-runtime.md]
+references: [features/actions/archive/01-command-pipeline.md, features/presentation/archive/01-presentation-loop.md, features/engine/archive/03-game-rules-runtime.md]
 tags: [#adr, #actions, #validation, #cross-cutting]
 ---
 
 # ADR-0007 — Five validation layers, with handler.Validate authoritative
 
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
+
 Date: 2026-04-29 (elevated from `features/actions/decisions/0007-five-validation-layers.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across actions + engine + presentation, with each layer owned by a different feature)
-Context-docs: `features/actions/models/01-command-pipeline.md`, `features/presentation/models/01-presentation-loop.md`, `features/engine/models/03-game-rules-runtime.md`
-Proposal: features/presentation/models/01-presentation-loop.md, features/actions/models/01-command-pipeline.md
+Context-docs: `features/actions/archive/01-command-pipeline.md`, `features/presentation/archive/01-presentation-loop.md`, `features/engine/archive/03-game-rules-runtime.md`
+Proposal: features/presentation/archive/01-presentation-loop.md, features/actions/archive/01-command-pipeline.md
 
 ## Amendment — 2026-05-07 (triggers + dispatch design pass)
 
@@ -28,7 +30,7 @@ Per [ADR-0010](decisions/0010-validator-handler-split.md), the "authoritative le
 | Engine lifecycle gate (framework, ADR-0006) | `SessionGate` validator (framework default in the chain) |
 | *(new)* — | `MatchStateActionGate` validator (framework default in the chain; cheap prophylactic type gate from ADR-0009's `MatchState.Actions`) |
 
-`MatchStateActionGate` is technically a sixth checkpoint structurally, but it shares the same "framework-owned flow gate" role as `SessionGate` and lives in the same chain as a co-default; the canonical reference is the five-rejection-paths table in [`engine/03-game-rules-runtime.md`](features/engine/models/03-game-rules-runtime.md). The five-layer mental model is preserved (UI affordance / well-formedness / framework gates / authoritative legality / mid-execution cancel).
+`MatchStateActionGate` is technically a sixth checkpoint structurally, but it shares the same "framework-owned flow gate" role as `SessionGate` and lives in the same chain as a co-default; the canonical reference is the five-rejection-paths table in [`engine/03-game-rules-runtime.md`](features/engine/archive/03-game-rules-runtime.md). The five-layer mental model is preserved (UI affordance / well-formedness / framework gates / authoritative legality / mid-execution cancel).
 
 ## Context
 "Where is the validation?" was unanswerable because validation was scattered. We needed an explicit list of layers, with a single authoritative one, so each layer's role is clear.

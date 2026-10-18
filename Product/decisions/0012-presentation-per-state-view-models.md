@@ -1,11 +1,13 @@
 ---
 type: adr
 status: accepted
-references: [features/presentation/models/01-match-state-view-model.md, features/presentation/models/02-view-model-registry.md, features/presentation/presentation.md, features/actions/models/01-command-pipeline.md, features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
+references: [features/presentation/archive/01-match-state-view-model.md, features/presentation/archive/02-view-model-registry.md, features/presentation/archive/presentation.md, features/actions/archive/01-command-pipeline.md, features/engine/archive/01-game-engine.md, features/engine/archive/03-game-rules-runtime.md, features/engine/archive/07-match-state.md, spikes/archive/fsm-architecture.md, decisions/0007-five-validation-layers.md, decisions/0009-engine-as-fsm.md]
 tags: [#adr, #presentation, #engine, #fsm, #view-model, #intent]
 ---
 
 # ADR-0012 — Presentation as per-state polymorphic ViewModels; global `IIntentMapper` + `AffordanceMap` + `ActionTemplate` retired
+
+> **Superseded in part 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** The slice-based parts of this decision (`MatchStateSlice`, `PendingEffectsSlice`, `Ref<T>`, Scaffold `Store`) no longer match the code. ADR-0014 lists what survives.
 
 Date: 2026-05-11 (drafted from `Product/spikes/archive/fsm-architecture.md` D6–D9; sub-ADR D of the FSM-arch cascade following ADR-0009 + ADR-0010 + ADR-0011)
 Context-docs: new Models `presentation/01-match-state-view-model.md`, `presentation/02-view-model-registry.md`, rewritten `presentation/presentation.md`, archived `actions/02-intent-mapper.md`, archived `actions/05-available-actions-snapshot.md`
@@ -133,7 +135,7 @@ Smaller switches; mode-scoped; adding a phase doesn't grow a central table — i
 ## Notes
 
 - **Sub-ADR cascade position.** This is sub-ADR D of the FSM-arch cascade — the last of the four. Depends on ADR-0009's `MatchState` shape (already merged); structurally independent of ADR-0010 and ADR-0011. Conflict surface at merge time: the cosmetic `actions/01-command-pipeline.md` diagram and feature roots — all three of ADR-0010 / ADR-0011 / ADR-0012 touch them. Resolution by composition.
-- **Spike provenance.** `Product/spikes/archive/fsm-architecture.md` D6–D9 is the historical source. The FSM-architecture spike was archived in the post-cascade consolidation PR (2026-05-11) as `status: superseded` referencing 0009 / 0010 / 0011 / 0012; the same PR swept GLOSSARY + OPEN-ITEMS to repoint stale spike references at the landed ADRs. `Product/general/ARCHITECTURE.md` rewrite is a follow-up PR.
+- **Spike provenance.** `Product/spikes/archive/fsm-architecture.md` D6–D9 is the historical source. The FSM-architecture spike was archived in the post-cascade consolidation PR (2026-05-11) as `status: superseded` referencing 0009 / 0010 / 0011 / 0012; the same PR swept GLOSSARY + OPEN-ITEMS to repoint stale spike references at the landed ADRs. The `general/ARCHITECTURE.md` rewrite is a follow-up PR. *(2026-10-18: not rewritten; archived to `Product/general/archive/ARCHITECTURE.md` and replaced by `docs/architecture.md`.)*
 - **`PlayerIntent` ownership.** Moves from `actions/` (where it sat alongside the now-retired `IIntentMapper`) to presentation feature-root vocabulary. `IntentGateway` likewise. The intent base is a marker type — game-defined records derive from it; each `MatchStateViewModel<TState>.Map` switches on the typed subtypes its state cares about.
 - **`PlayerChoice` retired.** The pre-cascade `PlayerChoice(TemplateIndex, ModeIndex, Targets, Parameters)` flat record carried the player's pick alongside the `ActionTemplate` it was bound against. Per-state VMs absorb this — each VM authors its own intent records carrying typed per-gesture data. No central wire format.
 - **`IntentGateway` shape.** Today: thin entry layer translating raw device gestures (mouse, touch, controller) into typed `PlayerIntent` records, then routing through the active VM (looked up via `ViewModelRegistry` keyed on `MatchStateSlice.Current.GetType()`). Concrete implementation is game-supplied; framework provides the contract through `MatchStateViewModel<TState>` + `ViewModelRegistry`.

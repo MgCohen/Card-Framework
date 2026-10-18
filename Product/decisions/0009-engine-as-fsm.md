@@ -1,20 +1,23 @@
 ---
 type: adr
-status: accepted
-references: [features/engine/models/01-game-engine.md, features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, features/engine/models/09-state-based-actions.md, spikes/archive/fsm-architecture.md]
+status: superseded
+superseded_by: decisions/0014-service-first-state-model.md
+references: [features/engine/archive/01-game-engine.md, features/engine/archive/03-game-rules-runtime.md, features/engine/archive/07-match-state.md, features/engine/archive/08-turn-flow.md, features/engine/archive/09-state-based-actions.md, spikes/archive/fsm-architecture.md]
 tags: [#adr, #engine, #runtime, #fsm, #match-state, #session-lifecycle]
 ---
 
 # ADR-0009 — Engine as FSM; match state as Store slice; session lifecycle as engine field
 
+> **Superseded 2026-10-18 by [ADR-0014](Product/decisions/0014-service-first-state-model.md#effect-on-earlier-adrs).** D2 (`MatchStateSlice` wrapping `MatchState`) is replaced by `StateStore.Current` + `StateService.Push`. D1, D3, D4 and D12 survive only as unbuilt designs, to be re-decided in roadmap phase 1. The text below is history.
+
 Date: 2026-05-10 (drafted from `Product/spikes/archive/fsm-architecture.md` D1–D5 + D12 per the 2026-05-10 open-questions walk)
-Context-docs: `Product/features/engine/models/01-game-engine.md`, `Product/features/engine/models/03-game-rules-runtime.md`, new Models `engine/07-match-state.md`, `engine/08-turn-flow.md`, `engine/09-state-based-actions.md`
+Context-docs: `Product/features/engine/archive/01-game-engine.md`, `Product/features/engine/archive/03-game-rules-runtime.md`, new Models `engine/07-match-state.md`, `engine/08-turn-flow.md`, `engine/09-state-based-actions.md`
 Proposal: `Product/spikes/archive/fsm-architecture.md`
 
 > **Refresh (2026-05-11) per spike Q-walk locks.** Five refinements:
 >
 > 1. **ISBA retires from framework.** Triad `MatchState + ITurnFlow + ISBA` reduces to **`MatchState + ITurnFlow`**. SBA is a Magic-style game-specific pattern; framework ships only the `Evaluate` hook on `GameRulesRuntime`. `engine/09-state-based-actions.md` archived; `StateBasedActions` abstract property on `GameRulesRuntime` retires. D5 retires. **Trigger to revive:** if a non-MTG cross-cutting check pattern surfaces broadly.
-> 2. **Action-gate triad on `MatchState`.** `Actions` + new `ActionsOpen: bool` (default `true`). Open / locked / whitelist semantics — see [`engine/07`](Product/features/engine/models/07-match-state.md) banner.
+> 2. **Action-gate triad on `MatchState`.** `Actions` + new `ActionsOpen: bool` (default `true`). Open / locked / whitelist semantics — see [`engine/07`](Product/features/engine/archive/07-match-state.md) banner.
 > 3. **Lifecycle hooks become methods.** `EnterCommands` virtual property → **`OnEnter(scope) → IReadOnlyList<GameAction>`** method. New **`OnExit(scope) → IReadOnlyList<GameAction>`** mirror. `ShouldExit` renames to **`IsCompleted(action, result, scope) → bool`** for ergonomic naming. Methods can read scope; output stays data-only.
 > 4. **Transition-loop prevention invariant.** Engine **does not call `runtime.Evaluate` after `TransitionStateCommand`**. State-transition recursion (via misbehaving `IsCompleted`) is structurally impossible. Engine enqueues `oldState.OnExit(scope)` before the transition; `TransitionStateHandler` enqueues `newState.OnEnter(scope)` after the slice write. Each enqueued command goes through its own Evaluate cycle.
 > 5. **Match-end auto-emit + framework-shipped `EndOfMatchState`.** Framework ships `EndOfMatchState(MatchOutcome Outcome) : MatchState` (`ActionsOpen = false`). When `Evaluate` returns `EndOfMatchState`, engine completes the transition and **auto-dispatches `EndMatchCommand(outcome)`** — no host orchestrator required. `EndMatchCommand`'s handler flips `engine.Session = EndedSession(outcome)`. `EndedSession` is terminal; rematch is dispose-and-recreate via `GameFactory.Build`. No `RestartMatchCommand`.
@@ -121,7 +124,7 @@ Replaces / subsumes the `EngineLifecycle` enum and the `Lifecycle` field on `Eng
 - **Enables** per-state polymorphic ViewModels (ADR-0012's territory) — `MatchStateViewModel<TState>` binds to the current state; `ViewModelRegistry` maps state type → factory. Presentation no longer projects a global `AffordanceMap` from a generic snapshot.
 - **Enables** transitions as auditable commands. `TransitionStateCommand` enters the history envelope like everything else; `OnAfter<TransitionStateCommand>` triggers fire naturally; replay reconstructs exactly the same state sequence.
 - **Enables** the layered intake gate model. Session-level gating and match-state-level gating compose through the validator pipeline (per ADR-0010) instead of through bespoke engine logic.
-- **Retires** the `IAvailableActions` service and the `AvailableActionsState` slice. `MatchState.Actions: IReadOnlyList<Type>` is the new framework shape. The corresponding canonical Model (`Product/features/engine/models/04-available-actions.md`) is archived. The wire-form `ActionTemplate` (`Product/features/actions/models/05-available-actions-snapshot.md`) is retired in ADR-0012 (presentation per-state VMs).
+- **Retires** the `IAvailableActions` service and the `AvailableActionsState` slice. `MatchState.Actions: IReadOnlyList<Type>` is the new framework shape. The corresponding canonical Model (`Product/features/engine/archive/04-available-actions.md`) is archived. The wire-form `ActionTemplate` (`Product/features/actions/archive/05-available-actions-snapshot.md`) is retired in ADR-0012 (presentation per-state VMs).
 - **Retires** the `EngineLifecycle` enum and the `Lifecycle` field on `EngineState`. The intake-gate check moves from a hardcoded engine block to a registered framework validator (`SessionGate`) consulting `engine.Session` once ADR-0010 lands. Until then, `engine.Dispatch` keeps a transitional inline gate against `engine.Session`.
 - **Constrains** every match-state read to go through `MatchStateSlice` — games can't carry the current phase in a private game-authored slice and skip the framework shape. (They *can* still carry phase-specific *data* in separate slices, but the "what state are we in?" answer is structurally on `MatchStateSlice.Current`.)
 - **Constrains** the runtime's `Evaluate` to return a single `MatchState`, not a list. Multi-action follow-ups now flow through `MatchState.EnterCommands` (enqueued by `TransitionStateHandler`) or through commands dispatched by handlers / effects (the latter through the effect pipeline shape in ADR-0011).

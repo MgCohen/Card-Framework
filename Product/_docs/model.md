@@ -142,12 +142,12 @@ Instantiate this for a new model. Fill in placeholders; preserve section order. 
 
 ## Worked example
 
-A trimmed instance of the skeleton above. Frozen — does not track [`features/cards/models/01-card-model.md`](features/cards/models/01-card-model.md) if that drifts.
+A trimmed instance of the skeleton above. Frozen — does not track [`features/cards/archive/01-card-model.md`](features/cards/archive/01-card-model.md) if that drifts.
 
     ---
     type: model
     status: settled
-    references: [features/entities/models/01-definition-instance-model.md, features/zones/models/01-zone-model.md]
+    references: [features/entities/models/01-definition-instance-model.md, features/zones/archive/01-zone-model.md]
     tags: ["#cards", "#model"]
     ---
 

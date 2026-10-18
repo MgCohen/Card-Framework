@@ -44,7 +44,7 @@ flowchart LR
 
 | # | Phase | Status | Needs |
 |---|---|---|---|
-| 0 | Housekeeping | not started | — |
+| 0 | Housekeeping | in progress | — |
 | 1 | Engine loop | not started | 0 |
 | 2 | Client submit + convergence | not started | 1 |
 | 3 | Board: zones + players | not started | 1 |
@@ -60,11 +60,11 @@ flowchart LR
 
 **Goal.** Make `main`, the docs and the tools match the code before new work starts.
 
-- Merge PR #182 (test suite consolidation, `docs/testing.md`) and PR #183 (Unity 6000.6.6f1).
-- Close or move the stale PRs (#18, #19, #101, #148, #156, #159).
-- Refresh `Product/SESSION-CHECKPOINT.md` (it stops at 2026-05-31).
-- Mark the old-model docs superseded: `Product/features/**`, ADR-0009 to 0013 where the state model changed, the `MatchStateSlice` glossary entries. Write ADR-0014 for the service-first state model (deferred since step 5b).
-- Rename `CommandLayer` / `StateLayer` / `RequestLayer` to the `*Installer` names in the spikes that still use them.
+- ✅ Merge PR #182 (test suite consolidation, `docs/testing.md`) and PR #183 (Unity 6000.6.6f1). Merged 2026-10-18; EditMode 364/364 on 6000.6.6f1.
+- ✅ Close or move the stale PRs (#18, #19, #101, #148, #156, #159). Closed 2026-10-18, branches kept.
+- ✅ Refresh `Product/SESSION-CHECKPOINT.md` (it stops at 2026-05-31).
+- ✅ Mark the old-model docs superseded: `Product/features/**`, ADR-0009 to 0013 where the state model changed, the old-model glossary entries. Write ADR-0014 for the service-first state model (deferred since step 5b). Done 2026-10-18: [ADR-0014](../decisions/0014-service-first-state-model.md), feature docs archived, glossary replaced, `ledgers/OPEN-ITEMS.md` swept against the new vocabulary (each entry closed, rewritten, or assigned to a phase), `general/ARCHITECTURE.md` archived in favor of `docs/architecture.md`.
+- ✅ Rename the old `*Layer` classes to the `*Installer` names in the spikes that still use them.
 - Optional: CI that runs EditMode tests on each PR; `.editorconfig`; warnings as errors.
 
 **Done when.** The checkpoint, glossary and spike docs name only types that exist in code.
@@ -79,7 +79,7 @@ flowchart LR
 - Decide ids vs live `Entity` refs on queued commands.
 - System-gate validation (is this command legal in the current state?) moves into the loop.
 
-**Inputs.** `command-service.md` § Deferred items (rows: evaluate-loop, block nesting, live-ref vs id, validation model).
+**Inputs.** `command-service.md` § Deferred items (rows: evaluate-loop, block nesting, live-ref vs id, validation model); OPEN-ITEMS `oq-state-flow`, `oq-system-gate-validation`, `oq-pump-policy`, `oq-entity-destruction` (ids on queued commands).
 **Done when.** Acceptance scenarios run through `Enqueue`. A command that awaits a request passes a test. Nested blocks have correct `ParentId`.
 
 ### 2. Client submit + convergence
@@ -91,7 +91,7 @@ flowchart LR
 - **L+2 convergence:** a test that server and client stores are equal after a match script. Start with `LoopbackTransport.Pair()` in EditMode.
 - Connect Multiplayer to gameplay: an installer that uses `NgoTransport`, and peers mapped to player entities.
 
-**Inputs.** `acceptance-test-suite.md` § Deferred ladder (L+1, L+2), `request-service.md`, `multiplayer-architecture.md`.
+**Inputs.** `acceptance-test-suite.md` § Deferred ladder (L+1, L+2), `request-service.md`, `multiplayer-architecture.md`; OPEN-ITEMS `oq-legal-actions-shape`, `oq-request-timeout`.
 **Done when.** A two-sided test plays a command from client submit to equal stores on both sides.
 
 ### 3. Board: zones + players
@@ -102,7 +102,7 @@ flowchart LR
 - Player entities linked to the Multiplayer `Peer` / `PlayerContext`.
 - Ownership and controller tags.
 
-**Inputs.** `VerticalSlice` zones and players (reference code), `features/zones/zones.md` and `features/players/` (old model — read for the questions, not the contract). Write a new spike for the zone store.
+**Inputs.** `VerticalSlice` zones and players (reference code), `features/zones/archive/zones.md` and `features/players/archive/` (old model — read for the questions, not the contract). OPEN-ITEMS `oq-hidden-information`, `oq-card-location-lookup`, `oq-entity-destruction`, `bl-ownership-reverse-index`. Write a new spike for the zone store.
 **Done when.** A `MoveCard` command moves a card between zones on server and client, covered by an acceptance scenario.
 
 ### 4. Reactions: effects, hooks, triggers
@@ -115,14 +115,14 @@ flowchart LR
 - State-based actions (SBA) checked by the loop.
 - **L+3:** tests that a reaction fires exactly once.
 
-**Inputs.** `VerticalSlice` (hooks, `EffectStore`, Deathrattle), `hook-config-design.md` (deferred, old model), `archive/effect-pipeline.md`, OPEN-ITEMS `oq-effect-authoring`. Write a new spike for the Store / Service / Handler shape of reactions first.
+**Inputs.** `VerticalSlice` (hooks, `EffectStore`, Deathrattle), `hook-config-design.md` (deferred, old model), `archive/effect-pipeline.md`, OPEN-ITEMS `oq-effect-authoring`, `oq-trigger-ordering`, `oq-trigger-subscription-entry`, `oq-pump-policy` (SBA). Write a new spike for the Store / Service / Handler shape of reactions first.
 **Done when.** The VerticalSlice Deathrattle scenario passes as an acceptance test on the framework.
 
 ### 5. Modifiers
 
 **Goal.** Temporary and permanent stat changes as entities.
 
-**Inputs.** `modifiers-as-entities.md` (design locked 2026-05-18, sandbox not built).
+**Inputs.** `modifiers-as-entities.md` (design locked 2026-05-18, sandbox not built); OPEN-ITEMS `oq-attachment-storage`.
 **Done when.** A modifier changes a stat, expires, and the change reaches the client.
 
 ### 6. Card definitions + authoring
@@ -133,14 +133,14 @@ flowchart LR
 - The effect authoring vocabulary (primitives, graphs, or code).
 - Decide whether `com.scaffold.graphflow` is the authoring tool. It is a candidate: a graph editor, baked to runtime nodes.
 
-**Inputs.** OPEN-ITEMS `bl-authoring-feature`, `oq-effect-authoring`; `Packages/com.scaffold.graphflow/FOLLOW-UPS.md`.
+**Inputs.** OPEN-ITEMS `oq-effect-authoring`, `bl-versioned-definitions`; `Packages/com.scaffold.graphflow/FOLLOW-UPS.md`.
 **Done when.** One card with an effect is defined without new C# code.
 
 ### 7. Presentation
 
 **Goal.** Views that show the client stores and send intents.
 
-**Inputs.** `card-presentation.md` and the `CardPresentation` spike. ADR-0012 (per-state view-models) needs a review first, because it depends on the old `MatchStateSlice`.
+**Inputs.** `card-presentation.md` and the `CardPresentation` spike. ADR-0012 (per-state view-models) needs a review first, because it binds to the old slice-based match state. OPEN-ITEMS `oq-view-model-host-shape`, `oq-legal-actions-shape`.
 **Done when.** A scene shows a hand and a battlefield from client stores, and a drag sends a `Submit`.
 
 ### 8. Retire spikes

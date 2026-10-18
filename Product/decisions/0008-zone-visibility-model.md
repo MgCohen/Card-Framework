@@ -1,14 +1,14 @@
 ---
 type: adr
 status: accepted
-references: [features/cards/models/01-card-model.md, features/zones/models/01-zone-model.md, features/presentation/models/01-presentation-loop.md]
+references: [features/cards/archive/01-card-model.md, features/zones/archive/01-zone-model.md, features/presentation/archive/01-presentation-loop.md]
 tags: [#adr, #zones, #visibility, #history, #cards, #cross-cutting]
 ---
 
 # ADR-0008 — Visibility model: definition policy + per-card flag + server-side CardRef rotation
 
 Date: 2026-05-01 (elevated from `features/zones/decisions/0002-visibility-model.md` to project-wide on 2026-05-08 per §4.5 two-feature rule — cross-cutting across cards + zones + presentation; renumbered from 0006 to 0008 on 2026-05-08 to resolve number collision with the pre-existing `0006-two-pipeline-architecture.md`)
-Context-docs: `features/cards/models/01-card-model.md`, `features/zones/models/01-zone-model.md`, `features/presentation/models/01-presentation-loop.md`
+Context-docs: `features/cards/archive/01-card-model.md`, `features/zones/archive/01-zone-model.md`, `features/presentation/archive/01-presentation-loop.md`
 Proposal: session-20260501-1602-zone-model-internal-opens
 
 ## Context
@@ -57,7 +57,7 @@ For history filtering:
 
 **Zone visibility policy is authored on the `ZoneDefinition`.** The policy expresses per-actor-role rules across the two channels — e.g., "visible to owner, count-only to others" (hand), "hidden to all" (deck contents), "visible to all" (battlefield). The policy is static; runtime variation comes only from the per-card flag.
 
-**Per-card flag** lives on `CardVisibilityState` (defined in the [Card Model § Card Visibility](features/cards/models/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `Ref<Card>`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
+**Per-card flag** lives on `CardVisibilityState` (defined in the [Card Model § Card Visibility](features/cards/archive/01-card-model.md)) as a `CardVisibility` enum (`Hidden | VisibleToOwner | VisibleToAll`) keyed by `Ref<Card>`. Absent entry = use the zone's policy default. `VisibleToOwner` requires the card to have an Owner; collapses to `Hidden` if no Owner.
 
 **Rules read visibility via the card object:** `card.IsVisibleTo(state, actor)` delegates to the slice and combines with the zone's policy. Visibility-conditional rules and triggers branch on this read.
 

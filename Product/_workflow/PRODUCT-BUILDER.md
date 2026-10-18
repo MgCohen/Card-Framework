@@ -103,13 +103,13 @@ Every doc carries frontmatter. Per-type fields live in the type's rulebook; thes
 
 Every cross-doc reference is a **`Product/`-rooted absolute path** — no leading slash, forward slashes only. This applies to `references:` entries, markdown link targets, and bare path mentions in prose. Relative paths (`../`, `./`, `/`-prefixed) and URL-encoded paths (`%20`, `%28`) are not used.
 
-**Why one rule.** A single canonical form per target means: `grep -rn 'features/engine/models/01-game-engine.md' Product/` finds every reference; renames are a single global `sed`; the linter does no path resolution. The cost is non-clickable links in standard markdown renderers — for an AI-agent + path-aware-linter workflow, that trade is worth it.
+**Why one rule.** A single canonical form per target means: `grep -rn 'features/engine/archive/01-game-engine.md' Product/` finds every reference; renames are a single global `sed`; the linter does no path resolution. The cost is non-clickable links in standard markdown renderers — for an AI-agent + path-aware-linter workflow, that trade is worth it.
 
 **Format by use case:**
 
 ```yaml
 # references: front-matter — comma-separated absolute paths in brackets
-references: [features/engine/models/01-game-engine.md, features/actions/models/05-available-actions-snapshot.md]
+references: [features/engine/archive/01-game-engine.md, features/actions/archive/05-available-actions-snapshot.md]
 
 # Top-level docs use the literal `root`
 references: root
@@ -120,10 +120,10 @@ references: [_workflow/PRODUCT-BUILDER.md]
 
 ```markdown
 # Markdown links — absolute path, anchors append unencoded after #
-See [game engine §3](features/engine/models/01-game-engine.md#section-3) for the drain logic.
+See [game engine §3](features/engine/archive/01-game-engine.md#section-3) for the drain logic.
 
 # Bare path mentions in prose — same absolute form, no link wrapper, must resolve
-The trigger fold is defined in features/triggers/models/01-trigger.md §2.
+The trigger fold is defined in features/triggers/archive/01-trigger.md §2.
 
 # Illustrative or example paths — wrap in inline backticks, linter exempt
 A new model would live at `features/<feature>/models/<NN>-<slug>.md`.

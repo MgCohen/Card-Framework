@@ -30,5 +30,5 @@ Composite mutations — should there be a `CompositeAction` / scope helper, or i
 - Doc 19 composite-operation revision (session 03).
 
 ### References
-- Docs touched: `ledgers/GLOSSARY.md`, `features/actions/models/01-command-pipeline.md` (provenance).
+- Docs touched: `ledgers/GLOSSARY.md`, `features/actions/archive/01-command-pipeline.md` (provenance).
 - Related: PR #2 (`3f8a4ae`).

@@ -325,10 +325,10 @@ improvement once a game ships 3+ Request types — left as a follow-up.
 ### Layer (framework)
 
 ```csharp
-public sealed class RequestLayer : IAppFlowLayer
+public sealed class RequestInstaller : IInstaller
 {
     private readonly bool _isServer;
-    public RequestLayer(bool isServer) => _isServer = isServer;
+    public RequestInstaller(bool isServer) => _isServer = isServer;
 
     public void Install(IContainerBuilder builder)
     {
@@ -338,8 +338,8 @@ public sealed class RequestLayer : IAppFlowLayer
 }
 ```
 
-`FrameworkAppFlowRoot` adds `new RequestLayer(_isServer)` alongside the
-other layers. `EngineLayer` exposes `GameEngine.Requests` on the server
+`FrameworkAppFlowRoot` adds `new RequestInstaller(_isServer)` alongside the
+other layers. `EngineInstaller` exposes `GameEngine.Requests` on the server
 side.
 
 ## Wire grammar example
@@ -430,8 +430,8 @@ Step 5a build shipped exactly as scoped:
 3. ✅ `RequestStore` (`Dictionary<int, Request>`, both sides) /
    `RequestService` (server-only Open / Complete / CancelAllPending) /
    internal `PendingRequest<T>` + `IPendingRequest`.
-4. ✅ `RequestLayer` + `FrameworkAppFlowRoot` registration with
-   role-gating (matches `TagLayer` / `EntityLayer` shape).
+4. ✅ `RequestInstaller` + `FrameworkAppFlowRoot` registration with
+   role-gating (matches `TagInstaller` / `EntityInstaller` shape).
 5. ✅ `GameEngine.Requests` + `GameEngine.RequestStore` properties
    (server-only handle).
 6. ✅ Test fixture — `TestPickRequest` / `TestPickResponse` concrete pair,
@@ -444,7 +444,7 @@ Step 5a build shipped exactly as scoped:
    - `CancelAllPending` cancels parked TCSs.
    - Unmatched Response is a no-op.
 
-`EngineLayerTests` also updated: server scope resolves `Requests` /
+`GameplayLayerTests` also updated: server scope resolves `Requests` /
 `RequestStore`; client scope has `RequestStore` but `RequestService`
 throws (the "client cannot author requests" structural rule).
 

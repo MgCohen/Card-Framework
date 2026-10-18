@@ -1,7 +1,9 @@
 ---
 type: model
-status: archived
-references: [features/engine/models/03-game-rules-runtime.md, features/engine/models/07-match-state.md, features/engine/models/08-turn-flow.md, decisions/0009-engine-as-fsm.md]
+status: abandoned
+archived_on: 2026-05-11
+reason: "SBA is MTG-specific, not a framework primitive; games implement it in their own Evaluate (ADR-0009 refresh)."
+references: [features/engine/archive/03-game-rules-runtime.md, features/engine/archive/07-match-state.md, features/engine/archive/08-turn-flow.md, decisions/0009-engine-as-fsm.md]
 tags: [#engine, #sba, #fsm, #archived]
 ---
 
@@ -220,6 +222,6 @@ The order encodes priority: game-over wins over legend-rule wins over draw-from-
 
 - **Priority composition.** Registration order is the current contract. Richer priority (named tiers, declared dependencies) deferred until a game forces composition complexity.
 - **Per-state suppression.** "Don't fire `LegendRuleSBA` while in `CleanupState`." Today the SBA itself reads `MatchStateSlice.Current` and short-circuits if it's in a suppressed state. A declarative per-state suppression list on the runtime base could be cleaner; defer until multiple games want it.
-- **MTG-strict SBA loop ordering.** MTG runs an SBA loop *between* trigger fold and reaction dispatch (per [`engine/03 Q3`](features/engine/models/03-game-rules-runtime.md)). Our SBAs run at the start of `Evaluate`, which is one step too late for strict MTG ordering. Workaround today: encode the SBA logic as game-state mutators reacting to damage / death triggers. Real fix: add a pre-after-fold evaluator hook. Deferred until a game forces it.
+- **MTG-strict SBA loop ordering.** MTG runs an SBA loop *between* trigger fold and reaction dispatch (per [`engine/03 Q3`](features/engine/archive/03-game-rules-runtime.md)). Our SBAs run at the start of `Evaluate`, which is one step too late for strict MTG ordering. Workaround today: encode the SBA logic as game-state mutators reacting to damage / death triggers. Real fix: add a pre-after-fold evaluator hook. Deferred until a game forces it.
 - **Framework-default SBAs.** Whether the framework should ship any SBAs (e.g., a generic `GameOverByOutcomeSBA` that fires when a runtime-supplied policy returns a non-null `MatchOutcome`) is open. Today there are none — all SBAs are game-authored.
 - **SBA disable/enable at runtime.** Some games suspend specific SBAs during specific phases (e.g., "no legend-rule during cleanup"). Today the SBA short-circuits internally; a declarative on/off API deferred.
