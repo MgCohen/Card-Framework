@@ -7,7 +7,7 @@ tags: [#checkpoint]
 
 **Live spine.** This is the single source of truth for "where we are." Updated continuously as work happens. No open/close lifecycle.
 
-The previous checkpoint (to 2026-05-31, step 5b) is frozen in [`sessions/session-20260531-0000-step5b-state-service.md`](Product/sessions/session-20260531-0000-step5b-state-service.md).
+The previous checkpoint (to 2026-05-31, step 5b) is in git history: `git show 14a796c:Product/SESSION-CHECKPOINT.md` (session snapshots under `sessions/` are gitignored).
 
 ---
 
@@ -22,6 +22,8 @@ Done in phase 0:
 - Archived all 37 old-model docs under `Product/features/**` into their feature `archive/` folders. Built parts are `superseded` (by `docs/architecture.md`, ADR-0014 or a spike); unbuilt parts are `abandoned` and read only for their open questions.
 - Replaced the glossary with one that names only types on `main`. The old glossary is in [`_archive/ledgers/GLOSSARY-old-model.md`](Product/_archive/ledgers/GLOSSARY-old-model.md). Old-model terms and `*Layer` names are in `_workflow/retired-tokens.json`.
 - Renamed `*Layer` → `*Installer` in the active spikes; updated `state-service.md` to the post-#165 slot-based `StatePushEvent`; archived the two step-4 build logs.
+- Swept [`ledgers/OPEN-ITEMS.md`](Product/ledgers/OPEN-ITEMS.md) against the new glossary and ADR-0014: 10 entries closed (answered by code or ADR-0014, or owned by a roadmap phase), the rest rewritten in current vocabulary with an owning roadmap phase. The roadmap's phase inputs now list the OPEN-ITEMS ids they resolve.
+- Archived `general/ARCHITECTURE.md` (research-phase, old model) to `general/archive/`; `docs/architecture.md` replaces it.
 
 **What landed between 2026-05-31 and phase 0** (all on `main`):
 - 05-31 – 06-01: step 5b `Framework.States`; conformance PRs #161–#166 (Core `TypeKey` / `SlotRegistry`, `EntityType` records, typed tag store, slot-based `StatePushEvent` + `GameStateRegistry`, read-only store views with `internal` writers).
@@ -35,8 +37,7 @@ Done in phase 0:
 **Finish phase 0, then review the roadmap order before phase 1 (engine loop).**
 
 Left in phase 0:
-- `ledgers/OPEN-ITEMS.md` still uses old-model vocabulary; sweep it against the new glossary.
-- `general/ARCHITECTURE.md` is research-phase content; point it at `docs/architecture.md` or archive it.
+- Retired tokens still appear in some active docs outside phase 0's scope: ADR bodies (append-only; banners point at ADR-0014), the glossary's *Retired terms* table, and old-model spikes and samples (`match-state-redesign.md`, `runtime-walkthrough.md`, `support/samples/pile-counter.md`, `FEATURE-MAP.md`, `_drafts/template-pilot/`). Tracked by OPEN-ITEMS `bl-spike-status-migration`; `/builder:lint` T1 needs an allow-list for ADRs and the retired-terms table.
 - Optional: CI that runs EditMode tests on each PR (needs a Unity license secret), `.editorconfig`, warnings as errors.
 - Run PlayMode tests (`Framework.Wire.PlayTests`, `Framework.Multiplayer.PlayTests`) on 6000.6.6f1.
 

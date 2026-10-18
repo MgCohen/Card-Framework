@@ -482,7 +482,7 @@ Per-state polymorphic `MatchStateViewModel<TState>` becomes per-state `GameState
 When this spike lands, downstream docs need updates (rough order):
 
 1. **New ADR (likely 0014)** — *"Service-first, event-sourced, projection-based architecture."* Supersedes parts of 0009 (D2), introduces F1–F6, points at this spike.
-2. **Refresh — `general/ARCHITECTURE.md`** — top-level architecture doc; rewrite around the five-primitive model.
+2. **Refresh — `general/ARCHITECTURE.md`** — top-level architecture doc; rewrite around the five-primitive model. *(2026-10-18: archived instead; `docs/architecture.md` is the top-level doc.)*
 3. **New feature `features/services/`** (or absorbed into engine) — documents the projection contract, the watch API, the registration pattern.
 4. **Refresh — `features/engine/archive/01-game-engine.md`** — engine as service registry + pump; remove world-data references.
 5. **Refresh — `features/engine/archive/03-game-rules-runtime.md`** — `Evaluate` returns `GameState?`; uses services.

@@ -1,9 +1,14 @@
 ---
 type: reference
-status: settled
+status: superseded
+superseded_by: ../docs/architecture.md
+archived_on: 2026-10-18
+reason: "Research-phase architecture of the old slice-based model (Store of slices, MatchStateSlice, GameRulesRuntime, HistoryEnvelope). The code follows the service-first model of ADR-0014, described in docs/architecture.md."
 references: [features/state/archive/state.md, features/entities/archive/entities.md, features/zones/archive/zones.md, features/cards/archive/cards.md, features/players/archive/players.md, features/actions/archive/actions.md, features/triggers/archive/triggers.md, features/effects/archive/effects.md, features/engine/archive/engine.md, features/presentation/archive/presentation.md, decisions/0005-objects-over-ids.md, decisions/0006-two-pipeline-architecture.md, decisions/0007-five-validation-layers.md, decisions/0008-zone-visibility-model.md, decisions/0009-engine-as-fsm.md, decisions/0010-validator-handler-split.md, decisions/0011-effect-orchestration-dispatch-requests.md, decisions/0012-presentation-per-state-view-models.md]
 tags: [#general, #architecture]
 ---
+
+> **Archived 2026-10-18.** Superseded by [`docs/architecture.md`](docs/architecture.md) and [ADR-0014](Product/decisions/0014-service-first-state-model.md). This is the research-phase picture of the old slice-based model; most types it names were never built. The body below is kept as history.
 
 # Architecture
 
