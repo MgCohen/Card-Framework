@@ -1,3 +1,4 @@
+using Framework.Wire;
 using VContainer;
 
 namespace Framework.Bootstrap
@@ -7,11 +8,14 @@ namespace Framework.Bootstrap
     // scope, so GameEngine and every service/store it aggregates resolve from one container.
     public sealed class GameplayLayer : BootstrapLayer
     {
-        public GameplayLayer(bool isServer) : base(isServer) { }
+        readonly ITransport _transport;
+
+        public GameplayLayer(bool isServer, ITransport transport = null) : base(isServer)
+            => _transport = transport;
 
         public override void Install(IContainerBuilder builder)
         {
-            new EngineInstaller(_isServer).Install(builder);
+            new EngineInstaller(_isServer, _transport).Install(builder);
             new TagInstaller(_isServer).Install(builder);
             new EntityInstaller(_isServer).Install(builder);
             new RequestInstaller(_isServer).Install(builder);
