@@ -22,6 +22,7 @@ one neutral support module:
 Assets/Framework/Testing/
 ├── Support/        Framework.Testing.Support            # shared DSL + fixtures (no tests)
 │   ├── MatchHarness.cs        # boots the real composition root; the Execute seam + read facades
+│   ├── MatchPair.cs           # server + client GameplayLayer over a loopback transport; convergence checks
 │   ├── PictureAttribute.cs    # [Picture("x.md")] — backlinks a binding to its canonical spec
 │   ├── SampleTags.cs          # canonical sample tags (slots 2001-3)
 │   └── SampleCommands.cs      # sample commands + handlers + validators (public)
@@ -104,6 +105,10 @@ LLM judge. Any LLM step (generate, drift-check) is local/advisory and never gate
 - **Mechanism tests are intentional tripwires.** A change that makes
   `BootstrapWiring`/`RealAppFlowRoot` fail is telling you the wiring changed. Fix the
   wiring or update the test deliberately — don't paper over it.
+- **Use `MatchPair` when the client matters.** It starts a server and a client
+  `GameplayLayer` joined by `LoopbackTransport.Pair`. Register apply handlers on both sides
+  and commands on the server only (`bindScenario(builder, isServer)`). Call
+  `AssertStreamsMatch()` to check that the client got the same events.
 - **Check `Support/` before inventing a fixture.** The shared seam (`MatchHarness`),
   sample commands/handlers/validators (`SampleCommands.cs`), and sample tags
   (`SampleTags.cs`) already exist. Reuse them. Only add a new sample type when no existing

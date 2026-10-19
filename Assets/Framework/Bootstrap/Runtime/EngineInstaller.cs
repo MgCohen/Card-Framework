@@ -7,12 +7,18 @@ namespace Framework.Bootstrap
     public sealed class EngineInstaller : IInstaller
     {
         readonly bool _isServer;
+        readonly ITransport _transport;
 
-        public EngineInstaller(bool isServer) { _isServer = isServer; }
+        public EngineInstaller(bool isServer, ITransport transport = null)
+        {
+            _isServer  = isServer;
+            _transport = transport;
+        }
 
         public void Install(IContainerBuilder builder)
         {
-            builder.Register<NullTransport>(Lifetime.Singleton).As<ITransport>();
+            if (_transport != null) builder.RegisterInstance(_transport).As<ITransport>();
+            else                    builder.Register<NullTransport>(Lifetime.Singleton).As<ITransport>();
             builder.Register<Network>(c => new Network(c.Resolve<ITransport>()), Lifetime.Singleton);
 
             builder.Register<EventStream>(Lifetime.Singleton)
