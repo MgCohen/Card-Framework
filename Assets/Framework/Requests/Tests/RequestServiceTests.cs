@@ -162,5 +162,21 @@ namespace Framework.Requests.Tests
             Assert.DoesNotThrow(() =>
                 server.Stream.Emit(new TestPickResponse { RequestId = 999, Picked = 0 }));
         }
+
+        // Characterizes today's gap: a response the client sends over the wire reaches the
+        // server Network, but nothing routes it into the server stream, so the awaiter
+        // stays pending. Flip this when the client -> server path is wired.
+        [Test]
+        public void Client_Sent_Response_Does_Not_Complete_Task_Yet()
+        {
+            var (server, client, w) = Build();
+
+            var task = server.Service.Open(new TestPickRequest { OptionCount = 3 });
+            w.ClientNetwork.Send(new TestPickResponse { RequestId = 1, Picked = 2 });
+
+            Assert.IsFalse(task.IsCompleted);
+            Assert.AreEqual(1, server.Store.Open.Count);
+            Assert.AreEqual(1, client.Store.Open.Count);
+        }
     }
 }

@@ -84,5 +84,39 @@ namespace Framework.Wire.Tests
 
             Assert.AreEqual(3, count);
         }
+
+        [Test]
+        public void Client_Send_Reaches_Server_Network()
+        {
+            LoopbackTransport.Pair(out var serverTransport, out var clientTransport);
+            var serverNetwork = new Network(serverTransport);
+            var clientNetwork = new Network(clientTransport);
+
+            var serverChannel = serverNetwork.Register<PingEvent, PingEvent.Packed>();
+            clientNetwork.Register<PingEvent, PingEvent.Packed>();
+
+            PingEvent received = null;
+            serverChannel.OnReceived += ev => received = ev;
+
+            clientNetwork.Send(new PingEvent { Value = 7 });
+
+            Assert.IsNotNull(received);
+            Assert.AreEqual(7, received.Value);
+        }
+
+        // Characterizes today's wiring: no server-side inbound bridge exists, so a client
+        // send reaches the server Network but never enters the server EventStream.
+        // Flip this when the client -> server path is wired.
+        [Test]
+        public void Client_Send_Does_Not_Enter_Server_Stream()
+        {
+            var w = Wire.Connect();
+            w.ServerNetwork.Register<PingEvent, PingEvent.Packed>();
+            w.ClientNetwork.Register<PingEvent, PingEvent.Packed>();
+
+            w.ClientNetwork.Send(new PingEvent { Value = 7 });
+
+            Assert.AreEqual(0, w.ServerStream.Count);
+        }
     }
 }
