@@ -1,0 +1,203 @@
+{
+  "$schema": "./schema/rulebook.schema.json",
+  "version": 1,
+  "books": [
+    { "id": "architecture", "title": "Architecture", "description": "Dependency direction and who may write state." },
+    { "id": "testing", "title": "Testing", "description": "How tests are linked to specs and rules." }
+  ],
+  "rules": [
+    {
+      "id": "ARCH-01",
+      "book": "architecture",
+      "title": "No assembly cycles",
+      "rule": "The asmdef reference graph under Assets/Framework has no cycles.",
+      "why": "A cycle makes two features one feature and blocks every layering rule.",
+      "fix": "Move the shared type down to a lower assembly, or invert the dependency with an event or an interface.",
+      "status": "enforced",
+      "check": { "kind": "asmdef.noCycles", "params": { "roots": ["Assets/Framework"] } }
+    },
+    {
+      "id": "ARCH-02",
+      "book": "architecture",
+      "title": "Layer references",
+      "rule": "Each Framework runtime assembly references only the Framework assemblies listed for it.",
+      "why": "Keeps Core and Wire free of domain features, and makes every new dependency a visible decision.",
+      "fix": "Remove the reference, or add it to this rule's table if the new direction is intended.",
+      "status": "enforced",
+      "check": {
+        "kind": "asmdef.allowedReferences",
+        "params": {
+          "roots": ["Assets/Framework"],
+          "scope": "Framework.*",
+          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "allowed": {
+            "Framework.Core": [],
+            "Framework.Wire": [],
+            "Framework.Tags": ["Framework.Core", "Framework.Wire"],
+            "Framework.Entities": ["Framework.Core", "Framework.Tags", "Framework.Wire"],
+            "Framework.Requests": ["Framework.Wire"],
+            "Framework.States": ["Framework.Core", "Framework.Wire"],
+            "Framework.Commands": ["Framework.Wire"],
+            "Framework.Engine": ["Framework.Wire", "Framework.Tags", "Framework.Entities", "Framework.Requests", "Framework.States", "Framework.Commands"],
+            "Framework.Bootstrap": ["Framework.Core", "Framework.Commands", "Framework.Engine", "Framework.Entities", "Framework.Requests", "Framework.States", "Framework.Tags", "Framework.Wire"],
+            "Framework.Multiplayer": ["Framework.Wire"]
+          }
+        }
+      }
+    },
+    {
+      "id": "ARCH-03",
+      "book": "architecture",
+      "title": "No framework dependency on spikes",
+      "rule": "No Framework assembly references a spike or prototype assembly.",
+      "why": "Spikes are deleted in roadmap phase 8. The framework must not need them.",
+      "fix": "Promote the needed type into Assets/Framework, following docs/feature-layout.md.",
+      "status": "enforced",
+      "check": {
+        "kind": "asmdef.forbiddenReferences",
+        "params": {
+          "roots": ["Assets/Framework"],
+          "from": "Framework.*",
+          "forbidden": ["Spike.*", "VerticalSlice*", "StateMachine*", "TagAuthoringPrototype*"]
+        }
+      }
+    },
+    {
+      "id": "ARCH-04",
+      "book": "architecture",
+      "title": "InternalsVisibleTo allowlist",
+      "rule": "Each Framework runtime assembly grants internal access only to the assemblies listed for it.",
+      "why": "Store writers are internal. Every grant widens who can write state.",
+      "fix": "Remove the grant. If a new assembly needs internal access, add it to this rule's table and say why in the PR.",
+      "status": "enforced",
+      "check": {
+        "kind": "ivt.allowlist",
+        "params": {
+          "assemblies": ["Framework.*"],
+          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "allowed": {
+            "Framework.Commands": ["Framework.Bootstrap", "Framework.Engine", "Framework.Commands.Tests", "Framework.Testing.Integration.Tests"],
+            "Framework.Entities": ["Framework.Bootstrap", "Framework.Entities.Tests", "Framework.Testing.Integration.Tests"],
+            "Framework.Requests": ["Framework.Bootstrap", "Framework.Engine", "Framework.Requests.Tests", "Framework.Testing.Integration.Tests"],
+            "Framework.States": ["Framework.Bootstrap", "Framework.Engine", "Framework.States.Tests"],
+            "Framework.Tags": ["Framework.Bootstrap", "Framework.Tags.Tests", "Framework.Entities", "Framework.Entities.Tests", "Framework.Testing.Integration.Tests"],
+            "Framework.Wire": ["Framework.Bootstrap", "Framework.Wire.Tests", "Framework.Wire.PlayTests"]
+          }
+        }
+      }
+    },
+    {
+      "id": "ARCH-05",
+      "book": "architecture",
+      "title": "Only apply handlers write stores",
+      "rule": "An internal method on a Framework store is called only from a WireEventHandler<T> subclass.",
+      "why": "Server and client build the same state only when the same apply handler writes it.",
+      "fix": "Emit a wire event from the service. Let the apply handler for that event call the store writer.",
+      "status": "enforced",
+      "check": {
+        "kind": "il.callersOnly",
+        "params": {
+          "assemblies": ["Framework.*"],
+          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "callees": { "namespace": "Framework.*", "type": "*Store", "access": "internal" },
+          "allowedCallers": { "subclassOf": "Framework.Wire.WireEventHandler`1" }
+        }
+      }
+    },
+    {
+      "id": "ARCH-06",
+      "book": "architecture",
+      "title": "Apply handlers do not call services",
+      "rule": "A WireEventHandler<T> subclass does not call a Framework service.",
+      "why": "Apply handlers run on the client too, where services do not exist. A handler only writes its store.",
+      "fix": "Move the service call out of the handler, for example into a server-only listener on the event stream.",
+      "status": "enforced",
+      "check": {
+        "kind": "il.forbiddenCalls",
+        "params": {
+          "assemblies": ["Framework.*"],
+          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "callers": { "subclassOf": "Framework.Wire.WireEventHandler`1" },
+          "callees": { "namespace": "Framework.*", "type": "*Service" }
+        }
+      }
+    },
+    {
+      "id": "ARCH-07",
+      "book": "architecture",
+      "title": "GameEngine exposes read-only views",
+      "rule": "GameEngine exposes only services, read-only store views, the event stream and the network.",
+      "why": "Callers author through services and read through views. A writable store on the engine bypasses the apply handlers.",
+      "fix": "Expose the store through its IReadOnly* interface instead of the concrete store type.",
+      "status": "enforced",
+      "check": {
+        "kind": "type.propertyTypes",
+        "params": {
+          "assembly": "Framework.Engine",
+          "type": "Framework.Engine.GameEngine",
+          "allowed": ["IReadOnly*", "*Service", "EventStream", "Network"]
+        }
+      }
+    },
+    {
+      "id": "ARCH-08",
+      "book": "architecture",
+      "title": "Every feature has tests",
+      "rule": "Each feature folder with a Runtime folder has a Tests or PlayTests assembly with at least one test.",
+      "why": "A feature without its own tests is only covered by accident.",
+      "fix": "Add Framework.<Feature>.Tests with at least one unit test. Follow docs/testing.md.",
+      "status": "enforced",
+      "check": {
+        "kind": "feature.hasTests",
+        "params": { "root": "Assets/Framework", "runtimeFolder": "Runtime", "testFolders": ["Tests", "PlayTests"] }
+      },
+      "exceptions": [
+        { "target": "Tags", "reason": "Tag tests live in Framework.Entities.Tests; Framework.Tags.Tests is empty.", "until": "Test suite PR T-3" },
+        { "target": "Engine", "reason": "GameEngine is a plain aggregate, covered by Bootstrap and integration tests.", "until": "Engine loop (roadmap phase 1)" }
+      ]
+    },
+    {
+      "id": "ARCH-09",
+      "book": "architecture",
+      "title": "Wire holds no domain events",
+      "rule": "Framework.Wire declares no WireEvent subtypes except the Block events.",
+      "why": "Wire is a transport. Domain events live with the feature that owns them.",
+      "fix": "Move the event into the feature assembly that emits it.",
+      "status": "enforced",
+      "check": {
+        "kind": "type.noSubtypesIn",
+        "params": { "assembly": "Framework.Wire", "baseType": "Framework.Wire.WireEvent", "allowed": ["Framework.Wire.Block*"] }
+      }
+    },
+    {
+      "id": "TEST-01",
+      "book": "testing",
+      "title": "Acceptance tests and pictures are paired",
+      "rule": "Every acceptance test has a [Picture] that names an existing scenario file, and every scenario file has a test.",
+      "why": "The picture is the spec. A test without a picture, or a picture without a test, drifts from the intent.",
+      "fix": "Add [Picture(\"<scenario>.md\")] to the test, or write the binding for the scenario. Follow docs/testing.md.",
+      "status": "enforced",
+      "check": {
+        "kind": "tests.requireAttribute",
+        "params": {
+          "assemblies": ["Framework.Testing.Acceptance.Tests"],
+          "attribute": "Framework.Testing.PictureAttribute",
+          "fileFolder": "Assets/Framework/Testing/Acceptance/Scenarios",
+          "filePattern": "*.md",
+          "ignoreFilePrefix": "_",
+          "requireAllFilesReferenced": true
+        }
+      }
+    },
+    {
+      "id": "TEST-02",
+      "book": "testing",
+      "title": "Client converges with server",
+      "rule": "A command run on the server leaves the client with the same events and the same store values.",
+      "why": "The client builds state only from the server's events. Convergence is the core promise of the wire.",
+      "fix": "Check that the event reaches the client channel and that the same apply handler is registered on both sides.",
+      "status": "enforced",
+      "check": { "kind": "attached" }
+    }
+  ]
+}

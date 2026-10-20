@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gate",
+  "type": "object",
+  "required": ["version", "stages"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "testCategory": { "type": "string" },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "title"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "kind": { "enum": ["compile", "editmode", "playmode"] },
+          "title": { "type": "string" },
+          "assemblies": { "type": "array", "items": { "type": "string" } },
+          "optional": { "type": "boolean" },
+          "disabled": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

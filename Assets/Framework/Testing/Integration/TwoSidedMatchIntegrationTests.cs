@@ -4,12 +4,14 @@ using Framework.States;
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
+using Tools.Rulebook;
 using VContainer;
 
 namespace Framework.Testing.Integration
 {
     // Server and client GameplayLayer joined by a loopback transport: the server runs a
     // command, and the client must end with the same stores from the same events.
+    [Rule("TEST-02")]
     public class TwoSidedMatchIntegrationTests
     {
         static MatchPair StartWithDamageCommands() => MatchPair.Start((builder, isServer) =>

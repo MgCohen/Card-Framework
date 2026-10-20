@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Testing.Integration",
     "references": [
         "Framework.Testing.Support",
+        "Tools.Rulebook",
         "Framework.Bootstrap",
         "Framework.Commands",
         "Framework.Core",
