@@ -353,7 +353,7 @@
       "id": "TEST-01",
       "book": "testing",
       "title": "Acceptance tests and pictures are paired",
-      "rule": "Every acceptance test has a [Picture] that names an existing scenario file, and every scenario file has a test.",
+      "rule": "Every acceptance test has a [Picture] that names an existing scenario file, and every scenario file has a test. Files that start with \"_\" are guides, not scenarios.",
       "why": "The picture is the spec. A test without a picture, or a picture without a test, drifts from the intent.",
       "fix": "Add [Picture(\"<scenario>.md\")] to the test, or write the binding for the scenario. Follow docs/testing.md.",
       "status": "enforced",
@@ -389,7 +389,7 @@
       "id": "CODE-01",
       "book": "code",
       "title": "Comments warn, they do not narrate",
-      "rule": "A code comment in Assets/Framework warns about something the code does not show. It does not restate the signature or the body.",
+      "rule": "A code comment in the runtime code of Assets/Framework (each feature's Runtime folder) warns about something the code does not show. It does not restate the signature or the body.",
       "why": "docs/coding-standards.md: narration goes stale and hides the comments that matter.",
       "fix": "Delete the comment, or rewrite it as one line that warns about the non-obvious fact.",
       "status": "enforced",
@@ -398,12 +398,12 @@
         "kind": "agent.review",
         "params": {
           "subject": "files",
-          "prompt": "Read docs/coding-standards.md section \"Comments\". Then review the C# files listed under Subject. Report each comment that narrates (restates what the code or its name already says, or is a header block that describes the type). Do not report comments that warn about an invariant, an ordering constraint, a workaround or a non-obvious reason. Report at most 15 findings, the clearest first.",
+          "prompt": "Read docs/coding-standards.md section \"Comments\". Then review the C# files listed under Subject. Report each comment that narrates (restates what the code or its name already says, or is a header block that describes the type). Do not report comments that warn about an invariant, an ordering constraint, a workaround or a non-obvious reason.",
           "model": "sonnet",
           "files": [
             "Assets/Framework/*/Runtime/**/*.cs"
           ],
-          "maxFiles": 60
+          "batchSize": 40
         }
       }
     },
@@ -447,7 +447,7 @@
       "id": "REV-03",
       "book": "review",
       "title": "Acceptance bindings match their pictures",
-      "rule": "Each acceptance binding performs the Given and When of its picture and asserts every Then and Invariant line.",
+      "rule": "Each acceptance binding performs the Given and When of its picture, asserts every Then and Invariant line, and performs no step the picture does not describe.",
       "why": "The picture is the spec. A binding that skips a Then line leaves that behavior untested.",
       "fix": "Add the missing step or assertion to the binding, or correct the picture if the intent changed.",
       "status": "enforced",

@@ -4,14 +4,14 @@
     python Tools/Rulebook/review.py --rules REV-01  # one or more rule ids, comma separated
 
 Each rule gets a subject (files, a diff, the rulebook, linked tests or acceptance pictures), its
-own prompt, and a fixed output schema. The agent may only read: Read, Grep and Glob are allowed,
-every other tool is denied. Results are written to Logs/gate/rules/<id>.json in the same shape as
-the Unity rule results, plus a "judge" block with model, cost, turns and the agent's summary.
+own prompt, and a fixed output schema. A file subject is split into batches, one agent call per
+batch, so every file is reviewed. The agent may only read: Read, Grep and Glob are allowed, every
+other tool is denied. Results are written to Logs/gate/rules/<id>.json in the same shape as the
+Unity rule results, plus a "judge" block with model, cost, turns, coverage and the summary.
 """
 
 import argparse
 import concurrent.futures
-import fnmatch
 import json
 import re
 import subprocess
@@ -69,66 +69,96 @@ def read_json(path, fallback=None):
         return fallback
 
 
-def glob_files(patterns, limit):
+def glob_files(patterns):
     found = []
     for pattern in patterns:
         found += [p for p in ROOT.glob(pattern) if p.is_file()]
-    unique = sorted({p.relative_to(ROOT).as_posix() for p in found})
-    return unique[:limit], len(unique)
+    return sorted({p.relative_to(ROOT).as_posix() for p in found})
 
 
-def subject_for(rule, book, catalog):
+def batches(header, files, size):
+    chunks = [files[i:i + size] for i in range(0, len(files), size)]
+    return [(f"{header} (batch {n} of {len(chunks)}):\n" + "\n".join(f"- {f}" for f in chunk), len(chunk))
+            for n, chunk in enumerate(chunks, 1)]
+
+
+def subjects_for(rule, book, catalog):
+    """Returns (subjects, total files). Each subject is (text, number of files in it)."""
     p = rule["check"].get("params", {})
     kind = p.get("subject")
-    limit = int(p.get("maxFiles", 40))
+    size = max(1, int(p.get("batchSize", 40)))
 
     if kind == "files":
-        files, total = glob_files(p.get("files", []), limit)
-        note = f"\n(showing {len(files)} of {total} files)" if total > len(files) else ""
-        return "Review these files:\n" + "\n".join(f"- {f}" for f in files) + note
+        files = glob_files(p.get("files", []))
+        return batches("Review these files", files, size), len(files)
 
     if kind == "diff":
         base = p.get("base", "origin/main")
         names = subprocess.run(["git", "diff", "--name-only", f"{base}...HEAD"], cwd=ROOT,
                                capture_output=True, text=True).stdout.split()
-        names = [n for n in names if (ROOT / n).is_file()][:limit]
-        if not names:
-            return None
-        return f"Files changed since {base}:\n" + "\n".join(f"- {n}" for n in names)
+        names = [n for n in names if (ROOT / n).is_file()]
+        return batches(f"Files changed since {base}", names, size), len(names)
 
     if kind == "rules":
         rules = [{k: r.get(k) for k in ("id", "title", "rule", "why", "fix", "status", "severity", "check")}
                  for r in book["rules"]]
-        return "The rulebook rules (JSON):\n" + json.dumps(rules, indent=2)
+        return [("The rulebook rules (JSON):\n" + json.dumps(rules, indent=2), 0)], 0
 
     if kind == "linkedTests":
-        tests = (catalog or {}).get("tests", [])
         by_rule = {}
-        for t in tests:
+        for t in (catalog or {}).get("tests", []):
             if t.get("assembly") == "Tools.Rulebook.Tests":
                 continue
             for rid in t.get("rules") or []:
                 by_rule.setdefault(rid, []).append(t["fullname"])
         if not by_rule:
-            return None
+            return [], 0
         lines = []
         for r in book["rules"]:
             if r["id"] in by_rule:
                 lines.append(f"Rule {r['id']}: {r['rule']}")
                 lines += [f"  - {name}" for name in sorted(by_rule[r["id"]])]
-        return "Rules and the tests linked to them:\n" + "\n".join(lines)
+        return [("Rules and the tests linked to them:\n" + "\n".join(lines), 0)], 0
 
     if kind == "pictures":
         pics = sorted(f.name for f in (ROOT / p["pictures"]).glob("*.md") if not f.name.startswith("_"))
         binds = sorted(f.name for f in (ROOT / p["bindings"]).glob("*.cs"))
-        return (f"Pictures in {p['pictures']}:\n" + "\n".join(f"- {n}" for n in pics) +
+        text = (f"Pictures in {p['pictures']}:\n" + "\n".join(f"- {n}" for n in pics) +
                 f"\n\nBindings in {p['bindings']} (each carries [Picture(\"<file>\")]):\n" + "\n".join(f"- {n}" for n in binds))
+        return [(text, 0)], 0
 
     raise ValueError(f"unknown subject '{kind}'")
 
 
 def glob_match(pattern, value):
     return re.fullmatch(re.escape(pattern).replace(r"\*", ".*"), value or "") is not None
+
+
+def ask(rule, p, subject):
+    """One headless agent call. Returns (verdict, envelope)."""
+    prompt = FRAME.format(subject=subject, prompt=p.get("prompt", ""), **rule)
+    command = [
+        "claude", "-p",
+        "--output-format", "json",
+        "--json-schema", json.dumps(VERDICT_SCHEMA),
+        "--model", p.get("model", "sonnet"),
+        "--max-turns", str(p.get("maxTurns", 30)),
+        "--allowedTools", "Read", "Grep", "Glob",
+        "--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch",
+        "--no-session-persistence",
+    ]
+    run = subprocess.run(command, input=prompt, cwd=ROOT, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=900)
+    envelope = json.loads(run.stdout) if run.stdout.strip().startswith("{") else {}
+    if run.returncode != 0 or envelope.get("is_error"):
+        raise RuntimeError((envelope.get("result") or run.stderr or run.stdout or "claude failed").strip()[:500])
+    verdict = envelope.get("structured_output")
+    if verdict is None:
+        match = re.search(r"\{.*\}", envelope.get("result", ""), re.S)
+        verdict = json.loads(match.group(0)) if match else None
+    if not isinstance(verdict, dict):
+        raise RuntimeError("the agent returned no verdict")
+    return verdict, envelope
 
 
 def judge(rule, book, catalog):
@@ -138,39 +168,30 @@ def judge(rule, book, catalog):
               "judge": {"kind": "agent", "model": p.get("model", "sonnet")}}
     started = time.time()
     try:
-        subject = subject_for(rule, book, catalog)
-        if subject is None:
+        subjects, total = subjects_for(rule, book, catalog)
+        if not subjects:
             result["passed"] = True
             result["judge"]["summary"] = "Nothing to review: the subject is empty."
             return result
-        prompt = FRAME.format(subject=subject, prompt=p.get("prompt", ""), **rule)
-        command = [
-            "claude", "-p",
-            "--output-format", "json",
-            "--json-schema", json.dumps(VERDICT_SCHEMA),
-            "--model", p.get("model", "sonnet"),
-            "--max-turns", str(p.get("maxTurns", 30)),
-            "--allowedTools", "Read", "Grep", "Glob",
-            "--disallowedTools", "Bash", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch",
-            "--no-session-persistence",
-        ]
-        run = subprocess.run(command, input=prompt, cwd=ROOT, capture_output=True, text=True,
-                             encoding="utf-8", errors="replace", timeout=900)
-        envelope = json.loads(run.stdout) if run.stdout.strip().startswith("{") else {}
-        if run.returncode != 0 or envelope.get("is_error"):
-            raise RuntimeError((envelope.get("result") or run.stderr or run.stdout or "claude failed").strip()[:500])
-        verdict = envelope.get("structured_output")
-        if verdict is None:
-            text = envelope.get("result", "")
-            match = re.search(r"\{.*\}", text, re.S)
-            verdict = json.loads(match.group(0)) if match else None
-        if not isinstance(verdict, dict):
-            raise RuntimeError("the agent returned no verdict")
 
-        result["judge"].update(summary=verdict.get("summary", ""), costUsd=envelope.get("total_cost_usd"),
-                               turns=envelope.get("num_turns"))
+        findings, summaries, cost, turns, reviewed = [], [], 0.0, 0, 0
+        for text, count in subjects:
+            verdict, envelope = ask(rule, p, text)
+            findings += verdict.get("findings", [])
+            summaries.append(verdict.get("summary", ""))
+            cost += envelope.get("total_cost_usd") or 0
+            turns += envelope.get("num_turns") or 0
+            reviewed += count
+
+        summary = " ".join(s for s in summaries if s)
+        if total:
+            summary = f"Reviewed {reviewed} of {total} files in {len(subjects)} batch(es). {summary}"
+        result["judge"].update(summary=summary, costUsd=round(cost, 4), turns=turns, batches=len(subjects))
+        if total:
+            result["judge"].update(filesReviewed=reviewed, filesTotal=total)
+
         used = set()
-        for f in verdict.get("findings", []):
+        for f in findings:
             v = {"target": f.get("target", "?"), "detail": f.get("detail", ""), "location": f.get("location")}
             ex = next((i for i, e in enumerate(rule.get("exceptions", [])) if glob_match(e["target"], v["target"])), None)
             if ex is None:

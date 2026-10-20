@@ -3,9 +3,6 @@ using VContainer;
 
 namespace Framework.Bootstrap
 {
-    // One AppFlow layer = one altitude of the app (gameplay, metagame, navigation, ...).
-    // The gameplay layer composes the engine's systems as flat installers into a single
-    // scope, so GameEngine and every service/store it aggregates resolve from one container.
     public sealed class GameplayLayer : BootstrapLayer
     {
         readonly ITransport _transport;
