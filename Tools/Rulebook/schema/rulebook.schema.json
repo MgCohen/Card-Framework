@@ -132,7 +132,7 @@
                   "ivt.allowlist",
                   "il.callersOnly",
                   "il.forbiddenCalls",
-                  "type.propertyTypes",
+                  "type.memberTypes",
                   "type.noSubtypesIn",
                   "feature.hasTests",
                   "tests.requireAttribute",

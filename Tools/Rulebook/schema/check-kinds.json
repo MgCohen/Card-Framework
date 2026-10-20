@@ -228,9 +228,9 @@
         }
       ]
     },
-    "type.propertyTypes": {
+    "type.memberTypes": {
       "judge": "static",
-      "description": "A type's public properties must have allowed types.",
+      "description": "A type's public properties, fields and method return types must have allowed types.",
       "params": [
         {
           "name": "assembly",
@@ -248,7 +248,7 @@
           "name": "allowed",
           "type": "list",
           "required": true,
-          "help": "Globs on property type names, without generic arity."
+          "help": "Globs on member type names, without generic arity."
         }
       ]
     },

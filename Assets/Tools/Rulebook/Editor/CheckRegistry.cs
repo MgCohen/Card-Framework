@@ -14,7 +14,7 @@ namespace Tools.Rulebook
             new IvtAllowlistCheck(),
             new IlCallsCheck(IlCallsCheck.CallersOnly),
             new IlCallsCheck(IlCallsCheck.ForbiddenCalls),
-            new PropertyTypesCheck(),
+            new MemberTypesCheck(),
             new NoSubtypesCheck(),
             new FeatureHasTestsCheck(),
             new RequireAttributeCheck(),

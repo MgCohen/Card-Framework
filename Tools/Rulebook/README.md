@@ -82,7 +82,7 @@ pictures.
 | `ivt.allowlist` | `InternalsVisibleTo` grants match a table | `assemblies`, `exclude`, `allowed` |
 | `il.callersOnly` | Only subclasses of a base type call matching methods (IL scan) | `assemblies`, `callees`, `allowedCallers` |
 | `il.forbiddenCalls` | Subclasses of a base type do not call matching methods (IL scan) | `assemblies`, `callers`, `callees` |
-| `type.propertyTypes` | A type's public properties have allowed types | `assembly`, `type`, `allowed` |
+| `type.memberTypes` | A type's public properties, fields and method return types have allowed types | `assembly`, `type`, `allowed` |
 | `type.noSubtypesIn` | An assembly declares no subtypes of a base, except allowed ones | `assembly`, `baseType`, `allowed` |
 | `feature.hasTests` | Each feature folder has a test assembly with tests | `root`, `runtimeFolder`, `testFolders` |
 | `tests.requireAttribute` | Tests carry an attribute that names an existing file; optionally every file is named | `assemblies`, `attribute`, `fileFolder` |

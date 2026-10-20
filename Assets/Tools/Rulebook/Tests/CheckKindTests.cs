@@ -59,9 +59,9 @@ namespace Tools.Rulebook.Tests
                              $"{Fx}.ChattyHandler::Apply -> {Fx}.FakeService::Do");
 
         [Test]
-        public void Type_PropertyTypes_Finds_The_Writable_Store()
-            => AssertTargets(Run("type.propertyTypes", $"{{ 'assembly': '{Fx}', 'type': '{Fx}.FakeEngine', 'allowed': ['IReadOnly*', '*Service'] }}"),
-                             "FakeEngine.Store");
+        public void Type_MemberTypes_Finds_The_Writable_Store_In_Property_Field_And_Method()
+            => AssertTargets(Run("type.memberTypes", $"{{ 'assembly': '{Fx}', 'type': '{Fx}.FakeEngine', 'allowed': ['IReadOnly*', '*Service'] }}"),
+                             "FakeEngine.Store", "FakeEngine.StoreField", "FakeEngine.StoreOf()");
 
         [Test]
         public void Type_NoSubtypesIn_Finds_The_Domain_Event()

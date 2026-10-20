@@ -60,7 +60,7 @@ namespace Tools.Rulebook.Fixtures
         public override void Apply(int ev) => _service.Do();
     }
 
-    // --- type.propertyTypes ---
+    // --- type.memberTypes ---
 
     public interface IReadOnlyFake { }
 
@@ -69,6 +69,10 @@ namespace Tools.Rulebook.Fixtures
         public IReadOnlyFake View    { get; set; }
         public FakeService   Service { get; set; }
         public FakeStore     Store   { get; set; }
+        public FakeStore     StoreField;
+        public IReadOnlyFake ViewOf() => View;
+        public FakeStore     StoreOf() => Store;
+        public void          Touch() { }
     }
 
     // --- type.noSubtypesIn ---

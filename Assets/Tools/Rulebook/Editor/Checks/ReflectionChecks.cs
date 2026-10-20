@@ -30,20 +30,27 @@ namespace Tools.Rulebook
         }
     }
 
-    // params: assembly, type (full name), allowed[] (globs on property type names, generic arity removed)
-    sealed class PropertyTypesCheck : IRuleCheck
+    // params: assembly, type (full name), allowed[] (globs on type names, generic arity removed)
+    // Checks the types of public properties and fields, and the return types of public methods.
+    sealed class MemberTypesCheck : IRuleCheck
     {
-        public string Kind => "type.propertyTypes";
+        public string Kind => "type.memberTypes";
 
         public IEnumerable<Violation> Run(JObject p, CheckContext context)
         {
             var type    = Reflect.Type(context, Params.String(p, "assembly"), Params.String(p, "type"));
             var allowed = Params.Strings(p, "allowed");
-            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+            var members = type.GetProperties(flags).Select(m => (m.Name, m.PropertyType, "property"))
+                .Concat(type.GetFields(flags).Select(m => (m.Name, m.FieldType, "field")))
+                .Concat(type.GetMethods(flags).Where(m => !m.IsSpecialName && m.ReturnType != typeof(void))
+                            .Select(m => (m.Name + "()", m.ReturnType, "method return")));
+            foreach (var (name, memberType, what) in members)
             {
-                var typeName = prop.PropertyType.Name.Split('`')[0];
+                var typeName = memberType.Name.Split('`')[0];
                 if (!Glob.Any(allowed, typeName))
-                    yield return new Violation($"{type.Name}.{prop.Name}", $"public property type {typeName} is not allowed");
+                    yield return new Violation($"{type.Name}.{name}", $"public {what} type {typeName} is not allowed");
             }
         }
     }

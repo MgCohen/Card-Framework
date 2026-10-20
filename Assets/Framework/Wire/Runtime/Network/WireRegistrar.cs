@@ -25,8 +25,6 @@ namespace Framework.Wire
     // ─────────────────────────────────────────────────────────────────────────────
     public static class WireRegistrar
     {
-        // The set of value types used to close open-generic wire events. Temporary —
-        // the source generator (or a game-supplied declaration) will replace this.
         static readonly Type[] ValueTypes = { typeof(int), typeof(bool) };
 
         static readonly MethodInfo RegisterMethod = typeof(Network)
@@ -36,8 +34,6 @@ namespace Framework.Wire
         {
             var all = LoadedTypes().ToList();
 
-            // Pass 1 — concrete, non-generic events (EntityCreatedEvent, TagRemovedEvent,
-            // StatePushEvent, Block*Event, game-defined requests/responses, …).
             foreach (var type in all
                          .Where(IsConcreteWireEvent)
                          .OrderBy(t => t.FullName, StringComparer.Ordinal))
@@ -45,8 +41,7 @@ namespace Framework.Wire
                 Register(network, type, NestedPacked(type));
             }
 
-            // Pass 2 — open-generic events (TagSetEvent<>, TagChangeEvent<>) closed over
-            // each declared value type. Definitions sorted, value types in list order.
+            // Reordering ValueTypes shifts every channel id after it (invariant 1).
             foreach (var def in all
                          .Where(IsOpenGenericWireEvent)
                          .OrderBy(t => t.FullName, StringComparer.Ordinal))
