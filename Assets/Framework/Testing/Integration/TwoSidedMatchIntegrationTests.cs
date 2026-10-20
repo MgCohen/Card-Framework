@@ -4,6 +4,7 @@ using Framework.States;
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
+using Tools.Rulebook;
 using VContainer;
 
 namespace Framework.Testing.Integration
@@ -29,7 +30,7 @@ namespace Framework.Testing.Integration
             Assert.Throws<VContainerException>(() => match.Client.Resolve<TagService>());
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void Command_On_Server_Converges_On_Client()
         {
             using var match = StartWithDamageCommands();
@@ -47,7 +48,7 @@ namespace Framework.Testing.Integration
             match.AssertStreamsMatch();
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void Rejected_Command_Sends_Nothing_To_Client()
         {
             using var match = StartWithDamageCommands();
@@ -61,7 +62,7 @@ namespace Framework.Testing.Integration
             match.AssertStreamsMatch();
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void State_Push_Converges_On_Client()
         {
             using var match = StartWithDamageCommands();

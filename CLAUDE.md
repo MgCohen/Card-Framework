@@ -17,7 +17,9 @@ Card Framework/
 ├── Product/spikes/framework-roadmap.md  # Ordered plan for the remaining framework work
 ├── Assets/
 │   ├── Framework/             # Graduated features (vertical slices)
-│   └── Spike/                 # Exploratory / prototype work; deletable
+│   ├── Spike/                 # Exploratory / prototype work; deletable
+│   └── Tools/Rulebook/        # Rule check kinds + rulebook tests (Unity side)
+├── Tools/Rulebook/            # rulebook.json, gate.json, gate.ps1, local app
 ├── Packages/manifest.json     # UPM dependencies
 └── Library/                   # Unity-generated; gitignored
     └── PackageCache/          # Imported UPM package source — read-only
@@ -33,18 +35,15 @@ Card Framework/
 
 ### Code
 
-**Verify before claiming done.** Run the affected tests in headless batch mode. The batch run is the authority, not type-checking or "looks right":
+**Verify before claiming done.** Run the gate. It is the authority, not type-checking or "looks right":
 
-```
-Unity.exe -batchmode -nographics -projectPath . -runTests \
-  -testPlatform EditMode \
-  -testCategory "!Benchmark" \
-  [-assemblyNames Framework.<Feature>.Tests] \
-  [-testFilter <Namespace>.<Class>.<Method>] \
-  -testResults Logs/test-results.xml -logFile Logs/test.log
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Read `Logs/test-results.xml` for pass/fail, `Logs/test.log` for compile errors and stack traces.
+It compiles, runs the rulebook tests and the Framework EditMode tests in one Unity launch, prints a summary, and exits 1 on FAIL. Add `-With playmode` when you touch Wire, Multiplayer or NGO code. On FAIL, read `Logs/gate/report.json`: each failure names the rule, the file and line, and the fix. Apply each fix, then run the gate again. Options and stages: [Tools/Rulebook/README.md](Tools/Rulebook/README.md).
+
+**Rules live in `Tools/Rulebook/rulebook.json`.** Do not weaken a rule or add an exception to make the gate pass. If a rule is wrong, say so and ask. A new architecture rule goes in the rulebook, not only in prose docs.
 
 **Benchmarks are opt-in.** Tests tagged `[Category("Benchmark")]` (perf/allocation gates — currently in `Assets/Spike/ECS/VerticalSlice/QueryBench/`) are excluded by default via `-testCategory "!Benchmark"`. To run only them, swap to `-testCategory "Benchmark"`.
 

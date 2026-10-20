@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Framework.Bootstrap;
 using Framework.Commands;
 using Framework.Engine;
@@ -46,15 +47,20 @@ namespace Framework.Testing
 
         public CommandResult Execute(Command command) => Engine.Commands.Execute(command);
 
-        // Same events in the same order on both sides means the same apply handlers
-        // built the same stores.
+        // Same events with the same values in the same order on both sides means the same
+        // apply handlers built the same stores.
         public void AssertStreamsMatch()
         {
             var server = Server.Resolve<EventStream>();
             var client = Client.Resolve<EventStream>();
             Assert.AreEqual(server.Count, client.Count, "event count differs between server and client");
             for (var i = 0; i < server.Count; i++)
+            {
                 Assert.AreEqual(server[i].GetType(), client[i].GetType(), $"event #{i} type differs");
+                foreach (var field in server[i].GetType().GetFields(BindingFlags.Public | BindingFlags.Instance))
+                    Assert.AreEqual(field.GetValue(server[i]), field.GetValue(client[i]),
+                                    $"event #{i} {server[i].GetType().Name}.{field.Name} differs");
+            }
         }
 
         public void Dispose()

@@ -1,0 +1,1 @@
+{ "name": "Fx.D", "references": ["Fx.A", "Spike.Thing", "VContainer"] }

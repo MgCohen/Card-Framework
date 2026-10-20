@@ -143,6 +143,23 @@ If you add a global test that needs a feature's internals, it belongs in **Integ
 (and that feature must grant `InternalsVisibleTo("Framework.Testing.Integration.Tests")`).
 If it only needs the public seam, prefer **Acceptance** — and keep the fence intact.
 
+## Rulebook and gate
+
+Architecture and test rules are data in `Tools/Rulebook/rulebook.json`. Each rule names a check
+kind, and `Tools.Rulebook.Tests` runs one test case per rule. Run everything with one command:
+
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
+```
+
+- **A test that proves a rule** carries `[Rule("ID")]` from `Tools.Rulebook`. The gate reports it
+  under that rule, and the rule fails if it uses the `attached` kind and no test links to it.
+- **A new structural rule** (dependencies, who may call what, required pairings) goes in the
+  rulebook, not only in this file. If no check kind fits, add one: see
+  [`Tools/Rulebook/README.md`](../Tools/Rulebook/README.md).
+- **A known violation** goes in the rule's `exceptions` with a reason and the work that removes it.
+  The rule fails when an exception goes stale.
+
 ## Prior art
 
 The intent/mechanism split, and the choice to AI-generate the behaviour specs but

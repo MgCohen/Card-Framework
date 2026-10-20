@@ -15,6 +15,7 @@ Then:
 - the command is accepted
 - the entity's cost reads exactly 3
 - the entity is flagged as a card (IsCard is true)
+- the Command block closes as completed
 
 Invariants:
 - both mutations come from a single Execute, bracketed by one Command block

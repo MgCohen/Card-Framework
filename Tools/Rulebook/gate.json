@@ -1,0 +1,53 @@
+{
+  "$schema": "./schema/gate.schema.json",
+  "version": 1,
+  "testCategory": "!Benchmark",
+  "stages": [
+    {
+      "id": "compile",
+      "kind": "compile",
+      "title": "Compile"
+    },
+    {
+      "id": "rules",
+      "kind": "editmode",
+      "title": "Rulebook",
+      "assemblies": [
+        "Tools.Rulebook.Tests"
+      ]
+    },
+    {
+      "id": "editmode",
+      "kind": "editmode",
+      "title": "Framework EditMode",
+      "assemblies": [
+        "Framework.*"
+      ]
+    },
+    {
+      "id": "playmode",
+      "kind": "playmode",
+      "title": "Framework PlayMode",
+      "assemblies": [
+        "Framework.*"
+      ],
+      "optional": true
+    },
+    {
+      "id": "review",
+      "kind": "review",
+      "title": "Agent review",
+      "optional": true
+    },
+    {
+      "id": "others",
+      "kind": "editmode",
+      "title": "Spikes and packages",
+      "assemblies": [
+        "*"
+      ],
+      "optional": true
+    }
+  ],
+  "timeoutSeconds": 1800
+}

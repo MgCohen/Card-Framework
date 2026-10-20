@@ -1,0 +1,422 @@
+{
+  "version": 1,
+  "judges": {
+    "static": {
+      "title": "Static check",
+      "deterministic": true,
+      "runsIn": "Unity EditMode (rules stage)",
+      "description": "C# reads asmdef files, reflection metadata or IL with Mono.Cecil. Same input, same verdict."
+    },
+    "tests": {
+      "title": "Linked tests",
+      "deterministic": true,
+      "runsIn": "The stage that owns the test assemblies",
+      "description": "Hand-written tests carry [Rule(\"ID\")]. The rule passes when at least one test is linked and every linked test passes."
+    },
+    "agent": {
+      "title": "Agent review",
+      "deterministic": false,
+      "runsIn": "The review stage (headless claude -p, read-only tools)",
+      "description": "A model reads the subject and returns a structured verdict. Verdicts can change between runs, so agent rules default to advisory."
+    }
+  },
+  "kinds": {
+    "asmdef.noCycles": {
+      "judge": "static",
+      "description": "Fails on a cycle in the asmdef reference graph.",
+      "params": [
+        {
+          "name": "roots",
+          "type": "list",
+          "required": true,
+          "help": "Folders to scan for *.asmdef, relative to the project root."
+        }
+      ]
+    },
+    "asmdef.allowedReferences": {
+      "judge": "static",
+      "description": "Each in-scope asmdef references only the assemblies listed for it. An in-scope asmdef missing from the table also fails.",
+      "params": [
+        {
+          "name": "roots",
+          "type": "list",
+          "required": true,
+          "help": "Folders to scan for *.asmdef."
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "required": true,
+          "help": "Glob of assembly names that count, for checked asmdefs and for references."
+        },
+        {
+          "name": "exclude",
+          "type": "list",
+          "help": "Globs of asmdefs to skip."
+        },
+        {
+          "name": "allowed",
+          "type": "table",
+          "required": true,
+          "help": "Assembly name to the list of references it may have."
+        }
+      ]
+    },
+    "asmdef.forbiddenReferences": {
+      "judge": "static",
+      "description": "Fails when a checked asmdef references a forbidden assembly.",
+      "params": [
+        {
+          "name": "roots",
+          "type": "list",
+          "required": true,
+          "help": "Folders to scan for *.asmdef."
+        },
+        {
+          "name": "from",
+          "type": "string",
+          "required": true,
+          "help": "Glob of asmdefs to check."
+        },
+        {
+          "name": "forbidden",
+          "type": "list",
+          "required": true,
+          "help": "Globs of references that are not allowed."
+        }
+      ]
+    },
+    "ivt.allowlist": {
+      "judge": "static",
+      "description": "InternalsVisibleTo grants must match the table.",
+      "params": [
+        {
+          "name": "assemblies",
+          "type": "list",
+          "required": true,
+          "help": "Globs of loaded assemblies to check."
+        },
+        {
+          "name": "exclude",
+          "type": "list",
+          "help": "Globs of assemblies to skip."
+        },
+        {
+          "name": "allowed",
+          "type": "table",
+          "required": true,
+          "help": "Assembly name to the assemblies it may grant internal access to."
+        }
+      ]
+    },
+    "il.callersOnly": {
+      "judge": "static",
+      "description": "Only subclasses of a base type may call the matching methods. Scans IL.",
+      "params": [
+        {
+          "name": "assemblies",
+          "type": "list",
+          "required": true,
+          "help": "Globs of assemblies whose IL is scanned."
+        },
+        {
+          "name": "exclude",
+          "type": "list",
+          "help": "Globs of assemblies to skip."
+        },
+        {
+          "name": "callees",
+          "type": "object",
+          "required": true,
+          "help": "Which methods are protected.",
+          "fields": [
+            {
+              "name": "namespace",
+              "type": "string",
+              "help": "Glob on the declaring type's namespace."
+            },
+            {
+              "name": "type",
+              "type": "string",
+              "help": "Glob on the declaring type's name."
+            },
+            {
+              "name": "access",
+              "type": "enum",
+              "options": [
+                "any",
+                "internal"
+              ],
+              "help": "Only internal methods, or any."
+            }
+          ]
+        },
+        {
+          "name": "allowedCallers",
+          "type": "object",
+          "required": true,
+          "help": "Who may call them.",
+          "fields": [
+            {
+              "name": "subclassOf",
+              "type": "string",
+              "help": "Full name of the base type, for example Framework.Wire.WireEventHandler`1."
+            }
+          ]
+        },
+        {
+          "name": "allowSelf",
+          "type": "bool",
+          "help": "A type may call its own methods. Default true."
+        }
+      ]
+    },
+    "il.forbiddenCalls": {
+      "judge": "static",
+      "description": "Subclasses of a base type must not call the matching methods. Scans IL.",
+      "params": [
+        {
+          "name": "assemblies",
+          "type": "list",
+          "required": true,
+          "help": "Globs of assemblies whose IL is scanned."
+        },
+        {
+          "name": "exclude",
+          "type": "list",
+          "help": "Globs of assemblies to skip."
+        },
+        {
+          "name": "callers",
+          "type": "object",
+          "required": true,
+          "help": "Who is restricted.",
+          "fields": [
+            {
+              "name": "subclassOf",
+              "type": "string",
+              "help": "Full name of the base type."
+            }
+          ]
+        },
+        {
+          "name": "callees",
+          "type": "object",
+          "required": true,
+          "help": "What they must not call.",
+          "fields": [
+            {
+              "name": "namespace",
+              "type": "string",
+              "help": "Glob on the declaring type's namespace."
+            },
+            {
+              "name": "type",
+              "type": "string",
+              "help": "Glob on the declaring type's name."
+            },
+            {
+              "name": "access",
+              "type": "enum",
+              "options": [
+                "any",
+                "internal"
+              ],
+              "help": "Only internal methods, or any."
+            }
+          ]
+        }
+      ]
+    },
+    "type.memberTypes": {
+      "judge": "static",
+      "description": "A type's public properties, fields and method return types must have allowed types.",
+      "params": [
+        {
+          "name": "assembly",
+          "type": "string",
+          "required": true,
+          "help": "Assembly that declares the type."
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "required": true,
+          "help": "Full type name."
+        },
+        {
+          "name": "allowed",
+          "type": "list",
+          "required": true,
+          "help": "Globs on member type names, without generic arity."
+        }
+      ]
+    },
+    "type.noSubtypesIn": {
+      "judge": "static",
+      "description": "An assembly declares no subtypes of a base type, except allowed ones.",
+      "params": [
+        {
+          "name": "assembly",
+          "type": "string",
+          "required": true,
+          "help": "Assembly to check."
+        },
+        {
+          "name": "baseType",
+          "type": "string",
+          "required": true,
+          "help": "Full name of the base type."
+        },
+        {
+          "name": "allowed",
+          "type": "list",
+          "help": "Globs on full type names that may exist."
+        }
+      ]
+    },
+    "feature.hasTests": {
+      "judge": "static",
+      "description": "Each feature folder with a runtime folder has a test assembly with at least one test.",
+      "params": [
+        {
+          "name": "root",
+          "type": "string",
+          "required": true,
+          "help": "Folder whose children are features."
+        },
+        {
+          "name": "runtimeFolder",
+          "type": "string",
+          "required": true,
+          "help": "A child folder that marks a feature, for example Runtime."
+        },
+        {
+          "name": "testFolders",
+          "type": "list",
+          "required": true,
+          "help": "Folders that hold test asmdefs, for example Tests and PlayTests."
+        },
+        {
+          "name": "testAttributes",
+          "type": "list",
+          "help": "Full names of attributes that mark a test. Default: NUnit and Unity test attributes."
+        }
+      ]
+    },
+    "tests.requireAttribute": {
+      "judge": "static",
+      "description": "Each test carries an attribute that names an existing file. Optionally, every file must be named by a test.",
+      "params": [
+        {
+          "name": "assemblies",
+          "type": "list",
+          "required": true,
+          "help": "Globs of test assemblies."
+        },
+        {
+          "name": "attribute",
+          "type": "string",
+          "required": true,
+          "help": "Full name of the required attribute."
+        },
+        {
+          "name": "fileFolder",
+          "type": "string",
+          "required": true,
+          "help": "Folder that holds the named files."
+        },
+        {
+          "name": "filePattern",
+          "type": "string",
+          "help": "Glob of files in the folder. Default *."
+        },
+        {
+          "name": "ignoreFilePrefix",
+          "type": "string",
+          "help": "Files with this prefix are not checked."
+        },
+        {
+          "name": "requireAllFilesReferenced",
+          "type": "bool",
+          "help": "Every file must be named by a test."
+        },
+        {
+          "name": "testAttributes",
+          "type": "list",
+          "help": "Full names of attributes that mark a test."
+        }
+      ]
+    },
+    "attached": {
+      "judge": "tests",
+      "description": "Checked only by hand-written tests that carry [Rule(\"ID\")]. Fails while no test is linked.",
+      "params": []
+    },
+    "agent.review": {
+      "judge": "agent",
+      "description": "A model reviews the subject against the prompt and returns findings. Read-only: the agent may only read files.",
+      "params": [
+        {
+          "name": "subject",
+          "type": "enum",
+          "required": true,
+          "options": [
+            "files",
+            "diff",
+            "rules",
+            "linkedTests",
+            "pictures"
+          ],
+          "help": "files: the globs below. diff: files changed since base. rules: the rulebook. linkedTests: each rule with its linked tests. pictures: acceptance pictures with their bindings."
+        },
+        {
+          "name": "prompt",
+          "type": "text",
+          "required": true,
+          "help": "What to check and what to report. The runner adds the output format."
+        },
+        {
+          "name": "model",
+          "type": "enum",
+          "options": [
+            "haiku",
+            "sonnet",
+            "opus"
+          ],
+          "help": "Claude model alias. Default sonnet."
+        },
+        {
+          "name": "files",
+          "type": "list",
+          "help": "subject files: globs of files to review."
+        },
+        {
+          "name": "batchSize",
+          "type": "number",
+          "help": "subject files or diff: files per agent call. Every file is reviewed, in as many batches as needed. Default 40."
+        },
+        {
+          "name": "base",
+          "type": "string",
+          "help": "subject diff: the git ref to compare with. Default origin/main."
+        },
+        {
+          "name": "pictures",
+          "type": "string",
+          "help": "subject pictures: folder of picture files."
+        },
+        {
+          "name": "bindings",
+          "type": "string",
+          "help": "subject pictures: folder of binding files."
+        },
+        {
+          "name": "maxTurns",
+          "type": "number",
+          "help": "The most agent turns. Default 30."
+        }
+      ]
+    }
+  }
+}
