@@ -2,8 +2,16 @@
   "$schema": "./schema/rulebook.schema.json",
   "version": 1,
   "books": [
-    { "id": "architecture", "title": "Architecture", "description": "Dependency direction and who may write state." },
-    { "id": "testing", "title": "Testing", "description": "How tests are linked to specs and rules." }
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "description": "Dependency direction and who may write state."
+    },
+    {
+      "id": "testing",
+      "title": "Testing",
+      "description": "How tests are linked to specs and rules."
+    }
   ],
   "rules": [
     {
@@ -14,7 +22,14 @@
       "why": "A cycle makes two features one feature and blocks every layering rule.",
       "fix": "Move the shared type down to a lower assembly, or invert the dependency with an event or an interface.",
       "status": "enforced",
-      "check": { "kind": "asmdef.noCycles", "params": { "roots": ["Assets/Framework"] } }
+      "check": {
+        "kind": "asmdef.noCycles",
+        "params": {
+          "roots": [
+            "Assets/Framework"
+          ]
+        }
+      }
     },
     {
       "id": "ARCH-02",
@@ -27,20 +42,59 @@
       "check": {
         "kind": "asmdef.allowedReferences",
         "params": {
-          "roots": ["Assets/Framework"],
+          "roots": [
+            "Assets/Framework"
+          ],
           "scope": "Framework.*",
-          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "exclude": [
+            "*.Tests",
+            "*.PlayTests",
+            "*.Sample",
+            "Framework.Testing.*"
+          ],
           "allowed": {
             "Framework.Core": [],
             "Framework.Wire": [],
-            "Framework.Tags": ["Framework.Core", "Framework.Wire"],
-            "Framework.Entities": ["Framework.Core", "Framework.Tags", "Framework.Wire"],
-            "Framework.Requests": ["Framework.Wire"],
-            "Framework.States": ["Framework.Core", "Framework.Wire"],
-            "Framework.Commands": ["Framework.Wire"],
-            "Framework.Engine": ["Framework.Wire", "Framework.Tags", "Framework.Entities", "Framework.Requests", "Framework.States", "Framework.Commands"],
-            "Framework.Bootstrap": ["Framework.Core", "Framework.Commands", "Framework.Engine", "Framework.Entities", "Framework.Requests", "Framework.States", "Framework.Tags", "Framework.Wire"],
-            "Framework.Multiplayer": ["Framework.Wire"]
+            "Framework.Tags": [
+              "Framework.Core",
+              "Framework.Wire"
+            ],
+            "Framework.Entities": [
+              "Framework.Core",
+              "Framework.Tags",
+              "Framework.Wire"
+            ],
+            "Framework.Requests": [
+              "Framework.Wire"
+            ],
+            "Framework.States": [
+              "Framework.Core",
+              "Framework.Wire"
+            ],
+            "Framework.Commands": [
+              "Framework.Wire"
+            ],
+            "Framework.Engine": [
+              "Framework.Wire",
+              "Framework.Tags",
+              "Framework.Entities",
+              "Framework.Requests",
+              "Framework.States",
+              "Framework.Commands"
+            ],
+            "Framework.Bootstrap": [
+              "Framework.Core",
+              "Framework.Commands",
+              "Framework.Engine",
+              "Framework.Entities",
+              "Framework.Requests",
+              "Framework.States",
+              "Framework.Tags",
+              "Framework.Wire"
+            ],
+            "Framework.Multiplayer": [
+              "Framework.Wire"
+            ]
           }
         }
       }
@@ -56,9 +110,16 @@
       "check": {
         "kind": "asmdef.forbiddenReferences",
         "params": {
-          "roots": ["Assets/Framework"],
+          "roots": [
+            "Assets/Framework"
+          ],
           "from": "Framework.*",
-          "forbidden": ["Spike.*", "VerticalSlice*", "StateMachine*", "TagAuthoringPrototype*"]
+          "forbidden": [
+            "Spike.*",
+            "VerticalSlice*",
+            "StateMachine*",
+            "TagAuthoringPrototype*"
+          ]
         }
       }
     },
@@ -73,15 +134,50 @@
       "check": {
         "kind": "ivt.allowlist",
         "params": {
-          "assemblies": ["Framework.*"],
-          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
+          "assemblies": [
+            "Framework.*"
+          ],
+          "exclude": [
+            "*.Tests",
+            "*.PlayTests",
+            "*.Sample",
+            "Framework.Testing.*"
+          ],
           "allowed": {
-            "Framework.Commands": ["Framework.Bootstrap", "Framework.Engine", "Framework.Commands.Tests", "Framework.Testing.Integration.Tests"],
-            "Framework.Entities": ["Framework.Bootstrap", "Framework.Entities.Tests", "Framework.Testing.Integration.Tests"],
-            "Framework.Requests": ["Framework.Bootstrap", "Framework.Engine", "Framework.Requests.Tests", "Framework.Testing.Integration.Tests"],
-            "Framework.States": ["Framework.Bootstrap", "Framework.Engine", "Framework.States.Tests"],
-            "Framework.Tags": ["Framework.Bootstrap", "Framework.Tags.Tests", "Framework.Entities", "Framework.Entities.Tests", "Framework.Testing.Integration.Tests"],
-            "Framework.Wire": ["Framework.Bootstrap", "Framework.Wire.Tests", "Framework.Wire.PlayTests"]
+            "Framework.Commands": [
+              "Framework.Bootstrap",
+              "Framework.Engine",
+              "Framework.Commands.Tests",
+              "Framework.Testing.Integration.Tests"
+            ],
+            "Framework.Entities": [
+              "Framework.Bootstrap",
+              "Framework.Entities.Tests",
+              "Framework.Testing.Integration.Tests"
+            ],
+            "Framework.Requests": [
+              "Framework.Bootstrap",
+              "Framework.Engine",
+              "Framework.Requests.Tests",
+              "Framework.Testing.Integration.Tests"
+            ],
+            "Framework.States": [
+              "Framework.Bootstrap",
+              "Framework.Engine",
+              "Framework.States.Tests"
+            ],
+            "Framework.Tags": [
+              "Framework.Bootstrap",
+              "Framework.Tags.Tests",
+              "Framework.Entities",
+              "Framework.Entities.Tests",
+              "Framework.Testing.Integration.Tests"
+            ],
+            "Framework.Wire": [
+              "Framework.Bootstrap",
+              "Framework.Wire.Tests",
+              "Framework.Wire.PlayTests"
+            ]
           }
         }
       }
@@ -97,10 +193,23 @@
       "check": {
         "kind": "il.callersOnly",
         "params": {
-          "assemblies": ["Framework.*"],
-          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
-          "callees": { "namespace": "Framework.*", "type": "*Store", "access": "internal" },
-          "allowedCallers": { "subclassOf": "Framework.Wire.WireEventHandler`1" }
+          "assemblies": [
+            "Framework.*"
+          ],
+          "exclude": [
+            "*.Tests",
+            "*.PlayTests",
+            "*.Sample",
+            "Framework.Testing.*"
+          ],
+          "callees": {
+            "namespace": "Framework.*",
+            "type": "*Store",
+            "access": "internal"
+          },
+          "allowedCallers": {
+            "subclassOf": "Framework.Wire.WireEventHandler`1"
+          }
         }
       }
     },
@@ -115,10 +224,22 @@
       "check": {
         "kind": "il.forbiddenCalls",
         "params": {
-          "assemblies": ["Framework.*"],
-          "exclude": ["*.Tests", "*.PlayTests", "*.Sample", "Framework.Testing.*"],
-          "callers": { "subclassOf": "Framework.Wire.WireEventHandler`1" },
-          "callees": { "namespace": "Framework.*", "type": "*Service" }
+          "assemblies": [
+            "Framework.*"
+          ],
+          "exclude": [
+            "*.Tests",
+            "*.PlayTests",
+            "*.Sample",
+            "Framework.Testing.*"
+          ],
+          "callers": {
+            "subclassOf": "Framework.Wire.WireEventHandler`1"
+          },
+          "callees": {
+            "namespace": "Framework.*",
+            "type": "*Service"
+          }
         }
       }
     },
@@ -135,7 +256,12 @@
         "params": {
           "assembly": "Framework.Engine",
           "type": "Framework.Engine.GameEngine",
-          "allowed": ["IReadOnly*", "*Service", "EventStream", "Network"]
+          "allowed": [
+            "IReadOnly*",
+            "*Service",
+            "EventStream",
+            "Network"
+          ]
         }
       }
     },
@@ -149,11 +275,26 @@
       "status": "enforced",
       "check": {
         "kind": "feature.hasTests",
-        "params": { "root": "Assets/Framework", "runtimeFolder": "Runtime", "testFolders": ["Tests", "PlayTests"] }
+        "params": {
+          "root": "Assets/Framework",
+          "runtimeFolder": "Runtime",
+          "testFolders": [
+            "Tests",
+            "PlayTests"
+          ]
+        }
       },
       "exceptions": [
-        { "target": "Tags", "reason": "Tag tests live in Framework.Entities.Tests; Framework.Tags.Tests is empty.", "until": "Test suite PR T-3" },
-        { "target": "Engine", "reason": "GameEngine is a plain aggregate, covered by Bootstrap and integration tests.", "until": "Engine loop (roadmap phase 1)" }
+        {
+          "target": "Tags",
+          "reason": "Tag tests live in Framework.Entities.Tests; Framework.Tags.Tests is empty.",
+          "until": "Test suite PR T-3"
+        },
+        {
+          "target": "Engine",
+          "reason": "GameEngine is a plain aggregate, covered by Bootstrap and integration tests.",
+          "until": "Engine loop (roadmap phase 1)"
+        }
       ]
     },
     {
@@ -166,7 +307,13 @@
       "status": "enforced",
       "check": {
         "kind": "type.noSubtypesIn",
-        "params": { "assembly": "Framework.Wire", "baseType": "Framework.Wire.WireEvent", "allowed": ["Framework.Wire.Block*"] }
+        "params": {
+          "assembly": "Framework.Wire",
+          "baseType": "Framework.Wire.WireEvent",
+          "allowed": [
+            "Framework.Wire.Block*"
+          ]
+        }
       }
     },
     {
@@ -180,7 +327,9 @@
       "check": {
         "kind": "tests.requireAttribute",
         "params": {
-          "assemblies": ["Framework.Testing.Acceptance.Tests"],
+          "assemblies": [
+            "Framework.Testing.Acceptance.Tests"
+          ],
           "attribute": "Framework.Testing.PictureAttribute",
           "fileFolder": "Assets/Framework/Testing/Acceptance/Scenarios",
           "filePattern": "*.md",
@@ -197,7 +346,9 @@
       "why": "The client builds state only from the server's events. Convergence is the core promise of the wire.",
       "fix": "Check that the event reaches the client channel and that the same apply handler is registered on both sides.",
       "status": "enforced",
-      "check": { "kind": "attached" }
+      "check": {
+        "kind": "attached"
+      }
     }
   ]
 }

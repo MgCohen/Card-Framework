@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="rulebook-token" content="__TOKEN__">
+<title>Rulebook</title>
+<style>
+:root {
+  --bg: #f4f5f8; --panel: #ffffff; --ink: #1c2030; --muted: #5e6578; --line: #d9dde6; --soft: #edf0f5;
+  --accent: #3a50d9; --pass: #0f8a5b; --fail: #c4344a; --warn: #b77400; --plan: #7f4fcf;
+  --code: #f0f2f7;
+  --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg: #12141b; --panel: #1a1d27; --ink: #e7e9f0; --muted: #9aa1b3; --line: #2d3241; --soft: #222634;
+  --accent: #8394ff; --pass: #4fd29a; --fail: #ff7d8e; --warn: #f0b35a; --plan: #b98cf5; --code: #0f1117;
+  color-scheme: dark } }
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans) }
+button, input, select, textarea { font: inherit; color: inherit }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; cursor: pointer }
+button:hover { border-color: var(--accent) }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff }
+button.danger { color: var(--fail) }
+button:disabled { opacity: .5; cursor: default }
+input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 100% }
+textarea { font-family: var(--mono); font-size: 12.5px; resize: vertical }
+code, .mono { font-family: var(--mono); font-size: 12.5px }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5 }
+header h1 { font-size: 18px; margin: 0 12px 0 0 }
+header .spacer { flex: 1 }
+nav { display: flex; gap: 4px }
+nav button { border: none; background: none; padding: 6px 12px; border-radius: 6px; color: var(--muted) }
+nav button.on { background: var(--soft); color: var(--ink); font-weight: 600 }
+
+main { padding: 18px 20px 140px; max-width: 1400px; margin: 0 auto }
+.chip { display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap }
+.PASS, .Passed, .enforced { color: var(--pass) } .FAIL, .Failed, .ERROR { color: var(--fail) }
+.SKIP, .EMPTY, .Skipped, .Ignored, .NOTRUN { color: var(--muted) } .planned { color: var(--plan) } .exempt { color: var(--warn) }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0 }
+.muted { color: var(--muted) }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap }
+h2 { font-size: 15px; margin: 0 0 10px }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px }
+table { border-collapse: collapse; width: 100% }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+.scroll { overflow-x: auto }
+
+.split { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 16px; align-items: start }
+.list { display: grid; gap: 4px; max-height: calc(100vh - 150px); overflow: auto }
+.book { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; display: flex; justify-content: space-between; align-items: center }
+.item { display: grid; grid-template-columns: 74px 1fr auto; gap: 8px; align-items: center; padding: 7px 9px; border-radius: 7px; cursor: pointer; border: 1px solid transparent }
+.item:hover { background: var(--soft) }
+.item.on { background: var(--soft); border-color: var(--line) }
+.item .id { font: 600 12px var(--mono) }
+.form { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px 12px; align-items: start }
+.form label { padding-top: 6px; color: var(--muted); font-size: 12.5px }
+.violations { display: grid; gap: 6px }
+.violation { border-left: 3px solid var(--fail); background: var(--soft); padding: 6px 10px; border-radius: 0 6px 6px 0 }
+.violation.exempt { border-color: var(--warn) }
+.violation .t { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere }
+.fix { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 8px }
+.errors { color: var(--fail); white-space: pre-wrap; font-family: var(--mono); font-size: 12.5px }
+.toast { position: fixed; right: 20px; top: 70px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; box-shadow: 0 6px 20px rgba(0,0,0,.15); z-index: 20 }
+
+#runbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); z-index: 10 }
+#runbar .head { display: flex; gap: 10px; align-items: center; padding: 8px 20px; cursor: pointer }
+#runbar pre { margin: 0; max-height: 280px; overflow: auto; padding: 10px 20px; background: var(--code); font: 12px/1.45 var(--mono); border-top: 1px solid var(--line) }
+#runbar.closed pre { display: none }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted) }
+.dot.live { background: var(--warn); animation: pulse 1s infinite alternate }
+@keyframes pulse { to { opacity: .3 } }
+@media (prefers-reduced-motion: reduce) { .dot.live { animation: none } }
+@media (max-width: 860px) { .split { grid-template-columns: 1fr } .list { max-height: none } .form { grid-template-columns: 1fr } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rulebook</h1>
+  <nav id="tabs"></nav>
+  <span class="spacer"></span>
+  <span id="gateChip"></span>
+  <button id="runDefault" class="primary">Run gate</button>
+  <button id="runAll">Run all stages</button>
+</header>
+<main id="view"></main>
+<div id="runbar" class="closed">
+  <div class="head" id="runHead"><span class="dot" id="runDot"></span><b id="runTitle">No run yet</b><span class="muted" id="runMeta"></span><span style="flex:1"></span><button id="runStop" class="danger" hidden>Stop</button><span class="muted">output ▴</span></div>
+  <pre id="runOut"></pre>
+</div>
+
+<script>
+const TOKEN = document.querySelector('meta[name="rulebook-token"]').content;
+const S = { tab: 'rules', state: null, ruleId: null, draft: null, gateDraft: null, testFilter: { q: '', tier: '', stage: '', result: '', link: '' } };
+const $ = (sel, el = document) => el.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clone = v => JSON.parse(JSON.stringify(v));
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: { 'X-Rulebook-Token': TOKEN, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || (data.errors || []).join('\n') || res.statusText), { data });
+  return data;
+}
+
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.append(t); setTimeout(() => t.remove(), 2600);
+}
+
+async function load() {
+  S.state = await api('GET', '/api/state');
+  S.draft = clone(S.state.rulebook);
+  S.gateDraft = clone(S.state.gate);
+  if (!S.ruleId && S.draft.rules.length) S.ruleId = S.draft.rules[0].id;
+  render(); renderRun(S.state.run);
+}
+
+// --- derived data -----------------------------------------------------------------------------
+
+function ruleResult(id) {
+  const rep = S.state.report;
+  const own = rep?.rules?.find(r => r.rule === id);
+  const tests = (S.state.catalog?.tests || []).filter(t => (t.rules || []).includes(id));
+  const failedTests = tests.filter(t => t.result === 'Failed');
+  let status = 'NOTRUN';
+  if (own || tests.length) status = (own && !own.passed) || failedTests.length ? 'FAIL' : 'PASS';
+  return { own, tests, failedTests, status };
+}
+
+function ruleChip(rule) {
+  if (rule.status === 'planned') return '<span class="chip planned">PLANNED</span>';
+  const r = ruleResult(rule.id);
+  const label = r.status === 'NOTRUN' ? 'NOT RUN' : r.status;
+  const ex = r.own?.exempted?.length ? ` <span class="chip exempt" title="exempted violations">${r.own.exempted.length} exempt</span>` : '';
+  return `<span class="chip ${r.status}">${label}</span>${ex}`;
+}
+
+// --- tabs -------------------------------------------------------------------------------------
+
+const TABS = { rules: 'Rules', gate: 'Gate', tests: 'Tests', report: 'Last run' };
+function render() {
+  $('#tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${S.tab === k ? 'on' : ''}">${v}</button>`).join('');
+  const rep = S.state.report;
+  $('#gateChip').innerHTML = rep ? `<span class="chip ${rep.result}">GATE ${rep.result}</span> <span class="muted">${new Date(rep.startedAt).toLocaleString()}</span>` : '<span class="muted">No gate run yet</span>';
+  ({ rules: renderRules, gate: renderGate, tests: renderTests, report: renderReport })[S.tab]();
+}
+$('#tabs').addEventListener('click', e => { const t = e.target.dataset.tab; if (t) { S.tab = t; render(); } });
+
+// --- rules ------------------------------------------------------------------------------------
+
+function renderRules() {
+  const book = S.draft;
+  const dirty = JSON.stringify(book) !== JSON.stringify(S.state.rulebook);
+  const list = book.books.map(b => `
+    <div class="book"><span>${esc(b.title)}</span><button data-new="${esc(b.id)}" title="Add a rule to this book">+ rule</button></div>
+    ${book.rules.filter(r => r.book === b.id).map(r => `
+      <div class="item ${r.id === S.ruleId ? 'on' : ''}" data-rule="${esc(r.id)}">
+        <span class="id">${esc(r.id)}</span><span>${esc(r.title)}</span><span>${ruleChip(r)}</span>
+      </div>`).join('')}`).join('');
+  const rule = book.rules.find(r => r.id === S.ruleId);
+  $('#view').innerHTML = `
+    <div class="split">
+      <div class="panel"><div class="row" style="justify-content:space-between"><h2>Rules</h2>
+        <span class="muted">${book.rules.length} rules</span></div><div class="list">${list}</div></div>
+      <div class="panel">${rule ? ruleEditor(rule, dirty) : '<p class="muted">Select a rule.</p>'}</div>
+    </div>`;
+}
+
+function ruleEditor(rule, dirty) {
+  const isNew = !S.state.rulebook.rules.some(r => r.id === rule.id);
+  const r = ruleResult(rule.id);
+  const kinds = S.state.kinds.map(k => `<option ${k === rule.check.kind ? 'selected' : ''}>${k}</option>`).join('');
+  const books = S.draft.books.map(b => `<option value="${esc(b.id)}" ${b.id === rule.book ? 'selected' : ''}>${esc(b.title)}</option>`).join('');
+  const ex = (rule.exceptions || []).map((e, i) => `
+    <tr><td><input data-ex="${i}" data-k="target" value="${esc(e.target)}"></td>
+        <td><input data-ex="${i}" data-k="reason" value="${esc(e.reason)}"></td>
+        <td><input data-ex="${i}" data-k="until" value="${esc(e.until)}"></td>
+        <td><button class="danger" data-exdel="${i}" title="Remove exception">✕</button></td></tr>`).join('');
+  const violations = (list, cls) => list.map(v => `<div class="violation ${cls}"><div class="t">${esc(v.target)}</div><div class="muted">${esc(v.detail)}${v.location ? ` · <code>${esc(v.location)}</code>` : ''}</div></div>`).join('');
+  return `
+    <div class="row" style="justify-content:space-between">
+      <h2><code>${esc(rule.id)}</code> ${esc(rule.title)}</h2>
+      <div class="row">${ruleChip(rule)}</div>
+    </div>
+    <div class="form">
+      <label>Id</label><input id="f-id" value="${esc(rule.id)}" ${isNew ? '' : 'disabled'}>
+      <label>Book</label><select id="f-book">${books}</select>
+      <label>Title</label><input id="f-title" value="${esc(rule.title)}">
+      <label>Rule</label><textarea id="f-rule" rows="2">${esc(rule.rule)}</textarea>
+      <label>Why</label><textarea id="f-why" rows="2">${esc(rule.why)}</textarea>
+      <label>Fix</label><textarea id="f-fix" rows="2">${esc(rule.fix)}</textarea>
+      <label>Status</label><select id="f-status"><option ${rule.status === 'enforced' ? 'selected' : ''}>enforced</option><option ${rule.status === 'planned' ? 'selected' : ''}>planned</option></select>
+      <label>Check kind</label><select id="f-kind">${kinds}</select>
+      <label>Params</label><div><textarea id="f-params" rows="${Math.min(18, 3 + JSON.stringify(rule.check.params || {}, null, 2).split('\n').length)}">${esc(JSON.stringify(rule.check.params || {}, null, 2))}</textarea><div id="paramsErr" class="errors"></div></div>
+    </div>
+    <h3>Exceptions</h3>
+    <div class="scroll"><table><thead><tr><th>Target (glob)</th><th>Reason</th><th>Until</th><th></th></tr></thead><tbody>${ex || '<tr><td colspan="4" class="muted">None</td></tr>'}</tbody></table></div>
+    <div class="row" style="margin-top:8px"><button id="addEx">Add exception</button></div>
+    <div class="row" style="margin-top:16px">
+      <button class="primary" id="save" ${dirty ? '' : 'disabled'}>Save rulebook</button>
+      <button id="revert" ${dirty ? '' : 'disabled'}>Revert</button>
+      <button id="runRule" ${dirty || isNew ? 'disabled title="Save first"' : ''}>Run this rule</button>
+      <span style="flex:1"></span><button class="danger" id="delRule">Delete rule</button>
+    </div>
+    <div id="saveErr" class="errors"></div>
+    <h3>Last result</h3>
+    ${r.own?.error ? `<div class="errors">Check error: ${esc(r.own.error)}</div>` : ''}
+    <div class="violations">${violations(r.own?.violations || [], '')}${violations(r.own?.exempted || [], 'exempt')}</div>
+    ${(r.own?.staleExceptions || []).map(e => `<div class="violation"><div class="t">Stale exception: ${esc(e.target)}</div><div class="muted">No longer matches a violation. Remove it.</div></div>`).join('')}
+    ${!r.own && rule.check.kind !== 'attached' ? '<p class="muted">Not run yet.</p>' : ''}
+    ${r.own && !r.own.violations.length && !r.own.exempted.length && !r.own.error ? '<p class="muted">No violations.</p>' : ''}
+    ${r.own?.violations?.length ? `<div class="fix"><b>Fix</b> ${esc(rule.fix)}</div>` : ''}
+    <h3>Linked tests</h3>
+    ${r.tests.length ? `<div class="scroll"><table><thead><tr><th>Test</th><th>Tier</th><th>Result</th></tr></thead><tbody>${r.tests.map(t => `<tr><td class="mono">${esc(t.fullname)}</td><td>${t.tier}</td><td><span class="chip ${t.result}">${t.result}</span></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">No linked tests in the last run.</p>'}`;
+}
+
+function currentRule() { return S.draft.rules.find(r => r.id === S.ruleId); }
+
+$('#view').addEventListener('input', e => {
+  if (S.tab !== 'rules') return;
+  const rule = currentRule(); if (!rule) return;
+  const id = e.target.id;
+  const map = { 'f-title': 'title', 'f-rule': 'rule', 'f-why': 'why', 'f-fix': 'fix' };
+  if (map[id]) rule[map[id]] = e.target.value;
+  if (id === 'f-params') {
+    try { rule.check.params = JSON.parse(e.target.value || '{}'); $('#paramsErr').textContent = ''; }
+    catch (err) { $('#paramsErr').textContent = 'Not valid JSON: ' + err.message; return; }
+  }
+  if (e.target.dataset.ex !== undefined) rule.exceptions[+e.target.dataset.ex][e.target.dataset.k] = e.target.value;
+  refreshButtons();
+});
+
+$('#view').addEventListener('change', e => {
+  if (S.tab === 'rules') {
+    const rule = currentRule(); if (!rule) return;
+    if (e.target.id === 'f-status') rule.status = e.target.value;
+    if (e.target.id === 'f-book') rule.book = e.target.value;
+    if (e.target.id === 'f-kind') { rule.check.kind = e.target.value; if (rule.check.kind === 'attached') delete rule.check.params; }
+    if (e.target.id === 'f-id') { rule.id = e.target.value.trim(); S.ruleId = rule.id; }
+    renderRules();
+  }
+  if (S.tab === 'gate') gateChange(e);
+  if (S.tab === 'tests') { const k = e.target.dataset.filter; if (k) { S.testFilter[k] = e.target.value; renderTests(); } }
+});
+
+function refreshButtons() {
+  const dirty = JSON.stringify(S.draft) !== JSON.stringify(S.state.rulebook);
+  ['save', 'revert'].forEach(id => { const b = $('#' + id); if (b) b.disabled = !dirty; });
+  const run = $('#runRule'); if (run) run.disabled = dirty;
+}
+
+$('#view').addEventListener('click', async e => {
+  const t = e.target;
+  if (S.tab === 'rules') {
+    const item = t.closest('[data-rule]');
+    if (item) { S.ruleId = item.dataset.rule; return renderRules(); }
+    if (t.dataset.new) {
+      const prefix = { architecture: 'ARCH', testing: 'TEST' }[t.dataset.new] || t.dataset.new.toUpperCase().slice(0, 4);
+      const n = S.draft.rules.filter(r => r.id.startsWith(prefix + '-')).length + 1;
+      const id = `${prefix}-${String(n).padStart(2, '0')}`;
+      S.draft.rules.push({ id, book: t.dataset.new, title: 'New rule', rule: '', why: '', fix: '', status: 'planned', check: { kind: 'attached' } });
+      S.ruleId = id; return renderRules();
+    }
+    const rule = currentRule();
+    if (t.id === 'addEx') { (rule.exceptions ||= []).push({ target: '', reason: '', until: '' }); return renderRules(); }
+    if (t.dataset.exdel !== undefined) { rule.exceptions.splice(+t.dataset.exdel, 1); if (!rule.exceptions.length) delete rule.exceptions; return renderRules(); }
+    if (t.id === 'revert') { S.draft = clone(S.state.rulebook); if (!currentRule()) S.ruleId = S.draft.rules[0]?.id; return renderRules(); }
+    if (t.id === 'delRule') {
+      if (!t.dataset.confirm) { t.dataset.confirm = '1'; t.textContent = 'Click again to delete'; return; }
+      S.draft.rules = S.draft.rules.filter(r => r.id !== S.ruleId); S.ruleId = S.draft.rules[0]?.id; return renderRules();
+    }
+    if (t.id === 'save') {
+      try { await api('PUT', '/api/rulebook', S.draft); toast('Rulebook saved'); await load(); }
+      catch (err) { $('#saveErr').textContent = err.message; }
+    }
+    if (t.id === 'runRule') startRun({ rule: S.ruleId });
+  }
+  if (S.tab === 'gate') gateClick(e);
+});
+
+// --- gate -------------------------------------------------------------------------------------
+
+function renderGate() {
+  const g = S.gateDraft;
+  const dirty = JSON.stringify(g) !== JSON.stringify(S.state.gate);
+  const last = Object.fromEntries((S.state.report?.stages || []).map(s => [s.id, s]));
+  const rows = g.stages.map((s, i) => `
+    <tr>
+      <td><input type="checkbox" data-pick="${esc(s.id)}" ${s.disabled ? 'disabled' : ''} ${!s.optional && !s.disabled ? 'checked' : ''} title="Include in the next selected run"></td>
+      <td class="mono">${esc(s.id)}</td>
+      <td><input data-st="${i}" data-k="title" value="${esc(s.title)}"></td>
+      <td><select data-st="${i}" data-k="kind">${['compile', 'editmode', 'playmode'].map(k => `<option ${k === s.kind ? 'selected' : ''}>${k}</option>`).join('')}</select></td>
+      <td><input data-st="${i}" data-k="assemblies" value="${esc((s.assemblies || []).join(', '))}" ${s.kind === 'compile' ? 'disabled' : ''}></td>
+      <td><input type="checkbox" data-st="${i}" data-k="optional" ${s.optional ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-st="${i}" data-k="disabled" ${s.disabled ? 'checked' : ''}></td>
+      <td>${last[s.id] ? `<span class="chip ${last[s.id].result}">${last[s.id].result}</span> <span class="muted">${last[s.id].total ? last[s.id].passed + '/' + last[s.id].total : ''}</span>` : ''}</td>
+      <td class="row"><button data-up="${i}" title="Move up">↑</button><button data-down="${i}" title="Move down">↓</button><button class="danger" data-del="${i}" title="Remove stage">✕</button></td>
+    </tr>`).join('');
+  $('#view').innerHTML = `
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2>Stages</h2><span class="muted">Order sets which stage owns a test assembly: the first matching stage of its kind.</span></div>
+      <div class="scroll"><table><thead><tr><th>Run</th><th>Id</th><th>Title</th><th>Kind</th><th>Assemblies (globs)</th><th>Optional</th><th>Disabled</th><th>Last</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="row" style="margin-top:12px">
+        <button id="addStage">Add stage</button>
+        <button class="primary" id="saveGate" ${dirty ? '' : 'disabled'}>Save gate</button>
+        <button id="revertGate" ${dirty ? '' : 'disabled'}>Revert</button>
+        <span style="flex:1"></span>
+        <button id="runPicked" ${dirty ? 'disabled title="Save first"' : ''}>Run selected stages</button>
+      </div>
+      <div id="gateErr" class="errors"></div>
+      <h3>Test category filter</h3>
+      <input id="g-cat" value="${esc(g.testCategory || '')}" style="max-width:260px" placeholder="!Benchmark">
+    </div>`;
+}
+
+function gateChange(e) {
+  const t = e.target, g = S.gateDraft;
+  if (t.id === 'g-cat') g.testCategory = t.value;
+  if (t.dataset.st !== undefined) {
+    const s = g.stages[+t.dataset.st], k = t.dataset.k;
+    if (t.type === 'checkbox') { if (t.checked) s[k] = true; else delete s[k]; }
+    else if (k === 'assemblies') s.assemblies = t.value.split(',').map(x => x.trim()).filter(Boolean);
+    else { s[k] = t.value; if (k === 'kind' && t.value === 'compile') delete s.assemblies; }
+  }
+  if (!t.dataset.pick) renderGate();
+}
+
+async function gateClick(e) {
+  const t = e.target, g = S.gateDraft, move = (i, d) => { const [s] = g.stages.splice(i, 1); g.stages.splice(i + d, 0, s); };
+  if (t.dataset.up !== undefined && +t.dataset.up > 0) { move(+t.dataset.up, -1); return renderGate(); }
+  if (t.dataset.down !== undefined && +t.dataset.down < g.stages.length - 1) { move(+t.dataset.down, 1); return renderGate(); }
+  if (t.dataset.del !== undefined) { g.stages.splice(+t.dataset.del, 1); return renderGate(); }
+  if (t.id === 'addStage') { g.stages.push({ id: 'stage-' + (g.stages.length + 1), kind: 'editmode', title: 'New stage', assemblies: ['Framework.*'], optional: true }); return renderGate(); }
+  if (t.id === 'revertGate') { S.gateDraft = clone(S.state.gate); return renderGate(); }
+  if (t.id === 'saveGate') {
+    try { await api('PUT', '/api/gate', g); toast('Gate saved'); await load(); }
+    catch (err) { $('#gateErr').textContent = err.message; }
+  }
+  if (t.id === 'runPicked') {
+    const only = [...document.querySelectorAll('[data-pick]:checked')].map(c => c.dataset.pick);
+    if (!only.length) return toast('Pick at least one stage');
+    startRun({ only });
+  }
+}
+
+// --- tests ------------------------------------------------------------------------------------
+
+function renderTests() {
+  const tests = S.state.catalog?.tests || [];
+  const f = S.testFilter;
+  const opts = (key, values) => ['', ...new Set(values)].map(v => `<option value="${esc(v)}" ${f[key] === v ? 'selected' : ''}>${v || 'all'}</option>`).join('');
+  const shown = tests.filter(t =>
+    (!f.q || t.fullname.toLowerCase().includes(f.q.toLowerCase())) &&
+    (!f.tier || t.tier === f.tier) && (!f.stage || t.stage === f.stage) && (!f.result || t.result === f.result) &&
+    (!f.link || (f.link === 'linked' ? (t.rules || []).length : !(t.rules || []).length)));
+  const byTier = tests.reduce((m, t) => (m[t.tier] = (m[t.tier] || 0) + 1, m), {});
+  $('#view').innerHTML = `
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2>Tests in the last run</h2>
+        <span class="muted">${Object.entries(byTier).map(([k, v]) => `${k} ${v}`).join(' · ') || 'Run the gate to build the catalog.'}</span></div>
+      <div class="row" style="margin-bottom:10px">
+        <input id="tq" placeholder="Search test names" value="${esc(f.q)}" style="max-width:320px">
+        <label class="muted">Tier</label><select data-filter="tier" style="width:auto">${opts('tier', tests.map(t => t.tier))}</select>
+        <label class="muted">Stage</label><select data-filter="stage" style="width:auto">${opts('stage', tests.map(t => t.stage))}</select>
+        <label class="muted">Result</label><select data-filter="result" style="width:auto">${opts('result', tests.map(t => t.result))}</select>
+        <label class="muted">Rule link</label><select data-filter="link" style="width:auto">${['', 'linked', 'unlinked'].map(v => `<option value="${v}" ${f.link === v ? 'selected' : ''}>${v || 'all'}</option>`).join('')}</select>
+        <span class="muted">${shown.length} shown</span>
+      </div>
+      <div class="scroll"><table><thead><tr><th>Test</th><th>Assembly</th><th>Tier</th><th>Rules</th><th>Result</th><th>ms</th></tr></thead><tbody>
+        ${shown.slice(0, 600).map(t => `<tr><td class="mono">${esc(t.fullname)}</td><td class="mono muted">${esc(t.assembly)}</td><td>${t.tier}</td>
+          <td>${(t.rules || []).map(r => `<a href="#" data-goto="${esc(r)}" class="chip">${esc(r)}</a>`).join(' ')}</td>
+          <td><span class="chip ${t.result}">${t.result}</span></td><td class="mono">${Math.round((t.duration || 0) * 1000)}</td></tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  $('#tq').addEventListener('input', e => { S.testFilter.q = e.target.value; const pos = e.target.selectionStart; renderTests(); const q = $('#tq'); q.focus(); q.setSelectionRange(pos, pos); });
+}
+document.addEventListener('click', e => { const g = e.target.dataset?.goto; if (g) { e.preventDefault(); S.tab = 'rules'; S.ruleId = g; render(); } });
+
+// --- report -----------------------------------------------------------------------------------
+
+function renderReport() {
+  const r = S.state.report;
+  if (!r) { $('#view').innerHTML = '<div class="panel muted">No gate run yet. Use Run gate.</div>'; return; }
+  $('#view').innerHTML = `
+    <div class="panel">
+      <div class="row" style="justify-content:space-between"><h2>Gate <span class="chip ${r.result}">${r.result}</span></h2>
+        <span class="muted">${new Date(r.startedAt).toLocaleString()} · ${r.durationSec}s${r.selection?.rule ? ' · rule ' + esc(r.selection.rule) : ''}</span></div>
+      <div class="scroll"><table><thead><tr><th>Stage</th><th>Kind</th><th>Result</th><th>Passed</th><th>Failed</th><th>Skipped</th></tr></thead><tbody>
+        ${r.stages.map(s => `<tr><td class="mono">${esc(s.id)}</td><td>${s.kind}</td><td><span class="chip ${s.result}">${s.result}</span></td><td>${s.passed}</td><td>${s.failed}</td><td>${s.skipped}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${(r.infraErrors || []).map(e => `<div class="violation"><div class="t">${esc(e)}</div></div>`).join('')}
+      ${r.compileErrors?.length ? `<h3>Compile errors</h3><div class="violations">${r.compileErrors.map(c => `<div class="violation"><div class="t">${esc(c.file)}:${c.line} ${esc(c.code)}</div><div>${esc(c.message)}</div></div>`).join('')}</div>` : ''}
+      <h3>Failures</h3>
+      ${r.failures?.length ? r.failures.map(f => `
+        <div class="fix" style="margin-bottom:10px">
+          <div class="row"><span class="chip FAIL">${esc(f.stage)}</span><code>${esc(f.test)}</code>${(f.rules || []).map(id => `<a href="#" data-goto="${esc(id)}" class="chip">${esc(id)}</a>`).join('')}</div>
+          ${f.violations?.length ? `<div class="violations" style="margin-top:8px">${f.violations.map(v => `<div class="violation"><div class="t">${esc(v.target)}</div><div class="muted">${esc(v.detail)}${v.location ? ` · <code>${esc(v.location)}</code>` : ''}</div></div>`).join('')}</div>` : `<pre class="mono" style="white-space:pre-wrap">${esc(f.message)}</pre>`}
+          ${f.fix ? `<div style="margin-top:6px"><b>Fix</b> ${esc(f.fix)}</div>` : ''}
+        </div>`).join('') : '<p class="muted">None.</p>'}
+      <details style="margin-top:14px"><summary class="muted">Raw report.json</summary><pre class="mono" style="white-space:pre-wrap">${esc(JSON.stringify(r, null, 2))}</pre></details>
+    </div>`;
+}
+
+// --- runs -------------------------------------------------------------------------------------
+
+let polling = null;
+async function startRun(body) {
+  try { renderRun(await api('POST', '/api/run', body)); $('#runbar').classList.remove('closed'); poll(); }
+  catch (err) { toast(err.message); }
+}
+function poll() {
+  clearInterval(polling);
+  polling = setInterval(async () => {
+    const st = await api('GET', '/api/run');
+    renderRun(st);
+    if (!st.running) { clearInterval(polling); polling = null; await load(); toast(st.exitCode === 0 ? "Gate passed" : "Gate failed"); if (st.exitCode === 0) $("#runbar").classList.add("closed"); }
+  }, 1000);
+}
+function renderRun(st) {
+  if (!st) return;
+  $('#runDot').className = 'dot' + (st.running ? ' live' : '');
+  $('#runTitle').textContent = st.running ? 'Gate running' : st.startedAt ? `Gate finished (exit ${st.exitCode})` : 'No run yet';
+  $('#runMeta').textContent = st.args?.length ? st.args.join(' ') : '';
+  $('#runStop').hidden = !st.running;
+  ['runDefault', 'runAll'].forEach(id => $('#' + id).disabled = st.running);
+  const out = $('#runOut'); const atEnd = out.scrollTop + out.clientHeight >= out.scrollHeight - 4;
+  out.textContent = (st.output || []).join('\n');
+  if (atEnd) out.scrollTop = out.scrollHeight;
+  if (st.running && !polling) poll();
+}
+$('#runHead').addEventListener('click', e => { if (e.target.id !== 'runStop') $('#runbar').classList.toggle('closed'); });
+$('#runStop').addEventListener('click', async () => { await api('POST', '/api/run/stop'); toast('Stopping'); });
+$('#runDefault').addEventListener('click', () => startRun({}));
+$('#runAll').addEventListener('click', () => startRun({ all: true }));
+
+load().catch(err => { $('#view').innerHTML = `<div class="panel errors">${esc(err.message)}</div>`; });
+</script>
+</body>
+</html>

@@ -44,6 +44,11 @@ $rulebook = Read-Json (Join-Path $PSScriptRoot 'rulebook.json')
 $rules    = @{}
 foreach ($r in $rulebook.rules) { $rules[$r.id] = $r }
 
+# "-Only a,b" arrives as one string under powershell -File; accept both forms.
+$Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$Skip = @($Skip | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+$With = @($With | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+
 $knownIds = @($gate.stages | ForEach-Object { $_.id })
 foreach ($id in @($Only + $Skip + $With)) {
   if ($id -and $knownIds -notcontains $id) { throw "Unknown stage '$id'. Stages: $($knownIds -join ', ')" }
@@ -105,10 +110,14 @@ $unity = Get-Command unity -ErrorAction SilentlyContinue
 if (-not $unity) { throw "The Unity CLI ('unity') is not on PATH." }
 
 # Runs the Unity CLI with its own output in a file, so the console shows only the gate summary.
+# Waits for the CLI process only: Start-Process -Wait would also wait for helper processes the
+# CLI leaves running (for example its background update check).
 function Invoke-Unity([string[]] $arguments, [string] $outFile) {
-  $quoted = $arguments | ForEach-Object { if ($_ -match '[\s";]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ } }
-  $p = Start-Process -FilePath $unity.Source -ArgumentList ($quoted -join ' ') -NoNewWindow -Wait -PassThru `
+  $quoted = $arguments | ForEach-Object { if ($_ -match '[\s";|]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ } }
+  $p = Start-Process -FilePath $unity.Source -ArgumentList ($quoted -join ' ') -NoNewWindow -PassThru `
          -RedirectStandardOutput $outFile -RedirectStandardError "$outFile.err"
+  $null = $p.Handle   # caches the handle so ExitCode is readable after exit
+  $p.WaitForExit()
   return $p.ExitCode
 }
 
@@ -122,12 +131,13 @@ foreach ($mode in @('editmode', 'playmode')) {
   $log  = Join-Path $OutDir "$mode.log"
   Remove-Item $xml, $log -ErrorAction SilentlyContinue
   $mArg = $(if ($mode -eq 'editmode') { 'EditMode' } else { 'PlayMode' })
+  $cli  = @('test', $Root, '--mode', $mArg, '--output', $xml, '--timeout', $TimeoutSeconds, '--no-banner', '--format', 'json')
+  if ($Filter) { $cli += @('--filter', $Filter) }
   $pass = @('-assemblyNames', ($asms -join ';'), '-logFile', $log)
   if ($gate.testCategory) { $pass += @('-testCategory', $gate.testCategory) }
-  if ($Filter)            { $pass += @('-testFilter', $Filter) }
 
   Write-Host "Running $mArg ($($asms.Count) assemblies)..."
-  $code = Invoke-Unity (@('test', $Root, '--mode', $mArg, '--output', $xml, '--timeout', $TimeoutSeconds, '--no-banner', '--format', 'json', '--') + $pass) (Join-Path $OutDir "$mode-cli.json")
+  $code = Invoke-Unity ($cli + @('--') + $pass) (Join-Path $OutDir "$mode-cli.json")
   $runs += [pscustomobject]@{ mode = $mode; xml = $xml; log = $log; exit = $code }
 }
 
@@ -231,7 +241,15 @@ $report = [pscustomobject]@{
   rules         = $ruleResults
 }
 Write-Json (Join-Path $OutDir 'report.json') $report
-if ($tests.Count -gt 0) { Write-Json (Join-Path $OutDir 'catalog.json') ([pscustomobject]@{ generatedAt = $Started.ToString('o'); tests = $tests }) }
+# A filtered run (-Rule, -Filter, -Only) updates its tests in the catalog and keeps the rest.
+$catalogFile = Join-Path $OutDir 'catalog.json'
+$partial = $Rule -or $Filter -or $Only.Count -gt 0 -or $Skip.Count -gt 0
+if ($partial -and (Test-Path $catalogFile) -and $tests.Count -gt 0) {
+  $fresh = @{}
+  foreach ($t in $tests) { $fresh[$t.fullname] = $true }
+  $tests = @(@((Read-Json $catalogFile).tests | Where-Object { -not $fresh.ContainsKey($_.fullname) }) + $tests)
+}
+if ($tests.Count -gt 0) { Write-Json $catalogFile ([pscustomobject]@{ generatedAt = $Started.ToString('o'); tests = $tests }) }
 
 # --- console summary (short enough for an agent to read in full) ------------------------------
 
