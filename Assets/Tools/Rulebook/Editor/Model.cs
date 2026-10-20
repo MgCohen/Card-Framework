@@ -7,8 +7,20 @@ namespace Tools.Rulebook
     public sealed class RulebookFile
     {
         [JsonProperty("version")] public int Version;
+        [JsonProperty("fields")]  public List<FieldDef> Fields = new();
         [JsonProperty("books")]   public List<Book> Books = new();
         [JsonProperty("rules")]   public List<Rule> Rules = new();
+    }
+
+    // A custom rule field. Values live in each rule's "extra" object.
+    public sealed class FieldDef
+    {
+        [JsonProperty("name")]     public string Name;
+        [JsonProperty("label")]    public string Label;
+        [JsonProperty("type")]     public string Type;
+        [JsonProperty("options")]  public List<string> Options = new();
+        [JsonProperty("required")] public bool Required;
+        [JsonProperty("help")]     public string Help;
     }
 
     public sealed class Book
@@ -27,8 +39,10 @@ namespace Tools.Rulebook
         [JsonProperty("why")]        public string Why;
         [JsonProperty("fix")]        public string Fix;
         [JsonProperty("status")]     public string Status;
+        [JsonProperty("severity")]   public string Severity = "blocking";
         [JsonProperty("check")]      public Check Check;
         [JsonProperty("exceptions")] public List<Exemption> Exceptions = new();
+        [JsonProperty("extra")]      public JObject Extra = new();
 
         public bool IsPlanned => Status == "planned";
     }

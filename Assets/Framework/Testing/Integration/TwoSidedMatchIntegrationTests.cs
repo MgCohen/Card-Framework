@@ -11,7 +11,6 @@ namespace Framework.Testing.Integration
 {
     // Server and client GameplayLayer joined by a loopback transport: the server runs a
     // command, and the client must end with the same stores from the same events.
-    [Rule("TEST-02")]
     public class TwoSidedMatchIntegrationTests
     {
         static MatchPair StartWithDamageCommands() => MatchPair.Start((builder, isServer) =>
@@ -31,7 +30,7 @@ namespace Framework.Testing.Integration
             Assert.Throws<VContainerException>(() => match.Client.Resolve<TagService>());
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void Command_On_Server_Converges_On_Client()
         {
             using var match = StartWithDamageCommands();
@@ -49,7 +48,7 @@ namespace Framework.Testing.Integration
             match.AssertStreamsMatch();
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void Rejected_Command_Sends_Nothing_To_Client()
         {
             using var match = StartWithDamageCommands();
@@ -63,7 +62,7 @@ namespace Framework.Testing.Integration
             match.AssertStreamsMatch();
         }
 
-        [Test]
+        [Test, Rule("TEST-02")]
         public void State_Push_Converges_On_Client()
         {
             using var match = StartWithDamageCommands();

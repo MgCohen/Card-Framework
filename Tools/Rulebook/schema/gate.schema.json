@@ -2,26 +2,62 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Gate",
   "type": "object",
-  "required": ["version", "stages"],
+  "required": [
+    "version",
+    "stages"
+  ],
   "properties": {
-    "$schema": { "type": "string" },
-    "version": { "const": 1 },
-    "testCategory": { "type": "string" },
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "testCategory": {
+      "type": "string"
+    },
     "stages": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "kind", "title"],
+        "required": [
+          "id",
+          "kind",
+          "title"
+        ],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-          "kind": { "enum": ["compile", "editmode", "playmode"] },
-          "title": { "type": "string" },
-          "assemblies": { "type": "array", "items": { "type": "string" } },
-          "optional": { "type": "boolean" },
-          "disabled": { "type": "boolean" }
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "kind": {
+            "enum": [
+              "compile",
+              "editmode",
+              "playmode",
+              "review"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "assemblies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Off by default. Runs only with -With <id> or -All."
+          }
         },
         "additionalProperties": false
       }
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 60
     }
   },
   "additionalProperties": false

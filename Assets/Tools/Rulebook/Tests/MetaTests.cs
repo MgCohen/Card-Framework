@@ -33,5 +33,13 @@ namespace Tools.Rulebook.Tests
             var kinds = schema.SelectToken("properties.rules.items.properties.check.properties.kind.enum").Values<string>();
             CollectionAssert.AreEquivalent(CheckRegistry.Kinds, kinds);
         }
+
+        [Test]
+        public void Kind_Descriptors_Cover_Exactly_The_Registered_Kinds()
+        {
+            var descriptors = JObject.Parse(File.ReadAllText(Path.Combine(ProjectPaths.Root, "Tools/Rulebook/schema/check-kinds.json")));
+            var kinds = ((JObject)descriptors["kinds"]).Properties().Select(p => p.Name);
+            CollectionAssert.AreEquivalent(CheckRegistry.Kinds, kinds);
+        }
     }
 }

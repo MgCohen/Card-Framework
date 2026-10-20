@@ -1,6 +1,20 @@
 {
   "$schema": "./schema/rulebook.schema.json",
   "version": 1,
+  "fields": [
+    {
+      "name": "tags",
+      "label": "Tags",
+      "type": "list",
+      "help": "Free labels for filtering, for example \"wire\" or \"phase-1\"."
+    },
+    {
+      "name": "notes",
+      "label": "Notes",
+      "type": "text",
+      "help": "Context that does not fit why or fix."
+    }
+  ],
   "books": [
     {
       "id": "architecture",
@@ -11,6 +25,16 @@
       "id": "testing",
       "title": "Testing",
       "description": "How tests are linked to specs and rules."
+    },
+    {
+      "id": "code",
+      "title": "Code",
+      "description": "Code conventions that need judgement, checked by an agent."
+    },
+    {
+      "id": "review",
+      "title": "Review",
+      "description": "Agent reviews of the rules and tests themselves."
     }
   ],
   "rules": [
@@ -22,6 +46,7 @@
       "why": "A cycle makes two features one feature and blocks every layering rule.",
       "fix": "Move the shared type down to a lower assembly, or invert the dependency with an event or an interface.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "asmdef.noCycles",
         "params": {
@@ -39,6 +64,7 @@
       "why": "Keeps Core and Wire free of domain features, and makes every new dependency a visible decision.",
       "fix": "Remove the reference, or add it to this rule's table if the new direction is intended.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "asmdef.allowedReferences",
         "params": {
@@ -107,6 +133,7 @@
       "why": "Spikes are deleted in roadmap phase 8. The framework must not need them.",
       "fix": "Promote the needed type into Assets/Framework, following docs/feature-layout.md.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "asmdef.forbiddenReferences",
         "params": {
@@ -131,6 +158,7 @@
       "why": "Store writers are internal. Every grant widens who can write state.",
       "fix": "Remove the grant. If a new assembly needs internal access, add it to this rule's table and say why in the PR.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "ivt.allowlist",
         "params": {
@@ -190,6 +218,7 @@
       "why": "Server and client build the same state only when the same apply handler writes it.",
       "fix": "Emit a wire event from the service. Let the apply handler for that event call the store writer.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "il.callersOnly",
         "params": {
@@ -221,6 +250,7 @@
       "why": "Apply handlers run on the client too, where services do not exist. A handler only writes its store.",
       "fix": "Move the service call out of the handler, for example into a server-only listener on the event stream.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "il.forbiddenCalls",
         "params": {
@@ -251,6 +281,7 @@
       "why": "Callers author through services and read through views. A writable store on the engine bypasses the apply handlers.",
       "fix": "Expose the store through its IReadOnly* interface instead of the concrete store type.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "type.propertyTypes",
         "params": {
@@ -273,6 +304,7 @@
       "why": "A feature without its own tests is only covered by accident.",
       "fix": "Add Framework.<Feature>.Tests with at least one unit test. Follow docs/testing.md.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "feature.hasTests",
         "params": {
@@ -305,6 +337,7 @@
       "why": "Wire is a transport. Domain events live with the feature that owns them.",
       "fix": "Move the event into the feature assembly that emits it.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "type.noSubtypesIn",
         "params": {
@@ -324,6 +357,7 @@
       "why": "The picture is the spec. A test without a picture, or a picture without a test, drifts from the intent.",
       "fix": "Add [Picture(\"<scenario>.md\")] to the test, or write the binding for the scenario. Follow docs/testing.md.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "tests.requireAttribute",
         "params": {
@@ -346,8 +380,87 @@
       "why": "The client builds state only from the server's events. Convergence is the core promise of the wire.",
       "fix": "Check that the event reaches the client channel and that the same apply handler is registered on both sides.",
       "status": "enforced",
+      "severity": "blocking",
       "check": {
         "kind": "attached"
+      }
+    },
+    {
+      "id": "CODE-01",
+      "book": "code",
+      "title": "Comments warn, they do not narrate",
+      "rule": "A code comment in Assets/Framework warns about something the code does not show. It does not restate the signature or the body.",
+      "why": "docs/coding-standards.md: narration goes stale and hides the comments that matter.",
+      "fix": "Delete the comment, or rewrite it as one line that warns about the non-obvious fact.",
+      "status": "enforced",
+      "severity": "advisory",
+      "check": {
+        "kind": "agent.review",
+        "params": {
+          "subject": "files",
+          "prompt": "Read docs/coding-standards.md section \"Comments\". Then review the C# files listed under Subject. Report each comment that narrates (restates what the code or its name already says, or is a header block that describes the type). Do not report comments that warn about an invariant, an ordering constraint, a workaround or a non-obvious reason. Report at most 15 findings, the clearest first.",
+          "model": "sonnet",
+          "files": [
+            "Assets/Framework/*/Runtime/**/*.cs"
+          ],
+          "maxFiles": 60
+        }
+      }
+    },
+    {
+      "id": "REV-01",
+      "book": "review",
+      "title": "Rules are well written",
+      "rule": "Each rule in the rulebook states one checkable thing, gives a real reason, gives a fix an engineer can act on, and its check matches its statement.",
+      "why": "A vague rule or a check that tests something else gives false confidence.",
+      "fix": "Rewrite the rule statement, why or fix, or change the check parameters so they test exactly what the statement says.",
+      "status": "enforced",
+      "severity": "advisory",
+      "check": {
+        "kind": "agent.review",
+        "params": {
+          "subject": "rules",
+          "prompt": "Review every rule under Subject. For each rule decide: (1) the statement says one checkable thing, (2) why gives a real consequence, (3) fix is an action an engineer can take, (4) the check kind and params test exactly what the statement says, not more and not less. Use Tools/Rulebook/README.md for what each check kind does. Report only rules with a real problem; target is the rule id.",
+          "model": "sonnet"
+        }
+      }
+    },
+    {
+      "id": "REV-02",
+      "book": "review",
+      "title": "Linked tests prove their rule",
+      "rule": "Each test that carries [Rule(\"ID\")] would fail if the rule it names were broken.",
+      "why": "A linked test that passes whatever the code does makes the rule look enforced when it is not.",
+      "fix": "Add the missing assertion to the test, or remove the [Rule] link and attach a test that does prove the rule.",
+      "status": "enforced",
+      "severity": "advisory",
+      "check": {
+        "kind": "agent.review",
+        "params": {
+          "subject": "linkedTests",
+          "prompt": "For each rule under Subject, find its linked tests in the source (Grep for the test class and method names). Decide whether each test would fail if the rule were broken. Report tests that would still pass, and say which assertion is missing. Target is the test full name.",
+          "model": "sonnet"
+        }
+      }
+    },
+    {
+      "id": "REV-03",
+      "book": "review",
+      "title": "Acceptance bindings match their pictures",
+      "rule": "Each acceptance binding performs the Given and When of its picture and asserts every Then and Invariant line.",
+      "why": "The picture is the spec. A binding that skips a Then line leaves that behavior untested.",
+      "fix": "Add the missing step or assertion to the binding, or correct the picture if the intent changed.",
+      "status": "enforced",
+      "severity": "advisory",
+      "check": {
+        "kind": "agent.review",
+        "params": {
+          "subject": "pictures",
+          "prompt": "For each picture and binding pair under Subject, compare the picture lines (Given, When, Then, Invariants) with the binding code. Report each Then or Invariant line that the binding does not assert, and each binding step that the picture does not describe. Target is the picture file name.",
+          "model": "sonnet",
+          "pictures": "Assets/Framework/Testing/Acceptance/Scenarios",
+          "bindings": "Assets/Framework/Testing/Acceptance/Bindings"
+        }
       }
     }
   ]

@@ -34,6 +34,12 @@
       "optional": true
     },
     {
+      "id": "review",
+      "kind": "review",
+      "title": "Agent review",
+      "optional": true
+    },
+    {
       "id": "others",
       "kind": "editmode",
       "title": "Spikes and packages",
@@ -42,5 +48,6 @@
       ],
       "optional": true
     }
-  ]
+  ],
+  "timeoutSeconds": 1800
 }

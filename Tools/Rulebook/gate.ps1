@@ -21,7 +21,7 @@ param(
   [switch]   $All,
   [string]   $Rule,
   [string]   $Filter,
-  [int]      $TimeoutSeconds = 1800
+  [int]      $TimeoutSeconds = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,20 +54,32 @@ foreach ($id in @($Only + $Skip + $With)) {
   if ($id -and $knownIds -notcontains $id) { throw "Unknown stage '$id'. Stages: $($knownIds -join ', ')" }
 }
 if ($Rule -and -not $rules.ContainsKey($Rule)) { throw "Unknown rule '$Rule'." }
+if ($TimeoutSeconds -le 0) { $TimeoutSeconds = $(if ($gate.timeoutSeconds) { [int]$gate.timeoutSeconds } else { 1800 }) }
+
+# Severity of a failure: the strictest severity among its rules; a test without a rule blocks.
+function Get-Severity([string[]] $ruleIds) {
+  if (-not $ruleIds -or $ruleIds.Count -eq 0) { return 'blocking' }
+  foreach ($id in $ruleIds) { if (-not $rules.ContainsKey($id) -or $rules[$id].severity -ne 'advisory') { return 'blocking' } }
+  return 'advisory'
+}
 
 $stages = foreach ($s in $gate.stages) {
-  $enabled = -not $s.disabled -and (-not $s.optional -or $All -or $With -contains $s.id)
+  $enabled = (-not $s.optional) -or $All -or ($With -contains $s.id)
   if ($Only.Count -gt 0) { $enabled = $Only -contains $s.id }
   if ($Skip -contains $s.id) { $enabled = $false }
   [pscustomobject]@{
     id = $s.id; kind = $s.kind; title = $s.title; enabled = $enabled
     patterns = @($s.assemblies)
-    result = 'SKIP'; total = 0; passed = 0; failed = 0; skipped = 0
+    result = 'SKIP'; total = 0; passed = 0; failed = 0; skipped = 0; warned = 0
   }
 }
 
-# A rule run selects the rule's own test case plus every test linked to it in the last catalog.
-if ($Rule) {
+# An agent rule runs only in the review stage.
+if ($Rule -and $rules[$Rule].check.kind -eq 'agent.review') {
+  foreach ($s in $stages) { $s.enabled = $s.kind -eq 'review' }
+}
+# A deterministic rule run selects the rule's own test case plus every test linked to it in the last catalog.
+elseif ($Rule) {
   $names = @("Tools.Rulebook.Tests.RulebookTests.$Rule *")
   $catalogPath = Join-Path $OutDir 'catalog.json'
   if (Test-Path $catalogPath) {
@@ -151,6 +163,22 @@ if ($compileStage -and $compileStage.enabled -and $runs.Count -eq 0) {
   $runs += [pscustomobject]@{ mode = 'compile'; xml = $null; log = $log; exit = $code }
 }
 
+# --- agent review ----------------------------------------------------------------------------
+
+$reviewStage = $stages | Where-Object { $_.kind -eq 'review' -and $_.enabled } | Select-Object -First 1
+$reviewed = @()
+if ($reviewStage) {
+  $agentRules = @($rulebook.rules | Where-Object { $_.check.kind -eq 'agent.review' -and $_.status -eq 'enforced' -and (-not $Rule -or $_.id -eq $Rule) })
+  if ($agentRules.Count -gt 0) {
+    Write-Host "Reviewing $($agentRules.Count) agent rule(s)..."
+    $ids = ($agentRules | ForEach-Object { $_.id }) -join ','
+    $lines = @(& python (Join-Path $PSScriptRoot 'review.py') --rules $ids)
+    # Windows PowerShell 5.1 emits a parsed JSON array as one item; ForEach-Object unrolls it.
+    try { $reviewed = @(($lines[-1] | ConvertFrom-Json) | ForEach-Object { $_ }) } catch { $reviewed = @() }
+    if ($reviewed.Count -eq 0) { $reviewStage.result = 'ERROR' }
+  }
+}
+
 # --- collect results -------------------------------------------------------------------------
 
 $compileErrors = @()
@@ -171,7 +199,7 @@ foreach ($run in $runs) {
   }
 }
 $compileErrors = @($compileErrors | Sort-Object file, line, code -Unique)
-if ($compileStage) { $compileStage.result = $(if ($compileErrors.Count -gt 0) { 'FAIL' } elseif ($infraErrors.Count -gt 0) { 'ERROR' } else { 'PASS' }) }
+if ($compileStage -and $compileStage.enabled) { $compileStage.result = $(if ($compileErrors.Count -gt 0) { 'FAIL' } elseif ($infraErrors.Count -gt 0) { 'ERROR' } else { 'PASS' }) }
 
 $tests    = @()
 $failures = @()
@@ -205,7 +233,7 @@ foreach ($run in $runs | Where-Object { $_.xml -and (Test-Path $_.xml) }) {
         $failure = [pscustomobject]@{
           stage = $stageId; test = $case.fullname; assembly = $asm; rules = $ruleIds
           message = $(if ($message) { $message.InnerText.Trim() } else { '' })
-          violations = @(); fix = $null
+          violations = @(); fix = $null; severity = (Get-Severity $ruleIds)
         }
         foreach ($id in $ruleIds) {
           if ($rules.ContainsKey($id)) { $failure.fix = $rules[$id].fix }
@@ -218,12 +246,32 @@ foreach ($run in $runs | Where-Object { $_.xml -and (Test-Path $_.xml) }) {
   }
 }
 
-foreach ($s in $stages | Where-Object { $_.kind -ne 'compile' -and $_.enabled }) {
-  $s.result = $(if ($s.failed -gt 0) { 'FAIL' } elseif ($compileErrors.Count -gt 0 -or $infraErrors.Count -gt 0) { 'ERROR' } elseif ($s.total -eq 0) { 'EMPTY' } else { 'PASS' })
+foreach ($r in $reviewed) {
+  $reviewStage.total++
+  if ($r.passed) { $reviewStage.passed++; continue }
+  $reviewStage.failed++
+  $detail = Read-Json (Join-Path $OutDir "rules\$($r.rule).json")
+  $failures += [pscustomobject]@{
+    stage = $reviewStage.id; test = "$($r.rule) $($rules[$r.rule].title)"; assembly = 'agent'; rules = @($r.rule)
+    message = $(if ($detail.error) { $detail.error } else { $detail.judge.summary })
+    violations = @($detail.violations); fix = $rules[$r.rule].fix; severity = (Get-Severity @($r.rule))
+  }
+}
+
+# A stage fails on a blocking failure; advisory-only failures make it WARN.
+foreach ($s in $stages | Where-Object { $_.kind -ne 'compile' -and $_.enabled -and $_.result -ne 'ERROR' }) {
+  $mine     = @($failures | Where-Object { $_.stage -eq $s.id })
+  $blocking = @($mine | Where-Object { $_.severity -eq 'blocking' })
+  $s.warned = $mine.Count - $blocking.Count
+  $s.result = $(if ($blocking.Count -gt 0) { 'FAIL' }
+                elseif ($s.kind -ne 'review' -and ($compileErrors.Count -gt 0 -or $infraErrors.Count -gt 0)) { 'ERROR' }
+                elseif ($mine.Count -gt 0) { 'WARN' }
+                elseif ($s.total -eq 0) { 'EMPTY' } else { 'PASS' })
 }
 
 $bad    = @($stages | Where-Object { $_.enabled -and @('FAIL', 'ERROR') -contains $_.result })
-$result = $(if ($bad.Count -gt 0) { 'FAIL' } else { 'PASS' })
+$warn   = @($stages | Where-Object { $_.enabled -and $_.result -eq 'WARN' })
+$result = $(if ($bad.Count -gt 0) { 'FAIL' } elseif ($warn.Count -gt 0) { 'WARN' } else { 'PASS' })
 
 $ruleResults = @()
 $rulesDir = Join-Path $OutDir 'rules'
@@ -234,7 +282,7 @@ $report = [pscustomobject]@{
   startedAt     = $Started.ToString('o')
   durationSec   = [int]((Get-Date) - $Started).TotalSeconds
   selection     = [pscustomobject]@{ only = $Only; skip = $Skip; with = $With; all = [bool]$All; rule = $Rule; filter = $Filter }
-  stages        = @($stages | Select-Object id, title, kind, enabled, result, total, passed, failed, skipped)
+  stages        = @($stages | Select-Object id, title, kind, enabled, result, total, passed, failed, skipped, warned)
   compileErrors = $compileErrors
   infraErrors   = $infraErrors
   failures      = $failures
@@ -251,6 +299,14 @@ if ($partial -and (Test-Path $catalogFile) -and $tests.Count -gt 0) {
 }
 if ($tests.Count -gt 0) { Write-Json $catalogFile ([pscustomobject]@{ generatedAt = $Started.ToString('o'); tests = $tests }) }
 
+# History: one folder per run, newest 50 kept.
+$historyRoot = Join-Path $OutDir 'history'
+$runDir = Join-Path $historyRoot $Started.ToString('yyyyMMdd-HHmmss')
+New-Item -ItemType Directory -Force -Path $runDir | Out-Null
+Copy-Item (Join-Path $OutDir 'report.json') $runDir
+if (Test-Path $catalogFile) { Copy-Item $catalogFile $runDir }
+Get-ChildItem $historyRoot -Directory | Sort-Object Name -Descending | Select-Object -Skip 50 | Remove-Item -Recurse -Force
+
 # --- console summary (short enough for an agent to read in full) ------------------------------
 
 Write-Host ''
@@ -265,7 +321,7 @@ Write-Host ('{0,-14} {1,-6} {2,10}' -f 'GATE', $result, "$($report.durationSec)s
 foreach ($e in $infraErrors) { Write-Host "`nERROR $e" }
 foreach ($e in $compileErrors | Select-Object -First 20) { Write-Host "`nCOMPILE $($e.file):$($e.line) $($e.code) $($e.message)" }
 foreach ($f in $failures) {
-  Write-Host "`nFAIL $($f.stage) | $($f.test)"
+  Write-Host "`n$(if ($f.severity -eq 'advisory') { 'WARN' } else { 'FAIL' }) $($f.stage) | $($f.test)"
   if ($f.violations.Count -gt 0) {
     foreach ($v in $f.violations) { Write-Host ("  - {0}: {1}{2}" -f $v.target, $v.detail, $(if ($v.location) { " ($($v.location))" } else { '' })) }
   } else {
@@ -275,4 +331,4 @@ foreach ($f in $failures) {
 }
 Write-Host "`nReport: Logs/gate/report.json"
 
-exit $(if ($result -eq 'PASS') { 0 } else { 1 })
+exit $(if ($result -eq 'FAIL') { 1 } else { 0 })

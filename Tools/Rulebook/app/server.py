@@ -26,6 +26,7 @@ ROOT = BOOK_DIR.parent.parent
 RULEBOOK = BOOK_DIR / "rulebook.json"
 GATE = BOOK_DIR / "gate.json"
 SCHEMA = BOOK_DIR / "schema" / "rulebook.schema.json"
+KINDS = BOOK_DIR / "schema" / "check-kinds.json"
 OUT = ROOT / "Logs" / "gate"
 TOKEN = secrets.token_urlsafe(24)
 
@@ -42,8 +43,22 @@ def write_json(path, value):
 
 
 def check_kinds():
-    schema = read_json(SCHEMA, {})
-    return schema["properties"]["rules"]["items"]["properties"]["check"]["properties"]["kind"]["enum"]
+    return list(read_json(KINDS, {}).get("kinds", {}).keys())
+
+
+def history():
+    root = OUT / "history"
+    runs = []
+    if root.is_dir():
+        for d in sorted((d for d in root.iterdir() if d.is_dir()), reverse=True):
+            rep = read_json(d / "report.json")
+            if not rep:
+                continue
+            runs.append({"id": d.name, "result": rep.get("result"), "startedAt": rep.get("startedAt"),
+                         "durationSec": rep.get("durationSec"), "selection": rep.get("selection"),
+                         "stages": rep.get("stages"), "failures": len(rep.get("failures") or []),
+                         "rules": [{"rule": r.get("rule"), "passed": r.get("passed")} for r in rep.get("rules") or []]})
+    return runs
 
 
 # Mirrors RulebookLoader.Validate in Unity, which stays the authority the gate enforces.
@@ -52,6 +67,17 @@ def validate_rulebook(book):
     if book.get("version") != 1:
         errors.append("version must be 1")
     kinds = set(check_kinds())
+    field_names = set()
+    for f in book.get("fields", []):
+        if not re.fullmatch(r"[a-z][a-zA-Z0-9]*", f.get("name", "")):
+            errors.append(f"custom field name '{f.get('name')}' must be camelCase letters")
+        elif f["name"] in field_names:
+            errors.append(f"custom field '{f['name']}' is defined twice")
+        field_names.add(f.get("name"))
+        if f.get("type") not in ("text", "string", "list", "bool", "enum"):
+            errors.append(f"custom field '{f.get('name')}': type must be text, string, list, bool or enum")
+        if f.get("type") == "enum" and not f.get("options"):
+            errors.append(f"custom field '{f.get('name')}': an enum needs options")
     book_ids = set()
     for b in book.get("books", []):
         if not b.get("id"):
@@ -74,6 +100,14 @@ def validate_rulebook(book):
                 errors.append(f"{name}: '{field}' is empty")
         if r.get("status") not in ("enforced", "planned"):
             errors.append(f"{name}: status must be enforced or planned")
+        if r.get("severity", "blocking") not in ("blocking", "advisory"):
+            errors.append(f"{name}: severity must be blocking or advisory")
+        for key in (r.get("extra") or {}):
+            if key not in field_names:
+                errors.append(f"{name}: extra field '{key}' is not in the fields template")
+        for f in book.get("fields", []):
+            if f.get("required") and f.get("name") not in (r.get("extra") or {}):
+                errors.append(f"{name}: required field '{f.get('name')}' is missing")
         check = r.get("check") or {}
         if check.get("kind") not in kinds:
             errors.append(f"{name}: check kind '{check.get('kind')}' is unknown")
@@ -95,9 +129,9 @@ def validate_gate(gate):
         elif sid in ids:
             errors.append(f"stage id '{sid}' is used twice")
         ids.add(sid)
-        if s.get("kind") not in ("compile", "editmode", "playmode"):
-            errors.append(f"{sid}: kind must be compile, editmode or playmode")
-        if s.get("kind") != "compile" and not s.get("assemblies"):
+        if s.get("kind") not in ("compile", "editmode", "playmode", "review"):
+            errors.append(f"{sid}: kind must be compile, editmode, playmode or review")
+        if s.get("kind") in ("editmode", "playmode") and not s.get("assemblies"):
             errors.append(f"{sid}: a test stage needs at least one assembly pattern")
     return errors
 
@@ -233,9 +267,14 @@ class Handler(BaseHTTPRequestHandler):
                 "gate": read_json(GATE),
                 "catalog": read_json(OUT / "catalog.json"),
                 "report": read_json(OUT / "report.json"),
-                "kinds": check_kinds(),
+                "kinds": read_json(KINDS, {}),
+                "history": history(),
                 "run": RUN.status(),
             })
+        m = re.fullmatch(r"/api/history/(\d{8}-\d{6})", self.path)
+        if m:
+            rep = read_json(OUT / "history" / m.group(1) / "report.json")
+            return self._send(HTTPStatus.OK if rep else HTTPStatus.NOT_FOUND, rep or {"error": "no such run"})
         if self.path == "/api/run":
             return self._send(HTTPStatus.OK, RUN.status())
         self._send(HTTPStatus.NOT_FOUND, {"error": "not found"})

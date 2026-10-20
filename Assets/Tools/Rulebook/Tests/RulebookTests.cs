@@ -3,14 +3,15 @@ using NUnit.Framework;
 
 namespace Tools.Rulebook.Tests
 {
-    // One test case per rule in Tools/Rulebook/rulebook.json. Adding a rule of an existing
-    // check kind adds a test here with no code change.
+    // One test case per deterministic rule in Tools/Rulebook/rulebook.json. Adding a rule of an
+    // existing check kind adds a test here with no code change. Agent rules run in the review stage.
     public class RulebookTests
     {
         static IEnumerable<TestCaseData> Rules()
         {
             foreach (var rule in RulebookLoader.Load().Rules)
             {
+                if (CheckRegistry.IsExternal(rule.Check.Kind)) continue;   // judged by the gate's review stage
                 var data = new TestCaseData(rule.Id)
                     .SetName($"{rule.Id} {rule.Title}")
                     .SetProperty(RuleAttribute.PropertyName, rule.Id);

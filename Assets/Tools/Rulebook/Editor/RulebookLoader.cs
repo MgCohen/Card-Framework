@@ -20,6 +20,15 @@ namespace Tools.Rulebook
             var errors = new List<string>();
             if (book.Version != 1) errors.Add($"version must be 1, got {book.Version}");
 
+            var fieldNames = new HashSet<string>();
+            foreach (var f in book.Fields)
+            {
+                if (string.IsNullOrWhiteSpace(f.Name)) errors.Add("a custom field has no name");
+                else if (!fieldNames.Add(f.Name)) errors.Add($"custom field '{f.Name}' is defined twice");
+                if (!new[] { "text", "string", "list", "bool", "enum" }.Contains(f.Type)) errors.Add($"custom field '{f.Name}': type '{f.Type}' is unknown");
+                if (f.Type == "enum" && f.Options.Count == 0) errors.Add($"custom field '{f.Name}': an enum needs options");
+            }
+
             var bookIds = new HashSet<string>();
             foreach (var b in book.Books)
             {
@@ -39,6 +48,11 @@ namespace Tools.Rulebook
                     if (string.IsNullOrWhiteSpace(value)) errors.Add($"{name}: '{field}' is empty");
 
                 if (r.Status != "enforced" && r.Status != "planned") errors.Add($"{name}: status '{r.Status}' is not enforced or planned");
+                if (r.Severity != "blocking" && r.Severity != "advisory") errors.Add($"{name}: severity '{r.Severity}' is not blocking or advisory");
+                foreach (var key in r.Extra.Properties().Select(p => p.Name).Where(k => !fieldNames.Contains(k)))
+                    errors.Add($"{name}: extra field '{key}' is not defined in the fields template");
+                foreach (var f in book.Fields.Where(f => f.Required && r.Extra[f.Name] == null))
+                    errors.Add($"{name}: required field '{f.Name}' is missing");
                 if (r.Check == null || !CheckRegistry.Kinds.Contains(r.Check.Kind)) errors.Add($"{name}: check kind '{r.Check?.Kind}' is unknown");
 
                 foreach (var e in r.Exceptions.Where(e => string.IsNullOrWhiteSpace(e.Target) || string.IsNullOrWhiteSpace(e.Reason) || string.IsNullOrWhiteSpace(e.Until)))
