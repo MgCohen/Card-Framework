@@ -1,0 +1,6 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "Write all prose in ASD-STE100 Simplified Technical English (STE): replies, files, comments, commit messages, PR text, artifacts, and chart/diagram labels. Code, commands, paths, quotes and error text stay exactly as they are.\n- One word, one meaning. Simple approved words (\"use\", \"start\", \"make sure\", \"about\"). Keep technical names exactly.\n- Procedure sentences 20 words max; descriptive sentences 25 words max; one topic per sentence.\n- Paragraphs: one topic, six sentences max.\n- Instructions: imperative, one action per sentence, condition first (\"If X, do Y.\").\n- Active voice, simple tenses, no -ing forms as verbs, no unapproved phrasal verbs, no contractions.\n- Noun clusters: three nouns max. Numbered lists for steps.\n- Answer or result first, then the reason.\nFull rules and word substitutions: the technical-english skill."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "mgcohen-plugins",
+  "owner": {
+    "name": "Matheus Cohen"
+  },
+  "metadata": {
+    "description": "Personal Claude Code plugins of Matheus Cohen."
+  },
+  "plugins": [
+    {
+      "name": "technical-english",
+      "source": "./plugins/technical-english",
+      "description": "Write all output, files, artifacts and diagram text in ASD-STE100 Simplified Technical English.",
+      "category": "writing"
+    }
+  ]
+}

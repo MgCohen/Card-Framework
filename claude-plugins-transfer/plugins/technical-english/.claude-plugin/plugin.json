@@ -1,0 +1,17 @@
+{
+  "name": "technical-english",
+  "displayName": "Technical English (ASD-STE100)",
+  "version": "1.0.0",
+  "description": "Write all output, files, artifacts and diagram text in ASD-STE100 Simplified Technical English. Ships a rules skill, a forced output style, and hooks that remind the main agent and every subagent.",
+  "author": {
+    "name": "Matheus Cohen"
+  },
+  "keywords": [
+    "writing",
+    "ste",
+    "asd-ste100",
+    "simplified-technical-english",
+    "style"
+  ],
+  "license": "MIT"
+}
