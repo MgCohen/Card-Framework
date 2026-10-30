@@ -1,6 +1,6 @@
 # Architecture
 
-> **Status: current as of `main` @ `8a99696` (2026-06-05).** This doc describes the code in `Assets/Framework/` as it is. For what comes next, see [`Product/spikes/framework-roadmap.md`](../Product/spikes/framework-roadmap.md). When code and this doc disagree, the code is correct — fix this doc in the same PR.
+> **Status: describes the Framework code as of 2026-10-30.** For one page per feature, see [`systems/`](systems/README.md). When code and this doc disagree, the code is correct — fix this doc in the same PR.
 
 Structure follows [matklad's ARCHITECTURE.md pattern](https://matklad.github.io/2021/02/06/ARCHITECTURE.md.html): bird's-eye view, codemap, cross-cutting invariants.
 
@@ -46,7 +46,7 @@ flowchart LR
 
 ## Codemap
 
-All paths are under `Assets/Framework/`. Assembly names are `Framework.<Feature>` (Runtime) and `Framework.<Feature>.Tests`.
+Each feature is a folder directly under `Assets/`. Assembly names are `Framework.<Feature>` (Runtime) and `Framework.<Feature>.Tests`.
 
 ```mermaid
 flowchart TD
@@ -87,9 +87,9 @@ flowchart TD
 | `Multiplayer/` | Lobby, peers, ready-up over NGO. Not connected to `GameplayLayer` yet. | `Session`, `PeerRoster`, `Peer`, `PlayerData`, `PlayerContext`, `NetworkManagerSetup` |
 | `Testing/` | Global test tiers. `Support/` holds `MatchHarness` and shared fixtures. `Acceptance/` has picture-bound scenarios: each test has a `[Picture("x.md")]` that links to a scenario in `Scenarios/`. `Integration/` has cross-feature test spines. See [`testing.md`](testing.md). | `MatchHarness`, `FullFlowIntegrationTests`, `BootstrapWiringIntegrationTests`, `RealAppFlowRootCompositionTests` |
 
-Outside `Assets/Framework/`:
+Not Framework features:
 
-- `Assets/Spike/ECS/` — prototypes. `VerticalSlice` is the older complete game loop (effects, hooks, triggers, zones). It is the reference for the gameplay layer that the framework does not have yet.
+- `Assets/Tools/Rulebook/` — rule checks and rulebook tests used by the gate.
 - `Packages/com.scaffold.graphflow/` — graph package on Unity Graph Toolkit. The framework does not use it yet.
 
 ## How it works
@@ -132,7 +132,7 @@ The client does not get services, `GameEngine` or commands because the installer
 
 ## Not built yet
 
-These parts do not exist in `Assets/Framework/`. The [roadmap](../Product/spikes/framework-roadmap.md) puts them in order.
+These parts do not exist yet. The deleted [VerticalSlice spike](systems/spike-vertical-slice.md) built a version of most of them.
 
 | Missing | What exists now |
 |---|---|
@@ -150,9 +150,9 @@ These parts do not exist in `Assets/Framework/`. The [roadmap](../Product/spikes
 
 System-wide rules that span features. Edit with care — these are the load-bearing decisions.
 
-**Pipeline entry is `Enqueue`, not `Execute` / `Submit`.** External callers enqueue intents, actions, requests, or events into a single pipeline. The naming reflects the future shape — a multi-type pipeline routed by kind — not the current command-only state. Don't rename this even if "Execute" reads more naturally for command-only usage today. *Current code: the only entry is `CommandService.Execute`, which is synchronous. The engine loop step of the roadmap brings in the pipeline and this name.*
+**Pipeline entry is `Enqueue`, not `Execute` / `Submit`.** External callers enqueue intents, actions, requests, or events into a single pipeline. The naming reflects the future shape — a multi-type pipeline routed by kind — not the current command-only state. Don't rename this even if "Execute" reads more naturally for command-only usage today. *Current code: the only entry is `CommandService.Execute`, which is synchronous.*
 
-**Keyed lookups follow four named patterns.** Every registry, store, cursor, and dispatch table in `Assets/Framework/` is one of four shapes across two families — Registry and Router (frozen at composition) or Store and Cell (live, handler-written). See [lookup-patterns.md](lookup-patterns.md).
+**Keyed lookups follow four named patterns.** Every registry, store, cursor, and dispatch table in `Assets/` is one of four shapes across two families — Registry and Router (frozen at composition) or Store and Cell (live, handler-written). See [lookup-patterns.md](lookup-patterns.md).
 
 **Wire carries no domain types.** Domain events live with their owning feature; `Framework.Wire` is a pure transport substrate (event stream + network + dispatch) holding no domain event types. Events travel by `int` id/slot, not C# type, wherever a slot suffices. (`Block*` is a recognized exception — it stays in Wire as a concept until the command-pipeline feature graduates and gives it structure.)
 
@@ -164,6 +164,6 @@ System-wide rules that span features. Edit with care — these are the load-bear
 
 ## Where the design lives
 
-- Current design decisions: the spikes linked from the [roadmap](../Product/spikes/framework-roadmap.md) — `framework-architecture.md`, `definition-service-pattern.md`, `request-service.md`, `state-service.md`, `command-service.md`, `acceptance-test-suite.md`.
-- The state model is recorded in [ADR-0014](../Product/decisions/0014-service-first-state-model.md). Vocabulary is in [`Product/ledgers/GLOSSARY.md`](../Product/ledgers/GLOSSARY.md).
-- The old slice-based docs (`MatchStateSlice`, `GameRulesRuntime`, Scaffold.State slices) are archived: `Product/features/*/archive/` and `Product/_archive/ledgers/GLOSSARY-old-model.md`. ADR-0009 is superseded and ADR-0005, 0007 and 0010 to 0013 are superseded in part. Read them only for history or for the open questions behind unbuilt features.
+- One page per feature: [`systems/`](systems/README.md).
+- The deleted spikes, as reference shapes: the `spike-*.md` pages in [`systems/`](systems/README.md).
+- The old decision records, spike plans and roadmap (`Product/`, `PLANS/`) were deleted on 2026-10-30. They are in git at commit `b13907e`.

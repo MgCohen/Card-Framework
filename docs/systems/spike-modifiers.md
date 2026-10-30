@@ -65,7 +65,7 @@ c.Modifiers.Add(new ModifierDefinition(
 ```
 
 ## Relation to the Framework
-- Informs roadmap phase 5 (Modifiers). The Framework has no modifiers feature yet. It already has `EntityStore`, `EntityType`, `Catalog<TDef>` and an unmanaged `TagStore`.
+- Informs a future Framework modifiers feature. None exists yet. It already has `EntityStore`, `EntityType`, `Catalog<TDef>` and an unmanaged `TagStore`.
 - Every write in `OnAttach` and `Refresh` must go through `TagService`, so it becomes a `TagSetEvent` that the apply handler writes. Reset-then-replay would emit a burst of intermediate values. Fold into a scratch buffer and emit only the final changed tags.
 - Base values need a home the client can rebuild, such as a base tag store fed by its own events, or a read from the card definition.
 - `IModifierEffect` must take an entity id and services, not a mutable `Entity`. `TagPolicies` should become per-engine or a property of the `Tag` key. Detach needs an entity-destroy event, which the Framework does not have (only `EntityCreatedEvent`).

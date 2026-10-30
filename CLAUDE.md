@@ -10,20 +10,24 @@ Unity card-game framework. Unity version: `6000.6.6f1`.
 Card Framework/
 ├── CLAUDE.md                  # This file — router + hard rules
 ├── docs/
-│   ├── architecture.md        # How the current Framework works: codemap, data flow, invariants
+│   ├── architecture.md        # How the Framework works: codemap, data flow, invariants
+│   ├── systems/               # One short page per feature, plus the deleted spikes as reference shapes
 │   ├── coding-standards.md    # C# / Unity conventions for code under Assets/
 │   ├── feature-layout.md      # Feature structure, asmdefs, spike → framework promotion
+│   ├── lookup-patterns.md     # Registry / Router / Store / Cell conventions
 │   └── testing.md             # Test tiers (unit / acceptance / integration); which to write
-├── Product/spikes/framework-roadmap.md  # Ordered plan for the remaining framework work
 ├── Assets/
-│   ├── Framework/             # Graduated features (vertical slices)
-│   ├── Spike/                 # Exploratory / prototype work; deletable
+│   ├── <Feature>/             # Framework features (vertical slices): Core, Wire, Tags, Entities,
+│   │                          #   States, Requests, Commands, Engine, Bootstrap, Multiplayer
+│   ├── Testing/               # Global acceptance + integration test tiers
 │   └── Tools/Rulebook/        # Rule check kinds + rulebook tests (Unity side)
 ├── Tools/Rulebook/            # rulebook.json, gate.json, gate.ps1, local app
 ├── Packages/manifest.json     # UPM dependencies
 └── Library/                   # Unity-generated; gitignored
     └── PackageCache/          # Imported UPM package source — read-only
 ```
+
+There is no roadmap. The old plans, decision records and spikes were deleted on 2026-10-30; they are in git at commit `b13907e`, and `docs/systems/spike-*.md` records how each spike worked.
 
 ## Hard rules
 
@@ -45,13 +49,13 @@ It compiles, runs the rulebook tests and the Framework EditMode tests in one Uni
 
 **Rules live in `Tools/Rulebook/rulebook.json`.** Do not weaken a rule or add an exception to make the gate pass. If a rule is wrong, say so and ask. A new architecture rule goes in the rulebook, not only in prose docs.
 
-**Benchmarks are opt-in.** Tests tagged `[Category("Benchmark")]` (perf/allocation gates — currently in `Assets/Spike/ECS/VerticalSlice/QueryBench/`) are excluded by default via `-testCategory "!Benchmark"`. To run only them, swap to `-testCategory "Benchmark"`.
+**Benchmarks are opt-in.** Tests tagged `[Category("Benchmark")]` (perf/allocation gates; none exist right now) are excluded by default via `-testCategory "!Benchmark"`. To run only them, swap to `-testCategory "Benchmark"`.
 
 **Adding or modifying a feature.** Follow [docs/feature-layout.md](docs/feature-layout.md).
 
 **Adding or modifying a test.** Follow [docs/testing.md](docs/testing.md) — it decides the tier (per-feature **unit** in `Framework.<Feature>.Tests`; global **acceptance**, intent-as-picture, in `Framework.Testing.Acceptance.Tests`; global **integration**, hand-written mechanism, in `Framework.Testing.Integration.Tests`) and the rules for keeping pictures canonical and reusing `Framework.Testing.Support`. For acceptance tests, the `author-acceptance-test` skill scaffolds the picture + binding.
 
-**Before inventing a pattern.** Read existing code in the target feature (or relevant spike) first. If no pattern fits, ask — don't quietly introduce a new style alongside an existing one.
+**Before inventing a pattern.** Read existing code in the target feature first, and its page in `docs/systems/`. If no pattern fits, ask — don't quietly introduce a new style alongside an existing one.
 
 **Searching for an API.** If a type or method isn't in `Assets/`, grep `Library/PackageCache/` before assuming it doesn't exist — that's where UPM-imported packages live.
 

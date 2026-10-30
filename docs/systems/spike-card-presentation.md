@@ -65,7 +65,7 @@ public void OnDrop(PointerEventData e)
 ```
 
 ## Relation to the Framework
-- Informs roadmap phase 7 (Presentation). The Framework has no presentation feature yet. Zone membership depends on phase 3 (Board), and sending intents depends on phase 2 (client `Submit`).
+- Informs a future Framework presentation feature. None exists yet. Zone membership needs a zone store, and sending intents needs a client `Submit` path. The Framework has neither.
 - `World` and `CardChanged` become the client's read-only stores (`IReadOnlyTagStore`, the entity store, a future zone store) and a signal raised after apply handlers run.
 - `GameSystem` splits in two. Legality moves to the server engine and reaches the client as data (open item `oq-legal-actions-shape`). `TrySubmit` becomes a client submit with no local write, so a claimed view must wait for the server's event.
 - `CardEntity` string fields should come from card definitions in a `Catalog`. The per-card VM sits under the per-state view-models from ADR-0012, which ADR-0014 says need review first.

@@ -8,9 +8,9 @@ in [CLAUDE.md](../CLAUDE.md) (§Code → "Verify before claiming done").
 
 | Tier | Where | Proves | Authored as |
 |---|---|---|---|
-| **Unit** | `Assets/Framework/<Feature>/Tests/` (`Framework.<Feature>.Tests`) | one feature's component contracts in isolation | hand-written code |
-| **Acceptance** | `Assets/Framework/Testing/Acceptance/` (`Framework.Testing.Acceptance.Tests`) | a real gameplay moment reads back as the spec says — **intent/behaviour** | prose **picture** → generated **binding** → human approves |
-| **Integration** | `Assets/Framework/Testing/Integration/` (`Framework.Testing.Integration.Tests`) | the parts wire and compose — **mechanism/structure** | hand-written code |
+| **Unit** | `Assets/<Feature>/Tests/` (`Framework.<Feature>.Tests`) | one feature's component contracts in isolation | hand-written code |
+| **Acceptance** | `Assets/Testing/Acceptance/` (`Framework.Testing.Acceptance.Tests`) | a real gameplay moment reads back as the spec says — **intent/behaviour** | prose **picture** → generated **binding** → human approves |
+| **Integration** | `Assets/Testing/Integration/` (`Framework.Testing.Integration.Tests`) | the parts wire and compose — **mechanism/structure** | hand-written code |
 
 Unit tests are **per-feature and local** — each feature owns its own sample types and
 its `Tests/` asmdef references only that feature. They are deliberately not folded into
@@ -19,7 +19,7 @@ standalone testability). The two **global** tiers — Acceptance and Integration
 one neutral support module:
 
 ```
-Assets/Framework/Testing/
+Assets/Testing/
 ├── Support/        Framework.Testing.Support            # shared DSL + fixtures (no tests)
 │   ├── MatchHarness.cs        # boots the real composition root; the Execute seam + read facades
 │   ├── MatchPair.cs           # server + client GameplayLayer over a loopback transport; convergence checks
@@ -79,7 +79,7 @@ reasons) moved out to Acceptance pictures, leaving Integration as pure mechanism
 ## Authoring an Acceptance test (picture → binding → approve)
 
 The full generator contract lives in
-[`Assets/Framework/Testing/Acceptance/Scenarios/_how-to-bind.md`](../Assets/Framework/Testing/Acceptance/Scenarios/_how-to-bind.md)
+[`Assets/Testing/Acceptance/Scenarios/_how-to-bind.md`](../Assets/Testing/Acceptance/Scenarios/_how-to-bind.md)
 — stated once, reused by every picture. The `author-acceptance-test` skill operationalises
 it. In short:
 
@@ -119,7 +119,7 @@ LLM judge. Any LLM step (generate, drift-check) is local/advisory and never gate
   world. Each test builds its own match via `MatchHarness.Start(...)`
   ([Fresh Fixture](http://xunitpatterns.com/Fresh%20Fixture.html)); a
   [Shared Fixture](http://xunitpatterns.com/Shared%20Fixture.html) is an anti-pattern.
-- **Per-feature unit fixtures stay local.** Don't reach into `Framework/Testing/Support`
+- **Per-feature unit fixtures stay local.** Don't reach into `Testing/Support`
   from a feature's `Tests/` assembly, and don't fold a feature's sample types into Support.
 
 ## Assembly fences (compiler-enforced boundaries)
@@ -192,5 +192,5 @@ framing is our synthesis, aligned with "test behaviour, not implementation."
 ## Background
 
 The full design history, the deferred north-star layers (client-`Submit` seam, two-sided
-convergence, reactions), and the deferred test-freshness validator agent live in the spike
-plan: `Product/spikes/acceptance-test-suite.md`.
+convergence, reactions), and the deferred test-freshness validator agent were in the spike
+plan `Product/spikes/acceptance-test-suite.md`, deleted on 2026-10-30. It is in git at commit `b13907e`.

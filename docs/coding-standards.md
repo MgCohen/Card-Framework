@@ -27,4 +27,4 @@ Everything else gets its own file. An interface plus its implementation, a handf
 - why an `unsafe` / pointer / `sizeof` block is sound;
 - a deliberate no-op or a subtle ordering requirement.
 
-If the code already states it (`if (_isServer) …` is self-evidently server-only), the comment is redundant — drop it. Architectural rationale and the "why" of a design live in the design docs (`docs/`, `Product/`), not in code. When in doubt, omit.
+If the code already states it (`if (_isServer) …` is self-evidently server-only), the comment is redundant — drop it. Architectural rationale and the "why" of a design live in the design docs (`docs/`), not in code. When in doubt, omit.

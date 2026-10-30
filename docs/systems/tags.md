@@ -44,7 +44,7 @@ Assert.AreEqual(25, client.TagStore.Get<int>(serverCard.Id, SampleTags.Health.Sl
 
 ## Gaps
 - `TagRemovedEvent` carries only `EntityId` and `Slot`. The removed value is lost, so the event cannot be reversed.
-- `Framework.Tags.Tests` is an empty assembly. Tag behaviour is tested only inside `Framework.Entities.Tests` (ARCH-08 exception until test suite PR T-3).
+- `Framework.Tags.Tests` is an empty assembly. Tag behaviour is tested only inside `Framework.Entities.Tests` (an ARCH-08 exception).
 - `TagStore.Has` and `TagStore.Remove` scan every value-type map, because the slot alone does not say which map holds it.
 - Value types are fixed to `int` and `bool` in two places: `TagInstaller` and `WireRegistrar.ValueTypes`.
 - `TagRegistry` is registered in DI, but no code adds tags to it or reads from it.

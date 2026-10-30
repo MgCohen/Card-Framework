@@ -64,7 +64,7 @@ private void Evaluate(GameAction action, CommandResult result)
 
 ## Relation to the Framework
 - Informs `Framework.States`. The Framework kept the zero-data `GameState`, the baseline states (`MatchNotStartedState`, `PlayingState`, `MatchEndedState`) and a single `StatePushEvent`. That event carries one `int Slot` resolved through `GameStateRegistry`, not the spike's byte pair.
-- The Framework does not have the behavior surface yet (`Actions`, `OnEnter`, `OnExit`, `IsCompleted`, `IStateFlow`, `PushStateCommand`, `Evaluate`). It belongs to roadmap phase 1, which replaces the synchronous `CommandService.Execute` with an `Enqueue` loop.
+- The Framework does not have the behavior surface yet (`Actions`, `OnEnter`, `OnExit`, `IsCompleted`, `IStateFlow`, `PushStateCommand`, `Evaluate`). It would come with an engine loop that replaces the synchronous `CommandService.Execute` with an `Enqueue` pipeline.
 - To fit, `PushStateHandler` must call `StateService.Push<TState>()` and let `StatePushHandler` write `StateStore`. The spike writes `Current` directly.
 - Spike handlers write `Entity` tags and `MatchSingleton` in place. In the Framework they must call `TagService` (or a match store's service) so each change is a wire event.
 - The spike's `PrevKind` gave a cheap undo. The Framework has no unapply yet (`WireEventHandler.Unapply` throws).
