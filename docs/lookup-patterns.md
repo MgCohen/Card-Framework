@@ -1,6 +1,6 @@
 # Lookup patterns
 
-Conventions for keyed lookups in code under `Assets/Framework/`. Every registry, store,
+Conventions for keyed lookups in code under `Assets/`. Every registry, store,
 cursor, and dispatch table is one of **four named patterns** across **two families**, split
 on one axis: **frozen at composition** vs **live and handler-written**. Pick the pattern by
 what the lookup *is*, not by what's convenient at the call site.
@@ -139,7 +139,7 @@ collapses N channels/handlers down to one.
 
 ## Current gaps (code vs standard)
 
-The conformance PRs (PR1–PR6, see [conformance-plan.md](conformance-plan.md)) closed every lookup
+The conformance PRs (PR1–PR6) closed every lookup
 gap — registries, type-set records, State slot-wire, and Store discipline. **No framework lookup is
 off-standard.**
 

@@ -42,7 +42,7 @@
       "id": "ARCH-01",
       "book": "architecture",
       "title": "No assembly cycles",
-      "rule": "The asmdef reference graph under Assets/Framework has no cycles.",
+      "rule": "The asmdef reference graph under Assets has no cycles.",
       "why": "A cycle makes two features one feature and blocks every layering rule.",
       "fix": "Move the shared type down to a lower assembly, or invert the dependency with an event or an interface.",
       "status": "enforced",
@@ -51,7 +51,7 @@
         "kind": "asmdef.noCycles",
         "params": {
           "roots": [
-            "Assets/Framework"
+            "Assets"
           ]
         }
       }
@@ -69,7 +69,7 @@
         "kind": "asmdef.allowedReferences",
         "params": {
           "roots": [
-            "Assets/Framework"
+            "Assets"
           ],
           "scope": "Framework.*",
           "exclude": [
@@ -130,15 +130,15 @@
       "book": "architecture",
       "title": "No framework dependency on spikes",
       "rule": "No Framework assembly references a spike or prototype assembly.",
-      "why": "Spikes are deleted in roadmap phase 8. The framework must not need them.",
-      "fix": "Promote the needed type into Assets/Framework, following docs/feature-layout.md.",
+      "why": "Spike code is exploratory and can be deleted at any time. The framework must not need it.",
+      "fix": "Move the needed type into its feature folder under Assets/, following docs/feature-layout.md.",
       "status": "enforced",
       "severity": "blocking",
       "check": {
         "kind": "asmdef.forbiddenReferences",
         "params": {
           "roots": [
-            "Assets/Framework"
+            "Assets"
           ],
           "from": "Framework.*",
           "forbidden": [
@@ -308,7 +308,7 @@
       "check": {
         "kind": "feature.hasTests",
         "params": {
-          "root": "Assets/Framework",
+          "root": "Assets",
           "runtimeFolder": "Runtime",
           "testFolders": [
             "Tests",
@@ -320,12 +320,12 @@
         {
           "target": "Tags",
           "reason": "Tag tests live in Framework.Entities.Tests; Framework.Tags.Tests is empty.",
-          "until": "Test suite PR T-3"
+          "until": "Framework.Tags.Tests gets its own tests"
         },
         {
           "target": "Engine",
           "reason": "GameEngine is a plain aggregate, covered by Bootstrap and integration tests.",
-          "until": "Engine loop (roadmap phase 1)"
+          "until": "GameEngine gets behaviour of its own (the engine loop)"
         }
       ]
     },
@@ -365,7 +365,7 @@
             "Framework.Testing.Acceptance.Tests"
           ],
           "attribute": "Framework.Testing.PictureAttribute",
-          "fileFolder": "Assets/Framework/Testing/Acceptance/Scenarios",
+          "fileFolder": "Assets/Testing/Acceptance/Scenarios",
           "filePattern": "*.md",
           "ignoreFilePrefix": "_",
           "requireAllFilesReferenced": true
@@ -389,7 +389,7 @@
       "id": "CODE-01",
       "book": "code",
       "title": "Comments warn, they do not narrate",
-      "rule": "A code comment in the runtime code of Assets/Framework (each feature's Runtime folder) warns about something the code does not show. It does not restate the signature or the body.",
+      "rule": "A code comment in the runtime code of the Framework features (each Assets/<Feature>/Runtime folder) warns about something the code does not show. It does not restate the signature or the body.",
       "why": "docs/coding-standards.md: narration goes stale and hides the comments that matter.",
       "fix": "Delete the comment, or rewrite it as one line that warns about the non-obvious fact.",
       "status": "enforced",
@@ -401,7 +401,7 @@
           "prompt": "Read docs/coding-standards.md section \"Comments\". Then review the C# files listed under Subject. Report each comment that narrates (restates what the code or its name already says, or is a header block that describes the type). Do not report comments that warn about an invariant, an ordering constraint, a workaround or a non-obvious reason.",
           "model": "sonnet",
           "files": [
-            "Assets/Framework/*/Runtime/**/*.cs"
+            "Assets/*/Runtime/**/*.cs"
           ],
           "batchSize": 40
         }
@@ -458,8 +458,8 @@
           "subject": "pictures",
           "prompt": "For each picture and binding pair under Subject, compare the picture lines (Given, When, Then, Invariants) with the binding code. Report each Then or Invariant line that the binding does not assert, and each binding step that the picture does not describe. Target is the picture file name.",
           "model": "sonnet",
-          "pictures": "Assets/Framework/Testing/Acceptance/Scenarios",
-          "bindings": "Assets/Framework/Testing/Acceptance/Bindings"
+          "pictures": "Assets/Testing/Acceptance/Scenarios",
+          "bindings": "Assets/Testing/Acceptance/Bindings"
         }
       }
     }

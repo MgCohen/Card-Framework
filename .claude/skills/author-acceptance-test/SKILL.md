@@ -21,7 +21,7 @@ time; you never make the test judge pass/fail at run-time — the committed NUni
 is the gate.
 
 **Read first (canonical, do not duplicate their content here):**
-- `Assets/Framework/Testing/Acceptance/Scenarios/_how-to-bind.md` — the generator contract.
+- `Assets/Testing/Acceptance/Scenarios/_how-to-bind.md` — the generator contract.
 - `docs/testing.md` — tiers, the decision rule, what-to-touch-vs-not, the fences.
 
 ## Step 0 — Confirm this is an acceptance test
@@ -49,9 +49,9 @@ emits ZERO wire events"). If any is ambiguous, ask before scaffolding.
 ## Step 2 — Check `Support/` before inventing anything
 
 ```
-Assets/Framework/Testing/Support/SampleCommands.cs   # SetHealth/DealDamage/IntroduceCard + handlers + validators
-Assets/Framework/Testing/Support/SampleTags.cs       # Health/Cost/IsCard (slots 2001-3)
-Assets/Framework/Testing/Support/MatchHarness.cs      # the seam + read facades
+Assets/Testing/Support/SampleCommands.cs   # SetHealth/DealDamage/IntroduceCard + handlers + validators
+Assets/Testing/Support/SampleTags.cs       # Health/Cost/IsCard (slots 2001-3)
+Assets/Testing/Support/MatchHarness.cs      # the seam + read facades
 ```
 
 Reuse an existing sample command/handler/validator/tag if one fits. Only add a new one
@@ -61,7 +61,7 @@ its own match — Fresh Fixture).
 
 ## Step 3 — Write the picture
 
-Create `Assets/Framework/Testing/Acceptance/Scenarios/<kebab-title>.md` using the template
+Create `Assets/Testing/Acceptance/Scenarios/<kebab-title>.md` using the template
 from `_how-to-bind.md` (Goal / Given / When / Then / Invariants). End the file with:
 
 ```
@@ -73,7 +73,7 @@ paraphrase of code.
 
 ## Step 4 — Generate the binding
 
-Create `Assets/Framework/Testing/Acceptance/Bindings/<PascalTitle>.cs`:
+Create `Assets/Testing/Acceptance/Bindings/<PascalTitle>.cs`:
 
 - `namespace Framework.Testing.Acceptance;` (Support's public types resolve via the
   enclosing `Framework.Testing` namespace — no extra `using` needed for `MatchHarness`,

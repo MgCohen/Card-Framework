@@ -42,7 +42,7 @@
     {
       "id": "others",
       "kind": "editmode",
-      "title": "Spikes and packages",
+      "title": "Other assemblies",
       "assemblies": [
         "*"
       ],
