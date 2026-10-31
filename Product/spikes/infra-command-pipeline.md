@@ -47,7 +47,7 @@ The user made these decisions for all four infra spikes:
 | Effect | none | none | none | none | none. `BlockKind.Effect` is unused (`Wire/Runtime/Events/BlockKind.cs`). |
 | Command | `Command` (`Commands/Runtime/Command.cs:3`) | `CommandResult` (`CommandResult.cs:3`) | `CommandHandlerRegistry.HandlerFor` by `cmd.GetType()` (`CommandHandlerRegistry.cs:22`, `CommandService.cs:31`); opt-in `CommandValidatorRegistry.TryFor` (`CommandValidatorRegistry.cs:24`) | DI `CommandHandler<T>` (`CommandHandler.cs:5`), `CommandValidator<T>` (`CommandValidator.cs:5`), `RegisterCommandHandler<T>` (`Bootstrap/Runtime/HandlerRegistrationExtensions.cs:14`) | Inline, sync (`CommandService.cs:21-40`). Block `Open`/`Close` at `CommandService.cs:28,35,38`. `ParentId` is always 0 (`Wire/Runtime/Events/BlockScope.cs:15`). |
 | Event | `WireEvent` | store write | `HandlerRegistry` fan-out list by type (`Wire/Runtime/Stream/HandlerRegistry.cs:22-26`) | DI `WireEventHandler<T>` (`WireEventHandler.cs:5`) | Inline inside `EventStream.Emit` (`EventStream.cs:15-19`). `WireForwarder` replicates. |
-| Request (await point) | `Request<TResponse>` | `Task<TResponse>` (`Requests/Runtime/RequestService.cs:18`) | `_pending` by id (`RequestService.cs:10`) | game apply handlers | `Complete` (`RequestService.cs:28`) runs from a Response **apply handler** (`Requests/Tests/TestPickHandlers.cs:44`). |
+| Request (await point) | `Request<TResponse>` | `Task<TResponse>` (`Requests/Runtime/RequestService.cs:18`) | `_pending` by id (`RequestService.cs:10`) | game apply handlers | `Complete` (`RequestService.cs:28`) runs from a Response **apply handler** (`Requests/Tests/TestPickHandlers.cs:30`). |
 
 ### VerticalSlice (`Assets/Spike/ECS/VerticalSlice/Engine/`)
 
@@ -317,7 +317,7 @@ Composition rule: the command scheduler is inline. The stack fills only from `IC
 
 ## 4. Example end to end
 
-Divine Shield target, client plays Fireball. Ids are `int`.
+Divine Shield target, client plays Fireball.
 
 Every `*Id` field below is an `EntityId`.
 
@@ -466,14 +466,14 @@ Exact-type match is enough for steps 1–8. Base-type match is an open question.
 
 - Messages carry `EntityId` (`Framework.Core`). The pipeline needs a cheap "id is alive" check for validators, once destruction exists (`oq-entity-destruction`).
 - `RequestId` stays with `RequestService`. `Ask` returns the typed response; the pump matches `Answer` by `RequestId`.
-- `MessageId` and `IdAllocator<MessageId>` live in the pipeline assembly. `Enqueue` allocates one for each queued intent and each pushed `StackFrame`. It is local and not on the wire.
+- `MessageId` lives in the pipeline assembly. The pump holds an `IdAllocator<MessageId>`; the generic type is in `Framework.Core` (decision 2). `Enqueue` allocates one for each queued intent and each pushed `StackFrame`. It is local and not on the wire.
 - Phase 2 needs a per-sender sequence number on `Intent`, so the server can reply to a submit with its `Outcome`.
 
 **Blocks** (`infra-block-wire.md`, feature `Framework.Blocks`):
 
 - `BlockService.RunAsync(BlockHeader, Func<Task<T>>)` opens, runs the body and closes with `Completed`, `Errored` or `Cancelled`. `Pipeline.Run` has no open or close code of its own.
 - `BlockService.Current`: the innermost open block, `BlockId.None` when none.
-- `BlockHeader.Of(kind, message, messageSlot, causeId)`. `CauseId` is `BlockId` under decision 1 (the block draft still shows `int`). `BlockId.None` means "cause = lexical parent".
+- `BlockHeader.Of(kind, message, causeId)`. There is no message slot (open question 8). `CauseId` is `BlockId` under decision 1 (the block draft still shows `int`). `BlockId.None` means "cause = lexical parent".
 - There is no parent override. The nesting parent comes from bracket order. A stack frame captures `Current` as `CauseId` at push, and passes it to `Run(message, causeId)` when it resolves.
 - `CommandBlock` and `EffectBlock` from `BlockKindRegistry`. `IntentBlock` is not used (decision 6).
 - The open-block stack stays valid across an `await`. This holds because the pump runs one chain at a time and the intent level opens no block.
