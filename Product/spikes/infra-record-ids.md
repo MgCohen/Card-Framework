@@ -71,7 +71,7 @@ The user made these decisions for all four infra spikes:
 
 Framework paths are under `Assets/Framework/`. Three findings:
 
-- Five counters have the same shape: `int _nextId = 1; ... _nextId++`. None can be reset or restored. None is shared, so a second block emitter (effects) needs the comment at `BlockScope.cs:7` to stay true.
+- Five counters have the same shape: a private `int` field and `++`. Four start at 1. `Network` starts at 0 and casts to `byte`. None can be reset or restored. None is shared, so a second block emitter (effects) needs the comment at `BlockScope.cs:7` to stay true.
 - Every id is a bare `int`. `Request.ParentId`, `Request.SourceId`, `Request.ResponderId` and `BlockStartEvent.SourceId` do not say which id space they use.
 - Two events cannot be undone from their own fields: `TagRemovedEvent` and `StatePushEvent`.
 
@@ -83,7 +83,7 @@ Framework paths are under `Assets/Framework/`. Three findings:
 |---|---|---|---|---|---|
 | entity | `EntityId` | `Framework.Core` | `EntityService` | yes | match, never reused |
 | request | `RequestId` | `Framework.Requests` | `RequestService` | yes | match, never reused |
-| block | `BlockId` | `Framework.Blocks` | the block stack (today `BlockScope`) | yes (`Id`, `CauseId`) | match, never reused |
+| block | `BlockId` | `Framework.Blocks` | `BlockService` (today `BlockScope`) | yes (`Id`, `CauseId`) | match, never reused |
 | message | `MessageId` | pipeline asmdef | pipeline `Enqueue` | no (local, see §8) | match |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
@@ -215,7 +215,7 @@ Every event that changes a store holds enough data for `Unapply` to restore the 
 | Remove | key, `Prev` | write `Prev` |
 | Create record | id, all record fields | delete record |
 | Replace a cell | `Prev`, `Next` | write `Prev` |
-| Marker (`BlockStart`, `BlockEnd`) | — | no-op |
+| Block bracket (`BlockStart`, `BlockEnd`) | `Id`, header | `BlockStore.Remove` / `Reopen` (owned by the block piece) |
 
 Changes this needs:
 
@@ -236,8 +236,11 @@ public sealed class DealDamage : Command
 
 internal sealed class DealDamageHandler : CommandHandler<DealDamage>
 {
-    public override void Handle(DealDamage cmd)
-        => _tags.Set(cmd.Target, Health, _read.Get(cmd.Target, Health) - cmd.Amount);
+    public override Task Handle(DealDamage cmd, ICommandScope scope)
+    {
+        _tags.Set(cmd.Target, Health, _tags.Get(cmd.Target, Health) - cmd.Amount);
+        return Task.CompletedTask;
+    }
 }
 ```
 
@@ -248,7 +251,7 @@ Reasons:
 3. Replay and logs need a message that can be written down.
 4. Framework sample commands already hold `int EntityId`. Only the VerticalSlice spike uses `IEntity` refs.
 
-The cost is one store lookup in the handler. `command-service.md` says "commands carry references freely". That text depends on inline `Execute` (L3) and expires when the queue lands.
+The handler signature is the pipeline one (`infra-command-pipeline.md`). The cost is one store lookup in the handler. `command-service.md` says "commands carry references freely". That text depends on inline `Execute` (L3) and expires when the queue lands.
 
 ## 4. Call-site migration
 
@@ -256,7 +259,7 @@ The cost is one store lookup in the handler. `command-service.md` says "commands
 |---|---|---|
 | `int _nextId = 1;` + `var id = _nextId++;` in `EntityService` | inject `IdAllocator<EntityId>`; `var id = _ids.Next();` | ctor parameter; `EntityInstaller` registers allocator (server) |
 | `request.Id = _nextId++;` in `RequestService` | `request.Id = _ids.Next();` | `Request.Id : RequestId`; `RequestInstaller` registers allocator |
-| `var id = _nextId++;` in `Wire` `BlockScope` | `var id = _ids.Next();` in the `Framework.Blocks` block stack, returns `BlockId` | `Open` returns `BlockId`; `Close(BlockId, …)`; the Blocks installer registers the allocator (server) |
+| `var id = _nextId++;` in `Wire` `BlockScope` | `var id = _ids.Next();` in `Framework.Blocks` `BlockService`, returns `BlockId` | `BlockService` replaces `BlockScope`; the Blocks installer registers the allocator (server) |
 | `[Packed] public int Id; ParentId; SourceId;` on `BlockStartEvent`, `int Id` on `BlockEndEvent` | `[Packed] public BlockId Id;`, `[Packed] public BlockId CauseId;` (no `ParentId`) | events move to `Framework.Blocks`; tests that read `Id` or `ParentId` |
 | `[Packed] public int EntityId;` on Entity and Tag events | `[Packed] public EntityId EntityId;` | event fields; apply handlers |
 | `Entity.Id : int` | `Entity.Id : EntityId` | `EntityStore` `Dictionary<EntityId, Entity>` |
@@ -285,7 +288,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 | Id | Rule | Why | Check |
 |---|---|---|---|
 | ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. Confirm `callers` accepts a type glob (ARCH-06 uses `subclassOf`). |
-| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, the `Framework.Blocks` block stack, pipeline queue. |
+| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, `BlockService`, the pipeline `Enqueue`. |
 | ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
 | ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
 | EV-01 | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
@@ -296,7 +299,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 2–5 touch wire events, so they also run `-With playmode`.
 
 1. **Add `IdAllocator<TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, `Restore` forward only). No callers. No new asmdef reference yet.
-2. **Add `BlockId`** in `Framework.Blocks`. This step comes after the block piece creates `Framework.Blocks` and moves the `Block*` types out of Wire. That PR also makes the ARCH-02 and ARCH-09 edits with user approval. Add a Blocks test that packs and unpacks a block event with a `BlockId` field. This proves AutoPacker for typed ids before a wide change. Change `BlockStartEvent` (`Id`, `CauseId`) and `BlockEndEvent` (`Id`), inject `IdAllocator<BlockId>` into the block stack, and update `CommandService` and the block tests.
+2. **Add `BlockId`** in `Framework.Blocks`. This step comes after the block piece creates `Framework.Blocks` and moves the `Block*` types out of Wire. That PR also makes the ARCH-02 and ARCH-09 edits with user approval. Add a Blocks test that packs and unpacks a block event with a `BlockId` field. This proves AutoPacker for typed ids before a wide change. Change `BlockStartEvent` (`Id`, `CauseId`) and `BlockEndEvent` (`Id`), inject `IdAllocator<BlockId>` into `BlockService`, and update the block tests.
 3. **Add `RequestId`** in `Requests/Runtime/`. Change `Request.Id`, `Response.RequestId`, `RequestStore`, `IReadOnlyRequestStore`, `RequestService`, `RequestInstaller` and the request tests. `Request.ParentId`, `SourceId` and `ResponderId` stay `int` until §9 Q2 is answered.
 4. **Add `EntityId`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`. In this step, Tag call sites pass `id.Value`.
 5. **Move Tags to `EntityId`.** Change the Tag events, `TagStore` maps, `TagService`, `IReadOnlyTagStore` and the apply handlers. Remove the `.Value` calls from step 4.
@@ -310,13 +313,13 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 **Block and wire system.**
 
 - `BlockId` in `Framework.Blocks`, with `BlockId.None` for "no cause". Use it for `BlockStartEvent.Id`, `BlockEndEvent.Id` and `BlockStartEvent.CauseId`. There is no `ParentId` field.
-- `IdAllocator<BlockId>` from `Framework.Core`, a server singleton. Only the block stack (today `BlockScope`) calls `Next`. Effects and triggers open blocks through the block stack. They never inject the allocator (ID-02).
+- `IdAllocator<BlockId>` from `Framework.Core`, a server singleton. Only `BlockService` (today `BlockScope`) calls `Next`. Effects and triggers open blocks through `BlockService.Run`. They never inject the allocator (ID-02).
 - The nesting parent comes from the order of the brackets, not from an id. The block piece owns nesting. This piece owns only the id.
-- EV-01: block events are markers. `Unapply` is a no-op.
+- EV-01: block events create and close a `BlockRecord` in `BlockStore`. `Unapply` of start calls `Remove`. `Unapply` of end calls `Reopen`. The block piece owns these handlers.
 
 **Command pipeline.**
 
-- `MessageId` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued message (intent, command, effect step).
+- `MessageId` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
 - `MessageId` is local to the server. An intent opens no block (decision 6), so an intent id never appears in a block event. It goes on the wire only if the deferred "block payload + source capture" item adds it to `BlockStartEvent`.
 - Messages hold typed ids (MSG-01). The handler resolves records through read views (`IReadOnlyEntityStore.ById`).
 - Client submit (phase 2) needs a correlation id that the client makes. That is a separate per-client space. See §9 Q4.
