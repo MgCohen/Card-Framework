@@ -22,14 +22,14 @@ tags: [#spike, #infra, #router, #wire, #commands]
 
 ## 1. TL;DR
 
-1. One generic class in `Framework.Core`: `TypeRouter<T>`. It is a frozen map from a `Type` to its members. A `RouteArity` (`One` or `Many`) sets the duplicate rule (D10).
+1. One generic class in `Framework.Core`: `TypeRouter<T>`. It is a frozen map from a `Type` to its members. A `RouteMode` (`Single` or `Multiple`) sets the duplicate rule (D10).
 2. One member contract, `IRouted { Type RouteType }`, and one optional `IOrdered { int Order }`.
-3. Registration is one line for each router: `RegisterTypeRouter<T>(arity)`. It scans the loaded assemblies for members (D9). `TypeScan` scans once and caches the result, so other systems can use the same scan.
-4. Dispatch reads (`For`, `TryFor`, `All`) use the **exact type only**. Leaf message types become `sealed`, so an exact route cannot miss a subclass.
-5. A query read, `AllUnder(type)`, gives the members of every registered type under `type`: subclasses, implementations and closed generics (§ 5.6).
+3. Registration is one line for each router: `RegisterTypeRouter<T>(mode)`. It scans the loaded assemblies for members (D9). `TypeScan` scans once and caches the result, so other systems can use the same scan.
+4. Dispatch reads (`Get`, `TryGet`, `GetAll`) use the **exact type only**. Leaf message types become `sealed`, so an exact route cannot miss a subclass.
+5. A query read, `GetAllDerivedFrom(type)`, gives the members of every registered type under `type`: subclasses, implementations and closed generics (§ 5.6).
 6. `Dispatcher` (byte array) and `Network._byType` (id allocator) stay specialized. Hooks are out of scope (D8).
 
-### Decisions (2026-10-31, D9 to D11 on 2026-11-01)
+### Decisions (2026-10-31, D9 to D12 on 2026-11-01)
 
 The user made these decisions for all four infrastructure spikes. This spike uses them.
 
@@ -42,10 +42,11 @@ The user made these decisions for all four infrastructure spikes. This spike use
 | D5 | The wire carries `CauseId` only. The nesting parent comes from bracket order. No parent override. | The router does not carry or compute block parents (§ 10). |
 | D6 | An intent opens no block. | No effect. The intent router only finds a handler. |
 | D7 | Hooks exist only at the command level. Game-wide hooks are frozen DI registrations. Card hooks go in a server-only `HookTable`. | No effect here after D8. The command pipeline piece owns hooks. |
-| D8 | The router scope is type lookup only: register routed members, get the member for a type, get the members under a type. Hooks and hook tables are out of scope. | § 5.4 removes the hook design. § 5.6 adds the subtype read `AllUnder`. |
+| D8 | The router scope is type lookup only: register routed members, get the member for a type, get the members under a type. Hooks and hook tables are out of scope. | § 5.4 removes the hook design. § 5.6 adds the subtype read `GetAllDerivedFrom`. |
 | D9 | Members are found by an assembly scan, not by one registration line for each member. Source generation can come later, as an optional V2 plugin. | § 5.5. The explicit verbs stay only for tests and for closed generic members. |
-| D10 | One router class, `TypeRouter<T>`, with a `RouteArity` option. `TypeMultiRouter<T>` is removed. | § 5.1, § 5.2. A wrong read is a run-time error, not a compile error. |
+| D10 | One router class, `TypeRouter<T>`, with a `RouteMode` option. `TypeMultiRouter<T>` is removed. | § 5.1, § 5.2. A wrong read is a run-time error, not a compile error. |
 | D11 | The API and the examples are about type lookup, with neutral types. Commands and events are users of the router, not its API. | § 4. |
+| D12 | Names: `RouteMode { Single, Multiple }`. Reads `Get`, `TryGet`, `GetAll`, `GetAllDerivedFrom`, `RoutedTypesDerivedFrom`, `RoutedTypes`. `HandlerRegistry` becomes `WireEventDispatcher`. The Pipeline owns the run policy for many members. | § 4, § 5.2, § 6, § 9, § 11. |
 
 ## 2. Scope
 
@@ -55,10 +56,10 @@ The user approved this table (2026-11-01). The design sections cover only the co
 |---|---|---|
 | Member contract: `IRouted` (route type), `IOrdered` (order) | in | — |
 | DI registration: one style for members and routers | in | — |
-| Exact read, one member: `For` / `TryFor`, with the duplicate and miss rules | in | — |
-| Exact read, N members in a stable order: `All` | in | — |
-| Subtype read: `AllUnder` / `TypesUnder` | in | — |
-| Composition check of the registered types: `Types` | in | — |
+| Exact read, one member: `Get` / `TryGet`, with the duplicate and miss rules | in | — |
+| Exact read, N members in a stable order: `GetAll` | in | — |
+| Subtype read: `GetAllDerivedFrom` / `RoutedTypesDerivedFrom` | in | — |
+| Composition check of the registered types: `RoutedTypes` | in | — |
 | Rule: leaf messages are `sealed` (ROUTE-03), so exact dispatch cannot miss a subclass | in | — |
 | Call the member (`Handle`, `Apply`) and the context it gets | out | Pipeline (intent, effect, command); Blocks & Wires (event apply in `HandlerRegistry`) |
 | Select the stage by message kind (`Enqueue`) | out | Pipeline |
@@ -86,7 +87,7 @@ The user approved this table (2026-11-01). The design sections cover only the co
 
 Findings:
 
-- The three Framework `Type` copies have the same key, the same backing and the same DI feed. Only the arity and the miss behavior change.
+- The three Framework `Type` copies have the same key, the same backing and the same DI feed. Only the duplicate rule and the miss behavior change.
 - `CommandValidatorRegistry` is a verbatim copy of `CommandHandlerRegistry` (see `command-service.md` § Phase 1 build notes). Only the read verb is different.
 - The three helpers in `HandlerRegistrationExtensions` have identical bodies.
 - `EffectStore._hooks` sorts with `List.Sort`, which is not stable. Two hooks with the same priority can change order between runs.
@@ -99,10 +100,10 @@ Findings:
 | Audience | Entry point | Does |
 |---|---|---|
 | member author | `IRouted.RouteType` (optional `IOrdered.Order`) | Says which type the member is for. |
-| composition | `builder.RegisterTypeRouter<T>(RouteArity arity)` | Scans for the members of `T` and registers the router. |
-| runtime | `For`, `TryFor`, `All` | Dispatch read by exact type. |
-| runtime | `AllUnder`, `TypesUnder` | Query read over a type family. Not for dispatch. |
-| composition check | `Types` | Lists the registered route types. |
+| composition | `builder.RegisterTypeRouter<T>(RouteMode mode)` | Scans for the members of `T` and registers the router. |
+| runtime | `Get`, `TryGet`, `GetAll` | Dispatch read by exact type. |
+| runtime | `GetAllDerivedFrom`, `RoutedTypesDerivedFrom` | Query read over a type family. Not for dispatch. |
+| composition check | `RoutedTypes` | Lists the registered route types. |
 
 Call site, with neutral types:
 
@@ -121,7 +122,7 @@ public sealed class HelloReader : INoteReader
 }
 
 // 3. Composition: one line. The scan finds HelloReader (and ByeReader).
-builder.RegisterTypeRouter<INoteReader>(RouteArity.One);
+builder.RegisterTypeRouter<INoteReader>(RouteMode.Single);
 
 // 4. Runtime: DI injects the router. The class reads it.
 public sealed class NoteDesk
@@ -129,8 +130,8 @@ public sealed class NoteDesk
     readonly TypeRouter<INoteReader> _readers;
     public NoteDesk(TypeRouter<INoteReader> readers) => _readers = readers;
 
-    public void Take(Note note) => _readers.For(note.GetType()).Read(note);    // exact type
-    public IReadOnlyList<INoteReader> AllReaders() => _readers.AllUnder(typeof(Note));
+    public void Take(Note note) => _readers.Get(note.GetType()).Read(note);    // exact type
+    public IReadOnlyList<INoteReader> AllReaders() => _readers.GetAllDerivedFrom(typeof(Note));
 }
 ```
 
@@ -138,10 +139,10 @@ Who uses it (the framework levels):
 
 | Use | Member interface | Arity | Read |
 |---|---|---|---|
-| command handlers | `ICommandHandler` | `One` | `For` |
-| command validators | `ICommandValidator` | `One` | `TryFor` |
-| event apply handlers | `IWireEventHandler` | `Many` | `All` |
-| effect and intent handlers (later) | the Pipeline decides | `One` | `For` |
+| command handlers | `ICommandHandler` | `Single` | `Get` |
+| command validators | `ICommandValidator` | `Single` | `TryGet` |
+| event apply handlers | `IWireEventHandler` | `Multiple` | `GetAll` |
+| effect and intent handlers (later) | the Pipeline decides | `Single` | `Get` |
 
 Dependencies:
 
@@ -160,8 +161,8 @@ Rules. "Gate" is `Tools/Rulebook/gate.ps1`. It checks the rules in `Tools/Rulebo
 | A concrete message type is `sealed`, so exact dispatch cannot miss a subclass. | Gate (proposed ROUTE-03) |
 | A member gives its route type. | Compiler: the constraint `where T : class, IRouted` |
 | No member is added after composition. | No method exists for it. Only the constructor writes. |
-| A route type has a member when `For` reads it. | Run time: `For` throws. No earlier check exists yet (open question 1). |
-| Dispatch uses exact reads, not `AllUnder`. | Code review only. |
+| A route type has a member when `Get` reads it. | Run time: `Get` throws. No earlier check exists yet (open question 1). |
+| Dispatch uses exact reads, not `GetAllDerivedFrom`. | Code review only. |
 
 ## 5. Generalized contract
 
@@ -169,12 +170,12 @@ Rules. "Gate" is `Tools/Rulebook/gate.ps1`. It checks the rules in `Tools/Rulebo
 
 `docs/lookup-patterns.md` says "Standardize the contract, not the class" for Routers. This spike shares the class where key, backing and feed are identical. That is the case for every `Type` router that DI fills from a list.
 
-The first version of this spike had two classes, one for each arity. The user chose one class (D10). It is easier to learn, and one DI verb covers every level. The arity becomes a constructor option:
+The first version of this spike had two classes, one for each mode. The user chose one class (D10). It is easier to learn, and one DI verb covers every level. The mode becomes a constructor option:
 
-- `RouteArity.One`: two members with the same route type throw in the constructor. `For` and `TryFor` are the normal reads.
-- `RouteArity.Many`: many members for one route type are legal. `All` is the normal read. `For` and `TryFor` throw if the type has more than one member.
+- `RouteMode.Single`: two members with the same route type throw in the constructor. `Get` and `TryGet` are the normal reads.
+- `RouteMode.Multiple`: many members for one route type are legal. `GetAll` is the normal read. `Get` and `TryGet` throw if the type has more than one member.
 
-Cost: a wrong read (for example `For` on a type with two members) is a run-time error, not a compile error. The error text names the router and the type.
+Cost: a wrong read (for example `Get` on a type with two members) is a run-time error, not a compile error. The error text names the router and the type.
 
 ### 5.2 Signatures
 
@@ -185,21 +186,21 @@ Namespace `Framework.Core`, folder `Assets/Framework/Core/Runtime/Routing/`. One
 public interface IRouted  { Type RouteType { get; } }
 public interface IOrdered { int Order { get; } }   // lower runs first; equal values sort by full type name
 
-public enum RouteArity { One, Many }
+public enum RouteMode { Single, Multiple }
 ```
 
 ```csharp
 public sealed class TypeRouter<T> where T : class, IRouted
 {
-    public TypeRouter(IReadOnlyList<T> members, RouteArity arity);
+    public TypeRouter(IReadOnlyList<T> members, RouteMode mode);
 
-    public T    For(Type type);                     // exactly one member; throws on a miss or on many
-    public bool TryFor(Type type, out T member);    // false on a miss; throws on many
-    public IReadOnlyList<T> All(Type type);         // 0..N in order; empty on a miss; no allocation
+    public T    Get(Type type);                     // exactly one member; throws on a miss or on many
+    public bool TryGet(Type type, out T member);    // false on a miss; throws on many
+    public IReadOnlyList<T> GetAll(Type type);         // 0..N in order; empty on a miss; no allocation
 
-    public IReadOnlyList<T>    AllUnder(Type type);   // § 5.6
-    public IReadOnlyList<Type> TypesUnder(Type type); // § 5.6
-    public IReadOnlyCollection<Type> Types { get; }   // composition checks only
+    public IReadOnlyList<T>    GetAllDerivedFrom(Type type);   // type itself, subclasses, implementors, closed generics (§ 5.6)
+    public IReadOnlyList<Type> RoutedTypesDerivedFrom(Type type); // the routed types in that same set (§ 5.6)
+    public IReadOnlyCollection<Type> RoutedTypes { get; }   // composition checks only
 }
 ```
 
@@ -214,9 +215,9 @@ public static class TypeScan
 Rules for the implementation:
 
 - The constructor is the only writer. After the constructor, no member is added or removed.
-- A duplicate with `RouteArity.One` throws `InvalidOperationException`: `Duplicate {T} for {type}.`
-- A miss in `For` throws `InvalidOperationException`: `No {T} registered for {type}.` The current messages carry the same facts.
-- `All` returns a stored array. Callers iterate with `for`, not `foreach`, to keep the hot path free of enumerator allocation.
+- A duplicate with `RouteMode.Single` throws `InvalidOperationException`: `Duplicate {T} for {type}.`
+- A miss in `Get` throws `InvalidOperationException`: `No {T} registered for {type}.` The current messages carry the same facts.
+- `GetAll` returns a stored array. Callers iterate with `for`, not `foreach`, to keep the hot path free of enumerator allocation.
 - **Order.** The constructor sorts once: `IOrdered.Order` (0 when absent), then `Type.FullName` (ordinal). Registration order is not used, because the scan order is not stable. Both sides run the same build, so both sides get the same order.
 
 Member interfaces derive from `IRouted`. The bridge base classes implement it explicitly, so the current property names stay:
@@ -243,20 +244,20 @@ If a frozen route needs a composite key that fits neither case, write a `readonl
 
 ### 5.4 Question 3: hooks are out of scope
 
-Hooks are not part of this piece (D8). The command pipeline piece owns the frozen game-wide hooks, the live card hooks (`HookTable`), the merge of the two, the tie rule and `_direct`. It can use `TypeRouter<IHook>` with `RouteArity.Many` as a normal fan-out router.
+Hooks are not part of this piece (D8). The command pipeline piece owns the frozen game-wide hooks, the live card hooks (`HookTable`), the merge of the two, the tie rule and `_direct`. It can use `TypeRouter<IHook>` with `RouteMode.Multiple` as a normal fan-out router.
 
 ### 5.5 Question 4: registration by scan
 
 One DI verb for every level (D9):
 
 ```csharp
-public static void RegisterTypeRouter<T>(this IContainerBuilder b, RouteArity arity, bool scan = true)
+public static void RegisterTypeRouter<T>(this IContainerBuilder b, RouteMode mode, bool scan = true)
     where T : class, IRouted
 {
     if (scan)
         foreach (var type in TypeScan.ConcreteTypesOf(typeof(T)))
             b.Register(type, Lifetime.Singleton).As<T>();   // VContainer Register(Type, Lifetime)
-    b.Register<TypeRouter<T>>(Lifetime.Singleton).WithParameter(arity);
+    b.Register<TypeRouter<T>>(Lifetime.Singleton).WithParameter(mode);
 }
 ```
 
@@ -273,7 +274,7 @@ What the scan reads:
 
 The explicit verbs stay for two cases:
 
-- **Tests** that need a subset: `RegisterTypeRouter<T>(arity, scan: false)` and then `RegisterCommandHandler<THandler>()` for each member.
+- **Tests** that need a subset: `RegisterTypeRouter<T>(mode, scan: false)` and then `RegisterCommandHandler<THandler>()` for each member.
 - **Closed generic members.** The scan cannot close `TagSetHandler<T>`. `RegisterTagValueType<T>()` stays and registers `TagSetHandler<int>` and the other closed types explicitly.
 
 **Code stripping.** A member that only the scan reaches has no direct reference, so the linker removes it. The fix is one attribute on `IRouted`:
@@ -328,9 +329,9 @@ The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It re
 
 | Read | Key match | Use |
 |---|---|---|
-| `For`, `TryFor`, `All` | exact `RouteType` | dispatch: one message to its member or members |
-| `AllUnder(type)` | `RouteType` is `type`, or derives from it, implements it, or closes it | queries: "all readers for every `Note`", "all handlers for every `TagSetEvent<>`" |
-| `TypesUnder(type)` | the same match | the registered route types themselves |
+| `Get`, `TryGet`, `GetAll` | exact `RouteType` | dispatch: one message to its member or members |
+| `GetAllDerivedFrom(type)` | `RouteType` is `type`, or derives from it, implements it, or closes it | queries: "all readers for every `Note`", "all handlers for every `TagSetEvent<>`" |
+| `RoutedTypesDerivedFrom(type)` | the same match | the registered route types themselves |
 
 **Dispatch stays exact.** The router dispatches by exact runtime type (`msg.GetType()`).
 
@@ -358,26 +359,26 @@ Rules for the subtype read:
 
 - **Order is member order** (§ 5.2). Type depth has no effect, so there is no "base first or derived first" question.
 - **Deterministic.** Both sides build the index from the same members, so both sides get the same result.
-- **No allocation.** `AllUnder` and `TypesUnder` return stored arrays. A miss returns an empty array.
+- **No allocation.** `GetAllDerivedFrom` and `RoutedTypesDerivedFrom` return stored arrays. A miss returns an empty array.
 - **`object` is not a key.** The walk stops below `object`.
-- **Exact members are included.** `AllUnder(typeof(Hello))` returns the `Hello` member too.
+- **Exact members are included.** `GetAllDerivedFrom(typeof(Hello))` returns the `Hello` member too.
 - **Cost.** Memory is about the member count multiplied by the depth of the type tree. The trees are small (two or three levels).
 
-`AllUnder` does not change dispatch. A stage that wants base-type dispatch must call `AllUnder` itself and own that choice. No stage does this today.
+`GetAllDerivedFrom` does not change dispatch. A stage that wants base-type dispatch must call `GetAllDerivedFrom` itself and own that choice. No stage does this today.
 
 ## 6. Call-site migration
 
 | Current type | New type | Change needed |
 |---|---|---|
-| `HandlerRegistry` (internals) | `TypeRouter<IWireEventHandler>` (`Many`) inside `HandlerRegistry` | Keep the class, its constructor and the `OnAppended` link. Replace the dictionary. No test call site changes. |
+| `HandlerRegistry` | `WireEventDispatcher`, which holds a `TypeRouter<IWireEventHandler>` (`Multiple`) | Rename the class (D12). Keep its constructor and the `OnAppended` link. Replace the dictionary. Tests change only the class name. |
 | `IWireEventHandler`, `WireEventHandler<T>` | `: IRouted` | Add the interface and one explicit property. |
-| `CommandHandlerRegistry` | `TypeRouter<ICommandHandler>` | Delete the class. `CommandService` calls `_handlers.For(cmd.GetType())`. |
-| `CommandValidatorRegistry` | `TypeRouter<ICommandValidator>` | Delete the class. `CommandService` calls `_validators.TryFor(...)`. |
+| `CommandHandlerRegistry` | `TypeRouter<ICommandHandler>` | Delete the class. `CommandService` calls `_handlers.Get(cmd.GetType())`. |
+| `CommandValidatorRegistry` | `TypeRouter<ICommandValidator>` | Delete the class. `CommandService` calls `_validators.TryGet(...)`. |
 | `ICommandHandler`, `ICommandValidator` and their bases | `: IRouted` | Add the interface and one explicit property. |
-| `CommandInstaller` | `RegisterTypeRouter<ICommandHandler>(RouteArity.One)`, `RegisterTypeRouter<ICommandValidator>(RouteArity.One)` | Two lines change. |
+| `CommandInstaller` | `RegisterTypeRouter<ICommandHandler>(RouteMode.Single)`, `RegisterTypeRouter<ICommandValidator>(RouteMode.Single)` | Two lines change. |
 | `EngineStack`, `CommandServiceTests` | `new TypeRouter<...>(list)` | Change the constructor calls. |
 | `BootstrapWiringIntegrationTests` | none | Update two comments that name the old registries. |
-| `HandlerRegistrationExtensions` | `RegisterTypeRouter<T>(arity)` | Add the scan verb. The member verbs stay for tests and closed generics. |
+| `HandlerRegistrationExtensions` | `RegisterTypeRouter<T>(mode)` | Add the scan verb. The member verbs stay for tests and closed generics. |
 | `Network._byType` | unchanged | None here. Blocks & Wires owns it. A named miss message is a proposal for that piece. |
 | `Dispatcher._channels` | unchanged | None. |
 | `EffectStore` (spike) | out of scope (D8) | None. The command pipeline piece decides its replacement. |
@@ -388,7 +389,7 @@ Rules for the subtype read:
 - **`Network._byType` (`Type` to channel).** It is also the **id allocator**: `Register<T, TPacked>` assigns the next `byte` and fills the `Dispatcher`. Channels come from a build callback (`WireRegistrar`), not from a DI list. Its generic constraints (`IPackable<TPacked>`) do not fit `IRouted`. The record-ids piece may replace the allocator. The router should not absorb it.
 - **Live tables (for example card hooks).** A router is frozen. Data that changes while a match runs is not a router. See § 5.4.
 - **`SlotRegistry<TKey>._byType`.** This is a Registry (kind to identity), not a Router (message to handler). It stays a Registry.
-- **Stage-specific glue.** The router only finds members. It does not invoke them. `HandlerRegistry.Dispatch` loops and calls `Apply`. `CommandService` opens the block and calls `Handle`. Invoke logic stays with each stage, because each stage passes different context.
+- **Stage-specific glue.** The router only finds members. It does not invoke them. `WireEventDispatcher.Dispatch` loops and calls `Apply`. `CommandService` opens the block and calls `Handle`. Invoke logic stays with each stage, because each stage passes different context.
 
 ## 8. Rulebook rules to propose
 
@@ -422,7 +423,7 @@ ARCH-09 ("Wire holds no domain events") then has no exception. Its `allowed: ["F
 
 Text for the `why` fields:
 
-- ROUTE-01: "One router class for each arity. A copy drifts in its miss and duplicate behavior."
+- ROUTE-01: "One router class for each mode. A copy drifts in its miss and duplicate behavior."
 - ROUTE-02: "A static router leaks between the server and client scopes and between tests."
 - ROUTE-03: "Dispatch is by exact type. A handler for a non-sealed concrete type misses its subclasses with no error."
 
@@ -430,11 +431,11 @@ Text for the `why` fields:
 
 Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire.
 
-1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteArity`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `One`, `For` throws on a miss and on many, `TryFor` miss, empty `All`, order by `Order` then full name, no allocation on `All`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `AllUnder` and `TypesUnder`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
+1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteMode`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `GetAllDerivedFrom` and `RoutedTypesDerivedFrom`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
    1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
-2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Change `HandlerRegistry` internals to `TypeRouter<IWireEventHandler>` with `RouteArity.Many`. Gate with `-With playmode`.
+2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Rename `HandlerRegistry` to `WireEventDispatcher` and change its internals to `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`. Gate with `-With playmode`.
 3. **Commands.** Make `ICommandHandler` and `ICommandValidator` derive from `IRouted`. Replace both registries with `TypeRouter<T>`. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
-4. **Registration.** Add `RegisterTypeRouter<T>(arity, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
+4. **Registration.** Add `RegisterTypeRouter<T>(mode, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
 5. **Seal leaf messages.** Add `sealed` to the concrete `WireEvent` subtypes (`EntityCreatedEvent`, `StatePushEvent`, `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`, `BlockStartEvent` and `BlockEndEvent` in their new `Framework.Blocks` home, the Multiplayer events). AutoPacker and `WireRegistrar` accept `sealed partial` (§ 11, answered). Gate with `-With playmode`.
 6. **Rules.** Ask for approval, then add ROUTE-01 to ROUTE-04 to `rulebook.json`. Add the new check kinds in `Assets/Tools/Rulebook/Editor/Checks/` with fixture tests.
 7. **Docs.** Update `docs/lookup-patterns.md` § Router: name the shared classes and the two kinds of read (exact and under). Update the `docs/architecture.md` codemap.
@@ -449,7 +450,7 @@ Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` a
 
 **Block and wire system.**
 
-- `HandlerRegistry` keeps its public constructor `(EventStream, IReadOnlyList<IWireEventHandler>)`. Internally it holds a `TypeRouter<IWireEventHandler>` with `RouteArity.Many`.
+- `HandlerRegistry` becomes `WireEventDispatcher` (D12). It keeps its public constructor `(EventStream, IReadOnlyList<IWireEventHandler>)`. Internally it holds a `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`.
 - `IWireEventHandler : IRouted`. A new apply-handler base must implement `IRouted.RouteType`.
 - `Framework.Wire` references `Framework.Core` (D2).
 - `Framework.Blocks` owns `BlockStartEvent`, `BlockEndEvent`, `BlockScope` and `BlockId` (D3). Block events have no special route. Their apply handlers are found by the scan and route by exact type, as every other event does. The leaf Block events are `sealed` (ROUTE-03).
@@ -458,12 +459,12 @@ Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` a
 
 **Command pipeline.**
 
-- `TypeRouter<T>.For(Type)` for exactly one handler. `TypeRouter<T>.TryFor(Type, out T)` for an optional member. `TypeRouter<T>.All(Type)` with `RouteArity.Many` for fan-out.
-- `AllUnder(Type)` and `TypesUnder(Type)` for a query over a type family. These reads do not dispatch.
-- `TypeRouter<T>.Types` for a composition check, for example "each command type in the catalog has a handler".
+- `TypeRouter<T>.Get(Type)` for exactly one handler. `TypeRouter<T>.TryGet(Type, out T)` for an optional member. `TypeRouter<T>.GetAll(Type)` with `RouteMode.Multiple` for fan-out.
+- `GetAllDerivedFrom(Type)` and `RoutedTypesDerivedFrom(Type)` for a query over a type family. These reads do not dispatch.
+- `TypeRouter<T>.RoutedTypes` for a composition check, for example "each command type in the catalog has a handler".
 - `IOrdered` for any stage that needs a stable member order.
 - Each level (intent, effect, command, event) owns its own router instance. One `Enqueue` pipeline selects the stage by message kind. It then asks that stage's router. The router does not know about stages, blocks or `Task`. An intent route opens no block (D6); the block decision belongs to the stage, not the router.
-- Hooks are not in this piece (D8). If the pipeline keeps frozen game-wide hooks in a `TypeRouter<IHook>` (`Many`), it owns the split by phase, the live table, the merge and the tie rule.
+- Hooks are not in this piece (D8). If the pipeline keeps frozen game-wide hooks in a `TypeRouter<IHook>` (`Multiple`), it owns the split by phase, the live table, the merge and the tie rule.
 
 ## 11. Open questions
 
@@ -478,13 +479,13 @@ Closed:
   - `WireRegistrar` filters only on `IsAbstract` and `IsGenericTypeDefinition` (`Assets/Framework/Wire/Runtime/Network/WireRegistrar.cs:71`, `:77`). It has no `IsSealed` check.
   - Residual risk: the generator has a `virtual` emit path (`HasUserDeclaredVirtualOrAbstractPackOrUnpack`). A new `virtual` member in a sealed class is error CS0549. The test did not reach that path for a leaf. If a future leaf declares its own virtual `Pack`, the build fails at once, so the risk is visible, not silent.
 
-Still open:
+Closed on 2026-11-01:
 
 - ~~**Hooks, `HookTable`, `_direct`, hook tie rule.**~~ Moved to the command pipeline piece by D8.
+- ~~**Names.**~~ `HandlerRegistry` becomes `WireEventDispatcher` (D12).
+- ~~**Subtype read scope.**~~ `GetAllDerivedFrom` includes interfaces and open generic definitions (D12).
+- ~~**Many members for one type.**~~ The router supports `Single` and `Multiple` for each router, set at registration. The Pipeline chooses the mode for validators and handlers, and how a command runs many members (D12).
 
-Still open:
+Deferred:
 
-1. **Composition-time completeness.** Should the engine check at build time that each known command type has a handler, through `TypeRouter<T>.Types`? This needs a list of known command types, which does not exist yet.
-2. **Validator fan-out.** If the engine loop adds more than one validator for each command, the validator router changes from `RouteArity.One` to `RouteArity.Many`, with `IOrdered`. Confirm that this stays deferred.
-3. **Names.** Rename `HandlerRegistry` to `ApplyDispatcher` later? It dispatches; it does not register kinds.
-4. **Subtype read scope.** `AllUnder` includes interfaces and open generic definitions. Confirm both. If interfaces are not necessary, the index is smaller.
+1. **Composition-time completeness.** A check that each known command type has a handler. It can be unnecessary. `RoutedTypes` already lists the routed types, so a later check or a debug listing can use it. The check needs a list of known command types, which does not exist yet.
