@@ -23,7 +23,7 @@ tags: [#spike, #pipeline, #commands]
 
 ## 1. Summary
 
-1. `Pipeline<TMessage, TScope>` wraps each `Message` in an `Envelope` and runs it through a fixed order: `Validate`, `CreateScope`, `Before`, `Handle`, `After`. The envelope holds the state and the handler result. A caller gets a typed `Result<T>`.
+1. `Pipeline<TMessage, TScope>` wraps each `Message` in an `Envelope` and runs it through a fixed order: `Validate`, `CreateScope`, `Before`, `Handle`, `After`. The envelope holds the state and the handler result. A caller gets a `Result`, or a typed `Result<T>`.
 2. The owner system calls `Run()`. By default, it runs one envelope. A subclass can override `Run()` to drain the list. A scope can run a message inline in the same pipeline.
 3. v0 is **one pipeline**. Hooks, two or more pipelines, the loop across pipelines, groups and the concrete pipelines are **out**. Section 2 names their owners.
 
@@ -57,7 +57,7 @@ From 2026-11-01 (this spike):
 21. `Add` returns the `Envelope`. The owner reads `State` and `Reason` after `Run()`.
 22. Reaction timing and the `Ask` split (requests from `infra-block-wire.md`) are not in v0. v0 has no groups.
 23. **`Message` is the shared base** of every pipeline element. `Command`, `Effect` and `Intent` derive from it. `Command` keeps its glossary meaning: one atomic state change.
-24. **A message can have a typed result.** The handler returns it. The envelope keeps it as `object Result`. A caller gets `Result<T>`: state, reason and value. A message with no result gives `Result<Unit>`, so the caller still sees if the run worked.
+24. **A message can have a typed result.** The handler returns it. The envelope keeps it as `object Result`. A caller gets `Result<T>`: state, reason and value. A message with no result gives a plain `Result`, so the caller still sees if the run worked. Both are classes, and neither goes on the wire.
 25. A rejected run does not throw. `Result.Accepted` is false, and `Reason` gives the cause. A fault still throws.
 
 ## 2. Scope
@@ -73,7 +73,7 @@ From 2026-11-01 (this spike):
 | `Handler` and `Validator` abstract bases | Pipeline |
 | `Message` base | Pipeline |
 | `Envelope`: id, parent id, state, reason, result | Pipeline |
-| `Result<T>` and `Unit` | Pipeline |
+| `Result` and `Result<T>` | Pipeline |
 | List: `Add`, `Remove`, `TryPeek`, `Items` | Pipeline |
 | `Run()` with a one-envelope default; inline run for scopes | Pipeline |
 | Scope base: verbs throw after the run | Pipeline |
@@ -178,15 +178,18 @@ public abstract class Envelope
 }
 public sealed class Envelope<TMessage> : Envelope { public new TMessage Message { get; } }
 
-public readonly struct Result<T>                                    // what a caller gets
+public class Result                                                 // what a caller gets; server only
 {
     public EnvelopeState State { get; }                             // Accepted or Rejected
     public string Reason { get; }
-    public T Value { get; }
     public bool Accepted => State == EnvelopeState.Accepted;
-    public static Result<T> From(Envelope e);
+    public static Result From(Envelope e);
 }
-public readonly struct Unit { }                                     // the value of a message with no result
+public sealed class Result<T> : Result
+{
+    public T Value { get; }
+    public static new Result<T> From(Envelope e);
+}
 
 public abstract class Handler<TMessage, TScope> : IRouted
 {
@@ -220,7 +223,7 @@ The owner system adds a message, runs, and reads the result on the envelope:
 ```csharp
 var envelope = commands.Add(new PlayCard { CardId = card });
 await commands.Run();
-var result = Result<Unit>.From(envelope);
+var result = Result.From(envelope);
 if (!result.Accepted) Show(result.Reason);
 ```
 
@@ -243,7 +246,7 @@ if (!result.Accepted) Show(result.Reason);
 | `Pipeline<TMessage, TScope>` | `Add`, `Remove`, `TryPeek`, `Run`, inline run | FW `CommandService`, VS `CommandService.Execute`, VS `Stack`, VS engine queue |
 | `Message` | every pipeline element | the base of FW `Command` |
 | `Envelope`, `Envelope<TMessage>`, `EnvelopeState` | owner, groups | nothing in VS |
-| `Result<T>`, `Unit` | inline callers, owner | `CommandResult`; the mutable fields on VS `DealDamage` |
+| `Result`, `Result<T>` | inline callers, owner | `CommandResult`; the mutable fields on VS `DealDamage` |
 | `Handler<TMessage, TScope>`, `Validator<TMessage>` | the stores | `ICommandHandler`, `ICommandValidator` as store types |
 | `PipelineScope` | the concrete scope | VS `ICommandScope`, `IEffectScope` |
 
@@ -297,7 +300,7 @@ An MTG stack overrides `SelectNext` and returns `null` until both players pass p
 
 ### `Envelope`
 
-The pipeline makes one envelope for each message at `Add` or at an inline run. The message is the data that the author writes. The envelope is the run of that message: its identity, its parent, its state and its result. `Result<T>.From` reads it for a caller. Groups can read `Id` and `ParentId` later. Replace and cancel come later, as new states or fields.
+The pipeline makes one envelope for each message at `Add` or at an inline run. The message is the data that the author writes. The envelope is the run of that message: its identity, its parent, its state and its result. `Result.From` and `Result<T>.From` read it for a caller. Groups can read `Id` and `ParentId` later. Replace and cancel come later, as new states or fields.
 
 ### Stores and author bases
 
@@ -333,7 +336,7 @@ A scope holds the verbs of one pipeline that are not in DI. `CreateScope` makes 
 public interface ICommandScope                                                    // example; Commands owns it
 {
     Task<Result<TResult>> Run<TResult>(Command<TResult> command);
-    Task<Result<Unit>> Run(Command command);
+    Task<Result> Run(Command command);
 }
 
 sealed class CommandPipeline : Pipeline<Command, ICommandScope>
@@ -346,7 +349,7 @@ sealed class CommandScope : PipelineScope, ICommandScope
 {
     readonly Func<Command, Task<Envelope<Command>>> _run;
     public async Task<Result<TResult>> Run<TResult>(Command<TResult> c) { ThrowIfClosed(); return Result<TResult>.From(await _run(c)); }
-    public async Task<Result<Unit>> Run(Command c) { ThrowIfClosed(); return Result<Unit>.From(await _run(c)); }
+    public async Task<Result> Run(Command c) { ThrowIfClosed(); return Result.From(await _run(c)); }
 }
 ```
 
@@ -410,7 +413,7 @@ PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service)
 
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Both steps come after the router step that adds `TypeRouter<T>`, and after the record-ids step that adds `MessageId`.
 
-1. **Base pipeline. No behavior change.** Add `Message`, `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `Result<T>`, `Unit`, `PipelineScope`, `Handler<,>` and `Validator<>`. `Command` derives from `Message`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps `Result<Unit>` to `CommandResult`. The block bracket stays in `CommandService` until the Events & Blocks step changes it to a group. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
+1. **Base pipeline. No behavior change.** Add `Message`, `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `Result`, `Result<T>`, `PipelineScope`, `Handler<,>` and `Validator<>`. `Command` derives from `Message`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps `Result` to `CommandResult`. The block bracket stays in `CommandService` until the Events & Blocks step changes it to a group. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
 2. **Async handlers on the shared bases.** `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become `Task Handle(T, ICommandScope)`, or `Task<TResult>` for a `Command<TResult>`. Delete `CommandResult`. The registries become `TypeRouter`. Delete `CommandService`. Add PIPE-01, PIPE-04 and PIPE-05. Add the inline-continuation test (decision 4) in EditMode and PlayMode.
 
 ## 10. Interfaces needed from the other pieces
@@ -424,18 +427,21 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 ## 11. Later
 
-These items are not open for v0. Each has a place in the design.
+These items are not open for v0. Each row says why it waits and what reopens it.
 
-| Item | Place |
-|---|---|
-| Hooks and reactions: a handler in a phase, or a reaction message | Own discussion; `Before` and `After` are ready |
-| Reaction timing: reactions run before the trigger group closes | Hooks and reactions discussion |
-| `Ask` split: close the group with `Waiting`, continue in a new group | After groups come in |
-| `PipelineBuilder` and a runner object | Next, after v0 |
-| Two or more pipelines: wiring cycle, effects, PIPE-02 | v2 |
-| A shared typed author base | v2, after two pipelines exist |
-| Replace a message, also with a type change | `Envelope` |
-| Cancel an envelope | `EnvelopeState` |
-| Base-type match for validators | Router |
-| `Request<TResponse>` as a `Message` | When requests enter a pipeline |
-| A generic handler entry with no boxing | If a benchmark shows a problem |
+| Item | Why later | Trigger to reopen |
+|---|---|---|
+| Hooks and reactions: a handler in a phase, or a reaction message | Needs its own discussion | Next discussion |
+| Hooks: may a Before hook change the message? Does the result read the change? | Part of the hooks model | Hooks discussion |
+| Hooks: reactions inline or in the list | Part of the hooks model | Hooks discussion |
+| Hooks: static or live subscription (`HookTable`) | Router owns subscription | Hooks discussion |
+| Reaction timing: run before the trigger group closes | v0 has no groups | Hooks discussion |
+| `Ask` split: close the group with `Waiting`, continue in a new group | v0 has no groups | Groups enter the pipeline |
+| `Task<object>` boxing in the handler entry, and the `Result` allocation | Works now; one box and one object for each run | Before migration step 2, or a benchmark |
+| `PipelineBuilder` and a runner object | Needs one pipeline that runs | v0 is done |
+| Two or more pipelines: wiring cycle, effects, PIPE-02 | v0 is one pipeline | v0 is done |
+| A shared typed author base | Needs two pipelines to compare | v2 |
+| Replace a message, also with a type change | No use in v0 | Hooks discussion; place: `Envelope` |
+| Cancel an envelope | No use in v0 | Hooks discussion; place: `EnvelopeState` |
+| Base-type match for validators | Router owns matching | Router spike |
+| `Request<TResponse>` as a `Message` | Requests are not a pipeline | Requests enter a pipeline |
