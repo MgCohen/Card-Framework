@@ -29,7 +29,7 @@ tags: [#spike, #infra, #router, #wire, #commands]
 5. A query read, `GetAllDerivedFrom(type)`, gives the members of every registered type under `type`: subclasses, implementations and closed generics (§ 5.6).
 6. `Dispatcher` (byte array) and `Network._byType` (id allocator) stay specialized. Hooks are out of scope (D8).
 
-### Decisions (2026-10-31, D9 to D12 on 2026-11-01)
+### Decisions (2026-10-31, D9 to D13 on 2026-11-01)
 
 The user made these decisions for all four infrastructure spikes. This spike uses them.
 
@@ -47,6 +47,7 @@ The user made these decisions for all four infrastructure spikes. This spike use
 | D10 | One router class, `TypeRouter<T>`, with a `RouteMode` option. `TypeMultiRouter<T>` is removed. | § 5.1, § 5.2. A wrong read is a run-time error, not a compile error. |
 | D11 | The API and the examples are about type lookup, with neutral types. Commands and events are users of the router, not its API. | § 4. |
 | D12 | Names: `RouteMode { Single, Multiple }`. Reads `Get`, `TryGet`, `GetAll`, `GetAllDerivedFrom`, `RoutedTypesDerivedFrom`, `RoutedTypes`. `HandlerRegistry` becomes `WireEventDispatcher`. The Pipeline owns the run policy for many members. | § 4, § 5.2, § 6, § 9, § 11. |
+| D13 | The command member types are the Pipeline's abstract classes `Handler<Command, ICommandScope>` and `Validator<Command>`, not `ICommandHandler` and `ICommandValidator`. The Pipeline uses `RouteMode.Single` for both in v0. | § 4, § 5.2, § 6, § 9. |
 
 ## 2. Scope
 
@@ -137,10 +138,10 @@ public sealed class NoteDesk
 
 Who uses it (the framework levels):
 
-| Use | Member interface | Arity | Read |
+| Use | Member type | Mode | Read |
 |---|---|---|---|
-| command handlers | `ICommandHandler` | `Single` | `Get` |
-| command validators | `ICommandValidator` | `Single` | `TryGet` |
+| command handlers | `Handler<Command, ICommandScope>` (Pipeline) | `Single` | `Get` |
+| command validators | `Validator<Command>` (Pipeline) | `Single` | `TryGet` |
 | event apply handlers | `IWireEventHandler` | `Multiple` | `GetAll` |
 | effect and intent handlers (later) | the Pipeline decides | `Single` | `Get` |
 
@@ -231,7 +232,21 @@ public abstract class WireEventHandler<T> : IWireEventHandler where T : WireEven
 }
 ```
 
-`ICommandHandler`, `ICommandValidator`, `CommandHandler<T>` and `CommandValidator<T>` get the same two lines.
+The Pipeline owns the command member types (D13). They are abstract classes, so only the Pipeline assembly can call the entry:
+
+```csharp
+public abstract class Handler<TMessage, TScope> : IRouted
+{
+    public abstract Type RouteType { get; }
+    protected internal abstract Task<object> Handle(TMessage m, TScope s);
+}
+public abstract class CommandHandler<T> : Handler<Command, ICommandScope> where T : Command
+{
+    public override Type RouteType => typeof(T);   // Commands owns this base
+}
+```
+
+`Validator<TMessage>` has the same shape, with `protected internal abstract bool Validate(TMessage m, out string reason)`. `[RequireImplementors]` on `IRouted` keeps a subclass two levels down, such as `PlayCardHandler : CommandHandler<PlayCard>` (§ 5.5).
 
 ### 5.3 Question 2: composite keys
 
@@ -323,6 +338,16 @@ A second IL2CPP test (stripping level High, one build without the attributes and
 - The linker reads both attributes by their class names, so `Framework.Core` can hold both with no engine reference.
 - `IRouted` is an interface, so the router needs only `RequireImplementors`. If a future scan root is a base class, use `RequireDerived` on it.
 
+A third IL2CPP test used the Pipeline member shape (D13): `IRouted` ← abstract `Handler<TMessage, TScope>` ← abstract `CommandHandler<T>` ← sealed `PlayCardHandler : CommandHandler<PlayCard>`, and a direct subclass of `Handler<Command, ICommandScope>` with a constructor parameter. The scan root was the closed type `Handler<Command, ICommandScope>` and also the interface. With no attribute, all cases gave 0 / 0.
+
+| Case | Attribute | Found / built |
+|---|---|---|
+| P1 | `RequireImplementors` on the routed interface only | 2 / 2 |
+| P2 | `RequireDerived` on `Handler<,>` only | 2 / 2 |
+| P3 | both | 2 / 2 |
+
+`RequireImplementors` on `IRouted` keeps a class that gets `IRouted` from a base class, two levels down and through generic abstract bases. The Pipeline member types need no attribute of their own.
+
 The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Core` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
 
 ### 5.6 Question 6: exact dispatch, and a read for subtypes
@@ -372,10 +397,10 @@ Rules for the subtype read:
 |---|---|---|
 | `HandlerRegistry` | `WireEventDispatcher`, which holds a `TypeRouter<IWireEventHandler>` (`Multiple`) | Rename the class (D12). Keep its constructor and the `OnAppended` link. Replace the dictionary. Tests change only the class name. |
 | `IWireEventHandler`, `WireEventHandler<T>` | `: IRouted` | Add the interface and one explicit property. |
-| `CommandHandlerRegistry` | `TypeRouter<ICommandHandler>` | Delete the class. `CommandService` calls `_handlers.Get(cmd.GetType())`. |
-| `CommandValidatorRegistry` | `TypeRouter<ICommandValidator>` | Delete the class. `CommandService` calls `_validators.TryGet(...)`. |
-| `ICommandHandler`, `ICommandValidator` and their bases | `: IRouted` | Add the interface and one explicit property. |
-| `CommandInstaller` | `RegisterTypeRouter<ICommandHandler>(RouteMode.Single)`, `RegisterTypeRouter<ICommandValidator>(RouteMode.Single)` | Two lines change. |
+| `CommandHandlerRegistry` | `TypeRouter<Handler<Command, ICommandScope>>` | Delete the class. The Pipeline calls `Get(cmd.GetType())`. |
+| `CommandValidatorRegistry` | `TypeRouter<Validator<Command>>` | Delete the class. The Pipeline calls `TryGet(...)`. |
+| `ICommandHandler`, `ICommandValidator` | `Handler<Command, ICommandScope>`, `Validator<Command>` | Pipeline migration step 2 removes the interfaces. This step uses the new types. |
+| `CommandInstaller` | `RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteMode.Single)`, `RegisterTypeRouter<Validator<Command>>(RouteMode.Single)` | Two lines change. |
 | `EngineStack`, `CommandServiceTests` | `new TypeRouter<...>(list)` | Change the constructor calls. |
 | `BootstrapWiringIntegrationTests` | none | Update two comments that name the old registries. |
 | `HandlerRegistrationExtensions` | `RegisterTypeRouter<T>(mode)` | Add the scan verb. The member verbs stay for tests and closed generics. |
@@ -434,7 +459,7 @@ Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` a
 1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteMode`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `GetAllDerivedFrom` and `RoutedTypesDerivedFrom`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
    1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
 2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Rename `HandlerRegistry` to `WireEventDispatcher` and change its internals to `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`. Gate with `-With playmode`.
-3. **Commands.** Make `ICommandHandler` and `ICommandValidator` derive from `IRouted`. Replace both registries with `TypeRouter<T>`. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
+3. **Commands.** Do this step after Pipeline migration step 2, which adds `Handler<Command, ICommandScope>` and `Validator<Command>` and removes `ICommandHandler` and `ICommandValidator`. Replace both registries with `TypeRouter<T>` of the new types. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
 4. **Registration.** Add `RegisterTypeRouter<T>(mode, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
 5. **Seal leaf messages.** Add `sealed` to the concrete `WireEvent` subtypes (`EntityCreatedEvent`, `StatePushEvent`, `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`, `BlockStartEvent` and `BlockEndEvent` in their new `Framework.Blocks` home, the Multiplayer events). AutoPacker and `WireRegistrar` accept `sealed partial` (§ 11, answered). Gate with `-With playmode`.
 6. **Rules.** Ask for approval, then add ROUTE-01 to ROUTE-04 to `rulebook.json`. Add the new check kinds in `Assets/Tools/Rulebook/Editor/Checks/` with fixture tests.

@@ -133,6 +133,16 @@ A first test on Mono and IL2CPP compared more options for `IRouted`. Members imp
 
 The managed code size was the same for all protected builds.
 
+A third test used a deep class chain: interface `IRouted` ← abstract generic `Handler<TMessage, TScope>` ← abstract generic `CommandHandler<T>` ← sealed `PlayCardHandler`. A second member derived directly from `Handler<Command, ICommandScope>` and had a constructor parameter.
+
+| Case | Attribute | Found / built |
+|---|---|---|
+| P1 | `RequireImplementors` on the routed interface only | 2 / 2 |
+| P2 | `RequireDerived` on `Handler<,>` only | 2 / 2 |
+| P3 | both | 2 / 2 |
+
+An implementor is a class that implements the interface directly or through a base class. `RequireImplementors` keeps both.
+
 ## 6. Smoke build
 
 The Editor does not strip code. Thus only a player build can show a stripping problem.
