@@ -11,6 +11,7 @@ Card Framework/
 ├── CLAUDE.md                  # This file — router + hard rules
 ├── docs/
 │   ├── architecture.md        # How the current Framework works: codemap, data flow, invariants
+│   ├── code-stripping.md      # Keep reflection-only types in a stripped player build
 │   ├── coding-standards.md    # C# / Unity conventions for code under Assets/
 │   ├── feature-layout.md      # Feature structure, asmdefs, spike → framework promotion
 │   └── testing.md             # Test tiers (unit / acceptance / integration); which to write
@@ -52,6 +53,8 @@ It compiles, runs the rulebook tests and the Framework EditMode tests in one Uni
 **Adding or modifying a test.** Follow [docs/testing.md](docs/testing.md) — it decides the tier (per-feature **unit** in `Framework.<Feature>.Tests`; global **acceptance**, intent-as-picture, in `Framework.Testing.Acceptance.Tests`; global **integration**, hand-written mechanism, in `Framework.Testing.Integration.Tests`) and the rules for keeping pictures canonical and reusing `Framework.Testing.Support`. For acceptance tests, the `author-acceptance-test` skill scaffolds the picture + binding.
 
 **Before inventing a pattern.** Read existing code in the target feature (or relevant spike) first. If no pattern fits, ask — don't quietly introduce a new style alongside an existing one.
+
+**Types that only reflection reaches.** A scan, `Activator` or DI registration by scan is not a reference, so the UnityLinker removes those types from a player build. The Editor and the gate do not show it. Follow [docs/code-stripping.md](docs/code-stripping.md).
 
 **Searching for an API.** If a type or method isn't in `Assets/`, grep `Library/PackageCache/` before assuming it doesn't exist — that's where UPM-imported packages live.
 
