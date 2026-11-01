@@ -181,6 +181,7 @@ Cost: a wrong read (for example `For` on a type with two members) is a run-time 
 Namespace `Framework.Core`, folder `Assets/Framework/Core/Runtime/Routing/`. One top-level type per file.
 
 ```csharp
+[RequireImplementors]   // keeps scanned members in a stripped player (§ 5.5)
 public interface IRouted  { Type RouteType { get; } }
 public interface IOrdered { int Order { get; } }   // lower runs first; equal values sort by full type name
 
@@ -275,7 +276,36 @@ The explicit verbs stay for two cases:
 - **Tests** that need a subset: `RegisterTypeRouter<T>(arity, scan: false)` and then `RegisterCommandHandler<THandler>()` for each member.
 - **Closed generic members.** The scan cannot close `TagSetHandler<T>`. `RegisterTagValueType<T>()` stays and registers `TagSetHandler<int>` and the other closed types explicitly.
 
-**IL2CPP stripping.** A member that only the scan reaches has no direct reference, so the linker can remove it at stripping level Low or higher. An attribute on the base class does not help here. Unity's `[RequireImplementors]` needs `UnityEngine`, and `Framework.Core` and `Framework.Commands` have `noEngineReferences: true`. A `[Preserve]` attribute does not pass to subclasses. The proposal is a `link.xml` that keeps the Framework assemblies and the game assembly. Validate with one IL2CPP build at stripping level Low (step 1b).
+**Code stripping.** A member that only the scan reaches has no direct reference, so the linker removes it. The fix is one attribute on `IRouted`:
+
+```csharp
+// Framework.Core. Our own copy: Core has noEngineReferences, so it cannot use UnityEngine.Scripting.
+[AttributeUsage(AttributeTargets.Interface)]
+public sealed class RequireImplementorsAttribute : Attribute { }
+
+[RequireImplementors]
+public interface IRouted { Type RouteType { get; } }
+```
+
+Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono, stripping level High). The test used a separate project with members in an assembly with no engine references. The members implement `IHandler : IRouted`, one member has a constructor parameter, and no code names a member.
+
+| Build | Protection | Members found | Members built |
+|---|---|---|---|
+| M | none, stripping level Minimal | 3 | 3 |
+| A | none | 0 | 0 |
+| B | `link.xml` that an `IUnityLinkerProcessor` writes at build time from `TypeScan` | 3 | 3 |
+| C1 | our own `RequireImplementorsAttribute`, namespace `Test.Core`, on `IRouted` | 3 | 3 |
+| C2 | our own copy with Unity's full name `UnityEngine.Scripting.RequireImplementorsAttribute` | 3 | 3 |
+
+- Build A shows that the problem is real: the linker removes all members.
+- C1 shows that the linker reads the attribute by its short name. The namespace and the engine reference are not necessary. The attribute also passes through a derived interface and keeps the constructors.
+- The build sizes of A, B, C1 and C2 are the same (about 8.6 MB of managed code). Both fixes keep only the member types.
+
+Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus step 1b keeps the test as a smoke build to run again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
+
+The test did not cover IL2CPP, because this machine has no IL2CPP module. The UnityLinker is the same for Mono and IL2CPP, so the result is expected to be the same. Step 1b runs the IL2CPP build when the module is available.
+
+The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Core` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
 
 ### 5.6 Question 6: exact dispatch, and a read for subtypes
 
@@ -384,7 +414,7 @@ Text for the `why` fields:
 Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire.
 
 1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteArity`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `One`, `For` throws on a miss and on many, `TryFor` miss, empty `All`, order by `Order` then full name, no allocation on `All`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `AllUnder` and `TypesUnder`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
-   1b. **IL2CPP check.** Build one IL2CPP player at stripping level Low with the `link.xml`. Make sure that the scan finds a member that nothing references directly.
+   1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one player at stripping level High, with IL2CPP when the module is available. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
 2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Change `HandlerRegistry` internals to `TypeRouter<IWireEventHandler>` with `RouteArity.Many`. Gate with `-With playmode`.
 3. **Commands.** Make `ICommandHandler` and `ICommandValidator` derive from `IRouted`. Replace both registries with `TypeRouter<T>`. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
 4. **Registration.** Add `RegisterTypeRouter<T>(arity, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
