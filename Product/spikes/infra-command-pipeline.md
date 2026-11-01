@@ -275,7 +275,7 @@ protected async Task<Envelope<TMessage>> Execute(Envelope<TMessage> e)
 protected abstract TScope CreateScope(Envelope<TMessage> e);
 protected virtual bool Validate(Envelope<TMessage> e, out string reason);         // validators.TryGet(type)
 protected virtual Task Before(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
-protected virtual Task<object> Handle(Envelope<TMessage> e, TScope s);            // handlers.For(type)
+protected virtual Task<object> Handle(Envelope<TMessage> e, TScope s);            // handlers.Get(type)
 protected virtual Task After(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
 ```
 
