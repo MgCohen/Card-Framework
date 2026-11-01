@@ -225,7 +225,7 @@ Every event that changes a store holds enough data for `Unapply` to restore the 
 Changes this needs:
 
 - `TagRemovedEvent` becomes `TagRemovedEvent<T> where T : unmanaged` with `[Packed] T Prev`. It gets one channel for each value type, like `TagSetEvent<T>` and `TagChangeEvent<T>`.
-- `StatePushEvent` gets `[Packed] int PrevSlot`.
+- `StatePushEvent` gets `[Packed] StateSlot PrevSlot`. `StateSlot` comes from `infra-kind-ids.md`. Until that step lands, the field is `int`.
 - A Response closes a request, and the request is not in the Response. Recommended: `RequestStore` keeps closed requests in a `Closed` set, so `Unapply` moves the request back to `Open`. This matches "Answer A" in `entity-identity-model.md` (records are not destroyed in a match).
 
 The wire cost is `sizeof(T)` on tag remove and 4 bytes on state push. `WireEventHandler<T>.Unapply` can stay unimplemented. This spike only makes it implementable.
@@ -264,6 +264,7 @@ The handler signature is the pipeline one (`infra-command-pipeline.md`). The cos
 |---|---|---|
 | `int _nextId = 1;` + `var id = _nextId++;` in `EntityService` | inject `IdAllocator<EntityId>`; `var id = _ids.Next();` | ctor parameter; `EntityInstaller` registers allocator (server) |
 | `request.Id = _nextId++;` in `RequestService` | `request.Id = _ids.Next();` | `Request.Id : RequestId`; `RequestInstaller` registers allocator |
+| `Dictionary<int, IPendingRequest> _pending` in `RequestService` | `Dictionary<RequestId, IPendingRequest>` | `Open`, `Complete` (key from `Response.RequestId`) |
 | `var id = _nextId++;` in `Wire` `BlockScope` | `var id = _ids.Next();` in `Framework.Blocks` `BlockService`, returns `BlockId` | `BlockService` replaces `BlockScope`; the Blocks installer registers the allocator (server) |
 | `[Packed] public int Id; ParentId; SourceId;` on `BlockStartEvent`, `int Id` on `BlockEndEvent` | `[Packed] public BlockId Id;`, `[Packed] public BlockId CauseId;` (no `ParentId`) | events move to `Framework.Blocks`; tests that read `Id` or `ParentId` |
 | `[Packed] public int EntityId;` on Entity and Tag events | `[Packed] public EntityId EntityId;` | event fields; apply handlers |
