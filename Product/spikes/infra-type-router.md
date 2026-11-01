@@ -100,12 +100,18 @@ Findings:
 | runtime | `AllUnder`, `TypesUnder` | Query read over a type family. |
 | composition check | `Types` | Lists the registered route types. |
 
-Call site (author):
+Call site:
 
 ```csharp
-public sealed class DealDamageHandler : CommandHandler<DealDamage> { /* Handle */ }
-
+// Composition: register the member and the router
 builder.RegisterCommandHandler<DealDamageHandler>();
+builder.RegisterTypeRouter<ICommandHandler>();
+
+// Runtime: the stage gets the router by injection and reads it
+var handler = _handlers.For(cmd.GetType());                       // DealDamageHandler; throws on a miss
+if (_validators.TryFor(cmd.GetType(), out var validator)) { ... }  // optional member
+var appliers = _appliers.All(ev.GetType());                       // N apply handlers, stable order
+var family   = _appliers.AllUnder(typeof(TagSetEvent<>));        // every TagSetHandler<T>
 ```
 
 Access:
