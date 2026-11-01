@@ -287,7 +287,7 @@ public sealed class RequireImplementorsAttribute : Attribute { }
 public interface IRouted { Type RouteType { get; } }
 ```
 
-Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono, stripping level High). The test used a separate project with members in an assembly with no engine references. The members implement `IHandler : IRouted`, one member has a constructor parameter, and no code names a member.
+Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono and IL2CPP, stripping level High). The test used a separate project with members in an assembly with no engine references. The members implement `IHandler : IRouted`, one member has a constructor parameter, and no code names a member.
 
 | Build | Protection | Members found | Members built |
 |---|---|---|---|
@@ -304,7 +304,7 @@ Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono, stripping lev
 
 Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus step 1b keeps the test as a smoke build to run again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
 
-The test did not cover IL2CPP, because this machine has no IL2CPP module. The UnityLinker is the same for Mono and IL2CPP, so the result is expected to be the same. Step 1b runs the IL2CPP build when the module is available.
+IL2CPP gives the same result. A before and after rerun with `ScriptingImplementation.IL2CPP` (two separate Unity launches, stripping level High) gives 0 / 0 with no attribute and 3 / 3 with the attribute.
 
 The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Core` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
 
@@ -415,7 +415,7 @@ Text for the `why` fields:
 Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire.
 
 1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteArity`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `One`, `For` throws on a miss and on many, `TryFor` miss, empty `All`, order by `Order` then full name, no allocation on `All`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `AllUnder` and `TypesUnder`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
-   1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one player at stripping level High, with IL2CPP when the module is available. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
+   1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
 2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Change `HandlerRegistry` internals to `TypeRouter<IWireEventHandler>` with `RouteArity.Many`. Gate with `-With playmode`.
 3. **Commands.** Make `ICommandHandler` and `ICommandValidator` derive from `IRouted`. Replace both registries with `TypeRouter<T>`. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
 4. **Registration.** Add `RegisterTypeRouter<T>(arity, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
