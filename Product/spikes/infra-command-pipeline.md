@@ -59,6 +59,7 @@ From 2026-11-01 (this spike):
 23. **`Message` is the shared base** of every pipeline element. `Command`, `Effect` and `Intent` derive from it. `Command` keeps its glossary meaning: one atomic state change.
 24. **A message can have a typed result.** The handler returns it. The envelope keeps it as `object Result`. A caller gets `Result<T>`: state, reason and value. A message with no result gives a plain `Result`, so the caller still sees if the run worked. Both are classes, and neither goes on the wire.
 25. A rejected run does not throw. `Result.Accepted` is false, and `Reason` gives the cause. A fault still throws.
+26. **Build first, migrate later.** v0 builds the parts as standalone code. No current caller changes. Migration starts after all specced systems have their basic shapes. One cross-spike plan gives its order.
 
 ## 2. Scope
 
@@ -409,12 +410,18 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service) wait for v2.
 
-## 9. Migration steps
+## 9. Build, then migration
 
-Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Both steps come after the router step that adds `TypeRouter<T>`, and after the record-ids step that adds `MessageId`.
+The build is one PR. It keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. The migration is not in this spike (decision 26).
 
-1. **Base pipeline. No behavior change.** Add `Message`, `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `Result`, `Result<T>`, `PipelineScope`, `Handler<,>` and `Validator<>`. `Command` derives from `Message`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps `Result` to `CommandResult`. The block bracket stays in `CommandService` until the Events & Blocks step changes it to a group. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
-2. **Async handlers on the shared bases.** `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become `Task Handle(T, ICommandScope)`, or `Task<TResult>` for a `Command<TResult>`. Delete `CommandResult`. The registries become `TypeRouter`. Delete `CommandService`. Add PIPE-01, PIPE-04 and PIPE-05. Add the inline-continuation test (decision 4) in EditMode and PlayMode.
+1. **Build. Standalone.** Add `Message`, `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `Result`, `Result<T>`, `PipelineScope`, `Handler<,>` and `Validator<>`. Use `TypeRouter<T>` and `MessageId` from the standalone builds of those spikes. Do not change `Command`, `CommandService` or the command registries. Add `PipelineTests` with test messages and test handlers: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run, a typed result, and the inline continuation (decision 4) in EditMode and PlayMode.
+2. **Migration. Later.** The cross-spike plan gives the order and the owner of each change. The Pipeline changes are:
+   - `Command` derives from `Message`. Add `Command<TResult>`.
+   - Add `CommandPipeline` and `ICommandScope`.
+   - `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become async.
+   - The command registries become `TypeRouter`. The router spike also lists this change. The cross-spike plan gives it one owner.
+   - Delete `CommandService` and `CommandResult`.
+   - Ask for approval, then add PIPE-01, PIPE-04 and PIPE-05.
 
 ## 10. Interfaces needed from the other pieces
 
@@ -437,7 +444,7 @@ These items are not open for v0. Each row says why it waits and what reopens it.
 | Hooks: static or live subscription (`HookTable`) | Router owns subscription | Hooks discussion |
 | Reaction timing: run before the trigger group closes | v0 has no groups | Hooks discussion |
 | `Ask` split: close the group with `Waiting`, continue in a new group | v0 has no groups | Groups enter the pipeline |
-| `Task<object>` boxing in the handler entry, and the `Result` allocation | Works now; one box and one object for each run | Before migration step 2, or a benchmark |
+| `Task<object>` boxing in the handler entry, and the `Result` allocation | Works now; one box and one object for each run | Before the migration, or a benchmark |
 | `PipelineBuilder` and a runner object | Needs one pipeline that runs | v0 is done |
 | Two or more pipelines: wiring cycle, effects, PIPE-02 | v0 is one pipeline | v0 is done |
 | A shared typed author base | Needs two pipelines to compare | v2 |
