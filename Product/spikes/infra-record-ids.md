@@ -14,21 +14,21 @@ sandbox: Assets/Framework/Core/Runtime/Ids/
 tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 ---
 
-# Shared infra — records with ids, and id allocation
+# Shared infra — record ids and id allocation
 
 > **Status: proposed.** One of four shared-infrastructure spikes for the
 > intent / effect / command / event pipeline. The other three are the
 > type-keyed router, the block and wire system, and the command pipeline.
-> This spike owns id spaces, id allocation, the record read contract and the
-> "event carries its inverse" rule. No code changes yet.
+> This spike owns instance id spaces, id allocation and the record read names.
+> Page: https://claude.ai/artifact/66MvZgwWo8hSEeKJ6KMDms. No code changes yet.
 
 ## 1. TL;DR
 
 1. One `IdAllocator<TId>` per id space. It is server-only, a DI singleton in the match scope, and it starts at 1 (0 is `None`). One service calls `Next()`.
 2. Ids on the wire are typed `readonly struct`s around `int` (`EntityId`, `RequestId`, `BlockId`, `MessageId`). The wire cost is zero bytes, and the pack cost is the same as for `int` (evidence in §3.2).
 3. Keep "no `Store<T>` base". Standardize the read pair `ById` / `TryGetById` over the typed id, by convention and by rule.
-4. Every state-changing event holds the data to undo itself: `Set`, `Change(Prev, Next)`, `Remove(Prev)`. Add `Prev` to `TagRemovedEvent` and `StatePushEvent`.
-5. Queued messages (commands, intents) hold typed ids, never live `Entity` refs. Handlers resolve ids through read views when they run.
+4. No code outside the owning asmdef can make an id from an `int` or read the `int` back.
+5. Out of scope: inverse events (rollback) and "messages hold ids" (pipeline). See §2a and the appendix.
 
 ### Decisions (2026-10-31)
 
@@ -45,6 +45,28 @@ The user made these decisions for all four infra spikes:
 ### Decisions (2026-11-01)
 
 8. Kind ids (tag, entity type, game state and block kind slots) are a different pattern from record ids. They moved to `infra-kind-ids.md`. This spike covers instance ids only.
+9. Scope (§2a) is approved. "Events carry their inverse" and "messages hold ids" are out. Their design text moves to the appendix and is kept for the owners.
+10. Typed ids have no public `int`. The constructor and `Value` are `internal` to the owning asmdef. `Framework.Core` makes the entity allocator (`EntityIds.NewAllocator()`), because `EntityId` lives in Core and `EntityService` lives in Entities. Tests get `InternalsVisibleTo` grants on the allowlist rule, as other features do today.
+
+## 2a. Scope
+
+| Concern | In / out | Owner if out |
+|---|---|---|
+| Typed instance id structs | in | — |
+| Access to the `int` inside an id | in | — |
+| Allocation: one server allocator for each space | in | — |
+| Determinism: start value, save, load | in | — |
+| Store read pair over a typed id | in (names only) | — |
+| Typed ids on the wire | in | — |
+| Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
+| Messages hold ids, not refs | out | Pipeline (`infra-command-pipeline.md`). Design text in the appendix. |
+| Closed requests, request cross-space fields | out | Requests feature (§9 Q2, Q3) |
+| Kind slots | out | `infra-kind-ids.md` |
+| Block nesting and `BlockStore` | out | `infra-block-wire.md` |
+| Client correlation id | out | Pipeline, phase 2 (§9 Q4) |
+| Channel ids, seats, definition ids | out | Wire, Multiplayer, Entities catalog (§5) |
+
+Boundary: the owning service on the server asks for a new id. The pattern gives back a typed id. The service puts it in its wire event. Stores and the wire use the id after that, and never make one.
 
 ## 2. Current shapes
 
@@ -105,9 +127,9 @@ namespace Framework.Core
     {
         public static readonly EntityId None = default;
 
-        public readonly int Value;
+        internal readonly int Value;
 
-        public EntityId(int value) => Value = value;
+        internal EntityId(int value) => Value = value;
 
         public bool IsNone => Value == 0;
 
@@ -122,9 +144,9 @@ namespace Framework.Core
 }
 ```
 
-`RequestId`, `BlockId` and `MessageId` have the same shape. There is no implicit conversion to or from `int`, because an implicit conversion removes the type safety. Unity C# 9 has no `record struct`, so the members are written by hand.
+`RequestId`, `BlockId` and `MessageId` have the same shape. There is no implicit conversion to or from `int`, because an implicit conversion removes the type safety. The constructor and `Value` are `internal` (decision 10). AutoPacker copies the struct as raw bytes, so the wire needs no access to `Value`. Unity C# 9 has no `record struct`, so the members are written by hand.
 
-**Why typed.** `docs/coding-standards.md` allows "a `readonly struct` wrapper around `int`, TagKey-style". `Scaffold.Maps` `Index<TPrimary,TSecondary>` uses `EqualityComparer<T>.Default`, so an `IEquatable` key does not box. The cost is churn at call sites, plus `.Value` where code formats or indexes arrays.
+**Why typed.** `docs/coding-standards.md` allows "a `readonly struct` wrapper around `int`, TagKey-style". `Scaffold.Maps` `Index<TPrimary,TSecondary>` uses `EqualityComparer<T>.Default`, so an `IEquatable` key does not box. The cost is churn at call sites. Code outside the owner cannot index arrays by id; it uses a dictionary.
 
 **AutoPacker cost (verified 2026-10-31).** A typed id costs zero extra wire bytes. It also takes the same pack path as `int`. The generator ships only as `AutoPackerGenerator.dll`, so the evidence comes from the compiled IL and the package files:
 
@@ -173,10 +195,12 @@ Registration, server only, in the installer that registers the owning service:
 ```csharp
 if (_isServer)
 {
-    builder.Register(_ => new IdAllocator<EntityId>(v => new EntityId(v)), Lifetime.Singleton);
+    builder.Register(_ => EntityIds.NewAllocator(), Lifetime.Singleton);
     builder.Register<EntityService>(Lifetime.Singleton);
 }
 ```
+
+`EntityIds.NewAllocator()` lives in `Framework.Core` beside `EntityId`, so Entities never sees the constructor. The other spaces pass their own lambda, because the constructor is internal to the same asmdef: `new IdAllocator<RequestId>(v => new RequestId(v))`.
 
 Each id space has its own closed type, so VContainer resolves each one without keys. The client scope has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
 
@@ -209,55 +233,6 @@ public interface IReadOnlyEntityStore
 
 **No shared `IRecord<TId>` or `IReadOnlyStore<TId,T>`.** `request-service.md` L3 rejected interfaces on wire records, because `[Packed]` needs fields and an interface can only declare properties. No current consumer is polymorphic over stores. The read pair is two lines. So the "no `Store<T>` base" decision from `docs/lookup-patterns.md` still fits: conform by convention and enforce with a rule (§6). `RequestStore.Get<T>` stays as a different contract (typed read, `null` on miss), as `lookup-patterns.md` already says.
 
-### 3.6 Events carry their inverse
-
-Every event that changes a store holds enough data for `Unapply` to restore the earlier state. Nothing outside the event is read.
-
-| Event kind | Fields | `Unapply` |
-|---|---|---|
-| Set (first write) | key, `Value` | remove key (a Set implies "absent before") |
-| Change | key, `Prev`, `Next` | write `Prev` |
-| Remove | key, `Prev` | write `Prev` |
-| Create record | id, all record fields | delete record |
-| Replace a cell | `Prev`, `Next` | write `Prev` |
-| Block bracket (`BlockStart`, `BlockEnd`) | `Id`, header | `BlockStore.Remove` / `Reopen` (owned by the block piece) |
-
-Changes this needs:
-
-- `TagRemovedEvent` becomes `TagRemovedEvent<T> where T : unmanaged` with `[Packed] T Prev`. It gets one channel for each value type, like `TagSetEvent<T>` and `TagChangeEvent<T>`.
-- `StatePushEvent` gets `[Packed] StateSlot PrevSlot`. `StateSlot` comes from `infra-kind-ids.md`. Until that step lands, the field is `int`.
-- A Response closes a request, and the request is not in the Response. Recommended: `RequestStore` keeps closed requests in a `Closed` set, so `Unapply` moves the request back to `Open`. This matches "Answer A" in `entity-identity-model.md` (records are not destroyed in a match).
-
-The wire cost is `sizeof(T)` on tag remove and 4 bytes on state push. `WireEventHandler<T>.Unapply` can stay unimplemented. This spike only makes it implementable.
-
-### 3.7 Messages hold ids, not refs
-
-```csharp
-public sealed class DealDamage : Command
-{
-    public EntityId Target;
-    public int      Amount;
-}
-
-internal sealed class DealDamageHandler : CommandHandler<DealDamage>
-{
-    public override Task Handle(DealDamage cmd, ICommandScope scope)
-    {
-        _tags.Set(cmd.Target, Health, _tags.Get(cmd.Target, Health) - cmd.Amount);
-        return Task.CompletedTask;
-    }
-}
-```
-
-Reasons:
-
-1. A queue puts a gap between "make the message" and "handle the message". A live ref can describe a state that changed in that gap.
-2. Phase 2 client intents come over the wire. A client has no server objects, so an intent can only carry ids. One shape for server and client messages means one validator path.
-3. Replay and logs need a message that can be written down.
-4. Framework sample commands already hold `int EntityId`. Only the VerticalSlice spike uses `IEntity` refs.
-
-The handler signature is the pipeline one (`infra-command-pipeline.md`). The cost is one store lookup in the handler. `command-service.md` says "commands carry references freely". That text depends on inline `Execute` (L3) and expires when the queue lands.
-
 ## 4. Call-site migration
 
 | Current code | New code | Change needed |
@@ -273,9 +248,6 @@ The handler signature is the pipeline one (`infra-command-pipeline.md`). The cos
 | `TagService.Set<T>(int entityId, …)`, `TagStore.Get<T>(int, int)` | `EntityId entityId` | `TagStore` maps become `Map<EntityId,int,T>` |
 | `RequestStore.Get<T>(int id)`, `Dictionary<int, Request>` | `Get<T>(RequestId id)`, `Dictionary<RequestId, Request>` | `IReadOnlyRequestStore.Open` key type |
 | `Response.RequestId : int` | `RequestId` | `RequestService.Complete` |
-| `TagRemovedEvent { EntityId, Slot }` | `TagRemovedEvent<T> { EntityId, Slot, Prev }` | `TagService.Remove` reads prev; per-`T` handler and channel in `TagInstaller` |
-| `StatePushEvent { Slot }` | `StatePushEvent { Slot, PrevSlot }` | `StateService.Push` reads `StateStore.Current.Slot` |
-| `SetHealth { int EntityId; }` (samples) | `SetHealth { EntityId Target; }` | Testing Support, Commands tests, acceptance bindings |
 | `Catalog<TDef>`, `Network`, `PeerRoster` | no change | see §5 |
 
 ## 5. What stays specialized, and why
@@ -284,7 +256,7 @@ The handler signature is the pipeline one (`infra-command-pipeline.md`). The cos
 - **Definition ids (`Catalog<TDef>`).** The id comes from data (`def.Id`). `Catalog.Add` is strict. A typed `DefinitionId` is a possible later step, and it is not in this spike.
 - **Channel ids (`Network`).** A channel id is a Router key, not a record id. It is a `byte`, it has a capacity limit, and both sides must compute the same id from the sorted registration. `WireRegistrar` replacement is its own roadmap item.
 - **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store (`lookup-patterns.md`). Seats live for the lobby, not the match. The seat → player-entity map is phase 3 work. Seat can use `IdAllocator<T>` later, but it gets no benefit now.
-- **VerticalSlice.** No migration. Phase 8 deletes it. Its `TagRemovedEvent.Prev` and `MirrorWorld` are the reference for §3.6.
+- **VerticalSlice.** No migration. Phase 8 deletes it. Its `TagRemovedEvent.Prev` and `MirrorWorld` are the reference for appendix A.1.
 - **`RequestStore.Get<T>`.** A typed read with `null` on miss stays a different contract.
 
 ## 6. Rulebook rules to propose
@@ -297,8 +269,8 @@ Proposals only. `rulebook.json` does not change in this spike.
 | ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, `BlockService`, the pipeline `Enqueue`. |
 | ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
 | ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. (`infra-kind-ids.md` KIND-03 adds `Slot` to the same test.) | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
-| EV-01 | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
-| MSG-01 | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. Client intents cannot carry refs. | `attached`: a reflection test over `Command` subtypes. Or the `type.memberTypes` + `baseType` kind. |
+| EV-01 (handed off) | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
+| MSG-01 (handed off) | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. Client intents cannot carry refs. | `attached`: a reflection test over `Command` subtypes. Or the `type.memberTypes` + `baseType` kind. |
 
 ## 7. Migration steps
 
@@ -307,10 +279,10 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 1. **Add `IdAllocator<TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, `Restore` forward only). No callers. No new asmdef reference yet.
 2. **Add `BlockId`** in `Framework.Blocks`. This step comes after the block piece creates `Framework.Blocks` and moves the `Block*` types out of Wire. That PR also makes the ARCH-02 and ARCH-09 edits with user approval. Add a Blocks test that packs and unpacks a block event with a `BlockId` field. This proves AutoPacker for typed ids before a wide change. Change `BlockStartEvent` (`Id`, `CauseId`) and `BlockEndEvent` (`Id`), inject `IdAllocator<BlockId>` into `BlockService`, and update the block tests.
 3. **Add `RequestId`** in `Requests/Runtime/`. Change `Request.Id`, `Response.RequestId`, `RequestStore`, `IReadOnlyRequestStore`, `RequestService`, `RequestInstaller` and the request tests. `Request.ParentId`, `SourceId` and `ResponderId` stay `int` until §9 Q2 is answered.
-4. **Add `EntityId`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`. In this step, Tag call sites pass `id.Value`.
-5. **Move Tags to `EntityId`.** Change the Tag events, `TagStore` maps, `TagService`, `IReadOnlyTagStore` and the apply handlers. Remove the `.Value` calls from step 4.
-6. **Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings. The pictures do not change, because they name `#1`, not types.
-7. **Add the inverse fields.** `StatePushEvent.PrevSlot`; `TagRemovedEvent<T>` with `Prev`; the per-`T` handler and channel in `TagInstaller`; and tests that the fields hold the earlier value. `Unapply` stays unimplemented.
+4. **Add `EntityId`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`. Tags still takes `int` in this step. Thus Core gives `Framework.Entities` a temporary `InternalsVisibleTo` grant, so Entities can pass `id.Value` to Tags.
+5. **Move Tags to `EntityId`.** Change the Tag events, `TagStore` maps, `TagService`, `IReadOnlyTagStore` and the apply handlers. Remove the temporary grant from step 4.
+6. **(Handed off to the pipeline.) Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings. The pictures do not change, because they name `#1`, not types.
+7. **(Handed off to rollback.) Add the inverse fields.** `StatePushEvent.PrevSlot`; `TagRemovedEvent<T>` with `Prev`; the per-`T` handler and channel in `TagInstaller`; and tests that the fields hold the earlier value. `Unapply` stays unimplemented.
 8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review. ID-03, ID-04 and MSG-01 can be `enforced` at once. EV-01 stays `planned`.
 9. **Update docs.** Update `docs/architecture.md` (id spaces), `docs/lookup-patterns.md` (typed read pair), and the live-ref text in `command-service.md`.
 
@@ -338,16 +310,77 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 **All pieces.**
 
-- An event that changes a store follows the §3.6 table.
+- An event that changes a store follows the appendix A.1 table (owner: rollback).
 - A store has `ById(TId)` and `TryGetById(TId, out T)`, and no allocator (ID-01).
 
 ## 9. Open questions
 
 1. ~~**Allocator home.**~~ **Closed 2026-10-31:** `Framework.Core` (decision 2). `Framework.Wire` references `Framework.Core`, and ARCH-02 changes to allow it.
 2. **Typed cross-space fields.** Which space do `Request.ParentId`, `Request.SourceId` and `Request.ResponderId` use? `ResponderId` is a seat or a player entity, and that depends on phase 3. Is `BlockStartEvent.CauseId` always a `BlockId`, or can a cause also be a request? The block piece decides.
-3. **Closed requests.** Keep a `Closed` set in `RequestStore` so a Response can be undone (§3.6)? Or put the full request data in the Response? This affects `request-service.md` L5 ("no AnswersStore").
+3. **Closed requests.** Keep a `Closed` set in `RequestStore` so a Response can be undone (appendix A.1)? Or put the full request data in the Response? This affects `request-service.md` L5 ("no AnswersStore").
 4. **Client correlation id.** Does a client intent carry a client-made `SubmitId` for accept and reject replies? Who owns it: one allocator per client scope?
 5. **Save watermarks.** Store the watermarks in the save, or compute them on load from the highest id in the stream?
 6. **Id scope across matches.** Are ids unique only in a match (`entity-identity-model.md` Q3)? A replay archive would then need a match id.
 7. **`DefinitionId`.** Make definition ids typed in this effort, or wait for phase 6?
 8. **Seat migration.** Move `PeerRoster` to `IdAllocator<int>` now for one pattern, or leave it until phase 3 links seats to player entities?
+
+## Appendix: handed off
+
+These concerns are out of scope (§2a). The text stays here for the owners until they take it.
+
+### A.1 Events carry their inverse
+
+Every event that changes a store holds enough data for `Unapply` to restore the earlier state. Nothing outside the event is read.
+
+| Event kind | Fields | `Unapply` |
+|---|---|---|
+| Set (first write) | key, `Value` | remove key (a Set implies "absent before") |
+| Change | key, `Prev`, `Next` | write `Prev` |
+| Remove | key, `Prev` | write `Prev` |
+| Create record | id, all record fields | delete record |
+| Replace a cell | `Prev`, `Next` | write `Prev` |
+| Block bracket (`BlockStart`, `BlockEnd`) | `Id`, header | `BlockStore.Remove` / `Reopen` (owned by the block piece) |
+
+Changes this needs:
+
+- `TagRemovedEvent` becomes `TagRemovedEvent<T> where T : unmanaged` with `[Packed] T Prev`. It gets one channel for each value type, like `TagSetEvent<T>` and `TagChangeEvent<T>`.
+- `StatePushEvent` gets `[Packed] StateSlot PrevSlot`. `StateSlot` comes from `infra-kind-ids.md`. Until that step lands, the field is `int`.
+- A Response closes a request, and the request is not in the Response. Recommended: `RequestStore` keeps closed requests in a `Closed` set, so `Unapply` moves the request back to `Open`. This matches "Answer A" in `entity-identity-model.md` (records are not destroyed in a match).
+
+The wire cost is `sizeof(T)` on tag remove and 4 bytes on state push. `WireEventHandler<T>.Unapply` can stay unimplemented. This spike only makes it implementable.
+
+### A.2 Messages hold ids, not refs
+
+```csharp
+public sealed class DealDamage : Command
+{
+    public EntityId Target;
+    public int      Amount;
+}
+
+internal sealed class DealDamageHandler : CommandHandler<DealDamage>
+{
+    public override Task Handle(DealDamage cmd, ICommandScope scope)
+    {
+        _tags.Set(cmd.Target, Health, _tags.Get(cmd.Target, Health) - cmd.Amount);
+        return Task.CompletedTask;
+    }
+}
+```
+
+Reasons:
+
+1. A queue puts a gap between "make the message" and "handle the message". A live ref can describe a state that changed in that gap.
+2. Phase 2 client intents come over the wire. A client has no server objects, so an intent can only carry ids. One shape for server and client messages means one validator path.
+3. Replay and logs need a message that can be written down.
+4. Framework sample commands already hold `int EntityId`. Only the VerticalSlice spike uses `IEntity` refs.
+
+The handler signature is the pipeline one (`infra-command-pipeline.md`). The cost is one store lookup in the handler. `command-service.md` says "commands carry references freely". That text depends on inline `Execute` (L3) and expires when the queue lands.
+
+### A.3 Migration rows
+
+| Current code | New code | Change needed |
+|---|---|---|
+| `TagRemovedEvent { EntityId, Slot }` | `TagRemovedEvent<T> { EntityId, Slot, Prev }` | `TagService.Remove` reads prev; per-`T` handler and channel in `TagInstaller` |
+| `StatePushEvent { Slot }` | `StatePushEvent { Slot, PrevSlot }` | `StateService.Push` reads `StateStore.Current.Slot` |
+| `SetHealth { int EntityId; }` (samples) | `SetHealth { EntityId Target; }` | Testing Support, Commands tests, acceptance bindings |
