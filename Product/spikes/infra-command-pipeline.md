@@ -379,7 +379,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 |---|---|
 | Router (`infra-type-router.md`) | `TypeRouter<T>.For` and `TryFor`. `RegisterTypeRouter<T>(RouteArity.One)`. The `T : class, IRouted` constraint accepts an abstract class. |
 | Record ids (`infra-record-ids.md`) | `MessageId` and `IdAllocator<MessageId>`. The id is local and not on the wire. |
-| Events & Blocks (`infra-block-wire.md`) | Later. `GroupService.Open(kind, source, trigger)` and `Close(id, outcome)` wrap `Before`, `Handle` and `After`, and not `Validate`. |
+| Events & Blocks (`infra-block-wire.md`) | Later. `GroupService.Open(source, trigger)` and `Close(id, outcome)` wrap `Before`, `Handle` and `After`, and not `Validate`. |
 | Requests | The scope forwards `Ask` to `RequestService`. |
 
 ## 11. Later
