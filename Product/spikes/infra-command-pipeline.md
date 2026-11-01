@@ -141,7 +141,7 @@ From 2026-11-01 (this spike):
 | author | `CommandHandler<T, TResult>.Handle(T, ICommandScope)` returns `TResult` | the logic for one message type |
 | author | `CommandHandler<T>.Handle(T, ICommandScope)` | the same, with no result |
 | author | `CommandValidator<T>.Validate(T, out string)` | the check before the run |
-| composition | `builder.RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteArity.One)`, same for validators | fills the stores |
+| composition | `builder.RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteMode.Single)`, same for validators | fills the stores |
 | composition | `new CommandPipeline(handlers, validators)` | makes the one pipeline; not in DI |
 | subclass | `CreateScope`, `SelectNext`, `Validate`, `Before`, `Handle`, `After`, `Run` | the custom part of one pipeline |
 | owner | `Add`, `Remove`, `TryPeek`, `Items`, `Run` | the owner system uses the list |
@@ -273,7 +273,7 @@ protected async Task<Envelope<TMessage>> Execute(Envelope<TMessage> e)
 }
 
 protected abstract TScope CreateScope(Envelope<TMessage> e);
-protected virtual bool Validate(Envelope<TMessage> e, out string reason);         // validators.TryFor(type)
+protected virtual bool Validate(Envelope<TMessage> e, out string reason);         // validators.TryGet(type)
 protected virtual Task Before(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
 protected virtual Task<object> Handle(Envelope<TMessage> e, TScope s);            // handlers.For(type)
 protected virtual Task After(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
@@ -304,7 +304,7 @@ The pipeline makes one envelope for each message at `Add` or at an inline run. T
 
 ### Stores and author bases
 
-The base holds two `TypeRouter` stores (`infra-type-router.md`, `RouteArity.One`). `Handle` reads `For`, and `Validate` reads `TryFor`. The concrete pipeline gives the typed author base:
+The base holds two `TypeRouter` stores (`infra-type-router.md`, `RouteMode.Single`). `Handle` reads `Get`, and `Validate` reads `TryGet`. The pipeline chooses the mode for each router. The concrete pipeline gives the typed author base:
 
 ```csharp
 public abstract class Command : Message { }
@@ -361,7 +361,7 @@ sealed class CommandScope : PipelineScope, ICommandScope
 owner system: commands.Run()
 └─ RunOne → SelectNext → PlayCard envelope; remove from the list
    └─ Execute(envelope)
-      ├─ Validate                                   validators.TryFor(PlayCard)
+      ├─ Validate                                   validators.TryGet(PlayCard)
       ├─ CreateScope → CommandScope
       ├─ Before                                     empty by default
       ├─ Handle → PlayCardHandler.Handle(c, scope)
@@ -420,7 +420,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 | Piece | Needs |
 |---|---|
-| Router (`infra-type-router.md`) | `TypeRouter<T>.For` and `TryFor`. `RegisterTypeRouter<T>(RouteArity.One)`. The `T : class, IRouted` constraint accepts an abstract class. |
+| Router (`infra-type-router.md`) | `TypeRouter<T>.Get` and `TryGet`. `RegisterTypeRouter<T>(RouteMode.Single)`. `[RequireImplementors]` on `IRouted` keeps author subclasses after stripping. The `T : class, IRouted` constraint accepts an abstract class. |
 | Record ids (`infra-record-ids.md`) | `MessageId` and `IdAllocator<MessageId>`. The id is local and not on the wire. |
 | Events & Blocks (`infra-block-wire.md`) | Later. `GroupService.Open(source, trigger)` and `Close(id, outcome)` wrap `Before`, `Handle` and `After`, and not `Validate`. |
 | Requests | The scope forwards `Ask` to `RequestService`. |
@@ -444,4 +444,5 @@ These items are not open for v0. Each row says why it waits and what reopens it.
 | Replace a message, also with a type change | No use in v0 | Hooks discussion; place: `Envelope` |
 | Cancel an envelope | No use in v0 | Hooks discussion; place: `EnvelopeState` |
 | Base-type match for validators | Router owns matching | Router spike |
+| Many validators or handlers for one type: run policy (all, stop at first failure, order) | v0 uses `RouteMode.Single`; the Pipeline owns the policy | A second validator on one type |
 | `Request<TResponse>` as a `Message` | Requests are not a pipeline | Requests enter a pipeline |
