@@ -297,6 +297,7 @@ Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono, stripping lev
 | C1 | our own `RequireImplementorsAttribute`, namespace `Test.Core`, on `IRouted` | 3 | 3 |
 | C2 | our own copy with Unity's full name `UnityEngine.Scripting.RequireImplementorsAttribute` | 3 | 3 |
 
+- A clean rerun confirms A and C1 with two separate Unity launches and with no `link.xml` generator in the project. "Before" has no attribute and gives 0 / 0. "After" adds only the `[RequireImplementors]` line in the source and gives 3 / 3.
 - Build A shows that the problem is real: the linker removes all members.
 - C1 shows that the linker reads the attribute by its short name. The namespace and the engine reference are not necessary. The attribute also passes through a derived interface and keeps the constructors.
 - The build sizes of A, B, C1 and C2 are the same (about 8.6 MB of managed code). Both fixes keep only the member types.
