@@ -306,6 +306,22 @@ Decision: use C1. It needs no maintenance and no Editor code. Unity does not doc
 
 IL2CPP gives the same result. A before and after rerun with `ScriptingImplementation.IL2CPP` (two separate Unity launches, stripping level High) gives 0 / 0 with no attribute and 3 / 3 with the attribute.
 
+A second IL2CPP test (stripping level High, one build without the attributes and one build with them) examined our own copies of both attributes on each kind of base type. Each case had two derived types, one with a constructor parameter. The cells give found / built. With no attribute, all cases gave 0 / 0.
+
+| Base type | `RequireImplementors` | `RequireDerived` |
+|---|---|---|
+| interface, class implementors | 2 / 2 | 0 / 0 |
+| interface, record implementors | 2 / 2 | not tested |
+| abstract class | 0 / 0 | 2 / 2 |
+| base class, not abstract | 0 / 0 | 2 / 2 |
+| abstract record | 0 / 0 | 2 / 2 |
+| record, not abstract | not tested | 2 / 2 |
+
+- `RequireImplementors` works only on an interface. The implementors can be classes or records.
+- `RequireDerived` works only on a class or a record, abstract or not. It does not work on an interface.
+- The linker reads both attributes by their class names, so `Framework.Core` can hold both with no engine reference.
+- `IRouted` is an interface, so the router needs only `RequireImplementors`. If a future scan root is a base class, use `RequireDerived` on it.
+
 The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Core` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
 
 ### 5.6 Question 6: exact dispatch, and a read for subtypes
