@@ -547,8 +547,9 @@ Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.p
 
 ## 10. Open questions
 
-All open questions are deferred (decision 25).
+All open questions are deferred (decision 25, and Q4 until Record Ids is ready).
 
 1. **Hidden information.** If the server sends a block to only one client, the positions differ, and a `TriggerId` points to a different block on each side. Options: a placeholder block (`Hidden`) at the same position; an id field on every block; or redacted fields in the same block. Decide with the hidden-information design.
 2. **What ran.** Presentation must know which command or effect ran (Attack, Fireball), not only the source. A handler or an observer for that type gives it. Decide when presentation needs it.
 3. **Response queue.** The mechanism that keeps a response a root block (rule 2). Decide with the split at `Ask`.
+4. **Default arguments.** `trigger = default` gives `0` ("never set"), not `BlockId.None` (`-1`). Options: `BlockId? trigger = null`, overloads, or reference fields (`Block trigger = null`) when AutoPacker packs records as their key. Decide when the Record Ids shape is ready.
