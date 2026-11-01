@@ -25,18 +25,18 @@ tags: [#spike, #pipeline, #commands]
 
 1. `Pipeline<TMessage, TScope>` wraps each message in an `Envelope` and runs it through a fixed order: `Validate`, `CreateScope`, `Before`, `Handle`, `After`. The envelope holds the result.
 2. The owner system calls `Run()`. By default, it runs one envelope. A subclass can override `Run()` to drain the list. A scope can run a message inline in the same pipeline.
-3. v0 is **one pipeline** with five shared parts. Hooks, two or more pipelines, the loop across pipelines, blocks and the concrete pipelines are **out**. Section 2 names their owners.
+3. v0 is **one pipeline** with five shared parts. Hooks, two or more pipelines, the loop across pipelines, groups and the concrete pipelines are **out**. Section 2 names their owners.
 
 ### Decisions
 
 From 2026-10-31 (all four infra spikes):
 
-1. Ids are typed `readonly struct`s: `EntityId`, `RequestId`, `BlockId`, `MessageId` (`infra-record-ids.md`).
+1. Ids are typed `readonly struct`s: `EntityId`, `RequestId`, `MessageId` (`infra-record-ids.md`). `BlockId` is the position of a block in the stream (`infra-block-wire.md`).
 2. `TypeRouter<T>`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core`.
-3. A new `Framework.Blocks` feature owns all `Block*` types (`infra-block-wire.md`).
+3. A new `Framework.Blocks` feature owns `Block`, `Group` and `GroupService` (`infra-block-wire.md`).
 4. The async core uses `System.Threading.Tasks.Task`.
-5. The wire carries `CauseId` only. The nesting parent comes from bracket order.
-6. An intent opens no block.
+5. The wire carries `TriggerId` only. The parent comes only from group nesting.
+6. An intent opens no group.
 
 From 2026-11-01 (this spike):
 
@@ -47,7 +47,7 @@ From 2026-11-01 (this spike):
 11. One public run entry: `Run()`. Its default runs one envelope. A subclass overrides it to drain. A runner object waits for the builder discussion.
 12. Inline runs skip `SelectNext`. The concrete pipeline decides if its scope exposes them.
 13. Validators are a separate first slot. A reject runs no other step.
-14. Every message is wrapped in an `Envelope`. The envelope holds the identity, the chain and the result. A non-generic `Envelope` base exists for Blocks and logs.
+14. Every message is wrapped in an `Envelope`. The envelope holds the identity, the chain and the result. A non-generic `Envelope` base exists for groups and logs.
 15. The scope holds verbs only. It closes after the run, so a kept scope throws. Lifetime and chain data live on the envelope.
 16. The base holds two stores keyed by message type: `TypeRouter<Handler<TMessage, TScope>>` and `TypeRouter<Validator<TMessage>>`. The defaults of `Handle` and `Validate` read them.
 17. `Handler` and `Validator` are abstract base classes. Their entry is `protected internal`, so only the pipeline calls them. The concrete pipeline gives the typed author base, for example `CommandHandler<T>`.
@@ -81,11 +81,11 @@ From 2026-11-01 (this spike):
 | Replace a message, cancel an envelope (later) | This spike; `Envelope` is the place |
 | How a store works inside, base-type match | `infra-type-router.md` |
 | Typed author bases (`CommandHandler<T>`) and scope verbs | Concrete pipeline (Commands) |
-| Block bracket, `CauseId`, wire form | `infra-block-wire.md` (later) |
+| Group bracket (`GroupService`), `TriggerId`, wire form | `infra-block-wire.md` (later) |
 | `MessageId`, `EntityId` | `infra-record-ids.md` |
 | Loop and order across pipelines, intents, `Answer` | Engine loop (`GameEngine`; no spike yet) |
 | `Ask`: request id, await, completion | `RequestService`; the scope only forwards |
-| Event fan-out, list changes on the wire | Wire (`EventStream`) / Blocks |
+| Event fan-out, list changes on the wire | Wire (`EventStream`) / Events & Blocks |
 
 **Boundary.** The pipeline receives a message from `Add` or from an inline run. It wraps the message in an `Envelope`, runs it, and writes the result on the envelope. Handlers call services, and services emit events to `EventStream`.
 
@@ -123,7 +123,7 @@ From 2026-11-01 (this spike):
 | A scope for the handler | VS command, VS effect | verbs; the VS scopes leak engine objects |
 | A list and a "next" rule | VS stack, VS command queue | LIFO with a policy, or FIFO |
 | A result to the caller | FW command | VS returns nothing |
-| Block bracket | all three | out of scope (Blocks) |
+| Block bracket (later: group) | all three | out of scope (Events & Blocks) |
 
 ## 4. API
 
@@ -217,7 +217,7 @@ if (envelope.State == EnvelopeState.Rejected) Show(envelope.Reason);
 | Part | Serves | Replaces |
 |---|---|---|
 | `Pipeline<TMessage, TScope>` | `Add`, `Remove`, `TryPeek`, `Run`, inline run | FW `CommandService`, VS `CommandService.Execute`, VS `Stack`, VS engine queue |
-| `Envelope`, `Envelope<TMessage>`, `EnvelopeState` | owner, Blocks | `CommandResult`; nothing in VS |
+| `Envelope`, `Envelope<TMessage>`, `EnvelopeState` | owner, groups | `CommandResult`; nothing in VS |
 | `Handler<TMessage, TScope>`, `Validator<TMessage>` | the stores | `ICommandHandler`, `ICommandValidator` as store types |
 | `PipelineScope` | the concrete scope | VS `ICommandScope`, `IEffectScope` |
 
@@ -271,7 +271,7 @@ An MTG stack overrides `SelectNext` and returns `null` until both players pass p
 
 ### `Envelope`
 
-The pipeline makes one envelope for each message at `Add` or at an inline run. The message is the data that the author writes. The envelope is the run of that message: its identity, its parent and its result. Blocks will read `Id` and `ParentId`. Replace and cancel come later, as new states or fields.
+The pipeline makes one envelope for each message at `Add` or at an inline run. The message is the data that the author writes. The envelope is the run of that message: its identity, its parent and its result. Groups can read `Id` and `ParentId` later. Replace and cancel come later, as new states or fields.
 
 ### Stores and author bases
 
@@ -368,7 +368,7 @@ PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service)
 
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Both steps come after the router step that adds `TypeRouter<T>`, and after the record-ids step that adds `MessageId`.
 
-1. **Base pipeline. No behavior change.** Add `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `PipelineScope`, `Handler<,>` and `Validator<>`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps the envelope to `CommandResult`. The block bracket stays in `CommandService` until the Blocks step. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
+1. **Base pipeline. No behavior change.** Add `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `PipelineScope`, `Handler<,>` and `Validator<>`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps the envelope to `CommandResult`. The block bracket stays in `CommandService` until the Events & Blocks step changes it to a group. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
 2. **Async handlers on the shared bases.** `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become `Task Handle(T, ICommandScope)`. The registries become `TypeRouter`. Delete `CommandService`. Add PIPE-01, PIPE-04 and PIPE-05. Add the inline-continuation test (decision 4) in EditMode and PlayMode.
 
 ## 10. Interfaces needed from the other pieces
@@ -377,7 +377,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 |---|---|
 | Router (`infra-type-router.md`) | `TypeRouter<T>.For` and `TryFor`. `RegisterTypeRouter<T>(RouteArity.One)`. The `T : class, IRouted` constraint accepts an abstract class. |
 | Record ids (`infra-record-ids.md`) | `MessageId` and `IdAllocator<MessageId>`. The id is local and not on the wire. |
-| Blocks (`infra-block-wire.md`) | Later. Reads `Envelope.Id` and `ParentId`. The bracket wraps `Before`, `Handle` and `After`, and not `Validate`. |
+| Events & Blocks (`infra-block-wire.md`) | Later. `GroupService.Open(kind, source, trigger)` and `Close(id, outcome)` wrap `Before`, `Handle` and `After`, and not `Validate`. |
 | Requests | The scope forwards `Ask` to `RequestService`. |
 
 ## 11. Later
