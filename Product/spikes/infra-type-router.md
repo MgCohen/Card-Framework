@@ -114,17 +114,17 @@ var appliers = _appliers.All(ev.GetType());                       // N apply han
 var family   = _appliers.AllUnder(typeof(TagSetEvent<>));        // every TagSetHandler<T>
 ```
 
-Access:
+Access. "Gate" is `Tools/Rulebook/gate.ps1`. It checks the rules in `Tools/Rulebook/rulebook.json` and fails the build. The `ROUTE-*` rules are new proposals from this spike (§ 8).
 
 | Bypass route | What stops it |
 |---|---|
-| A hand-written `Dictionary<Type, *>` router | ROUTE-01 |
-| A `static` router shared between scopes or tests | ROUTE-02 |
-| A concrete message with a subclass, so exact dispatch misses the child | ROUTE-03 |
-| A member that does not give a route type | The generic constraint `where T : IRouted` (ROUTE-04 test) |
-| A member added after composition | No write API. The constructor is the only writer. |
-| A member registered without `AsImplementedInterfaces`, so it is not in the list | `For` throws on a miss. A composition check over `Types` can find it earlier (open question 1). |
-| A dispatch stage that calls `AllUnder` | No check. The name shows the difference. Code review stops it. |
+| Code writes its own `Dictionary<Type, *>` router | Gate: a new rule fails each Framework type with a field of that type (proposed ROUTE-01). |
+| Code keeps a router in a `static` field, so server, client and tests share it | Gate: a new rule fails each static router field (proposed ROUTE-02). |
+| A concrete message has a subclass, so exact dispatch misses the child | Gate: a new rule fails each message type that is not `sealed` or `abstract` (proposed ROUTE-03). |
+| A member does not give a route type | Compiler: the router constraint `where T : IRouted` rejects the member. |
+| Code adds a member after composition | No method exists for it. Only the constructor writes. |
+| A member is registered without `AsImplementedInterfaces`, so it is not in the list | At run time, `For` throws "No {T} registered for {type}". No earlier check exists yet (open question 1). |
+| A dispatch stage calls `AllUnder` instead of `All` | Nothing automatic. Code review only. |
 
 ## 5. Generalized contract
 
