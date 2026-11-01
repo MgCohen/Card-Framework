@@ -33,7 +33,7 @@ The server writes game blocks into one ordered stream. A **block** is one line o
 4. **Links.** Parent comes from nesting and is not on the wire. `TriggerId` (on `GroupStart` and `Response`) points to the block that caused the work. `SourceId` points to the entity that did the work.
 5. **Write.** Only server services call `IEventEmitter.Emit`. The client never emits game blocks.
 6. **Listen.** `HandlerRegistry.Dispatch` runs two stages: first all **apply handlers** (store writers), then all **observers** (read only). Handlers and observers do not emit.
-7. **Groups.** `GroupService.Open` / `Close` are public. `Create` is the helper: open, run the logic, close. A group that opens while another group is open is nested. `Close` throws if a child group is open.
+7. **Groups.** `GroupService.Open` / `Close` are public. `Create` is the helper: open, run the logic, close. A group that opens while another group is open is nested. `Close` throws if a child group is open. A group has no kind.
 8. **Requests** are not groups. The group that asks closes with `Waiting`. The response is a root block, in any order. The work continues in a new group with `TriggerId` = the response.
 
 ### Decisions
@@ -63,7 +63,17 @@ User decisions, 2026-11-01 (this piece):
 18. **Timing.** Nesting follows timing, and the pipeline decides the timing. Default for now: reactions run at the end of the trigger group, before its `Close`.
 19. **Requests.** A request is not a group and does not follow the close rule. A response can come after the asking group closes.
 
-The `Message` field is dropped from `GroupStart`, because the router gives no slot for each message type. Presentation identifies a group by `Kind` + `SourceId`.
+User decisions, 2026-11-01 (open questions):
+
+20. **`RequestId` goes away.** A request is a block, so its id is its `BlockId`.
+21. **Blocks references.** `Block` stays in `Framework.Blocks`. Tags, Entities, States and Requests reference Blocks.
+22. **Root blocks** are permitted. The engine does not open a `Match` group.
+23. **No group kind.** No runtime code reads the kind today. `GroupStart` holds `TriggerId` and `SourceId` only. The `Command` / `Effect` kind and the kind registry are removed.
+24. **Error path.** If the logic throws, `Create` closes the open child groups as `Errored`, then the parent, and then rethrows the original error.
+25. **Deferred:** hidden information (§10 Q1), "what ran" for presentation (§10 Q2), and the response queue (§10 Q3).
+26. **Response rule.** A response is always a root block.
+
+Pipeline v0 has no groups and no hooks (Pipeline decision, 2026-11-01). Reaction timing (decision 18) goes to the hooks and reactions discussion. The split at `Ask` (§4.8) waits until groups come into the Pipeline.
 
 ## 2. Scope
 
@@ -76,14 +86,14 @@ The `Message` field is dropped from `GroupStart`, because the router gives no sl
 | Groups: `Open` / `Close` / `Create`, nesting rule, `GroupStore` | in | — |
 | Links: parent, `TriggerId`, `SourceId` | in | — |
 | Request and response as blocks | in: shape and links | request store: `Framework.Requests` |
-| Group kinds as an open set | in (uses `TypeKey`) | key design: kind ids piece |
 | React to a block | in: observer contract only | scheduling, timing, hooks: `infra-command-pipeline.md` |
 | Find handlers by type | out | `infra-type-router.md` |
 | Id struct shape, `RecordStore` base | out | `infra-record-ids.md` |
 | Undo, replay cursor | out | `infra-record-ids.md` |
 | `WireEvent` transport, packing, channels | out | `Framework.Wire` network (no change) |
 | Lobby and membership events | out | `Framework.Multiplayer` |
-| Hidden information (redact `SourceId`) | out | not designed |
+| Hidden information | out (deferred) | not designed |
+| "What ran" for presentation | out (deferred) | a handler for that type, later |
 
 **Boundary.** The piece receives blocks from server services (tags, entities, states, requests,
 pipeline). It gives an ordered, well-nested stream to stores, client tools and the network. It
@@ -133,7 +143,7 @@ Paths in rows 1–10 start at `Assets/Framework/`.
 | author | `WireEventObserver<T>` | Reads the block after all apply handlers |
 | author | `GroupService.Open` / `Close` / `Create` | Brackets work in a group |
 | composition | `builder.RegisterHandler<T>()` / `RegisterObserver<T>()` | Adds a handler or an observer |
-| composition | `BlocksInstaller` | Stores, handlers, kinds (both sides); service (server) |
+| composition | `BlocksInstaller` | Store and handlers (both sides); service (server) |
 | runtime | `IReadOnlyGroupStore` | Current group, open groups, records |
 
 Shape:
@@ -164,12 +174,12 @@ public abstract partial class Block : WireEvent
 public sealed class GroupService
 {
     public BlockId Current { get; }
-    public BlockId Open(GroupKind kind, EntityId source = default, BlockId trigger = default);
+    public BlockId Open(EntityId source = default, BlockId trigger = default);
     public void    Close(BlockId id, GroupOutcome outcome = GroupOutcome.Completed);
-    public void    Create(GroupKind kind, EntityId source, Action logic, BlockId trigger = default);
-    public T       Create<T>(GroupKind kind, EntityId source, Func<T> logic, BlockId trigger = default);
-    public Task    CreateAsync(GroupKind kind, EntityId source, Func<Task> logic, BlockId trigger = default);
-    public Task<T> CreateAsync<T>(GroupKind kind, EntityId source, Func<Task<T>> logic, BlockId trigger = default);
+    public void    Create(EntityId source, Action logic, BlockId trigger = default);
+    public T       Create<T>(EntityId source, Func<T> logic, BlockId trigger = default);
+    public Task    CreateAsync(EntityId source, Func<Task> logic, BlockId trigger = default);
+    public Task<T> CreateAsync<T>(EntityId source, Func<Task<T>> logic, BlockId trigger = default);
 }
 ```
 
@@ -178,7 +188,7 @@ public sealed class GroupService
 Call site (an effect, after the pipeline port):
 
 ```csharp
-groups.Create(new EffectGroup(), effect.SourceId, () =>
+groups.Create(effect.SourceId, () =>
 {
     tags.Set(target, Health, hp - damage);       // TagChange block: inside the effect group
 }, trigger: damageBlock);
@@ -201,21 +211,21 @@ Access:
 ```
 stream (one ordered list of blocks)
 
-#1  GroupStart Command PlayCard  source: Goblin
+#1  GroupStart  source: Goblin       (play card)
 #2    TagChange  player Mana 5 → 3
 #3    CardMove   Goblin hand → board
 #4  GroupEnd   Completed
-#5  GroupStart Command Attack    source: Knight
+#5  GroupStart  source: Knight       (attack)
 #6    TagChange  Goblin Health 2 → 0
 #7    TagChange  Knight Health 4 → 3
-#8    GroupStart Effect Death    source: Goblin  trigger: #6
+#8    GroupStart  source: Goblin     (death)  trigger: #6
 #9      TagSet     Goblin Dead = true
 #10     CardMove   Goblin board → graveyard
 #11   GroupEnd   Completed
 #12 GroupEnd   Completed
 ```
 
-The number is the `BlockId`. Group `#8` has parent `#5` (from nesting), trigger `#6` and source Goblin.
+The number is the `BlockId`. The text in parentheses is a comment, not a field. Group `#8` has parent `#5` (from nesting), trigger `#6` and source Goblin.
 
 Block types:
 
@@ -228,7 +238,7 @@ Block types:
 Rules:
 
 1. A block belongs to the innermost open group. The block holds no parent field.
-2. A block with no open group is a root block (for example match setup, a response).
+2. A block with no open group is a root block (for example match setup). A response is always a root block.
 3. A group contains blocks and other groups.
 4. A group cannot close while a child group is open.
 5. Only `GroupStart` and `Response` hold `TriggerId`. Change blocks hold no link fields.
@@ -266,7 +276,6 @@ namespace Framework.Blocks
     public partial class GroupStart : Block
     {
         [Packed] public BlockId  TriggerId;  // BlockId.None = no trigger
-        [Packed] public int      Kind;       // GroupKind slot
         [Packed] public EntityId SourceId;   // EntityId.None = no source
     }
 
@@ -295,23 +304,13 @@ stay off the game stream. If a block is ever filtered for one client, the positi
 `Request.Id`, `Request.ParentId` and `Response.RequestId` are removed. The request id is its
 `BlockId`. `RequestId` goes away (record ids piece).
 
-### 4.4 Kinds
+### 4.4 No kind
 
-```csharp
-public abstract record GroupKind(int Slot) : TypeKey(Slot);
+`GroupStart` holds no kind. No runtime code reads the kind today: only tests assert it, and the VS
+tools read the message name. A reaction is a group with a `TriggerId`.
 
-public sealed record CommandGroup() : GroupKind(1);
-public sealed record EffectGroup()  : GroupKind(2);
-
-public sealed class GroupKindRegistry : SlotRegistry<GroupKind>
-{
-    public static GroupKindRegistry WithBaselines() { /* Register<CommandGroup>() ... */ }
-}
-```
-
-This copies `EntityType` + `EntityTypeRegistry`. Games add kinds with `Register<T>()` (turn,
-combat phase). Slot 3 (the old `Trigger` kind) is not used again. A reaction is an `EffectGroup`
-with a `TriggerId`.
+If presentation must know what ran (Attack, Fireball), it adds a handler or an observer for that
+type, as the tag listeners do (deferred, §10 Q2).
 
 ### 4.5 Source
 
@@ -332,7 +331,6 @@ public readonly struct GroupRecord : IRecord<BlockId>
     public BlockId Id { get; }                     // the GroupStart position
     public readonly BlockId  ParentId;             // derived: the group open at GroupStart
     public readonly BlockId  TriggerId;
-    public readonly int      Kind;
     public readonly EntityId SourceId;
     public readonly int      Depth;
     public readonly GroupOutcome Outcome;          // None while open
@@ -363,9 +361,9 @@ The handlers also implement `Unapply` when the record ids piece adds undo.
 ### 4.7 Service (server only)
 
 ```csharp
-public BlockId Open(GroupKind kind, EntityId source = default, BlockId trigger = default)
+public BlockId Open(EntityId source = default, BlockId trigger = default)
 {
-    var start = new GroupStart { TriggerId = trigger, Kind = kind.Slot, SourceId = source };
+    var start = new GroupStart { TriggerId = trigger, SourceId = source };
     _events.Emit(start);
     return start.Id;                               // Position was set by EventStream.Add
 }
@@ -377,17 +375,28 @@ public void Close(BlockId id, GroupOutcome outcome = GroupOutcome.Completed)
     _events.Emit(new GroupEnd { Outcome = (byte)outcome });
 }
 
-public void Create(GroupKind kind, EntityId source, Action logic, BlockId trigger = default)
+public void Create(EntityId source, Action logic, BlockId trigger = default)
 {
-    var id = Open(kind, source, trigger);
+    var id = Open(source, trigger);
     try   { logic(); }
-    catch (OperationCanceledException) { Close(id, GroupOutcome.Cancelled); throw; }
-    catch { Close(id, GroupOutcome.Errored); throw; }
+    catch (OperationCanceledException) { CloseFrom(id, GroupOutcome.Cancelled); throw; }
+    catch { CloseFrom(id, GroupOutcome.Errored); throw; }
     Close(id, GroupOutcome.Completed);
+}
+
+// Error path only: close the open child groups as Errored, then the group itself.
+void CloseFrom(BlockId id, GroupOutcome outcome)
+{
+    while (!_store.Current.Equals(id))
+        _events.Emit(new GroupEnd { Outcome = (byte)GroupOutcome.Errored });
+    _events.Emit(new GroupEnd { Outcome = (byte)outcome });
 }
 ```
 
 The other `Create` overloads have the same body. The async ones `await` the logic.
+
+A child group stays open on the error path only if the logic opened it with `Open` and threw before
+its `Close`. `CloseFrom` keeps the stream well nested, and the caller sees the original error.
 
 `Close` reads `_store.Current` after earlier emits. This works because `Emit` dispatches to the
 apply handlers before it returns. **Requirement:** server dispatch stays synchronous.
@@ -395,12 +404,12 @@ apply handlers before it returns. **Requirement:** server dispatch stays synchro
 ### 4.8 Requests
 
 ```
-#1  GroupStart Command PlayCard  source: Fireball
+#1  GroupStart  source: Fireball     (play card)
 #2    TagChange  player Mana 5 → 1
 #3    Request    player A: choose target
 #4  GroupEnd   Waiting
 #5  Response   target = Goblin          trigger: #3     root block
-#6  GroupStart Effect Fireball          trigger: #5
+#6  GroupStart  source: Fireball     trigger: #5
 #7    TagChange  Goblin Health 2 → 0
 #8  GroupEnd   Completed
 ```
@@ -411,7 +420,11 @@ apply handlers before it returns. **Requirement:** server dispatch stays synchro
 4. The work continues in a new group with `TriggerId` = the response.
 
 The author still writes `await Ask(...)`. The pipeline closes the group at `Ask` and opens the new
-group when the response arrives (pipeline piece).
+group when the response arrives. If a group is open when the response arrives, the pipeline waits
+until no group is open (rule 2).
+
+**Later.** Pipeline v0 has no groups. The split at `Ask` and the response queue come when groups
+come into the Pipeline.
 
 ### 4.9 Decisions behind the contract
 
@@ -422,7 +435,7 @@ group when the response arrives (pipeline piece).
 - **Parent, trigger, source.** Parent answers "where did it run", trigger "why", source "who". They often differ: in the example in §4.2, group `#8` has 3 different values.
 - **Two listen stages.** Observers see the state after all apply handlers. Without the stage split, the order depends on registration order.
 - **No emit while dispatch runs.** An emit inside a handler starts a second dispatch before the first one ends. Later handlers of the first block then see the state after the second block.
-- **Open kinds.** `docs/coding-standards.md` says an author-extensible set is not an enum. Games need group kinds (turn, combat phase, SBA batch).
+- **No kind.** A kind field with no reader adds a registry and wire bytes. A field is easy to add later, because no saved data exists yet.
 - **No payload.** `wire-block-events.md` L1 holds: change blocks carry the truth. AutoPacker packs only unmanaged fields.
 - **Own feature.** The client needs the store and handlers. The pipeline is server only. `Framework.Blocks` lets presentation use groups without the pipeline.
 
@@ -432,8 +445,8 @@ group when the response arrives (pipeline piece).
 |---|---|---|
 | `Framework.Wire.BlockScope` | `Framework.Blocks.GroupService` | Rename and move. Add the store. No allocator. |
 | `BlockStartEvent`, `BlockEndEvent` | `GroupStart`, `GroupEnd` | Move to Blocks. Drop `Id`, `ParentId`. Add `TriggerId`. |
-| `BlockKind` enum, `BlockOutcome` | `GroupKind` records, `GroupOutcome` (+ `Waiting`) | |
-| `CommandService.Execute` open / try / catch / close | `_groups.Create(new CommandGroup(), SourceOf(cmd), () => handler.Handle(cmd))` | Validation stays above it. |
+| `BlockKind` enum, `BlockOutcome` | removed; `GroupOutcome` (+ `Waiting`) | Tests stop asserting the kind. |
+| `CommandService.Execute` open / try / catch / close | `_groups.Create(SourceOf(cmd), () => handler.Handle(cmd))` | Validation stays above it. |
 | `CommandInstaller`: `Register<BlockScope>` | `BlocksInstaller` in `GameplayLayer`, before `CommandInstaller` | New installer. |
 | `TagSetEvent<T>`, `TagChangeEvent<T>`, `EntityCreatedEvent`, `StatePushEvent`, … | Derive from `Block` | Base class change only. |
 | `Request.Id`, `Request.ParentId`, `Response.RequestId` | `Request.Id` (position), `Response.TriggerId` | `RequestStore` keys on `BlockId`. |
@@ -442,8 +455,8 @@ group when the response arrives (pipeline piece).
 | Tests on `OnAppended` | `RecordingObserver` in `Framework.Testing.Support` | `OnAppended` becomes `internal`. |
 | `WireForwarder` on `OnAppended` | No change (inside `Framework.Wire`) | — |
 | `RoundTripTests` / `NgoTransportPlayTests` use bracket events | `PingEvent` / `PongEvent` | Wire tests stop using domain events. |
-| VS `World.OpenBlock(parentOverride)` | `groups.Open(kind, source, trigger: frame.TriggerId)` | Pattern for phase 4. |
-| VS `EffectService.RunInline` | `groups.Create(new EffectGroup(), effect.SourceId, () => effect.Run(scope))` | Pattern for phase 4. |
+| VS `World.OpenBlock(parentOverride)` | `groups.Open(source, trigger: frame.TriggerId)` | Pattern for phase 4. |
+| VS `EffectService.RunInline` | `groups.Create(effect.SourceId, () => effect.Run(scope))` | Pattern for phase 4. |
 | VS `RequestsService.OpenRequestInternal` | No group. The request block is inside the asking group. | Pattern for phase 4. |
 | VS `PayloadCapture` | `ISourced`; no payload on the wire | Dropped. |
 
@@ -499,10 +512,9 @@ Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.p
 4. **Groups.** Add `GroupStart`, `GroupEnd`, `GroupRecord`, `IReadOnlyGroupStore`, `GroupStore`, both handlers and `BlocksInstaller`. Delete the `Block*` events from Wire. Switch the Wire tests to `PingEvent` / `PongEvent`. Tighten ARCH-09 (BLK-02). Unit tests: nested groups give the correct `ParentId` and `Depth`.
 5. **Change blocks.** Derive the tag, entity and state events from `Block`.
 6. **Requests.** Derive `Request` and `Response` from `Block`. Remove `Request.Id`, `Request.ParentId` and `Response.RequestId`. Add `Response.TriggerId`. Add `GroupOutcome.Waiting`.
-7. **`GroupService`.** Replace `BlockScope`. Port `CommandService.Execute` to `Create`. Tests: nested `Create` → inner `ParentId` = outer `Id`; throw → `Errored`; cancel → `Cancelled`; close of a parent with an open child throws.
-8. **Open kinds.** Replace the `BlockKind` enum with the `GroupKind` records and the registry.
-9. **Source.** Add `ISourced`.
-10. **Rules and docs.** Add BLK-01, BLK-03, BLK-05, EVT-01, EVT-02 (BLK-04 stays `proposed`). Remove the `Block*` exception from `docs/architecture.md`. Add `Blocks/` to the codemap. Describe the block recipe.
+7. **`GroupService`.** Replace `BlockScope`. Delete the `BlockKind` enum. Port `CommandService.Execute` to `Create`. Tests: nested `Create` → inner `ParentId` = outer `Id`; throw → `Errored`; cancel → `Cancelled`; close of a parent with an open child throws; throw with an open manual child → both close as `Errored`, and the original error reaches the caller.
+8. **Source.** Add `ISourced`.
+9. **Rules and docs.** Add BLK-01, BLK-03, BLK-05, EVT-01, EVT-02 (BLK-04 stays `proposed`). Remove the `Block*` exception from `docs/architecture.md`. Add `Blocks/` to the codemap. Describe the block recipe.
 
 ## 9. Interfaces with the other pieces
 
@@ -519,14 +531,14 @@ Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.p
 
 - `GroupService.Open` / `Close` / `Create` / `CreateAsync`. No `BlockHeader` type.
 - `GroupService.Current` and `trigger`, to link deferred work.
-- `GroupOutcome.Waiting`, for the close at `Ask`.
+- `GroupOutcome.Waiting`, for the close at `Ask` (later).
 - `WireEventObserver<T>` + `IReadOnlyGroupStore.Current`: the contract for reactions.
 - `ISourced`.
 
 **Needs from the pipeline piece:**
 
-- Timing of reactions. Default: at the end of the trigger group, before its `Close`.
-- Close the asking group at `Ask`. Open a new group with `TriggerId` = the response.
+- Later (not Pipeline v0): timing of reactions, in the hooks and reactions discussion. Default: at the end of the trigger group, before its `Close`.
+- Later (not Pipeline v0): close the asking group at `Ask`; queue a response until no group is open; open a new group with `TriggerId` = the response.
 - Validation before `Open`.
 - A reaction schedules work. It does not emit inside an observer.
 - An `Answer` intent opens no group.
@@ -535,9 +547,8 @@ Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.p
 
 ## 10. Open questions
 
-1. **Root blocks.** This spike permits blocks outside a group (rule 2). Does the engine open a root group (`Match`, `Setup`) instead?
-2. **Kind slot ranges.** Does the framework reserve a slot range for baseline kinds?
-3. **Close check on the error path.** The nesting exception hides the original exception. Log and rethrow the original, or check only in tests?
-4. **Hidden information.** Must `SourceId` be redacted for a hidden card? If the server filters a block for one client, the positions differ. Then the client needs a placeholder block, or the id goes back on the wire.
-5. **Message identity.** If presentation needs "which command" without a source, who gives a stable slot?
-6. **Response position.** If a group is open when a response arrives, does the pipeline wait until no group is open, so the response is a root block?
+All open questions are deferred (decision 25).
+
+1. **Hidden information.** If the server sends a block to only one client, the positions differ, and a `TriggerId` points to a different block on each side. Options: a placeholder block (`Hidden`) at the same position; an id field on every block; or redacted fields in the same block. Decide with the hidden-information design.
+2. **What ran.** Presentation must know which command or effect ran (Attack, Fireball), not only the source. A handler or an observer for that type gives it. Decide when presentation needs it.
+3. **Response queue.** The mechanism that keeps a response a root block (rule 2). Decide with the split at `Ask`.
