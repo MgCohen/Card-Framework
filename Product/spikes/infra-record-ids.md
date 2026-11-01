@@ -29,6 +29,7 @@ tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 3. Keep "no `Store<T>` base". Standardize the read pair `ById` / `TryGetById` over the typed id, by convention and by rule.
 4. Every state-changing event holds the data to undo itself: `Set`, `Change(Prev, Next)`, `Remove(Prev)`. Add `Prev` to `TagRemovedEvent` and `StatePushEvent`.
 5. Queued messages (commands, intents) hold typed ids, never live `Entity` refs. Handlers resolve ids through read views when they run.
+6. Kind slots (`Tag`, `EntityType`, `GameState`, `BlockKind`) stay authored numbers. Each kind space gets a typed slot struct, and a gate rule makes sure that slots are unique (§3.8).
 
 ### Decisions (2026-10-31)
 
@@ -41,6 +42,10 @@ The user made these decisions for all four infra spikes:
 5. The block events carry `CauseId` only. The nesting parent comes from the order of the brackets. There is no `ParentId` on the wire and no parent override.
 6. An intent opens no block.
 7. Hooks exist only at the command level.
+
+### Decisions (2026-11-01)
+
+8. Kind slots use option D: the authored number stays the one wire identity, the slot is typed for each kind space, and a gate rule checks that slots are unique. The options that remove the number (count at composition, hash of the type name) are rejected, because saves, replays and data need a number that does not change across builds.
 
 ## 2. Current shapes
 
@@ -87,7 +92,8 @@ Framework paths are under `Assets/Framework/`. Three findings:
 | message | `MessageId` | pipeline asmdef | pipeline `Enqueue` | no (local, see §8) | match |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
-| slot, definition | `int` | authored | nobody (data) | yes | build |
+| slot | `TagSlot`, `EntityTypeSlot`, `StateSlot`, `BlockKindSlot` | with each kind | nobody (authored, §3.8) | yes | build |
+| definition | `int` | authored | nobody (data) | yes | build |
 
 `IdAllocator<TId>` and `EntityId` live in `Framework.Core` (decision 2). `EntityId` must be in Core because `Framework.Tags` uses it and Tags cannot reference Entities (Entities references Tags). `BlockId` lives in `Framework.Blocks` with the block events (decision 3). Then `Framework.Wire` holds no block types, and the ARCH-09 `Block*` exception can go.
 
@@ -253,6 +259,49 @@ Reasons:
 
 The handler signature is the pipeline one (`infra-command-pipeline.md`). The cost is one store lookup in the handler. `command-service.md` says "commands carry references freely". That text depends on inline `Execute` (L3) and expires when the queue lands.
 
+### 3.8 Kind slots
+
+A kind is a record type that names a closed member of an open set: a tag, an entity type, a game state, a block kind. Today each kind has two identities. The record type is one. The authored `int` slot is the other.
+
+```csharp
+public sealed record HealthTag() : Tag<int>(2001);             // SampleTags.cs:9
+public TKey BySlot(int slot)       => _bySlot[slot];           // SlotRegistry.cs:20
+public T    Of<T>() where T : TKey => (T)_byType[typeof(T)];   // SlotRegistry.cs:22
+```
+
+The slot stays an authored number (decision 8). It is the only identity on the wire and in data. The record type is the identity in code. These are the two lookup paths:
+
+| Path | Use it for | Call |
+|---|---|---|
+| Slot | apply handlers, data load, saves | `Registry.BySlot(TSlot)` |
+| Type | game and feature code | `Registry.Of<T>()`, a static alias (`SampleTags.Health`), or `key is HealthTag` to branch on a received key |
+
+**Typed slot.** Each kind space gets its own `readonly struct` around `int`, with the same shape as a typed id (§3.2): `TagSlot`, `EntityTypeSlot`, `StateSlot`, `BlockKindSlot`. Each struct lives with its kind. There is no `None`: slot 0 can be a real member (`Unknown() : EntityType(0)`).
+
+```csharp
+namespace Framework.Core
+{
+    public abstract record TypeKey<TSlot>(TSlot Slot) where TSlot : unmanaged, IEquatable<TSlot>;
+    public class SlotRegistry<TKey, TSlot> where TKey : TypeKey<TSlot> where TSlot : unmanaged, IEquatable<TSlot>
+    { /* BySlot(TSlot), TryBySlot(TSlot, out TKey), Of<T>() — the same body as today */ }
+}
+
+namespace Framework.Tags
+{
+    public abstract record Tag : TypeKey<TagSlot>
+    {
+        protected Tag(int slot) : base(new TagSlot(slot)) { }
+        public abstract Type ValueType { get; }
+    }
+}
+```
+
+The authoring line does not change: `HealthTag() : Tag<int>(2001)`. The protected `int` constructor is the only place where a bare number becomes a slot. Wire fields change from `[Packed] int Slot` to `[Packed] TagSlot Slot`. The wire cost is zero bytes, for the reason in §3.2. Make sure that C# records accept the explicit base constructor over a positional base before step 6; a compile test in Core proves it.
+
+**Unique slots (KIND-01).** `SlotRegistry.Add` finds a clash only when a match starts. A reflection test finds it in the gate: for each sealed `TypeKey<TSlot>` subtype with a public parameterless constructor, make one instance, group by `TSlot`, and fail on a duplicate slot. Members that come from data (`Register(TKey member)`) are not types, so the runtime check in `Add` stays.
+
+**Why one struct for each space, not `Slot<TKind>`.** The marker type exists here (`Tag`, `EntityType`), so the first argument in §3.2 does not apply. The AutoPacker argument does: a closed generic name in a `Packed` struct has no test. Four named structs keep one pattern for ids and slots.
+
 ## 4. Call-site migration
 
 | Current code | New code | Change needed |
@@ -269,12 +318,15 @@ The handler signature is the pipeline one (`infra-command-pipeline.md`). The cos
 | `Response.RequestId : int` | `RequestId` | `RequestService.Complete` |
 | `TagRemovedEvent { EntityId, Slot }` | `TagRemovedEvent<T> { EntityId, Slot, Prev }` | `TagService.Remove` reads prev; per-`T` handler and channel in `TagInstaller` |
 | `StatePushEvent { Slot }` | `StatePushEvent { Slot, PrevSlot }` | `StateService.Push` reads `StateStore.Current.Slot` |
+| `TypeKey(int Slot)`, `SlotRegistry<TKey>` | `TypeKey<TSlot>(TSlot Slot)`, `SlotRegistry<TKey, TSlot>` | the four kind roots and their registries |
+| `[Packed] int Slot` / `TypeSlot` on Tag, State and Entity events | `[Packed] TagSlot Slot`, `StateSlot Slot`, `EntityTypeSlot TypeSlot` | apply handlers call `BySlot` with the typed slot |
+| `BlockStartEvent.Kind : int` (block spike) | `BlockKindSlot Kind` | the block piece |
 | `SetHealth { int EntityId; }` (samples) | `SetHealth { EntityId Target; }` | Testing Support, Commands tests, acceptance bindings |
-| `Catalog<TDef>`, `SlotRegistry<TKey>`, `Network`, `PeerRoster` | no change | see §5 |
+| `Catalog<TDef>`, `Network`, `PeerRoster` | no change | see §5 |
 
 ## 5. What stays specialized, and why
 
-- **Slots (`TypeKey`, `SlotRegistry<TKey>`, the three registries).** Slots are authored at build time and frozen at composition. Nothing allocates them at runtime. A Registry rejects a clash. It does not count. Data authoring also depends on slots that stay plain `int`.
+- **Slot allocation.** Slots are authored at build time and frozen at composition. No allocator makes them, because a counted or hashed slot changes across builds (decision 8). The slot gets a typed struct and a gate rule (§3.8), but the number stays hand-written.
 - **Definition ids (`Catalog<TDef>`).** The id comes from data (`def.Id`). `Catalog.Add` is strict. A typed `DefinitionId` is a possible later step, and it is not in this spike.
 - **Channel ids (`Network`).** A channel id is a Router key, not a record id. It is a `byte`, it has a capacity limit, and both sides must compute the same id from the sorted registration. `WireRegistrar` replacement is its own roadmap item.
 - **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store (`lookup-patterns.md`). Seats live for the lobby, not the match. The seat → player-entity map is phase 3 work. Seat can use `IdAllocator<T>` later, but it gets no benefit now.
@@ -290,7 +342,8 @@ Proposals only. `rulebook.json` does not change in this spike.
 | ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. Confirm `callers` accepts a type glob (ARCH-06 uses `subclassOf`). |
 | ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, `BlockService`, the pipeline `Enqueue`. |
 | ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
-| ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
+| ID-04 | Ids and slots on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id` or `Slot`. | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
+| KIND-01 | Slots are unique in each kind space. No two sealed `TypeKey<TSlot>` subtypes with the same `TSlot` have the same slot. | A clash today shows only when a match starts. | `attached`: a reflection test in `Framework.Testing.Integration.Tests` (§3.8). |
 | EV-01 | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
 | MSG-01 | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. Client intents cannot carry refs. | `attached`: a reflection test over `Command` subtypes. Or the `type.memberTypes` + `baseType` kind. |
 
@@ -303,10 +356,11 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 3. **Add `RequestId`** in `Requests/Runtime/`. Change `Request.Id`, `Response.RequestId`, `RequestStore`, `IReadOnlyRequestStore`, `RequestService`, `RequestInstaller` and the request tests. `Request.ParentId`, `SourceId` and `ResponderId` stay `int` until §9 Q2 is answered.
 4. **Add `EntityId`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`. In this step, Tag call sites pass `id.Value`.
 5. **Move Tags to `EntityId`.** Change the Tag events, `TagStore` maps, `TagService`, `IReadOnlyTagStore` and the apply handlers. Remove the `.Value` calls from step 4.
-6. **Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings. The pictures do not change, because they name `#1`, not types.
-7. **Add the inverse fields.** `StatePushEvent.PrevSlot`; `TagRemovedEvent<T>` with `Prev`; the per-`T` handler and channel in `TagInstaller`; and tests that the fields hold the earlier value. `Unapply` stays unimplemented.
-8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review. ID-03, ID-04 and MSG-01 can be `enforced` at once. EV-01 stays `planned`.
-9. **Update docs.** Update `docs/architecture.md` (id spaces), `docs/lookup-patterns.md` (typed read pair), and the live-ref text in `command-service.md`.
+6. **Add typed slots.** Change `TypeKey` and `SlotRegistry` to the `TSlot` form in Core. Add `TagSlot`, `EntityTypeSlot` and `StateSlot` with their kinds, and `BlockKindSlot` with the block piece. Change the `Slot` and `TypeSlot` wire fields and the apply handlers. Add the KIND-01 test. The authoring lines do not change.
+7. **Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings. The pictures do not change, because they name `#1`, not types.
+8. **Add the inverse fields.** `StatePushEvent.PrevSlot`; `TagRemovedEvent<T>` with `Prev`; the per-`T` handler and channel in `TagInstaller`; and tests that the fields hold the earlier value. `Unapply` stays unimplemented.
+9. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review. ID-03, ID-04, KIND-01 and MSG-01 can be `enforced` at once. EV-01 stays `planned`.
+10. **Update docs.** Update `docs/architecture.md` (id spaces), `docs/lookup-patterns.md` (typed read pair), and the live-ref text in `command-service.md`.
 
 ## 8. Interfaces for the other three pieces
 
@@ -314,6 +368,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 - `BlockId` in `Framework.Blocks`, with `BlockId.None` for "no cause". Use it for `BlockStartEvent.Id`, `BlockEndEvent.Id` and `BlockStartEvent.CauseId`. There is no `ParentId` field.
 - `IdAllocator<BlockId>` from `Framework.Core`, a server singleton. Only `BlockService` (today `BlockScope`) calls `Next`. Effects and triggers open blocks through `BlockService.Run`. They never inject the allocator (ID-02).
+- `BlockKindSlot` for `BlockStartEvent.Kind`, and `BlockKind : TypeKey<BlockKindSlot>` (§3.8).
 - The nesting parent comes from the order of the brackets, not from an id. The block piece owns nesting. This piece owns only the id.
 - EV-01: block events create and close a `BlockRecord` in `BlockStore`. `Unapply` of start calls `Remove`. `Unapply` of end calls `Reopen`. The block piece owns these handlers.
 
