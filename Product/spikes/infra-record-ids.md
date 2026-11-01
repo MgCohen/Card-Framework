@@ -47,6 +47,8 @@ The user made these decisions for all four infra spikes:
 8. Kind ids (tag, entity type, game state and block kind slots) are a different pattern from record ids. They moved to `infra-kind-ids.md`. This spike covers instance ids only.
 9. Scope (§2a) is approved. "Events carry their inverse" and "messages hold ids" are out. Their design text moves to the appendix and is kept for the owners.
 10. Typed ids have no public `int`. The constructor and `Value` are `internal` to the owning asmdef. `Framework.Core` makes the entity allocator (`EntityIds.NewAllocator()`), because `EntityId` lives in Core and `EntityService` lives in Entities. Tests get `InternalsVisibleTo` grants on the allowlist rule, as other features do today.
+11. An allocator can rewind, but only from the top of a mark stack (last in, first out). Each space sets a policy at registration: `Forward` (default) or `Rewindable`. Undo of a record in the middle leaves a gap; the counter does not move. Ids are never pooled, and there is no generation in the id.
+12. Object pooling and disposal are a v2 concern of the feature stores. The idea of a record base nested in the allocator is kept in appendix A.4.
 
 ## 2a. Scope
 
@@ -56,6 +58,7 @@ The user made these decisions for all four infra spikes:
 | Access to the `int` inside an id | in | — |
 | Allocation: one server allocator for each space | in | — |
 | Determinism: start value, save, load | in | — |
+| Rewind policy for each space (top of the stack only) | in | — |
 | Store read pair over a typed id | in (names only) | — |
 | Typed ids on the wire | in | — |
 | Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
@@ -65,6 +68,7 @@ The user made these decisions for all four infra spikes:
 | Block nesting and `BlockStore` | out | `infra-block-wire.md` |
 | Client correlation id | out | Pipeline, phase 2 (§9 Q4) |
 | Channel ids, seats, definition ids | out | Wire, Multiplayer, Entities catalog (§5) |
+| Object pooling and disposal | out | Feature stores, v2 (appendix A.4) |
 
 Boundary: the owning service on the server asks for a new id. The pattern gives back a typed id. The service puts it in its wire event. Stores and the wire use the id after that, and never make one.
 
@@ -204,6 +208,30 @@ if (_isServer)
 
 Each id space has its own closed type, so VContainer resolves each one without keys. The client scope has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
 
+### 3.3a Rewind policy
+
+```csharp
+public enum IdPolicy { Forward, Rewindable }
+
+public readonly struct IdMark { internal readonly int Watermark, Depth; ... }
+
+// IdAllocator<TId>, added members
+public IdAllocator(Func<int, TId> make, IdPolicy policy = IdPolicy.Forward, int first = 1);
+public IdMark Mark();               // pushes a mark
+public void   RewindTo(IdMark mark); // mark must be the top mark; policy must be Rewindable; sets _next back, pops
+public void   Keep(IdMark mark);     // mark must be the top mark; pops, keeps the ids
+```
+
+| Undo shape | Ids above the mark | Allocator |
+|---|---|---|
+| Undo from the top (server lookahead, cancelled sequence) | all removed | `RewindTo(mark)` |
+| Remove a record in the middle | later records still use ids | no change; the id is a gap |
+| Client view scrub, replay | — | no allocator on the client |
+
+Contract on the caller (rollback): call `RewindTo` only after all records above the mark are undone, and only in a scope that sent none of those ids on the wire. The allocator cannot see the stores. A debug check can ask each store for its highest id in use. `Restore` (load) stays forward only.
+
+Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. Reuse breaks logs, replays, saves and old `CauseId` links. If ids were reused, the id would need a generation (`{ Index, Generation }`); a typed id could hold it, a bare `int` could not.
+
 ### 3.4 Determinism
 
 - **Seed.** No random seed. Every allocator starts at 1 in each new match scope. Two runs that allocate in the same order get the same ids.
@@ -211,7 +239,7 @@ Each id space has its own closed type, so VContainer resolves each one without k
 - **Replay.** Replay runs events through apply handlers. Apply handlers never allocate (ARCH-06 forbids service calls). The ids come from the events.
 - **Two-sided tests.** `MatchPair.Start` builds two scopes over `LoopbackTransport.Pair()`. Only the server scope has allocators. Client ids are copies of server ids by construction.
 - **Save and load.** A save stores each allocator `Watermark`. Load builds fresh stores from the event stream, then calls `Restore`. `Restore` moves forward only, so a bad save cannot reissue a live id.
-- **Rollback.** Ids are never reused in a match. A rollback (view scrub, replay tool) does not move allocators back. Server re-simulation is not planned.
+- **Rollback.** A client view scrub or replay does not touch allocators, because the client has none. A server undo that runs from the top of the stack can rewind a `Rewindable` allocator (§3.3a). Ids that the wire already sent are never reused.
 
 ### 3.5 Record and store read contract
 
@@ -269,6 +297,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 | ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, `BlockService`, the pipeline `Enqueue`. |
 | ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
 | ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. (`infra-kind-ids.md` KIND-03 adds `Slot` to the same test.) | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
+| ID-05 | `RewindTo` runs only in a scope with no wire. A `Rewindable` allocator is not registered in a scope that has `Network`. | A rewind after the wire sent ids gives the client two records with one id. | `attached`: a test in `BootstrapWiringIntegrationTests`. Status `planned` until rollback is scheduled. |
 | EV-01 (handed off) | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
 | MSG-01 (handed off) | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. Client intents cannot carry refs. | `attached`: a reflection test over `Command` subtypes. Or the `type.memberTypes` + `baseType` kind. |
 
@@ -384,3 +413,13 @@ The handler signature is the pipeline one (`infra-command-pipeline.md`). The cos
 | `TagRemovedEvent { EntityId, Slot }` | `TagRemovedEvent<T> { EntityId, Slot, Prev }` | `TagService.Remove` reads prev; per-`T` handler and channel in `TagInstaller` |
 | `StatePushEvent { Slot }` | `StatePushEvent { Slot, PrevSlot }` | `StateService.Push` reads `StateStore.Current.Slot` |
 | `SetHealth { int EntityId; }` (samples) | `SetHealth { EntityId Target; }` | Testing Support, Commands tests, acceptance bindings |
+
+### A.4 Object pooling (v2)
+
+Idea from the design talk: pool record objects, and give them a base class nested in the allocator, so the allocator can dispose an id even when code still holds a reference. Problems found:
+
+1. After reuse, the "disposed" flag is cleared. An old holder sees the new record, unless it also holds a generation.
+2. The client has records but no allocator (ID-03). Client records come from apply handlers.
+3. Wire records (`Request`) already derive from `WireEvent`, and C# allows one base class.
+
+The gain is small, because a match has hundreds of records. Owner: the feature stores, in v2.
