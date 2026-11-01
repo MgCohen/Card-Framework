@@ -54,6 +54,8 @@ From 2026-11-01 (this spike):
 18. **Hooks are out of v0.** `Before` and `After` are virtual and empty by default. The hooks and reactions discussion decides their model.
 19. Handlers get services from DI. Scope verbs are not in DI. Pipelines are not in DI.
 20. No tuple returns in the API. `out` parameters are acceptable.
+21. `Add` returns the `Envelope`. The owner reads `State` and `Reason` after `Run()`.
+22. Reaction timing and the `Ask` split (requests from `infra-block-wire.md`) are not in v0. v0 has no groups.
 
 ## 2. Scope
 
@@ -387,6 +389,8 @@ These items are not open for v0. Each has a place in the design.
 | Item | Place |
 |---|---|
 | Hooks and reactions: a handler in a phase, or a reaction message | Own discussion; `Before` and `After` are ready |
+| Reaction timing: reactions run before the trigger group closes | Hooks and reactions discussion |
+| `Ask` split: close the group with `Waiting`, continue in a new group | After groups come in |
 | `PipelineBuilder` and a runner object | Next, after v0 |
 | Two or more pipelines: wiring cycle, effects, PIPE-02 | v2 |
 | A shared typed author base | v2, after two pipelines exist |
