@@ -2,76 +2,225 @@
 type: spike
 status: proposed
 created: 2026-10-31
+updated: 2026-11-01
 references:
   - Product/spikes/framework-roadmap.md
   - Product/spikes/wire-block-events.md
   - Product/spikes/wire-network-protocol.md
   - Product/spikes/command-service.md
+  - Product/spikes/infra-command-pipeline.md
+  - Product/spikes/infra-type-router.md
+  - Product/spikes/infra-record-ids.md
   - docs/architecture.md
-  - docs/lookup-patterns.md
 sandbox: Assets/Framework/Blocks/
-tags: [#spike, #blocks, #wire, #causality, #pipeline, #infra]
+tags: [#spike, #events, #blocks, #wire, #causality, #infra]
 ---
 
-# Shared infrastructure — block and wire system
+# Shared infrastructure — events and blocks
 
-> **Status: proposed.** This spike is one of four parallel pieces of the shared
-> pipeline infrastructure (intent, effect, command, event). The other pieces are
-> the type-keyed router, record ids and allocation, and the command pipeline.
-> This piece owns block brackets, nesting, causality, and the block events on the
-> stream. No code changes yet.
+> **Status: proposed.** One of the shared pipeline infrastructure pieces (pipeline, router, record
+> ids, kind ids, events and blocks). This piece owns the event model: the shape of a wire event,
+> how to write, listen and react, how to add an event type, and blocks. No code changes yet.
 
-## 1. TL;DR
+## 1. Summary
 
-1. Move all `Block*` types out of `Framework.Wire` into a new `Framework.Blocks` feature. Wire then holds no domain events, with no exception.
-2. One server API brackets every level: `blocks.Run(header, body)` and `blocks.RunAsync(header, body)`. There is no public `Open` / `Close`.
-3. The wire carries one parent field, `CauseId`. The lexical parent comes from bracket order. A `BlockStore` (both sides) rebuilds it, so nesting is identical on server and client.
-4. `BlockKind` becomes an open `TypeKey` record set with a registry. Baselines: `Command`, `Effect`. `Trigger` folds into `Effect` + `CauseId`. Intents and requests open no block.
-5. `ISourced` replaces `PayloadCapture`. `BlockStartEvent` carries `Id`, `CauseId` (`BlockId`), `Kind` (`int`), `SourceId` (`EntityId`). No payload goes on the wire.
+The server writes wire events into one ordered stream. Blocks are pairs of bracket events in that
+stream, and they nest. Each event has one write path, two listen stages and one recipe for a new type.
 
-### Decisions (2026-10-31)
+1. **Event roles.** A wire event is a **bracket** event (`BlockStart`, `BlockEnd`), a **state** event (tags, entities, states) or a **signal** event (`Request`, `Response`). No event holds a parent field: its position in the stream gives its block.
+2. **Write.** Only server services call `IEventEmitter.Emit`. The client never emits game events.
+3. **Listen.** `HandlerRegistry.Dispatch` runs two stages for each event: first all **apply handlers** (`WireEventHandler<T>`, the store writers), then all **observers** (`WireEventObserver<T>`, read only).
+4. **React.** An observer never emits. A server reaction schedules work through the pipeline, with `cause = IReadOnlyBlockStore.Current`.
+5. **Blocks.** `BlockService.Open` / `Close` are public. `Create` is a helper: open, run the logic, close. Blocks nest. `Close` throws if the block has an open child block.
+6. **Wire shape.** The wire carries `CauseId` only. A `BlockStore` on both sides rebuilds the parent from bracket order. `BlockKind` is an open `TypeKey` set.
+7. **Feature.** All `Block*` types move from `Framework.Wire` to a new `Framework.Blocks` feature.
 
-User decisions that all four infrastructure spikes use:
+### Decisions
+
+User decisions, 2026-10-31 (all infrastructure pieces):
 
 1. Ids are typed `readonly struct`s around `int`. `BlockId` is in `Framework.Blocks`. `EntityId` and `IdAllocator<TId>` are in `Framework.Core`.
 2. Shared infrastructure (routers, allocator) is in `Framework.Core`. `Framework.Wire` references `Framework.Core`.
-3. The `Framework.Blocks` feature is accepted. §6 gives the ARCH-02 rows.
+3. The `Framework.Blocks` feature is accepted.
 4. The async core uses `System.Threading.Tasks.Task`, not UniTask.
-5. The parent model is accepted: the wire carries `CauseId` only. The nesting parent comes from bracket order.
-6. An intent opens no block, so an `Answer` intent can resume a chain that waits on a request without breaking nesting. **This spike removes `Intent` from the baseline kinds. It does not reserve a slot.** The registry can add a kind later, so a reserved slot gives nothing.
+5. The wire carries `CauseId` only. The parent comes from bracket order.
+6. An intent opens no block. No `Intent` kind and no reserved slot.
 7. Hooks exist only at the command level.
 
-Consequence for this spike: the router gives no `int` slot for each message type. **The `Message` field is dropped** from `BlockStartEvent`. Presentation identifies a block by `Kind` + `SourceId` (and the source's definition), as `wire-block-events.md` L1 says. Open question 8 tracks a return of the field.
+User decisions, 2026-11-01 (this piece):
 
-## 2. Current shapes
+8. **Scope.** This piece owns the event model, not only blocks. Page name: "Events & Blocks".
+9. **Nesting.** A block can open inside another block. A block cannot close while a child block is open.
+10. **API.** `Open` and `Close` are public. `Create` is the helper that does open, logic, close. No `BlockHeader` type: the API takes plain arguments.
+11. **React** is split. This piece defines what an observer gets. The pipeline piece owns the scheduling.
+12. **Lobby events** (`PeerJoinedEvent`, `MatchStartEvent`, …) are out. They stay on their own network channels.
 
-| # | Copy | What it does | Location |
+The `Message` field is dropped from `BlockStartEvent`, because the router gives no slot for each message type. Presentation identifies a block by `Kind` + `SourceId`.
+
+## 2. Scope
+
+| Concern | In / out | Owner if out |
+|---|---|---|
+| Shape of a wire event, event roles | in | — |
+| Write an event (`Emit`) | in | — |
+| Listen: apply stage, observe stage, order | in | — |
+| Add a new event type | in | — |
+| Blocks: `Open` / `Close` / `Create`, nesting rule, `CauseId`, `BlockStore` | in | — |
+| Block kinds as an open set | in (uses `TypeKey`) | key design: kind ids piece |
+| React to an event | in: observer contract only | scheduling, hooks: `infra-command-pipeline.md` |
+| Find handlers by event type | out | `infra-type-router.md` |
+| Id types and allocators | out | `infra-record-ids.md` |
+| Undo of events, replay cursor | out | `infra-record-ids.md` |
+| Network transport, packing, channels | out | `Framework.Wire` network (no change) |
+| Lobby and membership events | out | `Framework.Multiplayer` |
+| Hidden information (redact `SourceId`) | out | not designed |
+
+**Boundary.** The piece receives events from server services (tags, entities, states, requests,
+pipeline). It gives an ordered, well-nested stream to stores, client tools and the network. It
+gives the "react" contract to the pipeline, which schedules the work.
+
+## 3. Today
+
+| # | Use | What it does | Location |
 |---|---|---|---|
-| 1 | `BlockScope` counter | Only block-id counter. Comment warns about collisions. | `Assets/Framework/Wire/Runtime/Events/BlockScope.cs:7-8` |
-| 2 | `BlockScope.Open` | Allocates an id, emits `BlockStartEvent`, always writes `ParentId = 0`. | `Assets/Framework/Wire/Runtime/Events/BlockScope.cs:12-17` (`:15`) |
-| 3 | `BlockScope.Close` | Emits `BlockEndEvent` with an outcome. | `Assets/Framework/Wire/Runtime/Events/BlockScope.cs:19-20` |
-| 4 | `BlockStartEvent` / `BlockEndEvent` | Packed wire events. `Kind` is a `byte`. | `Assets/Framework/Wire/Runtime/Events/BlockStartEvent.cs:5-11`, `BlockEndEvent.cs:5-9` |
-| 5 | `BlockKind` (framework) | Closed enum: `None`, `Command`, `Effect`, `Trigger`. | `Assets/Framework/Wire/Runtime/Events/BlockKind.cs:3-9` |
-| 6 | Framework `CommandService.Execute` | Open, try, catch → `Errored` + rethrow, close `Completed`. | `Assets/Framework/Commands/Runtime/CommandService.cs:28-38` |
-| 7 | `CommandInstaller` | Registers `BlockScope` server-only. | `Assets/Framework/Bootstrap/Runtime/CommandInstaller.cs:17` |
-| 8 | Slice `World.OpenBlock` / `CloseBlock` | Allocator + open-block stack. `parentOverride` replaces the stack parent. | `Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:45-54` |
-| 9 | Slice `CommandService.Execute` | Open, reflect payload, try / catch / finally, close. | `Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/CommandService.cs:59-84` |
-| 10 | Slice `EffectService.RunInline` | Same body as #9, `BlockKind.Effect`, validate first. | `Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/EffectService.cs:84-112` |
-| 11 | Slice `RequestsService.OpenRequestInternal` | Bodyless `Request` block around option leaves. | `Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/RequestsService.cs:35-58` |
-| 12 | Slice causal capture | After-phase hooks capture `CurrentBlockId` into `StackFrame.ParentBlockId`; `Stack.ResolveAsync` passes it back. | `CommandService.cs:95,101`; `StackFrame.cs:30`; `Stack.cs:93` |
-| 13 | Slice `PayloadCapture` | Reflection: all public properties → dict; property named `Source` → entity. | `Assets/Spike/ECS/VerticalSlice/Engine/Pipeline/PayloadCapture.cs:16,37` |
-| 14 | Slice `BlockKind` | Closed enum: `Effect`, `Command`, `Request`. | `Assets/Spike/ECS/VerticalSlice/Engine/Stream/BlockKind.cs:16` |
-| 15 | Slice replay | `MirrorWorld.Apply` / `Unapply` (blocks are no-ops); `ScrubController.GoTo` walks a cursor. | `Mirror/MirrorWorld.cs:36,64`; `Mirror/ScrubController.cs:27-41` |
-| 16 | Framework dispatch | `HandlerRegistry.Dispatch` calls `Apply` only. `Unapply` throws. | `Assets/Framework/Wire/Runtime/Stream/HandlerRegistry.cs:22`; `WireEventHandler.cs:11` |
-| 17 | Block events as test fixtures | Wire tests use Block events as generic payloads. | `Assets/Framework/Wire/Tests/RoundTripTests.cs:16-17,140-216`; `Wire/PlayTests/NgoTransportPlayTests.cs:60-65` |
+| 1 | Services emit | Each service calls `IEventEmitter.Emit` with its own event. | `Tags/Runtime/TagService.cs:28,38,50`; `Entities/Runtime/EntityService.cs:20`; `States/Runtime/StateService.cs:15`; `Requests/Runtime/RequestService.cs:24` |
+| 2 | Apply handlers | `HandlerRegistry` subscribes to `OnAppended` and calls `Apply` for each handler of the type. `Unapply` throws. | `Wire/Runtime/Stream/HandlerRegistry.cs:19,22-26`; `WireEventHandler.cs:11` |
+| 3 | Raw listeners | `WireForwarder` and tests subscribe to `EventStream.OnAppended`. Order against handlers is the subscribe order. | `Wire/Runtime/WireForwarder.cs:6`; `Commands/Tests/CommandServiceTests.cs:22` |
+| 4 | Client input | `NetworkInboundBridge` emits received events into the client stream. | `Wire/Runtime/NetworkInboundBridge.cs:6` |
+| 5 | Lobby send | `Session` calls `Network.Send` directly, not the stream (out of scope). | `Multiplayer/Runtime/Session.cs:227-276` |
+| 6 | New type recipe | Event class, handler, `RegisterHandler<T>()` in an installer. `WireRegistrar` finds the type. | `Bootstrap/Runtime/HandlerRegistrationExtensions.cs:10-12`; `TagInstaller.cs:18-20` |
+| 7 | Flat bracket | `BlockScope.Open` / `Close`. One counter. `ParentId` is always 0. | `Wire/Runtime/Events/BlockScope.cs:7-20` |
+| 8 | Framework bracket user | `CommandService.Execute`: open, try, catch → `Errored`, close. | `Commands/Runtime/CommandService.cs:28-38` |
+| 9 | Block events | Packed. `Kind` is a `byte`. Closed `BlockKind` enum with `Trigger`. | `Wire/Runtime/Events/BlockStartEvent.cs:5-11`, `BlockEndEvent.cs:5-9`, `BlockKind.cs:3-9` |
+| 10 | Second parent field | `Request.ParentId` is a parent field next to the block parent. | `Requests/Runtime/Request.cs:9` |
+| 11 | VS nested bracket | Block stack + `parentOverride` for deferred work. | `Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:45-54` |
+| 12 | VS bracket copies | The same open, try, finally, close body three times. | VS `CommandService.cs:59-84`, `EffectService.cs:92-111`, `RequestsService.cs:43-56` |
+| 13 | VS deferred cause | After hooks capture `CurrentBlockId` into `StackFrame.ParentBlockId`. | VS `CommandService.cs:95,101`; `StackFrame.cs:30`; `Stack.cs:93` |
+| 14 | VS source capture | Reflection: property named `Source`, all public properties into a dictionary. | VS `PayloadCapture.cs:16,37-45` |
+| 15 | VS readers | `MirrorWorld` skips blocks. The log view indents with a stack. | VS `Mirror/MirrorWorld.cs:60`; `Unity/SliceBootstrap.cs:385-406` |
 
-Three copies (#6, #9, #10) repeat one body. Two copies (#1, #8) own an allocator. Two copies (#2, #8) disagree on nesting.
+Paths in rows 1–10 start at `Assets/Framework/`.
 
-## 3. Generalized contract
+### What repeats
 
-New feature `Framework.Blocks` (Runtime refs: `Framework.Core`, `Framework.Wire`, `Scaffold.Autopacker`). One top-level type per file. Comments only where they warn.
+| Common part | Seen in | Varies between uses |
+|---|---|---|
+| Emit one event | #1, #7 | event type |
+| Listen to the stream | #2, #3, #5 | path: handler, raw hook, channel |
+| Open, run, close a block | #8, #12 | kind, parent rule, payload |
+| Parent of an event | #7, #10, #11 | always 0, stack, override |
+| Read the source | #7, #14 | `int` argument, reflection |
 
-### Wire events
+## 4. Proposal
+
+### 4.1 API
+
+| Audience | Entry point | Does |
+|---|---|---|
+| author | `IEventEmitter.Emit(ev)` | Writes one event (server services only) |
+| author | `WireEventHandler<T>` | Applies the event to a store (both sides) |
+| author | `WireEventObserver<T>` | Reads the event after all apply handlers |
+| author | `BlockService.Open` / `Close` / `Create` | Brackets work in a block |
+| composition | `builder.RegisterHandler<T>()` / `RegisterObserver<T>()` | Adds a handler or an observer |
+| composition | `BlocksInstaller` | Store, handlers, kinds (both sides); service (server) |
+| runtime | `IReadOnlyBlockStore` | Current block, open blocks, records |
+
+Shape:
+
+```csharp
+// Framework.Wire
+public interface IEventEmitter { void Emit(WireEvent ev); }
+
+public abstract class WireEventHandler<T> : IWireEventHandler where T : WireEvent
+{
+    public abstract void Apply(T ev);            // store writer; must not emit
+    public virtual  void Unapply(T ev);          // undo (record ids piece)
+}
+
+public abstract class WireEventObserver<T> : IWireEventObserver where T : WireEvent
+{
+    public abstract void On(T ev);               // runs after all Apply calls; must not emit
+}
+
+// Framework.Blocks (server)
+public sealed class BlockService
+{
+    public BlockId Current { get; }
+    public BlockId Open(BlockKind kind, EntityId source = default, BlockId cause = default);
+    public void    Close(BlockId id, BlockOutcome outcome = BlockOutcome.Completed);
+    public void    Create(BlockKind kind, EntityId source, Action logic, BlockId cause = default);
+    public T       Create<T>(BlockKind kind, EntityId source, Func<T> logic, BlockId cause = default);
+    public Task    CreateAsync(BlockKind kind, EntityId source, Func<Task> logic, BlockId cause = default);
+    public Task<T> CreateAsync<T>(BlockKind kind, EntityId source, Func<Task<T>> logic, BlockId cause = default);
+}
+```
+
+`cause = BlockId.None` means "the cause is the current block". `source = EntityId.None` means "no source".
+
+Call site (an effect level, after the pipeline port):
+
+```csharp
+blocks.Create(new EffectBlock(), effect.Source, () =>
+{
+    tags.Set(target, Health, hp - damage);       // TagChangeEvent: inside the effect block
+});
+```
+
+Access:
+
+| Bypass route | What stops it |
+|---|---|
+| Construct `BlockStartEvent` outside `BlockService` | BLK-01 (`il.callersOnly`) |
+| Close a parent while a child is open | `Close` throws |
+| Emit from an apply handler or an observer | EVT-01 (`il.callersOnly` on `Emit`) |
+| Subscribe to raw `EventStream.OnAppended` | `OnAppended` becomes `internal` |
+| Write a game event with `Network.Send` | EVT-02: only `Framework.Multiplayer` and `Wire` call `Send` |
+| Write a store outside a handler | ARCH-05 (existing) |
+
+### 4.2 Event model
+
+```
+stream (one ordered list of wire events)
+
+BlockStart #1 Command  source: card 7            bracket
+  TagChange  card 7 Zone Hand → Board            state: in #1
+  BlockStart #2 Effect  source: card 7  cause #1  bracket
+    TagChange  enemy 3 Health 5 → 3              state: in #2
+  BlockEnd   #2 Completed                        bracket
+  Request    ChooseTarget                        signal: in #1
+BlockEnd   #1 Completed                          bracket
+```
+
+Rules:
+
+1. An event belongs to the innermost open block. The event holds no block id.
+2. An event with no open block is a root event (for example match setup).
+3. A block contains events and other blocks.
+4. A block cannot close while a child block is open.
+5. Apply handlers read state events and bracket events. Observers read all events.
+6. Apply handlers and observers do not emit. A reaction schedules work in the pipeline.
+
+Dispatch order for one event:
+
+```
+Emit(ev) → EventStream.Add(ev)
+  → HandlerRegistry.Dispatch(ev)
+      1. Apply: every WireEventHandler<T> for the type (registration order)
+      2. Observe: every WireEventObserver<T> for the type (registration order)
+  → WireForwarder → Network.Send (server only)
+```
+
+For `BlockStart`, the apply stage pushes the block, so an observer sees the new block as `Current`.
+For `BlockEnd`, the apply stage pops the block, so an observer sees the parent as `Current`.
+
+New event type, one recipe:
+
+1. Add `public partial class XEvent : WireEvent` with `[Packed]` fields in the feature `Runtime/Events/`.
+2. Add `XHandler : WireEventHandler<XEvent>` if the event changes a store.
+3. Add `builder.RegisterHandler<XHandler>()` in the feature installer (both roles).
+4. Emit the event from the feature service. `WireRegistrar` finds the type.
+
+### 4.3 Wire events and ids
 
 ```csharp
 namespace Framework.Blocks
@@ -79,7 +228,7 @@ namespace Framework.Blocks
     public partial class BlockStartEvent : WireEvent
     {
         [Packed] public BlockId  Id;
-        [Packed] public BlockId  CauseId;    // BlockId.None = no cause
+        [Packed] public BlockId  CauseId;    // BlockId.None = no cause (root block)
         [Packed] public int      Kind;       // BlockKind slot
         [Packed] public EntityId SourceId;   // EntityId.None = no source
     }
@@ -90,24 +239,14 @@ namespace Framework.Blocks
         [Packed] public byte    Outcome;
     }
 
-    public readonly struct BlockId : IEquatable<BlockId>
-    {
-        public readonly int Value;
-        public BlockId(int value) => Value = value;
-        public static readonly BlockId None = default;   // 0 is never allocated
-        public bool IsNone => Value == 0;
-        public bool Equals(BlockId other) => Value == other.Value;
-    }
-
     public enum BlockOutcome : byte { None = 0, Completed = 1, Errored = 2, Cancelled = 3 }
 }
 ```
 
-`BlockId` and `EntityId` are unmanaged structs, so AutoPacker packs them as fields. If the generator rejects a struct field, use `[Packed(typeof(int))]` with an `IPackingHandler` conversion. The ids piece owns the exact `BlockId` members (equality, operators, `ToString`); this spike needs only `Value`, `None` and equality. `Message` is dropped (see Decisions).
+`BlockId` is a number from one counter. `BlockId.None` (`0`) means "no block". The record ids
+piece owns its members. `Request.ParentId` is removed: the position of the request gives its block.
 
-`BlockOutcome` stays an enum. It is a closed set: a body completes, fails, or is cancelled.
-
-### Kinds (open set, Registry pattern)
+### 4.4 Kinds
 
 ```csharp
 public abstract record BlockKind(int Slot) : TypeKey(Slot);
@@ -121,38 +260,27 @@ public sealed class BlockKindRegistry : SlotRegistry<BlockKind>
 }
 ```
 
-This copies `EntityType` + `EntityTypeRegistry`. Games add kinds with `Register<T>()`. `SlotRegistry` rejects slot clashes. Slot 3 (the old `Trigger`) is not used again. No `Intent` kind exists and no slot is reserved for it (decision 6).
+This copies `EntityType` + `EntityTypeRegistry`. Games add kinds with `Register<T>()`. Slot 3 (the
+old `Trigger`) is not used again. `Trigger` folds into `Effect` + `CauseId`.
 
-### Source and header
+### 4.5 Source
 
 ```csharp
 public interface ISourced
 {
     EntityId SourceId { get; }
 }
-
-public readonly struct BlockHeader
-{
-    public readonly BlockKind Kind;
-    public readonly EntityId  SourceId;
-    public readonly BlockId   CauseId;   // None = use the lexical parent
-
-    public BlockHeader(BlockKind kind, EntityId sourceId = default, BlockId causeId = default) { ... }
-
-    public static BlockHeader Of(BlockKind kind, object message, BlockId causeId = default)
-        => new(kind, message is ISourced s ? s.SourceId : EntityId.None, causeId);
-}
 ```
 
-A message implements `ISourced` explicitly, for example `EntityId ISourced.SourceId => Source;`. The message holds a typed `EntityId Source`, not a live `Entity` (ids spike, MSG-01). Its handler resolves the entity through a read view.
+A message implements `ISourced` explicitly. The pipeline passes `message is ISourced s ? s.SourceId : EntityId.None` to `Open`. No reflection.
 
-### Store and handlers (both roles)
+### 4.6 Store and handlers (both roles)
 
 ```csharp
 public readonly struct BlockRecord
 {
     public readonly BlockId  Id;
-    public readonly BlockId  ParentId;     // lexical: the block open when this one started
+    public readonly BlockId  ParentId;     // the block that was open when this one started
     public readonly BlockId  CauseId;
     public readonly int      Kind;
     public readonly EntityId SourceId;
@@ -170,127 +298,102 @@ public interface IReadOnlyBlockStore
 
 public sealed class BlockStore : IReadOnlyBlockStore
 {
-    // Sole writers: BlockStartHandler and BlockEndHandler.
     internal void Insert(BlockStartEvent ev);            // ParentId = Current, then push
     internal void Close(BlockId id, BlockOutcome outcome);
-    internal void Remove(BlockId id);                    // Unapply of start
-    internal void Reopen(BlockId id);                    // Unapply of end
 }
 
-public sealed class BlockStartHandler : WireEventHandler<BlockStartEvent> { /* Apply → Insert; Unapply → Remove */ }
-public sealed class BlockEndHandler   : WireEventHandler<BlockEndEvent>   { /* Apply → Close;  Unapply → Reopen */ }
+public sealed class BlockStartHandler : WireEventHandler<BlockStartEvent> { /* Apply → Insert */ }
+public sealed class BlockEndHandler   : WireEventHandler<BlockEndEvent>   { /* Apply → Close  */ }
 ```
 
-The store keeps all records of the match by id. Open blocks are a stack of ids. `Insert` is idempotent on the same id, as the `Store` pattern requires.
+The store keeps all records of the match by id. Open blocks are a stack of ids. The handlers also
+implement `Unapply` when the record ids piece adds undo.
 
-### Service (server only)
+### 4.7 Service (server only)
 
 ```csharp
-public sealed class BlockService
+public BlockId Open(BlockKind kind, EntityId source = default, BlockId cause = default)
 {
-    readonly IEventEmitter _events;
-    readonly IReadOnlyBlockStore _store;
-    readonly IdAllocator<BlockId> _ids;
-
-    public BlockService(IEventEmitter events, IReadOnlyBlockStore store, IdAllocator<BlockId> ids) { ... }
-
-    public BlockId Current => _store.Current;
-
-    public void Run(in BlockHeader header, Action body);
-    public void Run<TState>(in BlockHeader header, TState state, Action<TState> body);
-    public T    Run<T>(in BlockHeader header, Func<T> body);
-    public Task RunAsync(BlockHeader header, Func<Task> body);
-    public Task<T> RunAsync<T>(BlockHeader header, Func<Task<T>> body);
+    var id = _ids.Next();
+    if (cause.IsNone) cause = _store.Current;
+    _events.Emit(new BlockStartEvent { Id = id, CauseId = cause, Kind = kind.Slot, SourceId = source });
+    return id;
 }
-```
 
-Every overload has the same body. The async ones `await` in place of the call:
-
-```csharp
-public void Run(in BlockHeader header, Action body)
+public void Close(BlockId id, BlockOutcome outcome = BlockOutcome.Completed)
 {
-    var id = Open(header);
-    try   { body(); }
+    if (!_store.Current.Equals(id))
+        throw new InvalidOperationException($"Block {id} has an open child block, or is not open.");
+    _events.Emit(new BlockEndEvent { Id = id, Outcome = (byte)outcome });
+}
+
+public void Create(BlockKind kind, EntityId source, Action logic, BlockId cause = default)
+{
+    var id = Open(kind, source, cause);
+    try   { logic(); }
     catch (OperationCanceledException) { Close(id, BlockOutcome.Cancelled); throw; }
     catch { Close(id, BlockOutcome.Errored); throw; }
     Close(id, BlockOutcome.Completed);
 }
-
-BlockId Open(in BlockHeader h)
-{
-    var id    = _ids.Next();
-    var cause = h.CauseId.IsNone ? _store.Current : h.CauseId;
-    _events.Emit(new BlockStartEvent { Id = id, CauseId = cause, Kind = h.Kind.Slot, SourceId = h.SourceId });
-    return id;
-}
-
-void Close(BlockId id, BlockOutcome outcome)
-{
-    // Another flow opened a block during an await: the stream is no longer well nested.
-    if (!_store.Current.Equals(id)) throw new InvalidOperationException($"Block {id} is not the innermost open block.");
-    _events.Emit(new BlockEndEvent { Id = id, Outcome = (byte)outcome });
-}
 ```
 
-### Decisions behind the contract
+The other `Create` overloads have the same body. The async ones `await` the logic.
 
-- **Q1 — `Run`, not `using`.** A `using` handle cannot see the exception in `Dispose`. It needs a `Complete()` call that authors forget. `Run` maps the result: return → `Completed`, `OperationCanceledException` → `Cancelled`, other exception → `Errored` + rethrow. Validation stays before `Run`, so a reject emits nothing (command-service L1 Phase 1). A bodyless block is `Run(header, () => { })`.
-- **Q1 — async.** `RunAsync` uses `System.Threading.Tasks.Task` (decision 4). It keeps the block open across `await`. A command that awaits a `Request` emits the request event inside its own block. The continuation emits inside the same block. Cancellation (`RequestService.CancelAllPending`) closes the block as `Cancelled`. This needs one invariant from the pipeline: **one flow at a time** (§8).
-- **Q2 — one wire field, two concepts.** The lexical parent is already in the stream: the bracket order shows it. A second wire field would repeat it. So the wire carries only `CauseId`. The default cause is the lexical parent. Deferred work (the slice `StackFrame.ParentBlockId`) passes its captured id as `CauseId`. `BlockStore` rebuilds `ParentId` from bracket order on both sides. A reaction is a block with `CauseId != ParentId`.
-- **Q3 — open kinds.** `docs/coding-standards.md` says an author-extensible set is not an enum. The pipeline levels are framework-defined, but games need grouping blocks (turn, combat phase, SBA batch). `Intent` is not a kind: an intent opens no block (decision 6). An `Answer` intent then resumes the waiting chain inside the block that is still open. `Request` is not a kind: a framework request is a typed leaf event (request-service L2). `Trigger` folds into `Effect` with a cause (§5).
-- **Q4 — no payload.** `wire-block-events.md` L1 holds: leaves carry the truth. The slice `Name` string is dropped with no replacement, because the router gives no message slot. Presentation identifies a block by `Kind` + `SourceId`. AutoPacker packs only unmanaged fields, so a reflected dictionary cannot travel.
-- **Q5 — own feature.** The architecture invariant allows `Block*` in Wire only "until the command-pipeline feature graduates". The client needs the store and handlers, and the pipeline is server-only. A separate `Framework.Blocks` lets presentation depend on blocks without the pipeline. Decision 3 accepts it.
-- **Q6 — replay cursor.** Not built in this piece. This piece makes blocks reversible: both block handlers implement `Unapply`. The cursor is a Wire concern (§5).
-- **Q7 — client tools.** See §5 and §8.
+`Open` reads `_store.Current` right after an earlier `Emit`. This works because `Emit` dispatches
+to `BlockStartHandler` before it returns. **Requirement:** server dispatch stays synchronous.
 
-## 4. Call-site migration
+### 4.8 Decisions behind the contract
 
-| Current code | New code | Change needed |
+- **Public `Open` / `Close`.** The model is "message nesting". Authors can see and control the brackets. `Create` is the safe default: it maps the result of the logic to the outcome. Validation stays before `Open`, so a reject emits nothing.
+- **Async.** `CreateAsync` keeps the block open across `await`. If two flows open blocks at the same time, a close can find an open child and throw. The pipeline must not start a second flow while a block waits.
+- **One wire field.** The parent is already in the bracket order. The wire carries only `CauseId`. The default cause is the current block. Deferred work passes the block that scheduled it. A reaction is a block with `CauseId != ParentId`.
+- **Two listen stages.** Observers see the state after all apply handlers. Without the stage split, the order depends on registration order.
+- **No emit while dispatch runs.** An emit inside a handler starts a second dispatch before the first one ends. Later handlers of the first event then see the state after the second event.
+- **Open kinds.** `docs/coding-standards.md` says an author-extensible set is not an enum. Games need group blocks (turn, combat phase, SBA batch).
+- **No payload.** `wire-block-events.md` L1 holds: leaf events carry the truth. AutoPacker packs only unmanaged fields.
+- **Own feature.** The client needs the store and handlers. The pipeline is server only. `Framework.Blocks` lets presentation use blocks without the pipeline.
+
+## 5. Call-site migration
+
+| Current code | New code | Change |
 |---|---|---|
-| `Framework.Wire.BlockScope` | `Framework.Blocks.BlockService` | Rename and move. Add store + allocator dependencies. Remove public `Open` / `Close`. |
-| `CommandService.Execute` open / try / catch / close (`CommandService.cs:28-38`) | `return _blocks.Run(BlockHeader.Of(CommandBlock, cmd), () => { handler.Handle(cmd); return CommandResult.Accept(); });` | Body shrinks to one call. Validation stays above it. |
-| `CommandInstaller`: `Register<BlockScope>` | `BlocksInstaller`: `BlockService` server-only; `BlockStore`, both handlers, `BlockKindRegistry` on both roles | New installer in `GameplayLayer`, before `CommandInstaller`. |
-| `EngineStack` / `CommandServiceTests`: `new BlockScope(Stream)` | `BlocksFixture.Build(stream)` (store + handlers + service) in `Framework.Testing.Support` | One helper, reused by unit and integration tiers. |
+| `Framework.Wire.BlockScope` | `Framework.Blocks.BlockService` | Rename and move. Add store and allocator. |
+| `CommandService.Execute` open / try / catch / close | `_blocks.Create(new CommandBlock(), SourceOf(cmd), () => handler.Handle(cmd))` | Validation stays above it. |
+| `CommandInstaller`: `Register<BlockScope>` | `BlocksInstaller` in `GameplayLayer`, before `CommandInstaller` | New installer. |
+| `HandlerRegistry` | Two stages: apply, then observe | Add `IWireEventObserver` list. |
+| Tests on `OnAppended` | `RecordingObserver` in `Framework.Testing.Support` | `OnAppended` becomes `internal`. |
+| `WireForwarder` on `OnAppended` | No change (inside `Framework.Wire`) | — |
+| `Request.ParentId` | Removed | Position gives the block. |
 | Tests: `(byte)BlockKind.Command`, `start.ParentId` | `new CommandBlock().Slot`, `start.CauseId` | Mechanical. |
-| `RoundTripTests` / `NgoTransportPlayTests` use Block events | Use `PingEvent` / `PongEvent` fixtures; block round-trip tests move to `Framework.Blocks.Tests` | Wire tests stop depending on domain events. |
-| Slice `World.OpenBlock(parentOverride)` | `BlockHeader(..., causeId: frame.CauseId)` | Pattern for the phase 4 port. Spike code does not change. |
-| Slice `EffectService.RunInline` / `CommandService.Execute` | `blocks.Run(BlockHeader.Of(EffectBlock, effect), () => effect.Run(scope))` | Pattern for phase 4. |
-| Slice `RequestsService.OpenRequestInternal` | No block. The typed request event is a leaf inside the open effect block. | Pattern for phase 4. |
-| Slice `StackFrame.ParentBlockId` | `StackFrame.CauseId = blocks.Current` at schedule time | Pattern for phase 4. Owned by the pipeline piece. |
-| Slice `PayloadCapture.ExtractSource` | `ISourced` on the message | Pattern for phase 4. |
-| Slice `PayloadCapture.Of` | Nothing on the wire. A server-side debug log may keep it later. | Dropped. |
+| `RoundTripTests` / `NgoTransportPlayTests` use Block events | `PingEvent` / `PongEvent` | Wire tests stop using domain events. |
+| VS `World.OpenBlock(parentOverride)` | `blocks.Open(kind, source, cause: frame.CauseId)` | Pattern for phase 4. |
+| VS `EffectService.RunInline` | `blocks.Create(new EffectBlock(), effect.Source, () => effect.Run(scope))` | Pattern for phase 4. |
+| VS `RequestsService.OpenRequestInternal` | No block. The request event is inside the open effect block. | Pattern for phase 4. |
+| VS `PayloadCapture` | `ISourced`; no payload on the wire | Dropped. |
 
-## 5. What stays specialized, and why
+## 6. What stays specialized
 
-- **Validation stays at the call site.** Each level validates differently (command validator, effect `Validate`). The block API only brackets. A reject must emit nothing, so validation must run before `Run`.
-- **Deferred scheduling stays in the pipeline.** This piece gives `Current` and accepts `CauseId`. The pipeline decides when to capture the cause (After hooks, triggers, request resolution). Hooks exist only at the command level (decision 7). A Before hook runs inside the command block. An After hook is deferred and carries the command block as `CauseId`.
-- **`Trigger` is folded, not kept.** A triggered reaction is an effect. Its identity comes from `SourceId` (and the source's definition). "Reactive" comes from `CauseId != ParentId`. A separate kind would split one fact over two fields. If presentation shows that this is not enough, a game or the framework registers a `TriggerBlock` record later; the registry makes that a one-line change.
-- **The event level opens no block.** Events are leaves. A reaction to an event opens an `Effect` block with the cause of the block that emitted the event.
-- **`BlockOutcome` stays a closed enum.** The outcomes are the three ways a body can end.
-- **The replay cursor stays in Wire.** A cursor over `EventStream` + `HandlerRegistry` holds no domain types. It needs: `HandlerRegistry.Undispatch(ev)` (handlers in reverse order), an `Unapply` in every handler, and events that carry their inverse (`TagChangeEvent` already has `Prev`). Blocks need no inverse data: `Remove` and `Reopen` use the record that the store keeps. The cursor is a separate spike when rollback is scheduled (roadmap "Not scheduled").
-- **Presentation hooks are plain handlers.** A client tool registers its own `WireEventHandler<BlockStartEvent>`. `HandlerRegistry` already fans out. No new callback API.
+- **Validation** stays at the call site. A reject must emit nothing.
+- **Scheduling** stays in the pipeline. This piece gives `Current` and accepts `cause`.
+- **Lobby events** stay on their own network channels.
+- **`BlockOutcome`** stays a closed enum: a block completes, fails or is cancelled.
+- **The replay cursor** stays in Wire, owned by the record ids piece.
+- **Presentation** registers its own `WireEventObserver<BlockStartEvent>`. No new callback API.
 
-What client tools get from this piece:
-
-1. Open and close of each block, with `Kind`, `SourceId`, `CauseId`, `ParentId`, `Depth`, `Outcome`.
-2. `IReadOnlyBlockStore.Current` when a leaf arrives. A tool groups the leaf into that block.
-3. `ById(CauseId)` after the cause has closed. A tool chains animations ("damage plays after the cast").
-4. A guarantee that the stream is well nested. A tool can use a simple stack.
-
-## 6. Rulebook rules to propose
+## 7. Rulebook rules to propose
 
 Proposals only. `rulebook.json` does not change in this spike.
 
 | Id | Rule | Check | Note |
 |---|---|---|---|
-| BLK-01 | Only `BlockService` constructs `BlockStartEvent` or `BlockEndEvent` in Framework runtime code. | `il.callersOnly`, callee `Framework.Blocks.Block*Event` constructors. | `allowedCallers` supports only `subclassOf` today. The check needs a `type` parameter. |
-| BLK-02 | `Framework.Wire` declares no `WireEvent` subtypes. | Tighten ARCH-09: `allowed: []`. | Replaces the `Block*` exception. |
-| BLK-03 | Block brackets in the stream are well nested: each start has one end, and each end closes the innermost open block. | `attached` (test-backed, like TEST-02). | Test: run a nested command + an async command through the pipeline; walk the stream with a stack. |
-| BLK-04 | A deferred reaction carries the id of the block that scheduled it as `CauseId`. | `attached`. | Lights up in phase 4. Status `proposed` until then. |
-| BLK-05 | Each `WireEventHandler<T>` overrides `Unapply`. | New IL or reflection check. | Severity `warning` until rollback is scheduled. |
-| ARCH-02 edit | See the rows below. | Existing check. | Table change, not a new rule. |
+| BLK-01 | Only `BlockService` constructs `BlockStartEvent` or `BlockEndEvent`. | `il.callersOnly` | Needs a `type` parameter. |
+| BLK-02 | `Framework.Wire` declares no `WireEvent` subtypes. | ARCH-09 `allowed: []` | Replaces the `Block*` exception. |
+| BLK-03 | Brackets are well nested: each end closes the innermost open block. | `attached` (test) | Walk the stream with a stack. |
+| BLK-04 | A deferred reaction carries the block that scheduled it as `CauseId`. | `attached` | Phase 4. |
+| EVT-01 | `WireEventHandler<T>` and `WireEventObserver<T>` subclasses do not call `IEventEmitter.Emit`. | `il.forbiddenCalls` (new) | |
+| EVT-02 | Only `Framework.Wire` and `Framework.Multiplayer` call `Network.Send`. | `il.callersOnly` | |
 
-Exact ARCH-02 `allowed` rows to propose (changed rows only; the other rows stay as they are):
+ARCH-02 rows (changed rows only):
 
 ```json
 "Framework.Wire":      ["Framework.Core"],
@@ -303,64 +406,48 @@ Exact ARCH-02 `allowed` rows to propose (changed rows only; the other rows stay 
                         "Framework.Wire"]
 ```
 
-`Framework.Wire → Core` comes from decision 2 and may also appear in the router and ids spikes. `Framework.Commands → Core` is for `EntityId` in `ISourced`. The pipeline spike may add its own assembly; that assembly then needs `Framework.Blocks` in its row.
+## 8. Migration steps
 
-The store writer rule is already ARCH-05: `BlockStore` internals are called only from `WireEventHandler<T>` subclasses.
+Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Add `-With playmode` to steps 2, 4 and 5.
 
-## 7. Migration steps
+1. **Rulebook table.** Apply the ARCH-02 rows. Get user approval first.
+2. **Two listen stages.** Add `WireEventObserver<T>`, `IWireEventObserver` and `RegisterObserver<T>()`. `HandlerRegistry.Dispatch` runs apply, then observe. Add `RecordingObserver` to `Framework.Testing.Support`. Make `OnAppended` internal.
+3. **Store and handlers.** Create `Framework.Blocks`. Add `BlockRecord`, `IReadOnlyBlockStore`, `BlockStore`, both handlers and `BlocksInstaller`. Unit tests: nested blocks give the correct `ParentId` and `Depth`.
+4. **Move the events.** Move the `Block*` events to `Framework.Blocks`. Switch the Wire tests to `PingEvent` / `PongEvent`. Tighten ARCH-09 (BLK-02).
+5. **Wire shape.** Needs `EntityId` and `BlockId`. Rename `ParentId` → `CauseId`. Change the field types. Remove `Request.ParentId`.
+6. **`BlockService`.** Replace `BlockScope`. Port `CommandService.Execute` to `Create`. Tests: nested `Create` → inner `CauseId` = outer `Id`; throw → `Errored`; cancel → `Cancelled`; close of a parent with an open child throws.
+7. **Open kinds.** Replace the `BlockKind` enum with the records and the registry.
+8. **Source.** Add `ISourced`.
+9. **Rules.** Add BLK-01, BLK-03, EVT-01, EVT-02. BLK-04 stays `proposed`.
+10. **Docs.** Remove the `Block*` exception from `docs/architecture.md`. Add `Blocks/` to the codemap. Describe the event recipe.
 
-Each step lands as its own PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Add `-With playmode` to steps 3 and 4 (Wire changes).
+## 9. Interfaces with the other pieces
 
-1. **Rulebook table.** Apply the ARCH-02 rows in §6. Get user approval: this is a rulebook edit. Nothing references the new entry yet, so the gate stays green.
-2. **Store and handlers.** Create `Framework.Blocks` (Runtime + Tests). Add `BlockRecord`, `IReadOnlyBlockStore`, `BlockStore`, `BlockStartHandler`, `BlockEndHandler`, against the current Wire events (`ParentId` treated as cause). Add `BlocksInstaller` (both roles). Unit tests: nested brackets give the correct `ParentId` and `Depth`; `Unapply` reverses both events. ARCH-08 needs these tests.
-3. **Move the events.** Move `BlockStartEvent`, `BlockEndEvent`, `BlockOutcome`, `BlockKind` to `Framework.Blocks`. Switch `RoundTripTests` and `NgoTransportPlayTests` to `PingEvent` / `PongEvent`. Move block round-trip tests to `Framework.Blocks.Tests`. Tighten ARCH-09 to `allowed: []` (BLK-02). `WireRegistrar` sorts by `FullName`, so channel ids shift on both sides the same way.
-4. **Wire shape.** Needs `EntityId` in `Framework.Core` and `BlockId` (ids piece). Rename `ParentId` → `CauseId`. Change `Id` / `CauseId` to `BlockId`, `SourceId` to `EntityId`, `Kind` to `int`. Update the tests in §4.
-5. **`BlockService`.** Replace `BlockScope` with `BlockService` (`Run` / `RunAsync`, store-backed `Current`). Inject `IdAllocator<BlockId>` from `Framework.Core` (ids piece). Port `CommandService.Execute`. Add tests: command inside command → inner `CauseId` = outer `Id`; throw → `Errored`; `OperationCanceledException` → `Cancelled`; async body that awaits a `Task` keeps the block open.
-6. **Open kinds.** Replace the `BlockKind` enum with the records and `BlockKindRegistry.WithBaselines()`. Register it in `BlocksInstaller`.
-7. **Source.** Add `ISourced`. `CommandService` builds `BlockHeader.Of(...)`.
-8. **Rules.** Add BLK-01 (with the new `type` parameter on `il.callersOnly`) and BLK-03 (test-backed). BLK-04 and BLK-05 stay `proposed`.
-9. **Docs.** Remove the `Block*` exception from the "Wire carries no domain types" invariant in `docs/architecture.md`. Add `Blocks/` to the codemap. Mark `wire-block-events.md` L5 superseded by this spike.
+**Needs from the record ids piece:** `BlockId` (`Value`, `None`, equality, unmanaged layout), `IdAllocator<BlockId>` (server only, reset for each match), `EntityId`, and `Unapply` support.
 
-## 8. Interfaces with the other three pieces
+**Needs from the router piece:** `TypeMultiRouter<T>` for the apply list and the observe list in `HandlerRegistry`.
 
-### Needs from the ids piece
+**Gives to the pipeline piece:**
 
-- `BlockId` is defined in `Framework.Blocks` (decision 1). The ids piece owns its shape; this piece needs `Value`, `None`, equality, and an unmanaged layout for AutoPacker.
-- `IdAllocator<BlockId>` from `Framework.Core`: `Next()` returns a value > 0, monotonic, unique per match. Server-only registration.
-- `EntityId` from `Framework.Core`, for `SourceId` and `ISourced`.
-- `BlockId.None` (`0`) is never allocated. It means "no block" and "no cause".
-- Reset per match (`wire-block-events.md` L3).
-- One instance for all levels. This removes the "second emitter" collision risk by construction.
-
-### Needs from the router piece
-
-- Nothing. The router gives no `int` slot for each message type, so `BlockStartEvent` has no `Message` field (see Decisions).
-
-### Gives to the pipeline piece
-
-- `BlockService.Run` / `RunAsync` (`Task`-based) with a `BlockHeader`. The command and effect levels bracket through it. The intent and event levels open no block. No level constructs block events.
+- `BlockService.Open` / `Close` / `Create` / `CreateAsync`. No `BlockHeader` type.
 - `BlockService.Current`, to capture a cause when work is deferred.
-- `BlockHeader.Of(kind, message, causeId)`, which reads `ISourced`.
+- `WireEventObserver<T>` + `IReadOnlyBlockStore.Current`: the contract for reactions to events.
+- `ISourced`.
 
-### Needs from the pipeline piece
+**Needs from the pipeline piece:**
 
-- **One flow at a time.** While a block is open across an `await`, the pump starts no other item that opens a block. Without this, the stream is not well nested and `Close` throws.
-- Validation before `Run`.
-- Capture of `Current` as `CauseId` when it schedules deferred work (After hooks, triggers).
-- An `Answer` intent resumes the waiting `RunAsync` body. It must not open a block, so the resumed work stays inside the block that waits.
-- Messages that have a source implement `ISourced`.
+- One flow at a time while a block waits across an `await`.
+- Validation before `Open`.
+- A reaction schedules work. It does not emit inside an observer.
+- An `Answer` intent opens no block.
 
-### Gives to client tools (presentation, phase 7)
+**Gives to client tools:** `IReadOnlyBlockStore`, observers, and a well-nested stream.
 
-- `IReadOnlyBlockStore` and the block events through `HandlerRegistry`, as listed in §5.
+## 10. Open questions
 
-## 9. Open questions
-
-1. **Shared id space.** Closed by decision 1: `BlockId` is its own type with its own `IdAllocator<BlockId>`, so it does not share a counter with request ids. This supersedes the shared counter in `wire-block-events.md` L3.
-2. **Kind slot ranges.** Does the framework reserve a slot range (for example 0–63) for baseline kinds, or does the registry clash check suffice?
-3. **`Trigger` fold.** Does presentation need a distinct trigger kind? Decide in the phase 4 reactions spike. The fold is reversible with one record.
-4. **Concurrent flows.** If the pipeline must run two flows at once (for example, a timer while a request waits), the stream stops being well nested. Then the lexical parent needs its own wire field. Confirm with the pipeline piece.
-5. **SBA and turn grouping.** Does the engine loop open an `Sba` or `Turn` block (`wire-network-protocol.md` "SBA wrapper block")? This piece supports it; the pipeline piece decides.
-6. **Close check on the error path.** `Close` throws on an out-of-order close. On the error path, this new exception hides the original one. Keep the check, log and skip, or check only in tests?
-7. **Hidden information.** Must `SourceId` be redacted for a hidden card (an opponent's face-down card)? This follows the hidden-information model, which is not designed yet.
-8. **Message identity.** `Message` is dropped. If presentation needs "which command" without a source (for example a system command), who gives a stable slot: the router, or a new registry? A server-only debug log with the reflected payload is the other option for tools.
+1. **Root events.** This spike permits events outside a block (rule 2). Does the engine open a root block (`Match`, `Setup`) instead?
+2. **Kind slot ranges.** Does the framework reserve a slot range for baseline kinds?
+3. **`Trigger` fold.** Does presentation need a separate trigger kind? Decide in the phase 4 reactions spike.
+4. **Close check on the error path.** The nesting exception hides the original exception. Log and rethrow the original, or check only in tests?
+5. **Hidden information.** Must `SourceId` be redacted for a hidden card?
+6. **Message identity.** If presentation needs "which command" without a source, who gives a stable slot?
