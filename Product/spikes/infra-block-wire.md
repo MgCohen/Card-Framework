@@ -295,7 +295,7 @@ namespace Framework.Requests
 ```
 
 `BlockId` is the position of the block in the stream. `EventStream.Add` sets `Position` on both
-sides. Position `0` is never used, so `BlockId.None` (`0`) means "no block". No id field is on the
+sides. Positions start at `1`. `BlockId.None` is `-1` and means "no block". `0` is the default value and means "never set" (a bug). No id field is on the
 wire, and no allocator exists.
 
 **Requirement:** the server and the client append the same blocks in the same order. Lobby events
