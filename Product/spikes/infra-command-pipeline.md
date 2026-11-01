@@ -14,7 +14,7 @@ references:
   - Product/spikes/request-service.md
   - Product/spikes/hook-config-design.md
 sandbox: Assets/Framework/Commands/
-tags: [#spike, #pipeline, #commands, #effects]
+tags: [#spike, #pipeline, #commands]
 ---
 
 # Pipeline
@@ -23,68 +23,71 @@ tags: [#spike, #pipeline, #commands, #effects]
 
 ## 1. Summary
 
-1. `Pipeline<TMessage, TScope>` runs one message through a fixed order: `Validate`, `CreateScope`, `Before`, `Handle`, `After`. It returns a `RunRecord`.
-2. A pipeline holds a list of items. The owner system calls `RunNext()`. The pipeline selects the next item, removes it from the list and runs it. A scope can run a message inline through the `IInlineRunner<TMessage>` of its own pipeline.
-3. v0 is **one pipeline** that runs on its own. Two or more pipelines are v2. The loop, blocks, ids, requests and the concrete pipelines are **out**. Section 2 names their owners.
+1. `Pipeline<TMessage, TScope>` wraps each message in an `Envelope` and runs it through a fixed order: `Validate`, `CreateScope`, `Before`, `Handle`, `After`. The envelope holds the result.
+2. The owner system calls `Run()`. By default, it runs one envelope. A subclass can override `Run()` to drain the list. A scope can run a message inline in the same pipeline.
+3. v0 is **one pipeline** with five shared parts. Hooks, two or more pipelines, the loop across pipelines, blocks and the concrete pipelines are **out**. Section 2 names their owners.
 
 ### Decisions
 
 From 2026-10-31 (all four infra spikes):
 
 1. Ids are typed `readonly struct`s: `EntityId`, `RequestId`, `BlockId`, `MessageId` (`infra-record-ids.md`).
-2. `TypeRouter<T>`, `TypeMultiRouter<T>`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core`.
+2. `TypeRouter<T>`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core`.
 3. A new `Framework.Blocks` feature owns all `Block*` types (`infra-block-wire.md`).
 4. The async core uses `System.Threading.Tasks.Task`.
 5. The wire carries `CauseId` only. The nesting parent comes from bracket order.
 6. An intent opens no block.
-7. Hooks exist only at the command level. Only the command pipeline fills its `Before` and `After` stores.
 
 From 2026-11-01 (this spike):
 
-8. **Scope first.** The pipeline owns only the concerns marked "in" in section 2.
-9. **API first.** Each part serves an entry point in section 4.
-10. The loop is out. The owner system decides when to call `RunNext`.
-11. `Execute` is not virtual. The steps in it are virtual: `Validate`, `Before`, `Handle`, `After`. `CreateScope` is abstract. `SelectNext` is virtual.
-12. One public run entry: `RunNext()`. Inline runs skip `SelectNext`. Only scopes get the inline runner. The concrete pipeline decides if its scope exposes it.
+7. **Scope first.** The pipeline owns only the concerns marked "in" in section 2.
+8. **API first.** Each part serves an entry point in section 4.
+9. **v0 is one pipeline.** Two or more pipelines (the wiring cycle, inline runs across pipelines) are v2.
+10. `Execute` is not virtual. The steps in it are virtual: `Validate`, `Before`, `Handle`, `After`, `SelectNext`. `CreateScope` is abstract.
+11. One public run entry: `Run()`. Its default runs one envelope. A subclass overrides it to drain. A runner object waits for the builder discussion.
+12. Inline runs skip `SelectNext`. The concrete pipeline decides if its scope exposes them.
 13. Validators are a separate first slot. A reject runs no other step.
-14. Every message is wrapped in a `PipelineItem<TMessage>`. It has little behavior now. Replace and cancel come later.
-15. After hooks cannot cancel.
-16. Handlers get services from DI. Scope verbs are not in DI.
-17. The pipeline defines the read interfaces of its stores and fills them at composition. Live add and remove is out.
-18. No tuple returns in the API. `out` parameters are acceptable.
-19. **v0 is one pipeline.** No `PipelineSet`. A pipeline gives its own inline runner to its scope. Two or more pipelines are v2.
-20. The result is a small `RunRecord`: `Status`, `Message`, `Reason`, `Steps`. Add more fields only when a use needs them.
-21. Hook subscription is not a pipeline concern. The pipeline reads `IRouteSource<T>.All(type)`. The router decides how types match.
+14. Every message is wrapped in an `Envelope`. The envelope holds the identity, the chain and the result. A non-generic `Envelope` base exists for Blocks and logs.
+15. The scope holds verbs only. It closes after the run, so a kept scope throws. Lifetime and chain data live on the envelope.
+16. The base holds two stores keyed by message type: `TypeRouter<Handler<TMessage, TScope>>` and `TypeRouter<Validator<TMessage>>`. The defaults of `Handle` and `Validate` read them.
+17. `Handler` and `Validator` are abstract base classes. Their entry is `protected internal`, so only the pipeline calls them. The concrete pipeline gives the typed author base, for example `CommandHandler<T>`.
+18. **Hooks are out of v0.** `Before` and `After` are virtual and empty by default. The hooks and reactions discussion decides their model.
+19. Handlers get services from DI. Scope verbs are not in DI. Pipelines are not in DI.
+20. No tuple returns in the API. `out` parameters are acceptable.
 
 ## 2. Scope
 
-| Concern | In / Out | Owner if out |
-|---|---|---|
-| Fixed run order: `Validate` → `CreateScope` → `Before` → `Handle` → `After` → `RunRecord` | in | — |
-| Validator slot, first and separate | in | — |
-| `Before`, `Handle`, `After` as virtual methods; the defaults read the stores | in | — |
-| Store read interfaces and their injection | in | — |
-| Fill the stores at composition | in | — |
-| Item wrapper `PipelineItem<TMessage>` | in | — |
-| Result `RunRecord`: status, message, reason, steps | in | — |
-| Item list: `Add`, `Remove`, `TryPeek`, `SelectNext` | in | — |
-| Run entries: `RunNext`, and the own `IInlineRunner<TMessage>` for scopes | in | — |
-| Scope: one for each item, not in DI, closed after the run | in | — |
-| Two or more pipelines: wiring cycle, inline runs across pipelines | out (v2) | This spike, after v0 runs |
-| Replace a message, cancel an item | out (later) | This spike; `PipelineItem` is the place |
-| Hook subscription, base-type match | out | `infra-type-router.md` |
-| Fill the stores at runtime (live add and remove) | out | Concrete pipeline or game; `HookTable` in `infra-type-router.md` |
-| How a store works inside | out | `infra-type-router.md` |
-| List changes on the wire (stack UI) | out | Blocks / wire |
-| Block bracket, `CauseId`, wire form | out | `infra-block-wire.md` (later) |
-| `MessageId`, `EntityId` | out | `infra-record-ids.md` |
-| Loop and order across pipelines (SBA, stack, next intent) | out | Engine loop (`GameEngine`; no spike yet) |
-| Intents, client input, the `Answer` path | out | Engine loop / Requests |
-| `Ask`: request id, await, completion | out | `RequestService`; the scope only forwards |
-| Concrete pipelines, their scope verbs and their hooks | out | Commands and Effects features |
-| Event fan-out and replication | out | Wire (`EventStream`, `HandlerRegistry`) |
+### In
 
-**Boundary.** The pipeline receives a message from `Add` or from an inline runner. It wraps the message in a `PipelineItem`, runs the item, and gives a `RunRecord` back to the caller. Handlers call services, and services emit events to `EventStream`.
+| Concern | Owner |
+|---|---|
+| Fixed run order: `Validate` → `CreateScope` → `Before` → `Handle` → `After` | Pipeline |
+| Validator slot, first and separate | Pipeline |
+| `Before`, `Handle`, `After`, `Validate`, `SelectNext` as virtual methods | Pipeline |
+| Handler and validator stores (`TypeRouter`), read by the defaults | Pipeline |
+| `Handler` and `Validator` abstract bases | Pipeline |
+| `Envelope`: id, parent id, state, reason | Pipeline |
+| List: `Add`, `Remove`, `TryPeek`, `Items` | Pipeline |
+| `Run()` with a one-envelope default; inline run for scopes | Pipeline |
+| Scope base: verbs throw after the run | Pipeline |
+
+### Out
+
+| Concern | Owner |
+|---|---|
+| Hooks and reactions: model, stores, order | Hooks and reactions discussion |
+| Two or more pipelines (v2) | This spike, after v0 runs |
+| `PipelineBuilder` and a runner object (next) | This spike, after v0 |
+| Replace a message, cancel an envelope (later) | This spike; `Envelope` is the place |
+| How a store works inside, base-type match | `infra-type-router.md` |
+| Typed author bases (`CommandHandler<T>`) and scope verbs | Concrete pipeline (Commands) |
+| Block bracket, `CauseId`, wire form | `infra-block-wire.md` (later) |
+| `MessageId`, `EntityId` | `infra-record-ids.md` |
+| Loop and order across pipelines, intents, `Answer` | Engine loop (`GameEngine`; no spike yet) |
+| `Ask`: request id, await, completion | `RequestService`; the scope only forwards |
+| Event fan-out, list changes on the wire | Wire (`EventStream`) / Blocks |
+
+**Boundary.** The pipeline receives a message from `Add` or from an inline run. It wraps the message in an `Envelope`, runs it, and writes the result on the envelope. Handlers call services, and services emit events to `EventStream`.
 
 ## 3. Today
 
@@ -128,39 +131,51 @@ From 2026-11-01 (this spike):
 
 | Audience | Entry point | Does |
 |---|---|---|
-| author | `Handler<T, TMessage, TScope>.Handle(T, TScope)` | the logic for one message type |
-| author | `Validator<T, TMessage>.Validate(T, out string)` | the check before the run |
-| author | `Hook<T, TMessage, TScope>.Run(PipelineItem<TMessage>, TScope)` | a Before or After step |
-| composition | `builder.RegisterHandler<TMessage, TScope, THandler>()` and the same for validators and hooks | fills the stores |
-| composition | `new CommandPipeline(stores)` | makes the one pipeline; not in DI |
-| composition | subclass `Pipeline<TMessage, TScope>`: `CreateScope`, `SelectNext`, `Before`, `After` | the custom part of one pipeline |
-| runtime | `Add`, `Remove`, `TryPeek`, `Items`, `RunNext` | the owner system uses the list |
-| runtime | `IInlineRunner<TMessage>.Run(TMessage)` | a scope runs a message now, nested, in the same pipeline |
+| author | `CommandHandler<T>.Handle(T, ICommandScope)` | the logic for one message type |
+| author | `CommandValidator<T>.Validate(T, out string)` | the check before the run |
+| composition | `builder.RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteArity.One)`, same for validators | fills the stores |
+| composition | `new CommandPipeline(handlers, validators)` | makes the one pipeline; not in DI |
+| subclass | `CreateScope`, `SelectNext`, `Validate`, `Before`, `Handle`, `After`, `Run` | the custom part of one pipeline |
+| owner | `Add`, `Remove`, `TryPeek`, `Items`, `Run` | the owner system uses the list |
+| scope | a verb that calls `RunInline(parent, message)` | a message runs now, nested, same pipeline |
 
 ### Shape
 
 ```csharp
 public abstract class Pipeline<TMessage, TScope> where TMessage : class
 {
-    public MessageId Add(TMessage message);                         // into the list
+    protected Pipeline(TypeRouter<Handler<TMessage, TScope>> handlers,
+                       TypeRouter<Validator<TMessage>> validators);
+
+    public Envelope<TMessage> Add(TMessage message);                // into the list
     public bool Remove(MessageId id);                               // false: absent, or already taken
-    public bool TryPeek(out PipelineItem<TMessage> item);           // the item that RunNext takes
-    public IReadOnlyList<PipelineItem<TMessage>> Items { get; }     // read-only view
-    public Task<RunRecord> RunNext();                               // RunRecord.None if no item is selected
-    protected IInlineRunner<TMessage> Inline { get; }               // this pipeline; a subclass gives it to its scope
+    public bool TryPeek(out Envelope<TMessage> envelope);           // the envelope that Run takes next
+    public IReadOnlyList<Envelope<TMessage>> Items { get; }         // read-only view
+    public virtual Task Run() => RunOne();                          // default: one envelope, then stop
+
+    protected Task<Envelope<TMessage>> RunOne();                    // SelectNext + Execute; null if none
+    protected Task<Envelope<TMessage>> RunInline(Envelope parent, TMessage message);   // skips SelectNext
 }
 
-public interface IInlineRunner<TMessage> { Task<RunRecord> Run(TMessage message); }   // scopes only
-
-public sealed class PipelineItem<TMessage> { public MessageId Id { get; } public TMessage Message { get; } public ItemState State { get; } }
-
-public sealed class RunRecord
+public abstract class Envelope
 {
-    public static readonly RunRecord None;                          // SelectNext gave no item
-    public RunStatus Status { get; }                                // None, Accepted, Rejected
-    public object Message { get; }
+    public MessageId Id { get; }
+    public MessageId? ParentId { get; }                             // set on an inline run
+    public EnvelopeState State { get; }                             // Listed, Running, Accepted, Rejected, Faulted
     public string Reason { get; }                                   // set only if Rejected
-    public IReadOnlyList<IPipelineStep> Steps { get; }              // validator, hooks, handler, in run order
+    public abstract object Message { get; }
+}
+public sealed class Envelope<TMessage> : Envelope { public new TMessage Message { get; } }
+
+public abstract class Handler<TMessage, TScope> : IRouted
+{
+    public abstract Type RouteType { get; }
+    protected internal abstract Task Handle(TMessage message, TScope scope);
+}
+public abstract class Validator<TMessage> : IRouted
+{
+    public abstract Type RouteType { get; }
+    protected internal abstract bool Validate(TMessage message, out string reason);
 }
 ```
 
@@ -169,7 +184,7 @@ public sealed class RunRecord
 ```csharp
 sealed class PlayCardHandler : CommandHandler<PlayCard>       // ctor: ZoneService (DI)
 {
-    public override async Task Handle(PlayCard c, ICommandScope s)
+    protected override async Task Handle(PlayCard c, ICommandScope s)
     {
         _zones.Move(c.CardId, Zones.Limbo);                     // service: from DI
         await s.Run(new DrawCard { Player = c.CasterId });      // verb: only from the scope
@@ -177,181 +192,152 @@ sealed class PlayCardHandler : CommandHandler<PlayCard>       // ctor: ZoneServi
 }
 ```
 
-The owner system runs the list:
+The owner system adds a message, runs, and reads the result on the envelope:
 
 ```csharp
-while ((await commands.RunNext()).Status != RunStatus.None) { }
+var envelope = commands.Add(new PlayCard { CardId = card });
+await commands.Run();
+if (envelope.State == EnvelopeState.Rejected) Show(envelope.Reason);
 ```
 
 ### Access
 
 | Bypass route | What stops it |
 |---|---|
+| Game code calls a handler directly | `Handle` is `protected internal`. Only `Framework.Pipeline` calls it. |
 | A handler injects a pipeline | Pipelines are not in DI. |
 | A handler injects the owner system | Rulebook check PIPE-04. |
-| An effect handler injects a service and skips command hooks (v2) | Rulebook check PIPE-02. The scope cannot stop this. |
 | A handler keeps the scope and uses it later | The scope closes after the run. Its verbs then throw. |
 | A subclass changes the run order | `Execute` is not virtual. |
-| A caller runs a message inline without a scope | `Inline` is protected. Only `CreateScope` gives it out. |
-| A game removes the running item | `Remove` returns false. The item left the list before the run. |
+| A caller runs a message inline without a scope | `RunInline` is protected. Only the subclass gives it to its scope. |
+| A game removes the running envelope | `Remove` returns false. The envelope left the list before the run. |
 
 ## 5. Parts
 
-| Part | Replaces |
-|---|---|
-| `Pipeline<TMessage, TScope>` | FW `CommandService`, VS `CommandService.Execute`, VS `EffectService.RunInline` |
-| Item list and `SelectNext` | VS `Stack`, VS `GameEngine` queue |
-| `PipelineItem<TMessage>` and `RunRecord` | `CommandResult`; nothing in VS |
-| Stores and author bases | `CommandHandlerRegistry`, `CommandValidatorRegistry`, VS `EffectStore` subscriptions, logic on messages |
-| Scope | VS `ICommandScope`, `IEffectScope` |
-| `IInlineRunner<TMessage>` | direct nested calls to `CommandService` |
+| Part | Serves | Replaces |
+|---|---|---|
+| `Pipeline<TMessage, TScope>` | `Add`, `Remove`, `TryPeek`, `Run`, inline run | FW `CommandService`, VS `CommandService.Execute`, VS `Stack`, VS engine queue |
+| `Envelope`, `Envelope<TMessage>`, `EnvelopeState` | owner, Blocks | `CommandResult`; nothing in VS |
+| `Handler<TMessage, TScope>`, `Validator<TMessage>` | the stores | `ICommandHandler`, `ICommandValidator` as store types |
+| `PipelineScope` | the concrete scope | VS `ICommandScope`, `IEffectScope` |
 
 ### `Pipeline<TMessage, TScope>`
 
-`Execute` is protected and not virtual. `RunNext` and the inline runner call it. Each step adds the element that ran to the record.
+`Execute` is protected and not virtual. `RunOne` and `RunInline` call it. The scope closes on every path.
 
 ```csharp
-protected async Task<RunRecord> Execute(PipelineItem<TMessage> item)
+protected async Task<Envelope<TMessage>> Execute(Envelope<TMessage> e)
 {
-    var record = new RunRecordBuilder(item.Message);
-    if (!Validate(item, record, out var reason)) return record.Rejected(reason);   // no other step
-    var scope = CreateScope(item);
+    e.State = EnvelopeState.Running;
+    if (!Validate(e, out var reason)) { e.Reject(reason); return e; }        // no other step
+    var scope = CreateScope(e);
     try
     {
-        await Before(item, scope, record);
-        await Handle(item, scope, record);
-        await After(item, scope, record);
-        return record.Accepted();
+        await Before(e, scope);
+        await Handle(e, scope);
+        await After(e, scope);
+        e.State = EnvelopeState.Accepted;
+        return e;
     }
-    finally { Close(scope); }                                                     // verbs throw after this
+    catch { e.State = EnvelopeState.Faulted; throw; }                       // the fault stays in the task
+    finally { Close(scope); }                                               // verbs throw after this
 }
 
-protected abstract TScope CreateScope(PipelineItem<TMessage> item);
-protected virtual bool Validate(PipelineItem<TMessage> item, RunRecordBuilder r, out string reason);   // validators.TryFor(type)
-protected virtual Task Before(PipelineItem<TMessage> item, TScope scope, RunRecordBuilder r);          // before.All(type), in order
-protected virtual Task Handle(PipelineItem<TMessage> item, TScope scope, RunRecordBuilder r);          // handlers.For(type)
-protected virtual Task After(PipelineItem<TMessage> item, TScope scope, RunRecordBuilder r);           // after.All(type), in order
+protected abstract TScope CreateScope(Envelope<TMessage> e);
+protected virtual bool Validate(Envelope<TMessage> e, out string reason);         // validators.TryFor(type)
+protected virtual Task Before(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
+protected virtual Task Handle(Envelope<TMessage> e, TScope s);                    // handlers.For(type)
+protected virtual Task After(Envelope<TMessage> e, TScope s) => Task.CompletedTask;
 ```
 
-A fault goes into the returned task. The scope closes on every path.
-
-### Item list and `SelectNext`
+### List and `Run`
 
 ```csharp
-public Task<RunRecord> RunNext()
+protected Task<Envelope<TMessage>> RunOne()
 {
-    var item = SelectNext(_items);                 // null: nothing to run now
-    if (item == null) return Task.FromResult(RunRecord.None);
-    _items.Remove(item);                           // before the run: a running item can Add more
-    return Execute(item);
+    var e = SelectNext(_items);                     // null: nothing to run now
+    if (e == null) return Task.FromResult<Envelope<TMessage>>(null);
+    _items.Remove(e);                               // before the run: a running envelope can Add more
+    return Execute(e);
 }
 
-protected virtual PipelineItem<TMessage> SelectNext(IReadOnlyList<PipelineItem<TMessage>> items)
-    => items.Count > 0 ? items[0] : null;          // FIFO; a stack returns the last item
+protected virtual Envelope<TMessage> SelectNext(IReadOnlyList<Envelope<TMessage>> items)
+    => items.Count > 0 ? items[0] : null;           // FIFO; a stack returns the last envelope
+
+public override async Task Run() { while (await RunOne() != null) { } }   // a subclass that drains
 ```
 
-An MTG stack overrides `SelectNext` and returns `null` until both players pass priority.
+An MTG stack overrides `SelectNext` and returns `null` until both players pass priority. Then a drain stops too.
 
-### `PipelineItem<TMessage>` and `RunRecord`
+### `Envelope`
 
-The item gives each message an id and a state. Replace and cancel come later, as new states or fields on the item.
-
-```csharp
-public sealed class PipelineItem<TMessage>
-{
-    public MessageId Id { get; }                   // from IdAllocator<MessageId> at Add or inline run
-    public TMessage Message { get; }
-    public ItemState State { get; internal set; }  // Listed, Running, Completed, Rejected, Faulted
-}
-```
-
-The record keeps only what a caller needs now:
-
-| Field | Why now |
-|---|---|
-| `Status` | The owner loop stops on `None`. |
-| `Message` | The caller sees which message ran. |
-| `Reason` | `CommandResult.RejectReason` maps to it. Tests check it. |
-| `Steps` | Tests check which elements ran, and their order. |
-
-A fault is not a status. It stays in the faulted task. An inline run returns its own record to the scope. The outer record does not hold it. Events are not in the record, because services emit them to `EventStream`.
+The pipeline makes one envelope for each message at `Add` or at an inline run. The message is the data that the author writes. The envelope is the run of that message: its identity, its parent and its result. Blocks will read `Id` and `ParentId`. Replace and cancel come later, as new states or fields.
 
 ### Stores and author bases
 
-The pipeline reads four stores. The router spike owns how each store works.
+The base holds two `TypeRouter` stores (`infra-type-router.md`, `RouteArity.One`). `Handle` reads `For`, and `Validate` reads `TryFor`. The concrete pipeline gives the typed author base:
 
 ```csharp
-public sealed class PipelineStores<TMessage, TScope>
+public abstract class CommandHandler<T> : Handler<Command, ICommandScope> where T : Command
 {
-    public TypeRouter<IValidator<TMessage>>               Validators { get; }   // zero or one
-    public TypeRouter<IHandler<TMessage, TScope>>         Handlers   { get; }   // exactly one
-    public IRouteSource<IHook<TMessage, TScope>>          Before     { get; }   // a list
-    public IRouteSource<IHook<TMessage, TScope>>          After      { get; }   // a list
-}
-
-public abstract class Handler<T, TMessage, TScope> : IHandler<TMessage, TScope> where T : TMessage
-{
-    public abstract Task Handle(T message, TScope scope);
+    public override Type RouteType => typeof(T);
+    protected internal override Task Handle(Command m, ICommandScope s) => Handle((T)m, s);   // one cast, here only
+    protected abstract Task Handle(T command, ICommandScope scope);
 }
 ```
 
-`IValidator<TMessage>`, `IHandler<TMessage, TScope>` and `IHook<TMessage, TScope>` implement `IPipelineStep` and `IRouted`. `IHook` also implements `IOrdered`. A concrete pipeline gives named bases, for example `CommandHandler<T> : Handler<T, Command, ICommandScope>`.
+If a pipeline needs another store, it overrides the step.
 
 ### Scope
 
-A scope holds the verbs of one pipeline that are not in DI. `CreateScope` makes one scope for each item. The concrete pipeline defines the verbs, and decides if the scope exposes the inline runner.
+A scope holds the verbs of one pipeline that are not in DI. `CreateScope` makes one scope for each envelope. The concrete pipeline defines the verbs, and decides if the scope exposes an inline run.
 
 ```csharp
-public interface ICommandScope { Task<RunRecord> Run(Command command); }   // example; Commands feature owns it
+public interface ICommandScope { Task<Envelope<Command>> Run(Command command); }   // example; Commands owns it
 
 sealed class CommandPipeline : Pipeline<Command, ICommandScope>
 {
-    protected override ICommandScope CreateScope(PipelineItem<Command> item) => new CommandScope(Inline);
+    protected override ICommandScope CreateScope(Envelope<Command> e)
+        => new CommandScope(m => RunInline(e, m));                                 // e becomes the parent
 }
 
 sealed class CommandScope : PipelineScope, ICommandScope
 {
-    readonly IInlineRunner<Command> _inline;
-    public Task<RunRecord> Run(Command command) { ThrowIfClosed(); return _inline.Run(command); }
+    readonly Func<Command, Task<Envelope<Command>>> _run;
+    public Task<Envelope<Command>> Run(Command c) { ThrowIfClosed(); return _run(c); }
 }
 ```
-
-The pipeline implements `IInlineRunner<TMessage>` explicitly, so `Run` is not on its public surface.
-
-### v2: two or more pipelines
-
-Out of v0. A command scope that adds effects, and an effect scope that runs commands, make a wiring cycle. A holder (`PipelineSet`) solves it. Design it after one pipeline runs.
 
 ## 6. Architecture
 
 ### Call stack
 
 ```
-owner system: commands.RunNext()
-└─ SelectNext → PlayCard item; remove from the list
-   └─ Execute(item)
+owner system: commands.Run()
+└─ RunOne → SelectNext → PlayCard envelope; remove from the list
+   └─ Execute(envelope)
       ├─ Validate                                   validators.TryFor(PlayCard)
-      ├─ CreateScope → CommandScope(Inline)
-      ├─ Before                                     before.All(PlayCard)
+      ├─ CreateScope → CommandScope
+      ├─ Before                                     empty by default
       ├─ Handle → PlayCardHandler.Handle(c, scope)
       │  ├─ ZoneService.Move → ZoneChanged (wire event)
-      │  └─ scope.Run(DrawCard) → IInlineRunner<Command>.Run
-      │     └─ Execute(item)                       same order; own RunRecord
-      ├─ After                                      after.All(PlayCard)
-      └─ close scope → RunRecord(Accepted, Steps)
+      │  └─ scope.Run(DrawCard) → RunInline(parent, DrawCard)
+      │     └─ Execute(child envelope)              same order; ParentId = PlayCard
+      ├─ After                                      empty by default
+      └─ close scope → envelope.State = Accepted
 ```
 
 ### Logic flow
 
 ```mermaid
 flowchart TD
-  A["RunNext"] --> S{"SelectNext returns an item?"}
-  S -- no --> N["RunRecord.None"]
+  A["Run"] --> S{"SelectNext returns an envelope?"}
+  S -- no --> N["Return null"]
   S -- yes --> R["Remove from list"] --> V{"Validate passes?"}
   I["Inline run"] --> V
-  V -- no --> RJ["Rejected record"]
-  V -- yes --> C["CreateScope"] --> B["Before"] --> H["Handle"] --> AF["After"] --> CL["Close scope"] --> OK["Accepted record"]
-  H -- exception --> F["Close scope, fault the task"]
+  V -- no --> RJ["State: Rejected"]
+  V -- yes --> C["CreateScope"] --> B["Before"] --> H["Handle"] --> AF["After"] --> CL["Close scope"] --> OK["State: Accepted"]
+  H -- exception --> F["State: Faulted, fault the task"]
 ```
 
 ## 7. Trade-offs
@@ -359,12 +345,12 @@ flowchart TD
 | Loss | Why it matters | Mitigation |
 |---|---|---|
 | A game changes policy with a subclass | The game must know the base class. | Few virtual methods; each has a default. |
-| `Execute` is fixed | A pipeline cannot run hooks before validation. | Validation is opt-in for each type. |
+| `Execute` is fixed | A pipeline cannot run a step before validation. | Validation is opt-in for each type. |
+| Author bases are classes | An author base cannot have another parent. | No author base has one today. |
+| Each pipeline writes its typed author base | About 10 lines for each pipeline. | Examine a shared base in v2. |
 | Two ways to get dependencies | Verbs come from the scope. Services come from DI. | One rule: call down with the scope. |
-| DI can skip the scope | The scope does not protect services. | Rulebook checks PIPE-02 to PIPE-04. |
-| `Remove` cannot stop a running item | A counter to a running effect needs another verb. | Cancel on `PipelineItem` comes later. |
+| `Remove` cannot stop a running envelope | A counter to a running message needs another verb. | Cancel on `Envelope` comes later. |
 | Every handler is async | A sync handler returns `Task.CompletedTask`. Stack traces are longer. | Named bases; one inline-continuation test. |
-| One class for each message type | The VS style (`Apply` on the message) is shorter. | DI handlers are testable. |
 
 ## 8. Rulebook rules to propose
 
@@ -373,28 +359,25 @@ Proposals only. `rulebook.json` does not change in this spike.
 | Id | Rule | Check kind |
 |---|---|---|
 | PIPE-01 | A scope interface exposes only the verbs of its pipeline. | `type.memberTypes`, extended with `includeParameters: true` |
-| PIPE-02 | An effect handler does not call a Framework service. (v2) | `il.forbiddenCalls` |
-| PIPE-03 | An intent handler does not call a Framework service. (v2) | `il.forbiddenCalls` |
 | PIPE-04 | A handler does not call a pipeline or the owner system. | `il.forbiddenCalls` |
 | PIPE-05 | A handler does not leave the run thread (`Task.Run`, `Task.Delay`, `ConfigureAwait`). | `il.forbiddenCalls`, extended with a `methods[]` filter |
 
+PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service) wait for v2.
+
 ## 9. Migration steps
 
-Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 1 and 2 come after the router step that adds `TypeRouter<T>`, and after the record-ids step that adds `MessageId`.
+Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Both steps come after the router step that adds `TypeRouter<T>`, and after the record-ids step that adds `MessageId`.
 
-1. **Base pipeline. No behavior change.** Add `Pipeline<,>`, `PipelineItem<>`, `RunRecord`, `IPipelineStep`, `PipelineStores<,>`, `IHandler<,>`, `IValidator<>`, `IHook<,>` and `IInlineRunner<>`. Add `CommandPipeline` with a scope that has no verbs. `CommandService.Execute` calls the inline runner, throws if the task is not complete, and maps `RunRecord` to `CommandResult`. The block bracket stays in `CommandService` until the Blocks step. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order in `Steps`, `SelectNext` FIFO and LIFO, `Remove` of a running item.
-2. **Async handlers.** Change `CommandHandler<T>` to `Task Handle(T, ICommandScope)`. Delete `CommandService`. Add PIPE-01, PIPE-04 and PIPE-05. Add the inline-continuation test (decision 4) in EditMode and PlayMode.
-3. **Command hooks.** Fill the command `Before` and `After` stores at composition. Proof: a hook picture with one command type.
-
-v2, after v0 runs: the effect pipeline, `IEffectScope`, `ICommandScope.Add(Effect)`, a LIFO `SelectNext`, the holder for two pipelines, and PIPE-02. Proof: the Fireball and Divine Shield pictures. The engine loop, intents and the `Answer` path move to the engine-loop spike.
+1. **Base pipeline. No behavior change.** Add `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `PipelineScope`, `Handler<,>` and `Validator<>`. Add `CommandPipeline`. Its `Handle` and `Validate` overrides call the current registries. `CommandService.Execute` calls `Add` and `Run`, throws if the task is not complete, and maps the envelope to `CommandResult`. The block bracket stays in `CommandService` until the Blocks step. Proof: `CommandServiceTests` and all acceptance bindings pass unchanged. Add `PipelineTests`: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run.
+2. **Async handlers on the shared bases.** `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become `Task Handle(T, ICommandScope)`. The registries become `TypeRouter`. Delete `CommandService`. Add PIPE-01, PIPE-04 and PIPE-05. Add the inline-continuation test (decision 4) in EditMode and PlayMode.
 
 ## 10. Interfaces needed from the other pieces
 
 | Piece | Needs |
 |---|---|
-| Router (`infra-type-router.md`) | `TypeRouter<T>.For(Type)` and `TryFor(Type, out T)`. `IRouteSource<T>.All(Type)` with a stable order, no allocation. `IRouted`, `IOrdered`. Hook subscription and base-type match. |
+| Router (`infra-type-router.md`) | `TypeRouter<T>.For` and `TryFor`. `RegisterTypeRouter<T>(RouteArity.One)`. The `T : class, IRouted` constraint accepts an abstract class. |
 | Record ids (`infra-record-ids.md`) | `MessageId` and `IdAllocator<MessageId>`. The id is local and not on the wire. |
-| Blocks (`infra-block-wire.md`) | Later. The bracket must wrap `Before`, `Handle` and `After`, and not `Validate`. |
+| Blocks (`infra-block-wire.md`) | Later. Reads `Envelope.Id` and `ParentId`. The bracket wraps `Before`, `Handle` and `After`, and not `Validate`. |
 | Requests | The scope forwards `Ask` to `RequestService`. |
 
 ## 11. Later
@@ -403,8 +386,10 @@ These items are not open for v0. Each has a place in the design.
 
 | Item | Place |
 |---|---|
-| Replace a message, also with a type change | `PipelineItem` |
-| Cancel an item | `PipelineItem.State` |
-| Base-type match for validators and hooks | Router |
-| More fields in `RunRecord` (inline tree, events) | `RunRecord`, when a use needs them |
-| Two or more pipelines | Section 5, v2 |
+| Hooks and reactions: a handler in a phase, or a reaction message | Own discussion; `Before` and `After` are ready |
+| `PipelineBuilder` and a runner object | Next, after v0 |
+| Two or more pipelines: wiring cycle, effects, PIPE-02 | v2 |
+| A shared typed author base | v2, after two pipelines exist |
+| Replace a message, also with a type change | `Envelope` |
+| Cancel an envelope | `EnvelopeState` |
+| Base-type match for validators | Router |
