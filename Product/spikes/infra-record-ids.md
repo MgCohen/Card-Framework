@@ -11,7 +11,7 @@ references:
   - Product/spikes/command-service.md
   - Product/spikes/infra-block-wire.md
   - Product/decisions/0014-service-first-state-model.md
-sandbox: Assets/Framework/Core/Runtime/Ids/
+sandbox: Assets/Framework/RecordIds/
 tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 ---
 
@@ -37,7 +37,7 @@ tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 The user made these decisions for all four infra spikes:
 
 1. ~~Ids are typed `readonly struct`s around `int`.~~ Replaced by decision 17.
-2. Shared infrastructure lives in `Framework.Core`: routers, `IdAllocator<TId>`, `Id`, `EntityId`. `Framework.Wire` references `Framework.Core`. This needs an ARCH-02 edit. This spike does not edit `rulebook.json`.
+2. Shared infrastructure lives in `Framework.Core`: routers. ~~`IdAllocator<TId>`, `Id`, `EntityId`~~ (decision 25 moves the record ids system to its own folder). `Framework.Wire` references `Framework.Core`. This needs an ARCH-02 edit. This spike does not edit `rulebook.json`.
 3. A new `Framework.Blocks` feature owns all `Block*` types and `BlockId`. `Framework.Wire` does not.
 4. The async core uses `System.Threading.Tasks.Task`, not UniTask.
 5. ~~The block events carry `CauseId` only.~~ The Blocks piece renamed it: `TriggerId` (decision 18).
@@ -66,6 +66,7 @@ The user made these decisions for all four infra spikes:
 22. **No save and load.** Loading a match in progress is out of scope. `Watermark` and `Restore` are removed. Undo affects only the top of the stack (`Release`).
 23. **Ids belong to their match.** Each match starts again at 1. Two matches can have the same ids, because they are different contexts.
 24. **Seats stay as they are.** A game mode has a known, small number of players (1 to 4). The shared allocator is for instance spaces of unknown size. Examine this again only if a mode has a large, changing number of players.
+25. **Extraction, not refactor (catalog v12).** The system lives in one root folder, `Assets/Framework/RecordIds/` (`Framework.RecordIds`). The plan builds it next to the current systems and changes none of them. The migration of the current systems is one item in §9 Later.
 
 ## 2a. Scope
 
@@ -130,7 +131,7 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 
 | Space | Type | Home asmdef | Made by | On the wire | Lifetime |
 |---|---|---|---|---|---|
-| entity | `EntityId` | `Framework.Core` | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
+| entity | `EntityId` | `Framework.RecordIds` (at migration) | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
 | block | `BlockId` | `Framework.Blocks` | `EventStream.Add` (position) | no (both sides compute it) | match |
 | request | — (uses `BlockId`) | `Framework.Requests` | `EventStream.Add` (a request is a block) | no | match |
 | message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
@@ -138,12 +139,12 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
 
-`Id`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core` (decision 2). `EntityId` must be in Core because `Framework.Tags` uses it and Tags cannot reference Entities (Entities references Tags). For the same reason, `IEntity : IRecord<EntityId>` lives in Core, so Tags APIs can take the record (§3.7).
+`Id`, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>` live in `Framework.RecordIds` (decision 25). The migration adds `EntityId` and `IEntity : IRecord<EntityId>` there too. `Framework.Tags` uses them and cannot reference Entities (Entities references Tags), so they cannot live in Entities (§3.7).
 
 ### 3.2 Typed id
 
 ```csharp
-namespace Framework.Core
+namespace Framework.RecordIds
 {
     [AutoPack]
     public abstract partial record Id
@@ -153,7 +154,7 @@ namespace Framework.Core
     }
 }
 
-public sealed record EntityId : Id;           // Framework.Core
+public sealed record EntityId : Id;           // Framework.RecordIds (migration)
 public sealed record BlockId : Id;            // Framework.Blocks
 public sealed record MessageId : Id;          // pipeline asmdef
 public sealed record DefinitionId : Id;       // Framework.Entities
@@ -166,7 +167,7 @@ public sealed record DefinitionId : Id;       // Framework.Entities
 | No mix at compile time | `EntityId` and `BlockId` are different types. A method that takes one rejects the other. |
 | No repeated members | All members are on the base. |
 
-Unity C# 9 needs a shim for `init`. Add it one time in Core:
+Unity C# 9 needs a shim for `init`. Add it one time in `Framework.RecordIds`:
 
 ```csharp
 namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
@@ -181,7 +182,7 @@ namespace System.Runtime.CompilerServices { internal static class IsExternalInit
 ### 3.3 Allocator
 
 ```csharp
-namespace Framework.Core
+namespace Framework.RecordIds
 {
     public class IdAllocator<TId> where TId : Id, new()
     {
@@ -327,7 +328,7 @@ The unpack makes a new object: `new EntityId { Value = v }`. This is correct for
 Author APIs take the record. The API reads the id internally:
 
 ```csharp
-// Framework.Core
+// Framework.RecordIds (migration)
 public interface IEntity : IRecord<EntityId> { }
 
 // Framework.Tags
@@ -389,68 +390,51 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 ## 7. Plan
 
-Build steps add standalone code and change no current caller. The cross-spike order on the catalog owns the Migrate steps. Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green.
+The plan builds a new system next to the current systems. No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/Framework/RecordIds/`.
 
 ### 7.1 Folder structure
 
 ```text
-Assets/Framework/Core/
-├─ Runtime/                       Framework.Core.asmdef  (+ Scaffold.Autopacker)
-│  └─ Ids/
-│     ├─ IsExternalInit.cs
-│     ├─ Id.cs
-│     ├─ EntityId.cs
-│     ├─ IRecord.cs
-│     ├─ IEntity.cs
-│     ├─ IdAllocator.cs
-│     ├─ StackIdAllocator.cs
-│     └─ RecordStore.cs
-└─ Tests/                         Framework.Core.Tests.asmdef  (+ Scaffold.Autopacker)
-   └─ Ids/
-      ├─ IdTests.cs
-      ├─ IdPackingTests.cs
-      ├─ IdAllocatorTests.cs
-      └─ RecordStoreTests.cs
+Assets/Framework/RecordIds/
+├─ Runtime/                       Framework.RecordIds.asmdef
+│  ├─ IsExternalInit.cs
+│  ├─ Id.cs
+│  ├─ IRecord.cs
+│  ├─ IdAllocator.cs
+│  ├─ StackIdAllocator.cs
+│  └─ RecordStore.cs
+└─ Tests/                         Framework.RecordIds.Tests.asmdef
+   ├─ Fixtures/
+   │  ├─ TestIds.cs               (AId, BId : Id)
+   │  └─ TestRecords.cs           (TestRecord : IRecord<AId>, TestStore)
+   ├─ IdTests.cs
+   ├─ IdPackingTests.cs
+   ├─ IdAllocatorTests.cs
+   └─ RecordStoreTests.cs
 ```
+
+The system has no data, so it has no `Assets/` subfolder.
 
 ### 7.2 Dependencies
 
 ```mermaid
 flowchart BT
-  C["Framework.Core"] --> AP["Scaffold.Autopacker"]
-  C --> R["Scaffold.Records"]
-  T["Framework.Core.Tests"] --> C
+  R["Framework.RecordIds"] --> AP["Scaffold.Autopacker"]
+  T["Framework.RecordIds.Tests"] --> R
   T --> AP
-  E["Framework.Entities"] --> C
-  G["Framework.Tags"] --> C
-  B["Framework.Blocks"] --> C
-  W["Framework.Wire"] --> C
 ```
 
-`Framework.Core` must not reference `Framework.Wire`, `Framework.Entities`, `Framework.Blocks` or VContainer.
+`Framework.RecordIds` references only `Scaffold.Autopacker`. It must not reference any `Framework.*` assembly or VContainer.
 
-### 7.3 Build steps
+Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker at or after Scaffold `8b27bacf` (Scaffold #63). Today it pins `15f5e5d2`.
+
+### 7.3 Steps
 
 | Step | Files | Tests | Done |
 |---|---|---|---|
-| B1 | `Packages/packages-lock.json`: AutoPacker hash at or after Scaffold `8b27bacf` | existing Wire tests | gate PASS with `-With playmode` |
-| B2 | `Ids/IsExternalInit.cs`, `Id.cs`, `EntityId.cs`; Core asmdef + `Scaffold.Autopacker` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS |
-| B3 | `Ids/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS |
-| B4 | `Ids/IRecord.cs`, `IEntity.cs`, `RecordStore.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; no caller outside Core |
-
-### 7.4 Migrate steps
-
-The catalog cross-spike order decides when each step runs.
-
-| Step | Change | Done |
-|---|---|---|
-| M1 | Entities: `IdAllocator<EntityId>` in `EntityService`; `EntityStore : RecordStore<Entity, EntityId>`; `EntityCreatedEvent.EntityId : EntityId` | gate PASS with `-With playmode`; no `_nextId` in Entities |
-| M2 | Tags: APIs take `IEntity`; Tag events carry `EntityId`; `TagStore` maps keyed on `EntityId` | gate PASS with `-With playmode` |
-| M3 | Catalog: `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | gate PASS; #195 closed first |
-| M4 | Blocks and Requests: positions, `RequestStore : RecordStore<Request, BlockId>` | owned by `infra-block-wire.md` |
-| M5 | Pipeline: `MessageId`, typed ids in sample commands | owned by `infra-command-pipeline.md` |
-| M6 | Rules: §6 into `rulebook.json`, in a separate PR for user review | gate PASS; user approval |
-| M7 | Docs: `docs/architecture.md`, `docs/lookup-patterns.md` ("`RecordStore<TRecord, TId>` for id → record stores only") | — |
+| 1 | `Runtime/Framework.RecordIds.asmdef`, `IsExternalInit.cs`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
+| 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
+| 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
 
 ## 8. Interfaces for the other three pieces
 
@@ -464,7 +448,7 @@ The catalog cross-spike order decides when each step runs.
 
 **Command pipeline.**
 
-- `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
+- `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.RecordIds`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
 - `MessageId` is local to the server. An intent opens no block (decision 6).
 - Messages hold typed ids (MSG-01). The handler resolves records through read views (`IReadOnlyEntityStore.ById`).
 - Client submit (phase 2) needs a correlation id that the client makes. See §9.
@@ -490,7 +474,8 @@ No open questions. Deferred items:
 | Seats on `IdAllocator` | A mode has 1 to 4 players (decision 24) | A mode with many, changing players |
 | Object pooling of records | A match has hundreds of records (appendix A.4) | The profiler shows record allocation cost |
 | Allocation cost of id records | Accepted (decision 17) | A benchmark shows id hashing or allocation cost |
-| Rules ID-05, ID-06, ID-07 | Need rollback or migrated APIs | Rollback is scheduled; the first API migrates to records |
+| Rules ID-01 to ID-07 | They check callers in current systems | The migration starts |
+| Migration of current systems: `EntityId` and `IEntity`; Entities, Tags and Catalog on `RecordStore`; Blocks and Requests on `BlockId`; pipeline `MessageId`; rules in `rulebook.json`; docs | Extraction first (decision 25) | The catalog cross-spike order schedules it |
 
 Questions for other owners:
 
