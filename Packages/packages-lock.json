@@ -17,11 +17,11 @@
       "hash": "0d7da20c6fce8338ab991c34d3d72fc1ba4cd453"
     },
     "com.scaffold.autopacker": {
-      "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.autopacker#main",
+      "version": "https://github.com/MgCohen/Scaffold.git?path=/Assets/Packages/com.scaffold.autopacker#b7dcb30a2fb31e37b8092bce2a05c539ab40dd42",
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "8b27bacf8b2c1cf5c1758589b87c03bab4281e1d"
+      "hash": "b7dcb30a2fb31e37b8092bce2a05c539ab40dd42"
     },
     "com.scaffold.graphflow": {
       "version": "file:com.scaffold.graphflow",
