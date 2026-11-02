@@ -108,6 +108,49 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
+        public void Close_WithOpenChild_ClosesChildThenGroupAsErrored()
+        {
+            var outer = Groups.Open();
+            var inner = Groups.Open();
+
+            Assert.Throws<InvalidOperationException>(() => Groups.Close(outer));
+
+            var blocks = _wire.ClientBlocks();
+            Assert.AreEqual(inner, ((GroupEnd)blocks[2]).StartId);
+            Assert.AreEqual(outer, ((GroupEnd)blocks[3]).StartId);
+            CollectionAssert.AreEqual(new[] { GroupOutcome.Errored, GroupOutcome.Errored }, _wire.ClientOutcomes());
+            Assert.IsNull(Groups.Current);
+        }
+
+        [Test]
+        public void Create_LeavesManualChildOpen_ClosesBothAsErrored()
+        {
+            Assert.Throws<InvalidOperationException>(() => Groups.Create(null, () => Groups.Open()));
+
+            CollectionAssert.AreEqual(new[] { GroupOutcome.Errored, GroupOutcome.Errored }, _wire.ClientOutcomes());
+            Assert.IsNull(Groups.Current);
+        }
+
+        [Test]
+        public void Close_WithNoOpenGroup_Throws()
+        {
+            Assert.Throws<InvalidOperationException>(() => Groups.Close(new BlockId { Value = 1 }));
+
+            Assert.AreEqual(0, _wire.Client.Count);
+        }
+
+        [Test]
+        public void Close_SameGroupTwice_Throws()
+        {
+            var id = Groups.Open();
+            Groups.Close(id);
+
+            Assert.Throws<InvalidOperationException>(() => Groups.Close(id));
+
+            Assert.AreEqual(2, _wire.Client.Count);
+        }
+
+        [Test]
         public void Open_WithoutBlockPositions_Throws()
         {
             var groups = new GroupService(new EventStream());
