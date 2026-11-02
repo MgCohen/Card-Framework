@@ -125,6 +125,10 @@
             "Framework.RecordIds": [],
             "Framework.RecordIds.Install": [
               "Framework.RecordIds"
+            ],
+            "Framework.Blocks": [
+              "Framework.RecordIds",
+              "Framework.Wire"
             ]
           }
         }
