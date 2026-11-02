@@ -51,10 +51,10 @@ using UnityEngine.Scripting;
 
 ### 3.2 Assembly with `noEngineReferences: true`
 
-`Framework.Core`, `Framework.Commands` and other pure assemblies cannot reference `UnityEngine.Scripting`. Declare our own copies in `Framework.Core`.
+`Framework.Routing`, `Framework.Commands` and other pure assemblies cannot reference `UnityEngine.Scripting`. `Framework.Routing` declares our own copies.
 
 ```csharp
-namespace Framework.Core
+namespace Framework.Routing
 {
     // The UnityLinker reads these attributes by class name. The namespace does not matter.
     [AttributeUsage(AttributeTargets.Interface)]

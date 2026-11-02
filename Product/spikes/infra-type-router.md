@@ -7,7 +7,7 @@ references:
   - docs/architecture.md
   - Product/spikes/framework-roadmap.md
   - Product/spikes/command-service.md
-sandbox: Assets/Framework/Core/
+sandbox: Assets/Framework/Routing/
 tags: [#spike, #infra, #router, #wire, #commands]
 ---
 
@@ -22,14 +22,14 @@ tags: [#spike, #infra, #router, #wire, #commands]
 
 ## 1. TL;DR
 
-1. One generic class in `Framework.Core`: `TypeRouter<T>`. It is a frozen map from a `Type` to its members. A `RouteMode` (`Single` or `Multiple`) sets the duplicate rule (D10).
+1. One generic class in a new system `Framework.Routing` (folder `Assets/Framework/Routing/`, D14): `TypeRouter<T>`. It is a frozen map from a `Type` to its members. A `RouteMode` (`Single` or `Multiple`) sets the duplicate rule (D10).
 2. One member contract, `IRouted { Type RouteType }`, and one optional `IOrdered { int Order }`.
 3. Registration is one line for each router: `RegisterTypeRouter<T>(mode)`. It scans the loaded assemblies for members (D9). `TypeScan` scans once and caches the result, so other systems can use the same scan.
 4. Dispatch reads (`Get`, `TryGet`, `GetAll`) use the **exact type only**. Leaf message types become `sealed`, so an exact route cannot miss a subclass.
 5. A query read, `GetAllDerivedFrom(type)`, gives the members of every registered type under `type`: subclasses, implementations and closed generics (§ 5.6).
 6. `Dispatcher` (byte array) and `Network._byType` (id allocator) stay specialized. Hooks are out of scope (D8).
 
-### Decisions (2026-10-31, D9 to D13 on 2026-11-01)
+### Decisions (2026-10-31, D9 to D13 on 2026-11-01, D14 on 2026-11-02)
 
 The user made these decisions for all four infrastructure spikes. This spike uses them.
 
@@ -48,6 +48,7 @@ The user made these decisions for all four infrastructure spikes. This spike use
 | D11 | The API and the examples are about type lookup, with neutral types. Commands and events are users of the router, not its API. | § 4. |
 | D12 | Names: `RouteMode { Single, Multiple }`. Reads `Get`, `TryGet`, `GetAll`, `GetAllDerivedFrom`, `RoutedTypesDerivedFrom`, `RoutedTypes`. `HandlerRegistry` becomes `WireEventDispatcher`. The Pipeline owns the run policy for many members. | § 4, § 5.2, § 6, § 9, § 12. |
 | D13 | The command member types are the Pipeline's abstract classes `Handler<Command, ICommandScope>` and `Validator<Command>`, not `ICommandHandler` and `ICommandValidator`. The Pipeline uses `RouteMode.Single` for both in v0. | § 4, § 5.2, § 6, § 9. |
+| D14 | Plan an extraction, not a refactor. The router is a new system in one root folder, `Assets/Framework/Routing/`, assembly `Framework.Routing`. The build changes no current system. D2 stays for ids. For routers, `Framework.Routing` replaces `Framework.Core`. | § 4, § 5.2, § 8, § 9, § 10, § 11. |
 
 ## 2. Scope
 
@@ -149,9 +150,8 @@ Dependencies:
 
 | From | To | Why |
 |---|---|---|
-| `Framework.Core` (`TypeRouter<T>`, `TypeScan`, `IRouted`) | nothing | Core references no other assembly. |
-| `Framework.Bootstrap` (`RegisterTypeRouter<T>`) | `Framework.Core`, VContainer | The DI verb lives with the other DI verbs. |
-| Member assemblies (Commands, Wire, game code) | `Framework.Core` | Members implement `IRouted`. |
+| `Framework.Routing` (`TypeRouter<T>`, `TypeScan`, `IRouted`, `RegisterTypeRouter<T>`) | VContainer | The DI verb is part of the system (D14). No Framework assembly. |
+| Member assemblies (Commands, Wire, game code) | `Framework.Routing` | Members implement `IRouted`. Added at migration. |
 
 Rules. "Gate" is `Tools/Rulebook/gate.ps1`. It checks the rules in `Tools/Rulebook/rulebook.json` and fails the build. The `ROUTE-*` rules are new proposals from this spike (§ 8).
 
@@ -180,7 +180,7 @@ Cost: a wrong read (for example `Get` on a type with two members) is a run-time 
 
 ### 5.2 Signatures
 
-Namespace `Framework.Core`, folder `Assets/Framework/Core/Runtime/Routing/`. One top-level type per file.
+Namespace `Framework.Routing`, folder `Assets/Framework/Routing/Runtime/` (D14). The asmdef has `noEngineReferences: true` and references VContainer only. One top-level type per file.
 
 ```csharp
 [RequireImplementors]   // keeps scanned members in a stripped player (§ 5.5)
@@ -295,7 +295,7 @@ The explicit verbs stay for two cases:
 **Code stripping.** A member that only the scan reaches has no direct reference, so the linker removes it. The fix is one attribute on `IRouted`:
 
 ```csharp
-// Framework.Core. Our own copy: Core has noEngineReferences, so it cannot use UnityEngine.Scripting.
+// Framework.Routing. Our own copy: the assembly has noEngineReferences, so it cannot use UnityEngine.Scripting.
 [AttributeUsage(AttributeTargets.Interface)]
 public sealed class RequireImplementorsAttribute : Attribute { }
 
@@ -318,7 +318,7 @@ Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono and IL2CPP, st
 - C1 shows that the linker reads the attribute by its short name. The namespace and the engine reference are not necessary. The attribute also passes through a derived interface and keeps the constructors.
 - The build sizes of A, B, C1 and C2 are the same (about 8.6 MB of managed code). Both fixes keep only the member types.
 
-Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus step B3 keeps the test as a smoke build to run again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
+Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus the smoke build (§ 11) runs again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
 
 IL2CPP gives the same result. A before and after rerun with `ScriptingImplementation.IL2CPP` (two separate Unity launches, stripping level High) gives 0 / 0 with no attribute and 3 / 3 with the attribute.
 
@@ -335,7 +335,7 @@ A second IL2CPP test (stripping level High, one build without the attributes and
 
 - `RequireImplementors` works only on an interface. The implementors can be classes or records.
 - `RequireDerived` works only on a class or a record, abstract or not. It does not work on an interface.
-- The linker reads both attributes by their class names, so `Framework.Core` can hold both with no engine reference.
+- The linker reads both attributes by their class names, so `Framework.Routing` can hold both with no engine reference.
 - `IRouted` is an interface, so the router needs only `RequireImplementors`. If a future scan root is a base class, use `RequireDerived` on it.
 
 A third IL2CPP test used the Pipeline member shape (D13): `IRouted` ← abstract `Handler<TMessage, TScope>` ← abstract `CommandHandler<T>` ← sealed `PlayCardHandler : CommandHandler<PlayCard>`, and a direct subclass of `Handler<Command, ICommandScope>` with a constructor parameter. The scan root was the closed type `Handler<Command, ICommandScope>` and also the interface. With no attribute, all cases gave 0 / 0.
@@ -348,7 +348,7 @@ A third IL2CPP test used the Pipeline member shape (D13): `IRouted` ← abstract
 
 `RequireImplementors` on `IRouted` keeps a class that gets `IRouted` from a base class, two levels down and through generic abstract bases. The Pipeline member types need no attribute of their own.
 
-The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Core` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
+The Unity analyzer gives warning `UAC0005` on `AppDomain.GetAssemblies()`. It recommends `CurrentAssemblies.GetLoadedAssemblies()`, but that API is in `UnityEngine`, and `Framework.Routing` cannot reference it. In a player, the assemblies do not unload, so the warning applies only to the Editor after a domain reload. `TypeScan` clears its cache on a domain reload.
 
 ### 5.6 Question 6: exact dispatch, and a read for subtypes
 
@@ -399,11 +399,11 @@ Rules for the subtype read:
 | `IWireEventHandler`, `WireEventHandler<T>` | `: IRouted` | Add the interface and one explicit property. |
 | `CommandHandlerRegistry` | `TypeRouter<Handler<Command, ICommandScope>>` | Delete the class. The Pipeline calls `Get(cmd.GetType())`. |
 | `CommandValidatorRegistry` | `TypeRouter<Validator<Command>>` | Delete the class. The Pipeline calls `TryGet(...)`. |
-| `ICommandHandler`, `ICommandValidator` | `Handler<Command, ICommandScope>`, `Validator<Command>` | Pipeline step 2 removes the interfaces. Router step M2 uses the new types. |
+| `ICommandHandler`, `ICommandValidator` | `Handler<Command, ICommandScope>`, `Validator<Command>` | Pipeline step 2 removes the interfaces. The command migration uses the new types. |
 | `CommandInstaller` | `RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteMode.Single)`, `RegisterTypeRouter<Validator<Command>>(RouteMode.Single)` | Two lines change. |
 | `EngineStack`, `CommandServiceTests` | `new TypeRouter<...>(list)` | Change the constructor calls. |
 | `BootstrapWiringIntegrationTests` | none | Update two comments that name the old registries. |
-| `HandlerRegistrationExtensions` | `RegisterTypeRouter<T>(mode)` | Add the scan verb. The member verbs stay for tests and closed generics. |
+| `HandlerRegistrationExtensions` | unchanged | The scan verb `RegisterTypeRouter<T>` lives in `Framework.Routing` (D14). The member verbs stay for tests and closed generics. |
 | `Network._byType` | unchanged | None here. Blocks & Wires owns it. A named miss message is a proposal for that piece. |
 | `Dispatcher._channels` | unchanged | None. |
 | `EffectStore` (spike) | out of scope (D8) | None. The command pipeline piece decides its replacement. |
@@ -423,28 +423,31 @@ Proposals only. `rulebook.json` does not change in this spike.
 | Id | Title | Rule | Check kind | Status at start |
 |---|---|---|---|---|
 | ARCH-02 (edit) | Layer references | Change the `allowed` table as shown below (D2, D3). | `asmdef.allowedReferences` (exists) | enforced |
-| ROUTE-01 | No hand-written type routers | A Framework runtime type does not declare a field of type `Dictionary<System.Type, *>`. Allowed: `Framework.Core.TypeRouter*`, `Framework.Core.SlotRegistry*`, `Framework.Core.TypeScan`, `Framework.Wire.Network`. Another piece that adds a live table adds its own entry. | new: `type.forbiddenFieldTypes` | advisory, then blocking after M2 |
-| ROUTE-02 | Routers are not static | A Framework runtime type does not declare a `static` field of type `TypeRouter<>` or `Dictionary<System.Type, *>`. Allowed: `Framework.Core.TypeScan` (a cache of types, the same for every scope). | new: `type.noStaticFieldsOfType` | blocking |
-| ROUTE-03 | Routed messages are sealed or abstract | Each subtype of `Framework.Wire.WireEvent` and `Framework.Commands.Command` in Framework runtime assemblies is `sealed` or `abstract`. | new: `type.sealedOrAbstract` | advisory, then blocking after M4 |
-| ROUTE-04 | Router members derive from IRouted | Each type that a `TypeRouter<>` collects comes through `IRouted`. The generic constraint enforces this, so this rule is a test, not a check. | `attached` (unit test in `Framework.Core.Tests`) | enforced |
+| ROUTE-01 | No hand-written type routers | A Framework runtime type does not declare a field of type `Dictionary<System.Type, *>`. Allowed: `Framework.Routing.TypeRouter*`, `Framework.Routing.TypeScan`, `Framework.Core.SlotRegistry*`, `Framework.Wire.Network`. Another piece that adds a live table adds its own entry. | new: `type.forbiddenFieldTypes` | advisory, then blocking after the command migration |
+| ROUTE-02 | Routers are not static | A Framework runtime type does not declare a `static` field of type `TypeRouter<>` or `Dictionary<System.Type, *>`. Allowed: `Framework.Routing.TypeScan` (a cache of types, the same for every scope). | new: `type.noStaticFieldsOfType` | blocking |
+| ROUTE-03 | Routed messages are sealed or abstract | Each subtype of `Framework.Wire.WireEvent` and `Framework.Commands.Command` in Framework runtime assemblies is `sealed` or `abstract`. | new: `type.sealedOrAbstract` | advisory, then blocking after the leaf messages are sealed |
+| ROUTE-04 | Router members derive from IRouted | Each type that a `TypeRouter<>` collects comes through `IRouted`. The generic constraint enforces this, so this rule is a test, not a check. | `attached` (unit test in `Framework.Routing.Tests`) | enforced |
 
-**ARCH-02 rows.** Only these rows change. The other rows stay as they are. The ids and blocks pieces can add a row for a feature they create. Each row lists only the references that the D1 to D3 moves need.
+**ARCH-02 rows.** Only these rows change. The other rows stay as they are. The ids and blocks pieces can add a row for a feature they create. Each row lists only the references that the D1 to D3 and D14 moves need.
 
-| Assembly | Allowed today | Proposed |
-|---|---|---|
-| `Framework.Core` | `[]` | `[]` (no change) |
-| `Framework.Wire` | `[]` | `["Framework.Core"]` |
-| `Framework.Blocks` (new) | n/a | `["Framework.Core", "Framework.Wire"]` |
-| `Framework.Requests` | `["Framework.Wire"]` | `["Framework.Core", "Framework.Wire"]` |
-| `Framework.Commands` | `["Framework.Wire"]` | `["Framework.Core", "Framework.Blocks", "Framework.Wire"]` |
-| `Framework.Engine` | `Wire, Tags, Entities, Requests, States, Commands` | add `"Framework.Core"`, `"Framework.Blocks"` |
-| `Framework.Bootstrap` | `Core, Commands, Engine, Entities, Requests, States, Tags, Wire` | add `"Framework.Blocks"` |
+| Assembly | Allowed today | Proposed | When |
+|---|---|---|---|
+| `Framework.Routing` (new) | n/a | `[]` | Build step B1 |
+| `Framework.Core` | `[]` | `[]` (no change) | n/a |
+| `Framework.Wire` | `[]` | `["Framework.Core", "Framework.Routing"]` | Migration |
+| `Framework.Blocks` (new) | n/a | `["Framework.Core", "Framework.Wire"]` | Blocks piece |
+| `Framework.Requests` | `["Framework.Wire"]` | `["Framework.Core", "Framework.Wire"]` | Ids piece |
+| `Framework.Commands` | `["Framework.Wire"]` | `["Framework.Core", "Framework.Blocks", "Framework.Routing", "Framework.Wire"]` | Migration |
+| `Framework.Engine` | `Wire, Tags, Entities, Requests, States, Commands` | add `"Framework.Core"`, `"Framework.Blocks"`, `"Framework.Routing"` | Migration |
+| `Framework.Bootstrap` | `Core, Commands, Engine, Entities, Requests, States, Tags, Wire` | add `"Framework.Blocks"`, `"Framework.Routing"` | Migration |
+
+The `Framework.Routing` row is the only change outside `Assets/Framework/Routing/` in the build. ARCH-02 fails on an assembly that is not in its table, so B1 cannot pass the gate without it.
 
 ARCH-09 ("Wire holds no domain events") then has no exception. Its `allowed: ["Framework.Wire.Block*"]` list becomes `[]` after the Block types move (D3).
 
 **New Core text.** Replace the "Shared primitives" line in `docs/feature-layout.md` § Where things live:
 
-> **Shared primitives** → `Assets/Framework/Core/`. Typed ids (`EntityId`, …), id allocators (`IdAllocator<TId>`), frozen lookup primitives (`SlotRegistry<TKey>`, `TypeRouter<T>`), the type scan (`TypeScan`) and attribute markers. Core holds no domain state, no wire events, no Unity engine references and no references to other Framework assemblies. If a type has domain behavior, it belongs in a feature.
+> **Shared primitives** → `Assets/Framework/Core/`. Typed ids (`EntityId`, …), id allocators (`IdAllocator<TId>`), frozen lookup primitives (`SlotRegistry<TKey>`) and attribute markers. `TypeRouter<T>` and `TypeScan` live in `Framework.Routing` (D14). Core holds no domain state, no wire events, no Unity engine references and no references to other Framework assemblies. If a type has domain behavior, it belongs in a feature.
 
 Text for the `why` fields:
 
@@ -454,23 +457,21 @@ Text for the `why` fields:
 
 ## 9. Plan
 
-Build steps add standalone code and change no current caller. The cross-spike order in the catalog owns the Migrate steps. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire. Each step is one PR.
+The plan builds a new system next to the current systems (D14). No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/Framework/Routing/`. The only exception is the ARCH-02 row for `Framework.Routing` in B1 (§ 8). The migration is one row in § 11. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Each step is one PR.
 
-### Build
+```
+Assets/Framework/Routing/
+├─ Runtime/     Framework.Routing.asmdef        (noEngineReferences, references VContainer)
+└─ Tests/       Framework.Routing.Tests.asmdef
+   └─ Fixtures/ neutral note types and readers
+```
 
-- **B1. Contract.** Add `IRouted`, `IOrdered`, `RouteMode` and `TypeRouter<T>` to `Framework.Core`, folder `Runtime/Routing/`. Add `TypeRouterTests` in `Framework.Core.Tests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. Add `TypeRouterDerivedFromTests`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation.
-- **B2. Scan.** Add `TypeScan` to `Runtime/Routing/`. Add `TypeScanTests`: finds concrete types, skips abstract types, open generics and test assemblies, caches.
-- **B3. Stripping.** Add `RequireImplementorsAttribute` and `RequireDerivedAttribute` to `Runtime/Stripping/` (§ 5.5). Put `[RequireImplementors]` on `IRouted`. Add the smoke build project `Tools/StrippingProbe/` ([docs/code-stripping.md](../../docs/code-stripping.md) § 6). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
-- **B4. Registration verb.** Add `RegisterTypeRouter<T>(mode, scan)` to `HandlerRegistrationExtensions` (§ 5.5). Add a test that resolves a `TypeRouter<T>` from a container. No installer calls it yet.
-- **B5. Rule checks.** Add the check kinds `type.forbiddenFieldTypes`, `type.noStaticFieldsOfType` and `type.sealedOrAbstract` in `Assets/Tools/Rulebook/Editor/Checks/RouteChecks.cs`, with fixture tests in `CheckKindTests`. Ask for approval, then add ROUTE-01 to ROUTE-04 to `rulebook.json` with the start status in § 8.
+The system has no data, so it has no `Assets/` subfolder.
 
-### Migrate
-
-- **M1. Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Rename `HandlerRegistry` to `WireEventDispatcher` and change its internals to `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`. Gate with `-With playmode`.
-- **M2. Commands.** Do this step after Pipeline step 2, which adds `Handler<Command, ICommandScope>` and `Validator<Command>` and removes `ICommandHandler` and `ICommandValidator`. The two steps overlap, so the catalog order decides who does the registry change. Replace both registries with `TypeRouter<T>` of the new types. Update `CommandService`, `CommandInstaller`, `EngineStack` and `CommandServiceTests`. Delete the two registry files and their `.meta` files. Then set ROUTE-01 to blocking.
-- **M3. Installers.** Use `RegisterTypeRouter<T>` in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
-- **M4. Seal leaf messages.** Add `sealed` to the concrete `WireEvent` subtypes (`EntityCreatedEvent`, `StatePushEvent`, `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`, `BlockStartEvent` and `BlockEndEvent` in their new `Framework.Blocks` home, the Multiplayer events). AutoPacker and `WireRegistrar` accept `sealed partial` (§ 12). Then set ROUTE-03 to blocking. Gate with `-With playmode`.
-- **M5. Docs.** Update `docs/lookup-patterns.md` § Router: name the shared classes and the two kinds of read (exact and derived). Update the `docs/architecture.md` codemap.
+- **B1. Contract.** Make the folder, both asmdefs and the ARCH-02 row. Add `IRouted`, `IOrdered`, `RouteMode` and `TypeRouter<T>` to `Runtime/`. Add the fixtures `Note`, `Hello`, `Bye`, `Gen<T>` and their readers to `Tests/Fixtures/`. Add `TypeRouterTests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. Add `TypeRouterDerivedFromTests`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. ROUTE-04 is the constraint test in `TypeRouterTests`.
+- **B2. Scan.** Add `TypeScan` to `Runtime/`, with `ConcreteTypesOf(Type)` and `ConcreteTypesIn(Assembly, Type)`. Add `TypeScanTests`: `ConcreteTypesIn` on the test assembly finds the fixture readers and skips abstract types and open generics. `ConcreteTypesOf` skips the test assembly. A second call returns the cached list.
+- **B3. Stripping.** Add `RequireImplementorsAttribute` and `RequireDerivedAttribute` to `Runtime/` (§ 5.5). Put `[RequireImplementors]` on `IRouted`. Add a test that `IRouted` has the attribute.
+- **B4. Registration verb.** Add `RoutingRegistrationExtensions.RegisterTypeRouter<T>(mode, scan)` to `Runtime/` (§ 5.5). Add `RegistrationTests`: with `scan: false` and one explicit fixture member, the container resolves a `TypeRouter<T>` with one routed type.
 
 ## 10. Interfaces the other three pieces need from this piece
 
@@ -484,7 +485,7 @@ Build steps add standalone code and change no current caller. The cross-spike or
 
 - `HandlerRegistry` becomes `WireEventDispatcher` (D12). It keeps its public constructor `(EventStream, IReadOnlyList<IWireEventHandler>)`. Internally it holds a `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`.
 - `IWireEventHandler : IRouted`. A new apply-handler base must implement `IRouted.RouteType`.
-- `Framework.Wire` references `Framework.Core` (D2).
+- `Framework.Wire` references `Framework.Routing` at migration (D14).
 - `Framework.Blocks` owns `BlockStartEvent`, `BlockEndEvent`, `BlockScope` and `BlockId` (D3). Block events have no special route. Their apply handlers are found by the scan and route by exact type, as every other event does. The leaf Block events are `sealed` (ROUTE-03).
 - The router does not carry, store or compute a block parent. The wire carries `CauseId` only, and the receiver gets the parent from bracket order (D5). No router API takes a parent or a block id.
 - `Dispatcher` and `Network` stay as they are. The wire piece owns them.
@@ -502,16 +503,27 @@ Build steps add standalone code and change no current caller. The cross-spike or
 
 | Item | Why later | Trigger to reopen |
 |---|---|---|
+| Migration of current systems (§ 6) | The plan is an extraction (D14) | Catalog cross-spike order reaches the router |
+| Rule checks ROUTE-01 to ROUTE-03 | They live in `Assets/Tools/Rulebook/` | Migration starts |
+| Stripping smoke build harness | It is a separate Unity project | First player build, or a Unity upgrade |
 | Composition-time completeness check | No list of known command types yet | A command catalog exists |
 | Rule: each scan root has a keep attribute | `IRouted` is the only scan root | A second scan root appears |
 | Build-time `link.xml` generator | The attribute passes the smoke build | The smoke build fails after an upgrade |
 | Slot router (`int` slot to member) | `Dispatcher` already uses a slot array | A second slot lookup appears |
 
+Migration order, from the earlier plan:
+
+1. Wire: add the `Framework.Routing` reference, make `IWireEventHandler : IRouted`, rename `HandlerRegistry` to `WireEventDispatcher` with a `TypeRouter<IWireEventHandler>` (`Multiple`). Gate with `-With playmode`.
+2. Commands: after Pipeline step 2. Replace both registries with `TypeRouter<T>` of the Pipeline types. Then set ROUTE-01 to blocking.
+3. Installers: use `RegisterTypeRouter<T>` in `CommandInstaller` and `EngineInstaller`. Keep `RegisterTagValueType<T>()`.
+4. Seal the leaf `WireEvent` types (§ 12). Then set ROUTE-03 to blocking. Gate with `-With playmode`.
+5. Docs: `docs/lookup-patterns.md` § Router and the `docs/architecture.md` codemap.
+
 The completeness check can be unnecessary. `RoutedTypes` already lists the routed types, so a later check or a debug listing can use it.
 
 ## 12. Closed items
 
-- ~~**Home assembly.**~~ Closed by D2: `Framework.Core`. § 8 gives the ARCH-02 rows and the new Core text.
+- ~~**Home assembly.**~~ Closed by D14: `Framework.Routing`, in its own folder. D2 first chose `Framework.Core`. § 8 gives the ARCH-02 rows.
 - ~~**Sealing and AutoPacker.**~~ Answered: AutoPacker accepts `sealed partial`. No fallback is necessary. Evidence:
   - The package ships only a compiled generator, `Library/PackageCache/com.scaffold.autopacker@fd08e7dbfb00/Runtime/AutoPackerGenerator.dll`. Its README says the generator source lives in `Generators/AutoPacker/` of the Scaffold repository, not in the package. There is no `.cs` source to cite by line.
   - The generator writes the type header from three parts: accessibility, `" partial "` and the type keyword (`GetAccessibilityKeyword`, `GetTypeKeyword`, `EmitPartial` in the DLL strings). It never writes `sealed`. In C#, `sealed` on one partial part seals the whole type, so the user part can carry it alone.
