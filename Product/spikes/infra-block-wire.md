@@ -40,7 +40,7 @@ The stream is the source of truth: no store keeps group state.
 
 User decisions, 2026-10-31 (all infrastructure pieces):
 
-1. ~~Ids are typed `readonly struct`s around `int`.~~ Replaced by decision 27. `EntityId` and `IdAllocator<TId>` are in `Framework.Core`.
+1. ~~Ids are typed `readonly struct`s around `int`.~~ Replaced by decision 27. `Id`, `EntityId` and `IEntity` are in `Framework.RecordIds` (decision 34).
 2. Shared infrastructure (allocator, `RecordStore`) is in `Framework.Core`. The routers are in `Framework.Routing` (decision 33). `Framework.Wire` references `Framework.Core`.
 3. The `Framework.Blocks` feature is accepted.
 4. The async core uses `System.Threading.Tasks.Task`, not UniTask.
@@ -83,7 +83,8 @@ User decisions, 2026-11-02:
 30. **`GroupEnd` links to its start.** `GroupEnd { StartId, Outcome }`. `StartId` is the `BlockId` of the `GroupStart` that it closes. The trigger and the source are not copied: a reader uses `stream[StartId]`.
 31. **Two group types.** `GroupStart` and `GroupEnd` stay separate types. No flag and no shared base: `HandlerRegistry.Dispatch` uses the exact type, so a base handler does not run.
 32. **Extraction plan** (catalog rule). The plan builds `Framework.Blocks` in `Assets/Framework/Blocks/` and changes no current system. Thus `Position` lives on `Block`, not on `WireEvent`. The two listen stages, requests as blocks and the change-block base move to the migration (§10).
-33. **Routers** live in `Framework.Routing` (TypeRouter decision D14). Ids stay in `Framework.Core`.
+33. **Routers** live in `Framework.Routing` (TypeRouter decision D14). Ids live in `Framework.RecordIds` (decision 34).
+34. **Record Ids assembly** (Record Ids, 2026-11-02). `Id`, `EntityId` and `IEntity` live in `Framework.RecordIds` (`Assets/Framework/RecordIds/`). `Framework.Blocks` references it, not `Framework.Core`.
 
 ## 2. Scope
 
@@ -200,11 +201,11 @@ Dependencies:
 | Depends on | Why |
 |---|---|
 | `Framework.Wire` | `WireEvent`, `IEventEmitter`, `EventStream` |
-| `Framework.Core` | `Id`, `EntityId`, `IEntity` (Record Ids) |
+| `Framework.RecordIds` | `Id`, `EntityId`, `IEntity` (Record Ids) |
 | `Scaffold.Autopacker` | `[Packed]` fields; a null record id packs as `-1` |
 
-asmdef references: `Framework.Core`, `Framework.Wire`, `Scaffold.Autopacker`. Must not depend on
-`Framework.Blocks`: `Framework.Core`, `Framework.Wire`, `Framework.Routing`.
+asmdef references: `Framework.RecordIds`, `Framework.Wire`, `Scaffold.Autopacker`. Must not depend on
+`Framework.Blocks`: `Framework.Core`, `Framework.RecordIds`, `Framework.Wire`, `Framework.Routing`.
 
 Rules:
 
@@ -212,7 +213,7 @@ Rules:
 |---|---|
 | A group closes only when it is the innermost open group | runtime: `GroupService.Close` throws `InvalidOperationException` |
 | Each `GroupEnd.StartId` is the innermost open `GroupStart` | test: `GroupNestingTests` walks the stream (rule BLK-03, later in the rulebook) |
-| Blocks references only Core, Wire and AutoPacker | rulebook ARCH-02 row, asmdef check in the gate |
+| Blocks references only RecordIds, Wire and AutoPacker | rulebook ARCH-02 row, asmdef check in the gate |
 | Only Blocks sets `Block.Position` | compiler: `internal set` |
 | Only `GroupService` constructs `GroupStart` or `GroupEnd` | rulebook BLK-01, `il.callersOnly` (later) |
 | Game-log types derive from `Block` | rulebook BLK-05, IL base-type check (later) |
@@ -481,7 +482,7 @@ Only the ARCH-02 row for `Framework.Blocks` lands in the plan (§8 step 1). The 
 ARCH-02 row in the plan:
 
 ```json
-"Framework.Blocks": ["Framework.Core", "Framework.Wire"]
+"Framework.Blocks": ["Framework.RecordIds", "Framework.Wire"]
 ```
 
 ARCH-02 rows in the migration (changed rows only):
@@ -503,7 +504,7 @@ the ARCH-02 row in step 1.
 
 Prerequisites (other pieces):
 
-- Record Ids: `Id` base (its step 1), `EntityId` and `IEntity` (its step 3).
+- Record Ids: `Id` base (its step 1), `EntityId` and `IEntity` (its step 4), in `Framework.RecordIds`.
 - AutoPacker: packing of record-id fields.
 
 Folder structure:
@@ -537,7 +538,7 @@ Dependency graph:
 ```mermaid
 flowchart BT
   B["Framework.Blocks"] --> W["Framework.Wire"]
-  B --> C["Framework.Core"]
+  B --> C["Framework.RecordIds"]
   B --> P["Scaffold.Autopacker"]
   T["Framework.Blocks.Tests"] --> B
   T --> W
