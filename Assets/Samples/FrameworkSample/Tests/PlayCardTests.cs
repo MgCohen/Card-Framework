@@ -20,17 +20,12 @@ namespace Framework.Samples.FrameworkSample.Tests
         {
             // Inside a Framework.* namespace, "Wire" names the namespace, so write the full name.
             var wire = Framework.Wire.Wire.Connect();
-            foreach (var network in new[] { wire.ServerNetwork, wire.ClientNetwork })
-            {
-                network.Register<GroupStart, GroupStart.Packed>();
-                network.Register<GroupEnd, GroupEnd.Packed>();
-                network.Register<CardMoved, CardMoved.Packed>();
-            }
             _serverStream = wire.ServerStream;
             _clientStream = wire.ClientStream;
 
             var server = new ContainerBuilder();
             server.RegisterInstance(_serverStream).AsSelf().As<IEventEmitter>();
+            server.RegisterInstance(wire.ServerNetwork);
             server.Register<CardStore>(Lifetime.Singleton);
             server.AddBlocks();
             server.AddIdSpace<CardId>(Role.Server);
@@ -41,6 +36,7 @@ namespace Framework.Samples.FrameworkSample.Tests
 
             var client = new ContainerBuilder();
             client.RegisterInstance(_clientStream).AsSelf().As<IEventEmitter>();
+            client.RegisterInstance(wire.ClientNetwork);
             client.AddBlocks(o => o.Role = Role.Client);
             client.AddKeySpace<Zone, ZoneRegistry>();
             _client = client.Build();

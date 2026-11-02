@@ -67,6 +67,41 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
+        public void TwoCalls_WithDifferentIncludeTests_Fail()
+        {
+            var builder = Builder();
+            builder.AddBlocks();
+
+            var error = Assert.Throws<InvalidOperationException>(() => builder.AddBlocks(o => o.IncludeTests = true));
+
+            StringAssert.Contains("IncludeTests", error.Message);
+        }
+
+        [Test]
+        public void WithNetwork_RegistersEachBlockType_OnBothEnds()
+        {
+            var wire = Wire.Wire.Connect();
+            var server = new ContainerBuilder();
+            server.RegisterInstance(wire.ServerStream).AsSelf().As<IEventEmitter>();
+            server.RegisterInstance(wire.ServerNetwork);
+            server.AddBlocks(o => o.IncludeTests = true);
+            var client = new ContainerBuilder();
+            client.RegisterInstance(wire.ClientStream);
+            client.RegisterInstance(wire.ClientNetwork);
+            client.AddBlocks(o => { o.Role = Role.Client; o.IncludeTests = true; });
+            var groups = server.Build().Resolve<GroupService>();
+            client.Build();
+
+            groups.Create(() => wire.ServerStream.Emit(new TestBlock { Value = 9 }));
+
+            Assert.AreEqual(3, wire.ClientStream.Count);
+            Assert.IsInstanceOf<GroupStart>(wire.ClientStream[0]);
+            Assert.AreEqual(9, ((TestBlock)wire.ClientStream[1]).Value);
+            Assert.AreEqual(2, ((Block)wire.ClientStream[1]).Position);
+            Assert.IsInstanceOf<GroupEnd>(wire.ClientStream[2]);
+        }
+
+        [Test]
         public void ListenerBeforeAddBlocks_ReadsZero_ListenerAfter_ReadsPosition()
         {
             var builder = Builder();

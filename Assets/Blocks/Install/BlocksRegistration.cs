@@ -5,22 +5,30 @@ using VContainer;
 
 namespace Framework.Blocks
 {
-    // Registers the BlockPositions singleton and keeps the Role, so a second
-    // AddBlocks call can check that it asks for the same role.
+    // Registers the BlockPositions singleton and keeps the options, so a second
+    // AddBlocks call can check that it asks for the same options.
     sealed class BlocksRegistration : RegistrationBuilder
     {
         readonly Role _role;
+        readonly bool _includeTests;
 
-        public BlocksRegistration(Role role) : base(typeof(BlockPositions), Lifetime.Singleton) => _role = role;
+        public BlocksRegistration(BlocksOptions options) : base(typeof(BlockPositions), Lifetime.Singleton)
+        {
+            _role = options.Role;
+            _includeTests = options.IncludeTests;
+        }
 
         public override Registration Build() =>
             new Registration(ImplementationType, Lifetime, InterfaceTypes, new Provider(this), Key);
 
-        public void Match(Role role)
+        public void Match(BlocksOptions options)
         {
-            if (role != _role)
+            if (options.Role != _role)
                 throw new InvalidOperationException(
-                    $"Blocks is installed as {_role}; a second AddBlocks call asks for {role}.");
+                    $"Blocks is installed as {_role}; a second AddBlocks call asks for {options.Role}.");
+            if (options.IncludeTests != _includeTests)
+                throw new InvalidOperationException(
+                    $"Blocks has IncludeTests = {_includeTests}; a second AddBlocks call asks for {options.IncludeTests}.");
         }
 
         public static BlocksRegistration InParents(IObjectResolver scope)

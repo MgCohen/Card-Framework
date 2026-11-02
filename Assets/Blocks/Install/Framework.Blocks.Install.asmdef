@@ -4,6 +4,7 @@
     "references": [
         "Framework.Blocks",
         "Framework.RecordIds",
+        "Framework.TypeRouting",
         "Framework.Wire",
         "VContainer"
     ],

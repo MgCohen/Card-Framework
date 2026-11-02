@@ -152,6 +152,7 @@
             "Framework.Blocks.Install": [
               "Framework.Blocks",
               "Framework.RecordIds",
+              "Framework.TypeRouting",
               "Framework.Wire"
             ],
             "Framework.Samples.FrameworkSample": [
