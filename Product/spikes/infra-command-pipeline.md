@@ -61,8 +61,10 @@ From 2026-11-01 (this spike):
     - The body gets the envelope: the request, and also the result at `After`. `Before` can change the message. `After` can read the result.
     - Code or data makes the instance. A generic data class reads the trigger, the timing and the body from data. Handlers use the same path.
     - The body usually starts an effect on the layer above. That wiring needs two pipelines, so hooks are v2. In v0, `Before` and `After` stay empty virtual methods.
-28. **One install method.** `builder.AddPipeline<TPipeline, TMessage, TScope>(o => …)` in `Runtime/PipelineInstall.cs` registers every part: the two routers, the `MessageId` allocator, the options and the pipeline. The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later row.
+28. **One install method.** `builder.AddPipeline<TPipeline, TMessage, TScope>(o => …)` in `Runtime/PipelineInstall.cs` registers every part: the two routers, the shared `MessageId` id space (`AddIdSpace<MessageId>`), the options and the pipeline. The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later row.
 29. **One root folder:** `Assets/Pipeline/` with `Runtime/`, `Tests/` and `PlayTests/`.
+30. **One `MessageId` space for all pipelines.** `AddPipeline` calls `builder.AddIdSpace<MessageId>(o.Role, o.FirstMessageId)` from Record Ids. Repeated calls merge. `PipelineOptions.Role` uses the shared `Role { Server, Client }` from `Framework.RecordIds`.
+31. **No DI guard in v0.** Nothing stops a handler that injects a pipeline. PIPE-04 stays in Later.
 
 ## 2. Scope
 
@@ -244,7 +246,8 @@ if (!result.Accepted) Show(result.Reason);
 ```csharp
 public sealed class PipelineOptions
 {
-    public int FirstMessageId { get; set; } = 1;            // used if no MessageId allocator exists yet
+    public Role Role { get; set; } = Role.Server;           // Framework.RecordIds; issue #202 moves it to a network layer
+    public int FirstMessageId { get; set; } = 1;
 }
 
 public static class PipelineInstall                        // Runtime/PipelineInstall.cs
@@ -255,8 +258,7 @@ public static class PipelineInstall                        // Runtime/PipelineIn
         var o = new PipelineOptions(); configure?.Invoke(o);
         b.RegisterTypeRouter<Handler<TMessage, TScope>>(RouteMode.Single);
         b.RegisterTypeRouter<Validator<TMessage>>(RouteMode.Single);
-        if (!b.Exists(typeof(IdAllocator<MessageId>)))      // one id space for all levels
-            b.RegisterInstance(new IdAllocator<MessageId>(o.FirstMessageId));
+        b.AddIdSpace<MessageId>(o.Role, o.FirstMessageId);  // Record Ids; one space for all levels, repeated calls merge
         b.Register<TPipeline>(Lifetime.Singleton);
     }
 }
@@ -269,7 +271,7 @@ builder.AddPipeline<CommandPipeline, Command, ICommandScope>();   // one call fo
 | Depends on | Why |
 |---|---|
 | `Framework.Routing`: `TypeRouter<T>`, `IRouted`, `RouteMode` | The stores; `[RequireImplementors]` keeps author subclasses |
-| `Framework.RecordIds`: `Id`, `IdAllocator<TId>` | One `MessageId` for each envelope |
+| `Framework.RecordIds`: `Id`, `IdAllocator<TId>`, `AddIdSpace<TId>`, `Role` | One shared `MessageId` space; one id for each envelope |
 | `VContainer` | `AddPipeline`; in a `noEngineReferences` asmdef, the same solution as `Framework.Routing` (TypeRouter checks it) |
 | `Scaffold.Autopacker` | `MessageId : Id` is an `[AutoPack]` record |
 | `System.Threading.Tasks` | The async run (decision 4) |
