@@ -46,7 +46,7 @@ The user made these decisions for all four infrastructure spikes. This spike use
 | D9 | Members are found by an assembly scan, not by one registration line for each member. Source generation can come later, as an optional V2 plugin. | § 5.5. The explicit verbs stay only for tests and for closed generic members. |
 | D10 | One router class, `TypeRouter<T>`, with a `RouteMode` option. `TypeMultiRouter<T>` is removed. | § 5.1, § 5.2. A wrong read is a run-time error, not a compile error. |
 | D11 | The API and the examples are about type lookup, with neutral types. Commands and events are users of the router, not its API. | § 4. |
-| D12 | Names: `RouteMode { Single, Multiple }`. Reads `Get`, `TryGet`, `GetAll`, `GetAllDerivedFrom`, `RoutedTypesDerivedFrom`, `RoutedTypes`. `HandlerRegistry` becomes `WireEventDispatcher`. The Pipeline owns the run policy for many members. | § 4, § 5.2, § 6, § 9, § 11. |
+| D12 | Names: `RouteMode { Single, Multiple }`. Reads `Get`, `TryGet`, `GetAll`, `GetAllDerivedFrom`, `RoutedTypesDerivedFrom`, `RoutedTypes`. `HandlerRegistry` becomes `WireEventDispatcher`. The Pipeline owns the run policy for many members. | § 4, § 5.2, § 6, § 9, § 12. |
 | D13 | The command member types are the Pipeline's abstract classes `Handler<Command, ICommandScope>` and `Validator<Command>`, not `ICommandHandler` and `ICommandValidator`. The Pipeline uses `RouteMode.Single` for both in v0. | § 4, § 5.2, § 6, § 9. |
 
 ## 2. Scope
@@ -162,7 +162,7 @@ Rules. "Gate" is `Tools/Rulebook/gate.ps1`. It checks the rules in `Tools/Rulebo
 | A concrete message type is `sealed`, so exact dispatch cannot miss a subclass. | Gate (proposed ROUTE-03) |
 | A member gives its route type. | Compiler: the constraint `where T : class, IRouted` |
 | No member is added after composition. | No method exists for it. Only the constructor writes. |
-| A route type has a member when `Get` reads it. | Run time: `Get` throws. No earlier check exists yet (open question 1). |
+| A route type has a member when `Get` reads it. | Run time: `Get` throws. No earlier check exists yet (§ 11). |
 | Dispatch uses exact reads, not `GetAllDerivedFrom`. | Code review only. |
 
 ## 5. Generalized contract
@@ -318,7 +318,7 @@ Test result (2026-11-01, Unity `6000.6.6f1`, Windows player, Mono and IL2CPP, st
 - C1 shows that the linker reads the attribute by its short name. The namespace and the engine reference are not necessary. The attribute also passes through a derived interface and keeps the constructors.
 - The build sizes of A, B, C1 and C2 are the same (about 8.6 MB of managed code). Both fixes keep only the member types.
 
-Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus step 1b keeps the test as a smoke build to run again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
+Decision: use C1. It needs no maintenance and no Editor code. Unity does not document that the linker reads the attribute by name. Thus step B3 keeps the test as a smoke build to run again after each Unity upgrade. If a Unity upgrade breaks C1, use B. Unity documents B and it has the same result.
 
 IL2CPP gives the same result. A before and after rerun with `ScriptingImplementation.IL2CPP` (two separate Unity launches, stripping level High) gives 0 / 0 with no attribute and 3 / 3 with the attribute.
 
@@ -399,7 +399,7 @@ Rules for the subtype read:
 | `IWireEventHandler`, `WireEventHandler<T>` | `: IRouted` | Add the interface and one explicit property. |
 | `CommandHandlerRegistry` | `TypeRouter<Handler<Command, ICommandScope>>` | Delete the class. The Pipeline calls `Get(cmd.GetType())`. |
 | `CommandValidatorRegistry` | `TypeRouter<Validator<Command>>` | Delete the class. The Pipeline calls `TryGet(...)`. |
-| `ICommandHandler`, `ICommandValidator` | `Handler<Command, ICommandScope>`, `Validator<Command>` | Pipeline migration step 2 removes the interfaces. This step uses the new types. |
+| `ICommandHandler`, `ICommandValidator` | `Handler<Command, ICommandScope>`, `Validator<Command>` | Pipeline step 2 removes the interfaces. Router step M2 uses the new types. |
 | `CommandInstaller` | `RegisterTypeRouter<Handler<Command, ICommandScope>>(RouteMode.Single)`, `RegisterTypeRouter<Validator<Command>>(RouteMode.Single)` | Two lines change. |
 | `EngineStack`, `CommandServiceTests` | `new TypeRouter<...>(list)` | Change the constructor calls. |
 | `BootstrapWiringIntegrationTests` | none | Update two comments that name the old registries. |
@@ -423,9 +423,9 @@ Proposals only. `rulebook.json` does not change in this spike.
 | Id | Title | Rule | Check kind | Status at start |
 |---|---|---|---|---|
 | ARCH-02 (edit) | Layer references | Change the `allowed` table as shown below (D2, D3). | `asmdef.allowedReferences` (exists) | enforced |
-| ROUTE-01 | No hand-written type routers | A Framework runtime type does not declare a field of type `Dictionary<System.Type, *>`. Allowed: `Framework.Core.TypeRouter*`, `Framework.Core.SlotRegistry*`, `Framework.Core.TypeScan`, `Framework.Wire.Network`. Another piece that adds a live table adds its own entry. | new: `type.forbiddenFieldTypes` | advisory, then blocking after step 3 |
+| ROUTE-01 | No hand-written type routers | A Framework runtime type does not declare a field of type `Dictionary<System.Type, *>`. Allowed: `Framework.Core.TypeRouter*`, `Framework.Core.SlotRegistry*`, `Framework.Core.TypeScan`, `Framework.Wire.Network`. Another piece that adds a live table adds its own entry. | new: `type.forbiddenFieldTypes` | advisory, then blocking after M2 |
 | ROUTE-02 | Routers are not static | A Framework runtime type does not declare a `static` field of type `TypeRouter<>` or `Dictionary<System.Type, *>`. Allowed: `Framework.Core.TypeScan` (a cache of types, the same for every scope). | new: `type.noStaticFieldsOfType` | blocking |
-| ROUTE-03 | Routed messages are sealed or abstract | Each subtype of `Framework.Wire.WireEvent` and `Framework.Commands.Command` in Framework runtime assemblies is `sealed` or `abstract`. | new: `type.sealedOrAbstract` | advisory, then blocking after step 5 |
+| ROUTE-03 | Routed messages are sealed or abstract | Each subtype of `Framework.Wire.WireEvent` and `Framework.Commands.Command` in Framework runtime assemblies is `sealed` or `abstract`. | new: `type.sealedOrAbstract` | advisory, then blocking after M4 |
 | ROUTE-04 | Router members derive from IRouted | Each type that a `TypeRouter<>` collects comes through `IRouted`. The generic constraint enforces this, so this rule is a test, not a check. | `attached` (unit test in `Framework.Core.Tests`) | enforced |
 
 **ARCH-02 rows.** Only these rows change. The other rows stay as they are. The ids and blocks pieces can add a row for a feature they create. Each row lists only the references that the D1 to D3 moves need.
@@ -452,18 +452,25 @@ Text for the `why` fields:
 - ROUTE-02: "A static router leaks between the server and client scopes and between tests."
 - ROUTE-03: "Dispatch is by exact type. A handler for a non-sealed concrete type misses its subclasses with no error."
 
-## 9. Migration steps
+## 9. Plan
 
-Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire.
+Build steps add standalone code and change no current caller. The cross-spike order in the catalog owns the Migrate steps. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` after each step. Add `-With playmode` for steps that touch Wire. Each step is one PR.
 
-1. **Add the contract.** Add `IRouted`, `IOrdered`, `RouteMode`, `TypeRouter<T>` and `TypeScan` to `Framework.Core`. Add unit tests in `Framework.Core.Tests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. For `TypeScan`: finds concrete types, skips abstract types, open generics and test assemblies, caches. For `GetAllDerivedFrom` and `RoutedTypesDerivedFrom`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation. No caller changes.
-   1b. **Stripping smoke build.** Add `[RequireImplementors]` to `IRouted` (§ 5.5). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
-2. **Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Rename `HandlerRegistry` to `WireEventDispatcher` and change its internals to `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`. Gate with `-With playmode`.
-3. **Commands.** Do this step after Pipeline migration step 2, which adds `Handler<Command, ICommandScope>` and `Validator<Command>` and removes `ICommandHandler` and `ICommandValidator`. Replace both registries with `TypeRouter<T>` of the new types. Update `CommandService`, `CommandInstaller`, `EngineStack`, `CommandServiceTests`. Delete the two registry files and their `.meta` files.
-4. **Registration.** Add `RegisterTypeRouter<T>(mode, scan)` to `HandlerRegistrationExtensions`. Use it in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
-5. **Seal leaf messages.** Add `sealed` to the concrete `WireEvent` subtypes (`EntityCreatedEvent`, `StatePushEvent`, `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`, `BlockStartEvent` and `BlockEndEvent` in their new `Framework.Blocks` home, the Multiplayer events). AutoPacker and `WireRegistrar` accept `sealed partial` (§ 11, answered). Gate with `-With playmode`.
-6. **Rules.** Ask for approval, then add ROUTE-01 to ROUTE-04 to `rulebook.json`. Add the new check kinds in `Assets/Tools/Rulebook/Editor/Checks/` with fixture tests.
-7. **Docs.** Update `docs/lookup-patterns.md` § Router: name the shared classes and the two kinds of read (exact and under). Update the `docs/architecture.md` codemap.
+### Build
+
+- **B1. Contract.** Add `IRouted`, `IOrdered`, `RouteMode` and `TypeRouter<T>` to `Framework.Core`, folder `Runtime/Routing/`. Add `TypeRouterTests` in `Framework.Core.Tests`: duplicate throws with `Single`, `Get` throws on a miss and on many, `TryGet` miss, empty `GetAll`, order by `Order` then full name, no allocation on `GetAll`. Add `TypeRouterDerivedFromTests`: base class, interface, open generic definition, exact type included, member order kept, empty on a miss, no allocation.
+- **B2. Scan.** Add `TypeScan` to `Runtime/Routing/`. Add `TypeScanTests`: finds concrete types, skips abstract types, open generics and test assemblies, caches.
+- **B3. Stripping.** Add `RequireImplementorsAttribute` and `RequireDerivedAttribute` to `Runtime/Stripping/` (§ 5.5). Put `[RequireImplementors]` on `IRouted`. Add the smoke build project `Tools/StrippingProbe/` ([docs/code-stripping.md](../../docs/code-stripping.md) § 6). Build one IL2CPP player at stripping level High. Make sure that the scan finds and builds a member that nothing references directly. Run this build again after each Unity upgrade.
+- **B4. Registration verb.** Add `RegisterTypeRouter<T>(mode, scan)` to `HandlerRegistrationExtensions` (§ 5.5). Add a test that resolves a `TypeRouter<T>` from a container. No installer calls it yet.
+- **B5. Rule checks.** Add the check kinds `type.forbiddenFieldTypes`, `type.noStaticFieldsOfType` and `type.sealedOrAbstract` in `Assets/Tools/Rulebook/Editor/Checks/RouteChecks.cs`, with fixture tests in `CheckKindTests`. Ask for approval, then add ROUTE-01 to ROUTE-04 to `rulebook.json` with the start status in § 8.
+
+### Migrate
+
+- **M1. Wire.** Apply the `Framework.Wire` row of the ARCH-02 edit (D2) and the new Core text. Add `Framework.Core` to `Framework.Wire.asmdef`. Make `IWireEventHandler : IRouted`. Rename `HandlerRegistry` to `WireEventDispatcher` and change its internals to `TypeRouter<IWireEventHandler>` with `RouteMode.Multiple`. Gate with `-With playmode`.
+- **M2. Commands.** Do this step after Pipeline step 2, which adds `Handler<Command, ICommandScope>` and `Validator<Command>` and removes `ICommandHandler` and `ICommandValidator`. The two steps overlap, so the catalog order decides who does the registry change. Replace both registries with `TypeRouter<T>` of the new types. Update `CommandService`, `CommandInstaller`, `EngineStack` and `CommandServiceTests`. Delete the two registry files and their `.meta` files. Then set ROUTE-01 to blocking.
+- **M3. Installers.** Use `RegisterTypeRouter<T>` in `CommandInstaller` and `EngineInstaller`. Delete the member registration lines that the scan now covers. Keep `RegisterTagValueType<T>()`.
+- **M4. Seal leaf messages.** Add `sealed` to the concrete `WireEvent` subtypes (`EntityCreatedEvent`, `StatePushEvent`, `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent`, `BlockStartEvent` and `BlockEndEvent` in their new `Framework.Blocks` home, the Multiplayer events). AutoPacker and `WireRegistrar` accept `sealed partial` (§ 12). Then set ROUTE-03 to blocking. Gate with `-With playmode`.
+- **M5. Docs.** Update `docs/lookup-patterns.md` § Router: name the shared classes and the two kinds of read (exact and derived). Update the `docs/architecture.md` codemap.
 
 ## 10. Interfaces the other three pieces need from this piece
 
@@ -491,9 +498,18 @@ Each step is one PR. Run `powershell -NoProfile -File Tools/Rulebook/gate.ps1` a
 - Each level (intent, effect, command, event) owns its own router instance. One `Enqueue` pipeline selects the stage by message kind. It then asks that stage's router. The router does not know about stages, blocks or `Task`. An intent route opens no block (D6); the block decision belongs to the stage, not the router.
 - Hooks are not in this piece (D8). If the pipeline keeps frozen game-wide hooks in a `TypeRouter<IHook>` (`Multiple`), it owns the split by phase, the live table, the merge and the tie rule.
 
-## 11. Open questions
+## 11. Later
 
-Closed:
+| Item | Why later | Trigger to reopen |
+|---|---|---|
+| Composition-time completeness check | No list of known command types yet | A command catalog exists |
+| Rule: each scan root has a keep attribute | `IRouted` is the only scan root | A second scan root appears |
+| Build-time `link.xml` generator | The attribute passes the smoke build | The smoke build fails after an upgrade |
+| Slot router (`int` slot to member) | `Dispatcher` already uses a slot array | A second slot lookup appears |
+
+The completeness check can be unnecessary. `RoutedTypes` already lists the routed types, so a later check or a debug listing can use it.
+
+## 12. Closed items
 
 - ~~**Home assembly.**~~ Closed by D2: `Framework.Core`. § 8 gives the ARCH-02 rows and the new Core text.
 - ~~**Sealing and AutoPacker.**~~ Answered: AutoPacker accepts `sealed partial`. No fallback is necessary. Evidence:
@@ -503,14 +519,7 @@ Closed:
   - The generated `LeafEvent.Packed.g.cs:4` is `public partial class LeafEvent : IPackable, …`. Lines `:11` and `:25` are `public override` (`Unpack`, `Pack`). `override` is legal in a sealed class. `PackTyped` and `UnpackTyped` (`:20`, `:14`) are not virtual.
   - `WireRegistrar` filters only on `IsAbstract` and `IsGenericTypeDefinition` (`Assets/Framework/Wire/Runtime/Network/WireRegistrar.cs:71`, `:77`). It has no `IsSealed` check.
   - Residual risk: the generator has a `virtual` emit path (`HasUserDeclaredVirtualOrAbstractPackOrUnpack`). A new `virtual` member in a sealed class is error CS0549. The test did not reach that path for a leaf. If a future leaf declares its own virtual `Pack`, the build fails at once, so the risk is visible, not silent.
-
-Closed on 2026-11-01:
-
 - ~~**Hooks, `HookTable`, `_direct`, hook tie rule.**~~ Moved to the command pipeline piece by D8.
 - ~~**Names.**~~ `HandlerRegistry` becomes `WireEventDispatcher` (D12).
 - ~~**Subtype read scope.**~~ `GetAllDerivedFrom` includes interfaces and open generic definitions (D12).
 - ~~**Many members for one type.**~~ The router supports `Single` and `Multiple` for each router, set at registration. The Pipeline chooses the mode for validators and handlers, and how a command runs many members (D12).
-
-Deferred:
-
-1. **Composition-time completeness.** A check that each known command type has a handler. It can be unnecessary. `RoutedTypes` already lists the routed types, so a later check or a debug listing can use it. The check needs a list of known command types, which does not exist yet.
