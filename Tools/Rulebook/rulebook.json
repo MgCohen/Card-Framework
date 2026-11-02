@@ -81,6 +81,9 @@
           "allowed": {
             "Framework.Core": [],
             "Framework.Routing": [],
+            "Framework.Kinds": [
+              "Framework.Routing"
+            ],
             "Framework.Wire": [],
             "Framework.Tags": [
               "Framework.Core",

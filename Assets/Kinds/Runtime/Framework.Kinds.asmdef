@@ -1,0 +1,18 @@
+{
+    "name": "Framework.Kinds",
+    "rootNamespace": "Framework.Kinds",
+    "references": [
+        "Framework.Routing",
+        "VContainer",
+        "Scaffold.Records"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
