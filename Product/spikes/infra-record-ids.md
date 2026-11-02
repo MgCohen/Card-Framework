@@ -62,14 +62,18 @@ The user made these decisions for all four infra spikes:
 18. **Blocks changes are adopted.** `BlockId` is the stream position (no allocator). `RequestId` is removed: a request is a block. `CauseId` is now `TriggerId`. `GroupStore : RecordStore<GroupRecord, BlockId>`.
 19. **"No id" has one form.** In code, "no id" is `null`. On the wire it is `-1`. `0` means "never set" (a bug), and an unpack can assert on it.
 20. **Records at call sites.** Author APIs take the record (`_tags.Set(card, Health, 5)`), not the id. Events and queued messages carry ids. A gate rule follows later (ID-06).
-21. **AutoPacker: nested packing.** A `[Packed]` field whose type is an `[AutoPack]` class packs its members inline. The `AsReference` work is not used.
+21. **AutoPacker: nested packing.** A `[Packed]` field whose type is an `[AutoPack]` class packs its members inline. The `AsReference` work is not used. Merged in https://github.com/MgCohen/Scaffold/pull/63.
+22. **No save and load.** Loading a match in progress is out of scope. `Watermark` and `Restore` are removed. Undo affects only the top of the stack (`Release`).
+23. **Ids belong to their match.** Each match starts again at 1. Two matches can have the same ids, because they are different contexts.
+24. **Seats stay as they are.** A game mode has a known, small number of players (1 to 4). The shared allocator is for instance spaces of unknown size. Examine this again only if a mode has a large, changing number of players.
 
 ## 2a. Scope
 
 | Concern | In / out | Owner if out |
 |---|---|---|
 | Typed id records (`Id` base) | in (base) | — |
-| Allocator: `Next`, `Release`, save, load | in (base) | — |
+| Allocator: `Next`, `Release` | in (base) | — |
+| Save and load of a match in progress | out | Later (decision 22) |
 | Record store base `RecordStore<TRecord, TId>` | in (base) | — |
 | Definition ids as a store user (`Catalog`) | in (base) | — |
 | One server allocator for each space | in (framework usage) | — |
@@ -185,21 +189,13 @@ namespace Framework.Core
 
         public IdAllocator(int first = 1) => _next = first;
 
-        public int Watermark => _next;
-
         public TId Next() => new TId { Value = _next++ };
 
         // Base: does nothing. The id stays used. See §3.3a.
         public virtual void Release(TId id) { }
 
+        protected int  Last => _next - 1;   // the last id given; 0 if none
         protected void StepBack() => _next--;
-
-        public void Restore(int watermark)
-        {
-            if (watermark < _next)
-                throw new InvalidOperationException($"Watermark {watermark} is below {_next}; ids are never reused.");
-            _next = watermark;
-        }
     }
 }
 ```
@@ -226,7 +222,7 @@ public sealed class StackIdAllocator<TId> : IdAllocator<TId> where TId : Id, new
     // Gives the id back only if it is the last id given (last in, first out).
     public override void Release(TId id)
     {
-        if (Watermark > 1 && id.Value == Watermark - 1) StepBack();
+        if (Last >= 1 && id.Value == Last) StepBack();
     }
 }
 ```
@@ -237,9 +233,9 @@ public sealed class StackIdAllocator<TId> : IdAllocator<TId> where TId : Id, new
 | Undo of a record in the middle | id stays used | id stays used (a gap) |
 | Client view scrub, replay | no allocator on the client | no allocator on the client |
 
-Contract on the caller: release the ids in the reverse order of `Next`. `Restore` (load) stays forward only.
+Contract on the caller: release the ids in the reverse order of `Next`.
 
-Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. Reuse breaks logs, replays, saves and old `TriggerId` links.
+Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. Reuse breaks logs, replays and old `TriggerId` links.
 
 ### 3.4 Determinism
 
@@ -248,7 +244,7 @@ Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. 
 - **Positions.** `BlockId` comes from `EventStream.Add` on both sides. The stream order is the same on both sides, so the ids are the same.
 - **Replay.** Replay runs events through apply handlers. Apply handlers never allocate (ARCH-06 forbids service calls). The ids come from the events.
 - **Two-sided tests.** `MatchPair.Start` builds two scopes over `LoopbackTransport.Pair()`. Only the server scope has allocators.
-- **Save and load.** A save stores each allocator `Watermark`. Load builds fresh stores from the event stream, then calls `Restore`.
+- **Matches.** Ids belong to their match (decision 23). A new match scope makes new allocators that start at 1.
 - **Rollback.** A server undo calls `Release`. Only a `StackIdAllocator` gives an id back (§3.3a). Ids that the wire already sent are never reused (ID-05).
 
 ### 3.5 Record and record store
@@ -370,7 +366,7 @@ _tags.Set(card, Health, 5);
 - **Kind slots.** A slot is an id for a type, not for an instance. See `infra-kind-ids.md`.
 - **Tag values (`TagStore`).** A tag value has no id of its own. The Tags feature can make `TagStore` a nested store later. It does not use `RecordStore`.
 - **Channel ids (`Network`).** A channel id is a Router key, not a record id. It is a `byte`, it has a capacity limit, and both sides must compute the same id from the sorted registration.
-- **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store. Seats live for the lobby, not the match. Seat can use `IdAllocator<T>` later, but it gets no benefit now.
+- **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store. Seats live for the lobby, not the match. A game mode has a known, small number of players, so seats keep their own counter (decision 24).
 - **Block ids.** A block id is a position, not an allocated id. Both sides compute it, so it needs no allocator and no wire field.
 - **VerticalSlice.** No migration. Phase 8 deletes it.
 - **`RequestStore.Get<T>`.** A typed read with `null` on miss stays, as an extra read beside the base pair.
@@ -396,7 +392,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 2–5 touch wire events, so they also run `-With playmode`.
 
 0. **AutoPacker upgrade.** Done: merged in https://github.com/MgCohen/Scaffold/pull/63 (merge commit `8b27bacf`). Update the package in `Packages/manifest.json`. Add a Wire test that packs and unpacks an event with a nested id field and a `null` id.
-1. **Add `Id`, the `IsExternalInit` shim, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `Restore` forward only, `ById` throws on a miss, `EntityId` 5 ≠ `BlockId` 5). No callers.
+1. **Add `Id`, the `IsExternalInit` shim, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `StackIdAllocator` gives back only the last id, `ById` throws on a miss, `EntityId` 5 ≠ `BlockId` 5). No callers.
 2. **Blocks piece.** `BlockId`, positions, `GroupStore` and the removal of `RequestId` land in the Blocks PRs (`infra-block-wire.md`).
 3. **Add `EntityId` and `IEntity`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`.
 4. **Move Tags to `EntityId` and `IEntity`.** Change the Tag events (ids), `TagService` and `IReadOnlyTagStore` (records), `TagStore` maps and the apply handlers.
@@ -439,10 +435,10 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 2. **Typed cross-space fields.** The Blocks piece removed `Request.ParentId` and set `TriggerId` to `BlockId`. `Request.ResponderId` is a seat or a player entity, and that depends on phase 3.
 3. **Closed requests.** Keep a `Closed` set in `RequestStore` so a Response can be undone (appendix A.1)? Or put the full request data in the Response? This affects `request-service.md` L5 ("no AnswersStore").
 4. **Client correlation id.** Does a client intent carry a client-made `SubmitId` for accept and reject replies? Who owns it: one allocator per client scope?
-5. **Save watermarks.** Store the watermarks in the save, or compute them on load from the highest id in the stream?
-6. **Id scope across matches.** Are ids unique only in a match (`entity-identity-model.md` Q3)? A replay archive would then need a match id.
+5. ~~**Save watermarks.**~~ **Closed 2026-11-02:** out of scope (decision 22).
+6. ~~**Id scope across matches.**~~ **Closed 2026-11-02:** ids belong to their match (decision 23). Data that lives longer than a match adds a match id when it comes.
 7. **`DefinitionId` source.** Definitions are authored data. Recommended: an `EntityDefinition` base in Entities holds a serialized `int` and returns `new DefinitionId { Value = _id }`. The other option is an id that the catalog gives at load. Catalog loading is still open (`definition-entity-setup.md`).
-8. **Seat migration.** Add `SeatId : Id` and move `PeerRoster` to `IdAllocator<SeatId>` now for one pattern, or leave it until phase 3 links seats to player entities?
+8. ~~**Seat migration.**~~ **Closed 2026-11-02:** seats stay as they are (decision 24).
 
 ## Appendix: handed off
 
