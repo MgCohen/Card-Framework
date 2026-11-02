@@ -228,17 +228,32 @@ var result = Result.From(envelope);
 if (!result.Accepted) Show(result.Reason);
 ```
 
-### Access
+### Dependencies
 
-| Bypass route | What stops it |
+| Depends on | Why |
 |---|---|
-| Game code calls a handler directly | `Handle` is `protected internal`. Only `Framework.Pipeline` calls it. |
-| A handler injects a pipeline | Pipelines are not in DI. |
-| A handler injects the owner system | Rulebook check PIPE-04. |
-| A handler keeps the scope and uses it later | The scope closes after the run. Its verbs then throw. |
-| A subclass changes the run order | `Execute` is not virtual. |
-| A caller runs a message inline without a scope | `RunInline` is protected. Only the subclass gives it to its scope. |
-| A game removes the running envelope | `Remove` returns false. The envelope left the list before the run. |
+| `Framework.Core`: `TypeRouter<T>`, `IRouted`, `RouteMode` | The stores; `[RequireImplementors]` keeps author subclasses |
+| `Framework.Core`: `Id`, `IdAllocator<TId>` | One `MessageId` for each envelope |
+| `System.Threading.Tasks` | The async run (decision 4) |
+| `Framework.Blocks` (later) | `GroupService.Open` and `Close` wrap `Before`, `Handle`, `After` |
+
+asmdef references: `Framework.Core`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Wire`, `Framework.Blocks`. · `Framework.Commands` references it only after the migration.
+
+### Rules
+
+| Rule | Enforced by |
+|---|---|
+| Only the pipeline calls a handler or a validator | C# access: `protected internal` entry; compiler |
+| A subclass does not change the run order | C# access: `Execute` is not virtual; compiler |
+| Only the subclass runs a message inline | C# access: `RunInline` is protected; compiler |
+| A handler does not get a pipeline from DI | Composition: pipelines are not registered; resolve fails |
+| A scope verb throws after the run | Runtime: `PipelineScope.ThrowIfClosed`; `PipelineTests.ScopeVerb_AfterRun_Throws` |
+| `Remove` does not stop a running envelope | Runtime: the envelope leaves the list first; `PipelineTests.Remove_Running_ReturnsFalse` |
+| A scope interface exposes only its pipeline verbs | Rulebook PIPE-01 (proposed): `type.memberTypes` with `includeParameters` |
+| A handler does not call a pipeline or the owner | Rulebook PIPE-04 (proposed): `il.forbiddenCalls` |
+| A handler does not leave the run thread | Rulebook PIPE-05 (proposed): `il.forbiddenCalls` with `methods[]` |
+
+PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service) wait for v2. `rulebook.json` does not change in this spike.
 
 ## 5. Parts
 
@@ -398,39 +413,205 @@ flowchart TD
 | `Remove` cannot stop a running envelope | A counter to a running message needs another verb. | Cancel on `Envelope` comes later. |
 | Every handler is async | A sync handler returns `Task.CompletedTask`. Stack traces are longer. | Named bases; one inline-continuation test. |
 
-## 8. Rulebook rules to propose
+## 8. Folder structure
 
-Proposals only. `rulebook.json` does not change in this spike.
+```
+Assets/Framework/Pipeline/
+├─ Runtime/                     Framework.Pipeline.asmdef
+│  ├─ Message.cs
+│  ├─ MessageId.cs              shape from Record Ids
+│  ├─ Envelope.cs               Envelope, Envelope<TMessage>, EnvelopeState
+│  ├─ Result.cs                 Result, Result<T>
+│  ├─ Handler.cs                Handler<TMessage, TScope>
+│  ├─ Validator.cs              Validator<TMessage>
+│  ├─ PipelineScope.cs
+│  └─ Pipeline.cs               Pipeline<TMessage, TScope>
+├─ Tests/                       Framework.Pipeline.Tests.asmdef
+│  ├─ Fakes/TestPipeline.cs     TestPipeline, TestScope, Ping, Echo, handlers
+│  ├─ ResultTests.cs
+│  ├─ RouterTests.cs
+│  └─ PipelineTests.cs
+└─ PlayTests/                   Framework.Pipeline.PlayTests.asmdef
+   └─ InlineContinuationTests.cs
+```
 
-| Id | Rule | Check kind |
-|---|---|---|
-| PIPE-01 | A scope interface exposes only the verbs of its pipeline. | `type.memberTypes`, extended with `includeParameters: true` |
-| PIPE-04 | A handler does not call a pipeline or the owner system. | `il.forbiddenCalls` |
-| PIPE-05 | A handler does not leave the run thread (`Task.Run`, `Task.Delay`, `ConfigureAwait`). | `il.forbiddenCalls`, extended with a `methods[]` filter |
+## 9. Dependency graph
 
-PIPE-02 and PIPE-03 (effect and intent handlers do not call a Framework service) wait for v2.
+```mermaid
+flowchart BT
+  P["Framework.Pipeline"] --> C["Framework.Core"]
+  T["Framework.Pipeline.Tests"] --> P
+  T --> C
+  PT["Framework.Pipeline.PlayTests"] --> P
+  CMD["Framework.Commands"] -. "after migration" .-> P
+  CMD --> W["Framework.Wire"]
+```
 
-## 9. Build, then migration
+## 10. Steps
 
-The build is one PR. It keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. The migration is not in this spike (decision 26).
+### 1 · Build — `Message`, `MessageId`, `Envelope`, `Result`
 
-1. **Build. Standalone.** Add `Message`, `Pipeline<,>`, `Envelope`, `Envelope<>`, `EnvelopeState`, `Result`, `Result<T>`, `PipelineScope`, `Handler<,>` and `Validator<>`. Use `TypeRouter<T>` and `MessageId` from the standalone builds of those spikes. Do not change `Command`, `CommandService` or the command registries. Add `PipelineTests` with test messages and test handlers: a reject runs no step, the scope closes on a fault, the step order, `SelectNext` FIFO and LIFO, `Remove` of a running envelope, `ParentId` on an inline run, a typed result, and the inline continuation (decision 4) in EditMode and PlayMode.
-2. **Migration. Later.** The cross-spike plan gives the order and the owner of each change. The Pipeline changes are:
-   - `Command` derives from `Message`. Add `Command<TResult>`.
-   - Add `CommandPipeline` and `ICommandScope`.
-   - `CommandHandler<T>` derives from `Handler<Command, ICommandScope>`, and `CommandValidator<T>` from `Validator<Command>`. Handlers become async.
-   - The command registries become `TypeRouter`. The router spike also lists this change. The cross-spike plan gives it one owner.
-   - Delete `CommandService` and `CommandResult`.
-   - Ask for approval, then add PIPE-01, PIPE-04 and PIPE-05.
+```csharp
+public abstract class Message { }
+public sealed record MessageId : Id;                    // shape from Record Ids
+public abstract class Envelope { Id; ParentId; State; Reason; Result; Message; }
+public sealed class Envelope<TMessage> : Envelope { public new TMessage Message { get; } }
+public class Result { State; Reason; Accepted; static Result From(Envelope e); }
+public sealed class Result<T> : Result { public T Value { get; } }
+```
 
-## 10. Interfaces needed from the other pieces
+```csharp
+[Test] public void From_Rejected_NotAccepted()   => Assert.That(Result.From(Rejected("no mana")).Reason, Is.EqualTo("no mana"));
+[Test] public void FromT_Accepted_ReturnsValue() => Assert.That(Result<int>.From(Accepted(5)).Value, Is.EqualTo(5));
+```
 
-| Piece | Needs |
-|---|---|
-| Router (`infra-type-router.md`) | `TypeRouter<T>.Get` and `TryGet`. `RegisterTypeRouter<T>(RouteMode.Single)`. `[RequireImplementors]` on `IRouted` keeps author subclasses after stripping. The `T : class, IRouted` constraint accepts an abstract class. |
-| Record ids (`infra-record-ids.md`) | `MessageId` and `IdAllocator<MessageId>`. The id is local and not on the wire. |
-| Events & Blocks (`infra-block-wire.md`) | Later. `GroupService.Open(source, trigger)` and `Close(id, outcome)` wrap `Before`, `Handle` and `After`, and not `Validate`. |
-| Requests | The scope forwards `Ask` to `RequestService`. |
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
+```
+
+Done: gate PASS; `ResultTests` green.
+
+### 2 · Build — `Handler<,>`, `Validator<>`
+
+```csharp
+public abstract class Handler<TMessage, TScope> : IRouted
+{
+    public abstract Type RouteType { get; }
+    protected internal abstract Task<object> Handle(TMessage message, TScope scope);
+}
+public abstract class Validator<TMessage> : IRouted
+{
+    public abstract Type RouteType { get; }
+    protected internal abstract bool Validate(TMessage message, out string reason);
+}
+```
+
+```csharp
+[Test] public void Router_Single_FindsPingHandler()
+    => Assert.That(new TypeRouter<Handler<Message, TestScope>>(handlers, RouteMode.Single).Get(typeof(Ping)), Is.SameAs(ping));
+```
+
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
+```
+
+Done: gate PASS; `RouterTests` green.
+
+### 3 · Build — `Pipeline<,>`, `PipelineScope`
+
+```csharp
+protected async Task<Envelope<TMessage>> Execute(Envelope<TMessage> e)
+{
+    e.State = EnvelopeState.Running;
+    if (!Validate(e, out var reason)) { e.Reject(reason); return e; }
+    var scope = CreateScope(e);
+    try { await Before(e, scope); e.Result = await Handle(e, scope); await After(e, scope); e.State = EnvelopeState.Accepted; return e; }
+    catch { e.State = EnvelopeState.Faulted; throw; }
+    finally { Close(scope); }
+}
+```
+
+```
+PipelineTests
+  Reject_RunsNoOtherStep
+  Fault_ClosesScope
+  Steps_RunInFixedOrder
+  SelectNext_Fifo
+  SelectNext_LifoOverride
+  Remove_Running_ReturnsFalse
+  RunInline_SetsParentId
+  Handle_TypedResult_ReachesResultT
+  ScopeVerb_AfterRun_Throws
+```
+
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
+```
+
+Done: gate PASS; `PipelineTests` green; no file outside `Assets/Framework/Pipeline/` changed.
+
+### 4 · Build — inline continuation in PlayMode
+
+```csharp
+[UnityTest] public IEnumerator RunInline_CompletesInSameFrame()
+{
+    var frame = Time.frameCount;
+    var task = pipeline.RunInlineForTest(new Ping());
+    Assert.That(task.IsCompleted && Time.frameCount == frame);
+    yield break;
+}
+```
+
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1 -With playmode
+```
+
+Done: gate PASS; `InlineContinuationTests` green in EditMode and PlayMode.
+
+### 5 · Migrate — `Command : Message` (order: cross-spike plan)
+
+```csharp
+public abstract class Command { }                       // before
+public abstract class Command : Message { }             // after
+public abstract class Command<TResult> : Command { }    // new
+```
+
+Done: gate PASS; `CommandServiceTests` green, unchanged.
+
+### 6 · Migrate — `CommandPipeline`, `ICommandScope`
+
+```csharp
+sealed class CommandPipeline : Pipeline<Command, ICommandScope>
+{
+    protected override ICommandScope CreateScope(Envelope<Command> e) => new CommandScope(m => RunInline(e, m));
+}
+```
+
+```
+CommandService.Execute → commands.Add → commands.Run → RunOne → Execute → Handle
+```
+
+Done: gate PASS; all acceptance bindings green, unchanged.
+
+### 7 · Migrate — handlers on the shared bases, async
+
+```csharp
+protected override void Handle(PlayCard c) { … }                              // before
+protected override async Task Handle(PlayCard c, ICommandScope s) { … }       // after
+```
+
+Done: gate PASS; no `ICommandHandler` or `ICommandValidator` left.
+
+### 8 · Migrate — registries become `TypeRouter` (owner: cross-spike plan)
+
+```csharp
+new CommandHandlerRegistry(handlers)                                        // before
+new TypeRouter<Handler<Command, ICommandScope>>(handlers, RouteMode.Single) // after
+```
+
+Done: gate PASS; `CommandHandlerRegistry.cs` and `CommandValidatorRegistry.cs` deleted.
+
+### 9 · Migrate — delete `CommandService`, `CommandResult`
+
+```csharp
+var r = commandService.Execute(cmd);                                        // before
+var e = commands.Add(cmd); await commands.Run(); var r = Result.From(e);    // after
+```
+
+Done: gate PASS; `CommandService.cs` and `CommandResult.cs` deleted.
+
+### 10 · Migrate — rules PIPE-01, PIPE-04, PIPE-05 (after approval)
+
+```
+Tools/Rulebook/rulebook.json                    + PIPE-01, PIPE-04, PIPE-05
+Assets/Tools/Rulebook/Editor/Checks/            + includeParameters, methods[] filter
+```
+
+```powershell
+powershell -NoProfile -File Tools/Rulebook/gate.ps1 -With playmode
+```
+
+Done: gate PASS; each rule fails on its fixture and passes on the Framework.
 
 ## 11. Later
 
