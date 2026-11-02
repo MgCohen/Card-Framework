@@ -313,7 +313,7 @@ public partial class EntityCreatedEvent : WireEvent
 }
 ```
 
-The AutoPacker upgrade (decision 21) has four parts. The Scaffold generator work owns them:
+The AutoPacker upgrade (decision 21) has four parts. It is merged in https://github.com/MgCohen/Scaffold/pull/63:
 
 | Part | Why |
 |---|---|
@@ -395,7 +395,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 2–5 touch wire events, so they also run `-With playmode`.
 
-0. **AutoPacker upgrade** in `MgCohen/Scaffold` (decision 21). Update the package in `Packages/manifest.json`. Add a Wire test that packs and unpacks an event with a nested id field and a `null` id.
+0. **AutoPacker upgrade.** Done: merged in https://github.com/MgCohen/Scaffold/pull/63 (merge commit `8b27bacf`). Update the package in `Packages/manifest.json`. Add a Wire test that packs and unpacks an event with a nested id field and a `null` id.
 1. **Add `Id`, the `IsExternalInit` shim, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `Restore` forward only, `ById` throws on a miss, `EntityId` 5 ≠ `BlockId` 5). No callers.
 2. **Blocks piece.** `BlockId`, positions, `GroupStore` and the removal of `RequestId` land in the Blocks PRs (`infra-block-wire.md`).
 3. **Add `EntityId` and `IEntity`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`.
