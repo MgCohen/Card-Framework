@@ -1,6 +1,6 @@
 using System;
 using Framework.RecordIds;
-using Framework.Routing;
+using Framework.TypeRouting;
 using NUnit.Framework;
 using VContainer;
 

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Framework.RecordIds;
-using Framework.Routing;
+using Framework.TypeRouting;
 using VContainer;
 
 namespace Framework.Pipeline.Tests

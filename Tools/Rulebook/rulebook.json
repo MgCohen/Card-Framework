@@ -80,9 +80,9 @@
           ],
           "allowed": {
             "Framework.Core": [],
-            "Framework.Routing": [],
-            "Framework.Kinds": [
-              "Framework.Routing"
+            "Framework.TypeRouting": [],
+            "Framework.TypeKeys": [
+              "Framework.TypeRouting"
             ],
             "Framework.Wire": [],
             "Framework.Tags": [
@@ -132,7 +132,7 @@
             "Framework.Pipeline": [
               "Framework.RecordIds",
               "Framework.RecordIds.Install",
-              "Framework.Routing"
+              "Framework.TypeRouting"
             ],
             "Framework.Blocks": [
               "Framework.RecordIds",

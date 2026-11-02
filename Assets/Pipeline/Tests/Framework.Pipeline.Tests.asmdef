@@ -6,7 +6,7 @@
         "Framework.RecordIds",
         "Framework.RecordIds.Install",
         "Scaffold.Records",
-        "Framework.Routing",
+        "Framework.TypeRouting",
         "VContainer",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"

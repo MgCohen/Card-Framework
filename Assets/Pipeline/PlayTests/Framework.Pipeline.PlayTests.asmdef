@@ -4,7 +4,7 @@
     "references": [
         "Framework.Pipeline",
         "Framework.RecordIds",
-        "Framework.Routing",
+        "Framework.TypeRouting",
         "UnityEngine.TestRunner"
     ],
     "includePlatforms": [],

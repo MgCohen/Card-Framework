@@ -1,0 +1,18 @@
+{
+    "name": "Framework.TypeKeys",
+    "rootNamespace": "Framework.TypeKeys",
+    "references": [
+        "Framework.TypeRouting",
+        "VContainer",
+        "Scaffold.Records"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

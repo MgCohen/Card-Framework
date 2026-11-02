@@ -1,5 +1,5 @@
 using System;
-using Framework.Routing;
+using Framework.TypeRouting;
 using VContainer;
 
 namespace Framework.Pipeline

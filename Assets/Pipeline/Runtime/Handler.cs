@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Framework.Routing;
+using Framework.TypeRouting;
 
 namespace Framework.Pipeline
 {

@@ -1,5 +1,5 @@
 using System;
-using Framework.Routing;
+using Framework.TypeRouting;
 using NUnit.Framework;
 
 namespace Framework.Pipeline.Tests

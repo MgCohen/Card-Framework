@@ -4,7 +4,7 @@
     "references": [
         "Framework.RecordIds",
         "Framework.RecordIds.Install",
-        "Framework.Routing",
+        "Framework.TypeRouting",
         "Scaffold.Autopacker",
         "VContainer"
     ],
