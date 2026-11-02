@@ -125,6 +125,10 @@
             "Framework.RecordIds": [],
             "Framework.RecordIds.Install": [
               "Framework.RecordIds"
+            ],
+            "Framework.Pipeline": [
+              "Framework.RecordIds",
+              "Framework.Routing"
             ]
           }
         }
@@ -210,6 +214,9 @@
               "Framework.Bootstrap",
               "Framework.Wire.Tests",
               "Framework.Wire.PlayTests"
+            ],
+            "Framework.Pipeline": [
+              "Framework.Pipeline.Tests"
             ]
           }
         }
