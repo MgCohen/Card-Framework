@@ -59,7 +59,7 @@ The user made these decisions for all four infra spikes:
 ### Decisions (2026-11-02)
 
 17. **Typed ids are record classes.** `abstract record Id` holds `[Packed] int Value { get; init; } = -1`. Each typed id is one line: `public sealed record EntityId : Id;`. The user accepts the cost of one allocation for each id.
-18. **Blocks changes are adopted.** `BlockId` is the stream position (no allocator). `RequestId` is removed: a request is a block. `CauseId` is now `TriggerId`. `GroupStore : RecordStore<GroupRecord, BlockId>`.
+18. **Blocks changes are adopted.** `BlockId` is the stream position (no allocator). `RequestId` is removed: a request is a block. `CauseId` is now `TriggerId`. ~~`GroupStore`~~: the Blocks piece removed it (2026-11-02); the stream is the source of truth.
 19. **"No id" has one form.** In code, "no id" is `null`. On the wire it is `-1`. `0` means "never set" (a bug), and an unpack can assert on it.
 20. **Records at call sites.** Author APIs take the record (`_tags.Set(card, Health, 5)`), not the id. Events and queued messages carry ids. A gate rule follows later (ID-06).
 21. **AutoPacker: nested packing.** A `[Packed]` field whose type is an `[AutoPack]` class packs its members inline. The `AsReference` work is not used. Merged in https://github.com/MgCohen/Scaffold/pull/63.
@@ -81,7 +81,7 @@ The user made these decisions for all four infra spikes:
 | Determinism: start value, pump order | in (framework usage) | — |
 | Typed ids on the wire, nested packing | in (framework usage) | — |
 | AutoPacker generator change | out | Scaffold (`MgCohen/Scaffold`) |
-| Block ids, request ids, `GroupStore` | out | `infra-block-wire.md` |
+| Block ids, request ids, block positions | out | `infra-block-wire.md` |
 | Nested `TagStore` | out | Tags feature |
 | Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
 | Messages hold ids, not refs | out | Pipeline (`infra-command-pipeline.md`). Design text in the appendix. |
@@ -131,15 +131,15 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 
 | Space | Type | Home asmdef | Made by | On the wire | Lifetime |
 |---|---|---|---|---|---|
-| entity | `EntityId` | `Framework.RecordIds` (at migration) | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
-| block | `BlockId` | `Framework.Blocks` | `EventStream.Add` (position) | no (both sides compute it) | match |
-| request | — (uses `BlockId`) | `Framework.Requests` | `EventStream.Add` (a request is a block) | no | match |
+| entity | `EntityId` | `Framework.RecordIds` | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
+| block | `BlockId` | `Framework.Blocks` | `BlockPositions` (position) | no (both sides compute it) | match |
+| request | — (uses `BlockId`) | `Framework.Requests` | `BlockPositions` (a request is a block) | no | match |
 | message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
 | definition | `DefinitionId` | `Framework.Entities` | authored data (§9 Later) | yes | build |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
 
-`Id`, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>` live in `Framework.RecordIds` (decision 25). The migration adds `EntityId` and `IEntity : IRecord<EntityId>` there too. `Framework.Tags` uses them and cannot reference Entities (Entities references Tags), so they cannot live in Entities (§3.7).
+`Id`, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>` live in `Framework.RecordIds` (decision 25). `EntityId` and `IEntity : IRecord<EntityId>` live there too (build step 4). `Framework.Tags` uses them and cannot reference Entities (Entities references Tags), so they cannot live in Entities (§3.7).
 
 ### 3.2 Typed id
 
@@ -154,7 +154,7 @@ namespace Framework.RecordIds
     }
 }
 
-public sealed record EntityId : Id;           // Framework.RecordIds (migration)
+public sealed record EntityId : Id;           // Framework.RecordIds
 public sealed record BlockId : Id;            // Framework.Blocks
 public sealed record MessageId : Id;          // pipeline asmdef
 public sealed record DefinitionId : Id;       // Framework.Entities
@@ -242,7 +242,7 @@ Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. 
 
 - **Seed.** No random seed. Every allocator starts at 1 in each new match scope. Two runs that allocate in the same order get the same ids.
 - **Order.** The pump runs one message at a time, so allocation order is the pump order. An `await` on a request must resume on the pump.
-- **Positions.** `BlockId` comes from `EventStream.Add` on both sides. The stream order is the same on both sides, so the ids are the same.
+- **Positions.** `BlockId` comes from `Block.Position`. `BlockPositions` (Framework.Blocks) sets it from `EventStream.OnAppended` on both sides. The stream order is the same on both sides, so the ids are the same.
 - **Replay.** Replay runs events through apply handlers. Apply handlers never allocate (ARCH-06 forbids service calls). The ids come from the events.
 - **Two-sided tests.** `MatchPair.Start` builds two scopes over `LoopbackTransport.Pair()`. Only the server scope has allocators.
 - **Matches.** Ids belong to their match (decision 23). A new match scope makes new allocators that start at 1.
@@ -278,7 +278,6 @@ public abstract class RecordStore<TRecord, TId>
 |---|---|---|
 | `EntityStore` | `RecordStore<Entity, EntityId>` | `Insert` (apply handler, does nothing on replay) |
 | `RequestStore` | `RecordStore<Request, BlockId>` | `Insert`, `Remove`; keeps `Get<T>` as an extra read |
-| `GroupStore` | `RecordStore<GroupRecord, BlockId>` | the Blocks piece decides |
 | `Catalog<TDef>` | `RecordStore<TDef, DefinitionId>` | `Add` at startup (strict) |
 
 Rules of the base:
@@ -328,7 +327,7 @@ The unpack makes a new object: `new EntityId { Value = v }`. This is correct for
 Author APIs take the record. The API reads the id internally:
 
 ```csharp
-// Framework.RecordIds (migration)
+// Framework.RecordIds
 public interface IEntity : IRecord<EntityId> { }
 
 // Framework.Tags
@@ -352,7 +351,7 @@ _tags.Set(card, Health, 5);
 | `int _nextId = 1;` + `var id = _nextId++;` in `EntityService` | inject `IdAllocator<EntityId>`; `var id = _ids.Next();` | ctor parameter; `EntityInstaller` registers allocator (server) |
 | `request.Id = _nextId++;` in `RequestService` | none: the id is the position | Blocks piece: `Request : Block` |
 | `Dictionary<int, IPendingRequest> _pending` in `RequestService` | `Dictionary<BlockId, IPendingRequest>` | `Open`, `Complete` (key from `Response.TriggerId`) |
-| `var id = _nextId++;` in `Wire` `BlockScope` | none: `EventStream.Add` sets `Position` | Blocks piece |
+| `var id = _nextId++;` in `Wire` `BlockScope` | none: `BlockPositions` sets `Block.Position` | Blocks piece |
 | `[Packed] public int EntityId;` on Entity and Tag events | `[Packed] public EntityId EntityId;` | event fields; apply handlers; needs the AutoPacker upgrade |
 | `Entity.Id : int`, `Entity.DefinitionId : int` | `Entity : IEntity`, `EntityId Id`, `DefinitionId DefinitionId` | `Entity` constructor, `EntityCreatedEvent` |
 | `EntityStore` with its own `Dictionary<int, Entity>` | `EntityStore : RecordStore<Entity, EntityId>` | the base gives `ById` and `TryGetById`; `Insert` stays |
@@ -402,7 +401,9 @@ Assets/Framework/RecordIds/
 │  ├─ IRecord.cs
 │  ├─ IdAllocator.cs
 │  ├─ StackIdAllocator.cs
-│  └─ RecordStore.cs
+│  ├─ RecordStore.cs
+│  ├─ EntityId.cs
+│  └─ IEntity.cs
 └─ Tests/                         Framework.RecordIds.Tests.asmdef
    ├─ Fixtures/
    │  ├─ TestIds.cs               (AId, BId : Id)
@@ -410,7 +411,8 @@ Assets/Framework/RecordIds/
    ├─ IdTests.cs
    ├─ IdPackingTests.cs
    ├─ IdAllocatorTests.cs
-   └─ RecordStoreTests.cs
+   ├─ RecordStoreTests.cs
+   └─ EntityIdTests.cs
 ```
 
 The system has no data, so it has no `Assets/` subfolder.
@@ -435,6 +437,7 @@ Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker
 | 1 | `Runtime/Framework.RecordIds.asmdef`, `IsExternalInit.cs`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs`; ARCH-02 row `"Framework.RecordIds": []` in `Tools/Rulebook/rulebook.json` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/Framework/RecordIds/` and `Tools/Rulebook/rulebook.json` (ARCH-02 row) |
 | 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
 | 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
+| 4 | `Runtime/EntityId.cs`, `IEntity.cs` | `EntityIdTests` (`EntityId` 5 ≠ `AId` 5; `IEntity.Id` is an `EntityId`) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
 
 ## 8. Interfaces for the other three pieces
 
@@ -442,7 +445,8 @@ Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker
 
 - `BlockId : Id` in `Framework.Blocks`. `Block.Id => new BlockId { Value = Position }`, not packed.
 - "No trigger" is `null` in code and `-1` on the wire. There is no `BlockId.None` object (decision 19). API defaults change from `= default` to `= null`.
-- `GroupStore : RecordStore<GroupRecord, BlockId>`, with `GroupRecord : IRecord<BlockId>`. The read names are `ById` and `TryGetById`.
+- No `GroupStore`. `GroupService` keeps a private open-group stack (server only). `GroupEnd` carries `[Packed] BlockId StartId` and the outcome.
+- `Block.Position` is set by `BlockPositions` from `EventStream.OnAppended`. `EventStream` does not change in the build plan.
 - `GroupService.Open` and `Create` take the source as a record (`IEntity source`), not `EntityId` (decision 20). `GroupStart.SourceId` stays an `EntityId` on the wire.
 - `RequestStore : RecordStore<Request, BlockId>`. `Response.TriggerId` is the request key.
 
@@ -475,7 +479,7 @@ No open questions. Deferred items:
 | Object pooling of records | A match has hundreds of records (appendix A.4) | The profiler shows record allocation cost |
 | Allocation cost of id records | Accepted (decision 17) | A benchmark shows id hashing or allocation cost |
 | Rules ID-01 to ID-07 | They check callers in current systems | The migration starts |
-| Migration of current systems: `EntityId` and `IEntity`; Entities, Tags and Catalog on `RecordStore`; Blocks and Requests on `BlockId`; pipeline `MessageId`; rules in `rulebook.json`; docs | Extraction first (decision 25) | The catalog cross-spike order schedules it |
+| Migration of current systems: Entities, Tags and Catalog on `RecordStore`; Blocks and Requests on `BlockId`; pipeline `MessageId`; rules in `rulebook.json`; docs | Extraction first (decision 25) | The catalog cross-spike order schedules it |
 
 Questions for other owners:
 
