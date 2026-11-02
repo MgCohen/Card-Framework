@@ -51,7 +51,7 @@ From 2026-11-01 (this spike):
 15. The scope holds verbs only. It closes after the run, so a kept scope throws. Lifetime and chain data live on the envelope.
 16. The base holds two stores keyed by message type: `TypeRouter<Handler<TMessage, TScope>>` and `TypeRouter<Validator<TMessage>>`. The defaults of `Handle` and `Validate` read them.
 17. `Handler` and `Validator` are abstract base classes. Their entry is `protected internal`, so only the pipeline calls them. The concrete pipeline gives the typed author base, for example `CommandHandler<T>`.
-18. **Hooks are out of v0.** `Before` and `After` are virtual and empty by default. The hooks and reactions discussion decides their model.
+18. **Hooks are out of v0.** `Before` and `After` are virtual and empty by default. Decision 27 gives the hook model for v2.
 19. Handlers get services from DI. Scope verbs are not in DI. Pipelines are not in DI.
 20. No tuple returns in the API. `out` parameters are acceptable.
 21. `Add` returns the `Envelope`. The owner reads `State` and `Reason` after `Run()`.
@@ -60,6 +60,11 @@ From 2026-11-01 (this spike):
 24. **A message can have a typed result.** The handler returns it. The envelope keeps it as `object Result`. A caller gets `Result<T>`: state, reason and value. A message with no result gives a plain `Result`, so the caller still sees if the run worked. Both are classes, and neither goes on the wire.
 25. A rejected run does not throw. `Result.Accepted` is false, and `Reason` gives the cause. A fault still throws.
 26. **Extraction, not refactor.** The plan builds the Pipeline next to the current systems, in one root folder: `Assets/Framework/Pipeline/`. No step edits, moves or migrates a current system. The migration is one row in section 11.
+27. **Hook model (v2 direction).** A hook has the same shape as a handler: a routed instance with a code body. It adds a timing value (`Before` or `After`).
+    - The route type is the trigger message type. The store is a `TypeRouter` in `Multiple` mode, ordered by `IOrdered`.
+    - The body gets the envelope: the request, and also the result at `After`. `Before` can change the message. `After` can read the result.
+    - Code or data makes the instance. A generic data class reads the trigger, the timing and the body from data. Handlers use the same path.
+    - The body usually starts an effect on the layer above. That wiring needs two pipelines, so hooks are v2. In v0, `Before` and `After` stay empty virtual methods.
 
 ## 2. Scope
 
@@ -83,7 +88,7 @@ From 2026-11-01 (this spike):
 
 | Concern | Owner |
 |---|---|
-| Hooks and reactions: model, stores, order | Hooks and reactions discussion |
+| Hooks: the build of the decision 27 model | This spike, v2 |
 | Two or more pipelines (v2) | This spike, after v0 runs |
 | `PipelineBuilder` and a runner object (next) | This spike, after v0 |
 | Replace a message, cancel an envelope (later) | This spike; `Envelope` is the place |
@@ -561,18 +566,17 @@ These items are not open for v0. Each row says why it waits and what reopens it.
 | Item | Why later | Trigger to reopen |
 |---|---|---|
 | Migration: Commands onto the Pipeline (`Command : Message`, `CommandPipeline`, async handlers, registries to `TypeRouter`, delete `CommandService` and `CommandResult`, add PIPE-01, PIPE-04, PIPE-05) | The plan is an extraction; no current system changes | All specced systems built; the cross-spike plan gives the order |
-| Hooks and reactions: a handler in a phase, or a reaction message | Needs its own discussion | Next discussion |
-| Hooks: may a Before hook change the message? Does the result read the change? | Part of the hooks model | Hooks discussion |
-| Hooks: reactions inline or in the list | Part of the hooks model | Hooks discussion |
-| Hooks: static or live subscription (`HookTable`) | Router owns subscription | Hooks discussion |
-| Reaction timing: run before the trigger group closes | v0 has no groups | Hooks discussion |
+| Hooks: build the decision 27 model | The body starts an effect on the layer above | Two or more pipelines |
+| Rules with a state condition (for example the death rule): a hook with a condition, or a separate trigger kind | Part of the hooks build | Hooks build |
+| Live subscription: a router that can change, or a fixed hook with a condition | No current caller; VS uses a condition | A card adds a hook at runtime |
+| Reaction timing: run before the trigger group closes | v0 has no groups | Hooks build |
 | `Ask` split: close the group with `Waiting`, continue in a new group | v0 has no groups | Groups enter the pipeline |
 | `Task<object>` boxing in the handler entry, and the `Result` allocation | Works now; one box and one object for each run | Before the migration, or a benchmark |
 | `PipelineBuilder` and a runner object | Needs one pipeline that runs | v0 is done |
 | Two or more pipelines: wiring cycle, effects, PIPE-02 | v0 is one pipeline | v0 is done |
 | A shared typed author base | Needs two pipelines to compare | v2 |
-| Replace a message, also with a type change | No use in v0 | Hooks discussion; place: `Envelope` |
-| Cancel an envelope | No use in v0 | Hooks discussion; place: `EnvelopeState` |
+| Replace a message, also with a type change | No use in v0 | Hooks build; place: `Envelope` |
+| Cancel an envelope | No use in v0 | Hooks build; place: `EnvelopeState` |
 | Base-type match for validators | Router owns matching | Router spike |
 | Many validators or handlers for one type: run policy (all, stop at first failure, order) | v0 uses `RouteMode.Single`; the Pipeline owns the policy | A second validator on one type |
 | `Request<TResponse>` as a `Message` | Requests are not a pipeline | Requests enter a pipeline |
