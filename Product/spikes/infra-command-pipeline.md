@@ -59,7 +59,7 @@ From 2026-11-01 (this spike):
 23. **`Message` is the shared base** of every pipeline element. `Command`, `Effect` and `Intent` derive from it. `Command` keeps its glossary meaning: one atomic state change.
 24. **A message can have a typed result.** The handler returns it. The envelope keeps it as `object Result`. A caller gets `Result<T>`: state, reason and value. A message with no result gives a plain `Result`, so the caller still sees if the run worked. Both are classes, and neither goes on the wire.
 25. A rejected run does not throw. `Result.Accepted` is false, and `Reason` gives the cause. A fault still throws.
-26. **Build first, migrate later.** v0 builds the parts as standalone code. No current caller changes. Migration starts after all specced systems have their basic shapes. One cross-spike plan gives its order.
+26. **Extraction, not refactor.** The plan builds the Pipeline next to the current systems, in one root folder: `Assets/Framework/Pipeline/`. No step edits, moves or migrates a current system. The migration is one row in section 11.
 
 ## 2. Scope
 
@@ -237,7 +237,7 @@ if (!result.Accepted) Show(result.Reason);
 | `System.Threading.Tasks` | The async run (decision 4) |
 | `Framework.Blocks` (later) | `GroupService.Open` and `Close` wrap `Before`, `Handle`, `After` |
 
-asmdef references: `Framework.Core`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Wire`, `Framework.Blocks`. · `Framework.Commands` references it only after the migration.
+asmdef references: `Framework.Core`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Wire`, `Framework.Blocks`. · No current system references it until the migration (section 11).
 
 ### Rules
 
@@ -426,13 +426,13 @@ Assets/Framework/Pipeline/
 │  ├─ Validator.cs              Validator<TMessage>
 │  ├─ PipelineScope.cs
 │  └─ Pipeline.cs               Pipeline<TMessage, TScope>
-├─ Tests/                       Framework.Pipeline.Tests.asmdef
-│  ├─ Fakes/TestPipeline.cs     TestPipeline, TestScope, Ping, Echo, handlers
-│  ├─ ResultTests.cs
-│  ├─ RouterTests.cs
-│  └─ PipelineTests.cs
-└─ PlayTests/                   Framework.Pipeline.PlayTests.asmdef
-   └─ InlineContinuationTests.cs
+└─ Tests/                       Framework.Pipeline.Tests.asmdef
+   ├─ Fixtures/TestPipeline.cs  TestPipeline, TestScope, Ping, Echo, handlers
+   ├─ ResultTests.cs
+   ├─ RouterTests.cs
+   ├─ PipelineTests.cs
+   └─ PlayMode/                 Framework.Pipeline.PlayTests.asmdef
+      └─ InlineContinuationTests.cs
 ```
 
 ## 9. Dependency graph
@@ -443,8 +443,6 @@ flowchart BT
   T["Framework.Pipeline.Tests"] --> P
   T --> C
   PT["Framework.Pipeline.PlayTests"] --> P
-  CMD["Framework.Commands"] -. "after migration" .-> P
-  CMD --> W["Framework.Wire"]
 ```
 
 ## 10. Steps
@@ -469,7 +467,7 @@ public sealed class Result<T> : Result { public T Value { get; } }
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Done: gate PASS; `ResultTests` green.
+Done: gate PASS; `ResultTests` green; the diff is only in `Assets/Framework/Pipeline/`.
 
 ### 2 · Build — `Handler<,>`, `Validator<>`
 
@@ -495,7 +493,7 @@ public abstract class Validator<TMessage> : IRouted
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Done: gate PASS; `RouterTests` green.
+Done: gate PASS; `RouterTests` green; the diff is only in `Assets/Framework/Pipeline/`.
 
 ### 3 · Build — `Pipeline<,>`, `PipelineScope`
 
@@ -528,7 +526,7 @@ PipelineTests
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Done: gate PASS; `PipelineTests` green; no file outside `Assets/Framework/Pipeline/` changed.
+Done: gate PASS; `PipelineTests` green; the diff is only in `Assets/Framework/Pipeline/`.
 
 ### 4 · Build — inline continuation in PlayMode
 
@@ -546,72 +544,7 @@ Done: gate PASS; `PipelineTests` green; no file outside `Assets/Framework/Pipeli
 powershell -NoProfile -File Tools/Rulebook/gate.ps1 -With playmode
 ```
 
-Done: gate PASS; `InlineContinuationTests` green in EditMode and PlayMode.
-
-### 5 · Migrate — `Command : Message` (order: cross-spike plan)
-
-```csharp
-public abstract class Command { }                       // before
-public abstract class Command : Message { }             // after
-public abstract class Command<TResult> : Command { }    // new
-```
-
-Done: gate PASS; `CommandServiceTests` green, unchanged.
-
-### 6 · Migrate — `CommandPipeline`, `ICommandScope`
-
-```csharp
-sealed class CommandPipeline : Pipeline<Command, ICommandScope>
-{
-    protected override ICommandScope CreateScope(Envelope<Command> e) => new CommandScope(m => RunInline(e, m));
-}
-```
-
-```
-CommandService.Execute → commands.Add → commands.Run → RunOne → Execute → Handle
-```
-
-Done: gate PASS; all acceptance bindings green, unchanged.
-
-### 7 · Migrate — handlers on the shared bases, async
-
-```csharp
-protected override void Handle(PlayCard c) { … }                              // before
-protected override async Task Handle(PlayCard c, ICommandScope s) { … }       // after
-```
-
-Done: gate PASS; no `ICommandHandler` or `ICommandValidator` left.
-
-### 8 · Migrate — registries become `TypeRouter` (owner: cross-spike plan)
-
-```csharp
-new CommandHandlerRegistry(handlers)                                        // before
-new TypeRouter<Handler<Command, ICommandScope>>(handlers, RouteMode.Single) // after
-```
-
-Done: gate PASS; `CommandHandlerRegistry.cs` and `CommandValidatorRegistry.cs` deleted.
-
-### 9 · Migrate — delete `CommandService`, `CommandResult`
-
-```csharp
-var r = commandService.Execute(cmd);                                        // before
-var e = commands.Add(cmd); await commands.Run(); var r = Result.From(e);    // after
-```
-
-Done: gate PASS; `CommandService.cs` and `CommandResult.cs` deleted.
-
-### 10 · Migrate — rules PIPE-01, PIPE-04, PIPE-05 (after approval)
-
-```
-Tools/Rulebook/rulebook.json                    + PIPE-01, PIPE-04, PIPE-05
-Assets/Tools/Rulebook/Editor/Checks/            + includeParameters, methods[] filter
-```
-
-```powershell
-powershell -NoProfile -File Tools/Rulebook/gate.ps1 -With playmode
-```
-
-Done: gate PASS; each rule fails on its fixture and passes on the Framework.
+Done: gate PASS; `InlineContinuationTests` green in EditMode and PlayMode; the diff is only in `Assets/Framework/Pipeline/`.
 
 ## 11. Later
 
@@ -619,6 +552,7 @@ These items are not open for v0. Each row says why it waits and what reopens it.
 
 | Item | Why later | Trigger to reopen |
 |---|---|---|
+| Migration: Commands onto the Pipeline (`Command : Message`, `CommandPipeline`, async handlers, registries to `TypeRouter`, delete `CommandService` and `CommandResult`, add PIPE-01, PIPE-04, PIPE-05) | The plan is an extraction; no current system changes | All specced systems built; the cross-spike plan gives the order |
 | Hooks and reactions: a handler in a phase, or a reaction message | Needs its own discussion | Next discussion |
 | Hooks: may a Before hook change the message? Does the result read the change? | Part of the hooks model | Hooks discussion |
 | Hooks: reactions inline or in the list | Part of the hooks model | Hooks discussion |
