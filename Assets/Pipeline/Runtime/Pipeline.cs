@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Framework.RecordIds;
@@ -69,6 +70,7 @@ namespace Framework.Pipeline
         protected virtual Envelope<TMessage> SelectNext(IReadOnlyList<Envelope<TMessage>> items)
             => items.Count > 0 ? items[0] : null;
 
+        /// <summary>Makes the scope for one run. The scope must be a <see cref="PipelineScope"/>; if not, the run faults.</summary>
         protected abstract TScope CreateScope(Envelope<TMessage> e);
 
         protected virtual bool Validate(Envelope<TMessage> e, out string reason)
@@ -87,20 +89,23 @@ namespace Framework.Pipeline
         // Not virtual: a subclass changes a step, never the order of the steps.
         protected async Task<Envelope<TMessage>> Execute(Envelope<TMessage> e)
         {
+            PipelineScope closable = null;
             e.Start();
-            if (!Validate(e, out var reason))
-            {
-                e.Reject(reason);
-                return e;
-            }
-
-            var scope = CreateScope(e);
             try
             {
+                if (!Validate(e, out var reason))
+                {
+                    e.Reject(reason);
+                    return e;
+                }
+
+                var scope = CreateScope(e);
+                closable = scope as PipelineScope
+                    ?? throw new InvalidOperationException($"{GetType().Name}.CreateScope must return a PipelineScope.");
                 await Before(e, scope);
-                e.SetResult(await Handle(e, scope));
+                var result = await Handle(e, scope);
                 await After(e, scope);
-                e.Accept(e.Result);
+                e.Accept(result);
                 return e;
             }
             catch
@@ -110,7 +115,7 @@ namespace Framework.Pipeline
             }
             finally
             {
-                (scope as PipelineScope)?.Close();
+                closable?.Close();
             }
         }
     }

@@ -135,7 +135,10 @@ namespace Framework.Pipeline.Tests
             Assert.That(e.State, Is.EqualTo(EnvelopeState.Running));
             Assert.IsFalse(pipeline.Remove(e.Id));
             Assert.IsFalse(run.IsCompleted);
+
             hold.Release.SetResult(null);
+            Assert.IsTrue(run.Wait(TimeSpan.FromSeconds(5)));
+            Assert.That(e.State, Is.EqualTo(EnvelopeState.Accepted));
         }
 
         [Test]
@@ -174,6 +177,68 @@ namespace Framework.Pipeline.Tests
             pipeline.Run().Wait();
 
             Assert.Throws<InvalidOperationException>(() => pipeline.Scopes[0].Run(new Ping()));
+        }
+
+        [Test]
+        public void Validate_Throws_Faults()
+        {
+            var pipeline = new TestPipeline(new CrashValidator());
+            var e = pipeline.Add(new Crash());
+
+            Assert.IsTrue(pipeline.Run().IsFaulted);
+            Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+            Assert.That(pipeline.Steps, Is.EqualTo(new[] { "validate" }));
+        }
+
+        [Test]
+        public void CreateScope_Throws_Faults()
+        {
+            var pipeline = new TestPipeline(new PingHandler()) { ScopeThrows = true };
+            var e = pipeline.Add(new Ping());
+
+            Assert.IsTrue(pipeline.Run().IsFaulted);
+            Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+            Assert.That(pipeline.Steps, Has.No.Member("handle"));
+        }
+
+        [Test]
+        public void CreateScope_NotPipelineScope_Faults()
+        {
+            var pipeline = new TestPipeline(new PingHandler()) { ScopeIsNull = true };
+            var e = pipeline.Add(new Ping());
+
+            var run = pipeline.Run();
+
+            Assert.IsTrue(run.IsFaulted);
+            Assert.That(run.Exception.InnerException.Message, Does.Contain("must return a PipelineScope"));
+            Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+        }
+
+        [Test]
+        public void Fault_LeavesNoResult()
+        {
+            var pipeline = new TestPipeline(new BoomHandler());
+            var e = pipeline.Add(new Boom());
+
+            pipeline.Run();
+
+            Assert.IsNull(e.Result);
+        }
+
+        [Test]
+        public void Add_DuringRun_ListsNewEnvelope()
+        {
+            var spawn = new SpawnHandler();
+            var pipeline = new TestPipeline(spawn, new PingHandler());
+            spawn.Target = pipeline;
+            var e = pipeline.Add(new Spawn());
+
+            pipeline.Run().Wait();
+
+            var added = (Envelope<Message>)e.Result;
+            Assert.That(pipeline.Items, Is.EqualTo(new[] { added }));
+            Assert.That(added.State, Is.EqualTo(EnvelopeState.Listed));
+            Assert.IsNull(added.ParentId);
         }
 
         [Test]

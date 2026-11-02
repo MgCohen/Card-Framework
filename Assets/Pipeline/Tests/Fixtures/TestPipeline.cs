@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Framework.RecordIds;
@@ -15,6 +16,8 @@ namespace Framework.Pipeline.Tests
         }
 
         public bool Lifo { get; set; }
+        public bool ScopeThrows { get; set; }
+        public bool ScopeIsNull { get; set; }
         public List<string> Steps { get; } = new();
         public List<TestScope> Scopes { get; } = new();
 
@@ -32,6 +35,8 @@ namespace Framework.Pipeline.Tests
         protected override TestScope CreateScope(Envelope<Message> e)
         {
             Steps.Add("scope");
+            if (ScopeThrows) throw new InvalidOperationException("scope");
+            if (ScopeIsNull) return null;
             var scope = new TestScope(m => RunInline(e, m));
             Scopes.Add(scope);
             return scope;
