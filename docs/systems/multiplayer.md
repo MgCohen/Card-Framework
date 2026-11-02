@@ -2,7 +2,7 @@
 
 Runs the lobby: hosting or joining a session, seats, player data, ready flags and the match start signal.
 
-**Code:** `Assets/Multiplayer/` · assembly `Framework.Multiplayer` · depends on `Framework.Wire`, `Scaffold.Autopacker`, `Unity.Netcode.Runtime`, `Unity.Netcode.Transports.UTP`, `Unity.Networking.Transport`, `Unity.Collections`, `UniTask`
+**Code:** `Assets/Multiplayer/` · assembly `Framework.Multiplayer` · depends on `Framework.Wire`, `Framework.Wire.Ngo`, `Scaffold.Autopacker`, `Unity.Netcode.Runtime`, `Unity.Netcode.Transports.UTP`, `Unity.Networking.Transport`, `Unity.Collections`, `UniTask`
 
 ## What it does
 - Starts a session as solo (in-process loopback), as host, or as a joining client, over Netcode for GameObjects.

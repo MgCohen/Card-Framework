@@ -2,13 +2,15 @@
 
 Wire carries every state change as a `WireEvent`: it records events in a stream, dispatches them to apply handlers, and ships them between server and client.
 
-**Code:** `Assets/Wire/` · assembly `Framework.Wire` · depends on `Scaffold.Autopacker`, `Unity.Netcode.Runtime`, `Unity.Collections` (no Framework assemblies)
+**Code:** `Assets/Wire/` · assembly `Framework.Wire` · depends on `Scaffold.Autopacker` only (no engine, no Framework assemblies; rulebook ARCH-10)
+
+**NGO adapter:** `Assets/Wire/Runtime/Ngo/` · assembly `Framework.Wire.Ngo` · depends on `Framework.Wire`, `Unity.Netcode.Runtime`, `Unity.Collections`
 
 ## What it does
 - Keeps an append-only `EventStream` of `WireEvent`s and raises `OnAppended` for each one.
 - Routes each event by runtime type to every `WireEventHandler<T>` registered for it (`HandlerRegistry`).
 - Packs each event into a fixed-size struct (`[AutoPack]` / `[Packed]`) and sends it over an `ITransport` with a one-byte channel id.
-- Provides transports: `NgoTransport` (Netcode named messages), `LoopbackTransport` (in-process pair), `NullTransport` (drops everything).
+- Provides transports: `LoopbackTransport` (in-process pair), `NullTransport` (drops everything), and `NgoTransport` (Netcode named messages) in `Framework.Wire.Ngo`.
 - Brackets work in blocks: `BlockScope` emits `BlockStartEvent` and `BlockEndEvent` with a `BlockKind` and `BlockOutcome`.
 - Holds no domain events. Features declare their own (rulebook ARCH-09).
 
@@ -44,7 +46,7 @@ EventStream.Emit ── append ── OnAppended
 | `Network` | Owns the channel table. `Register<T,TPacked>()` adds a channel; `Send` looks one up by type. |
 | `NetworkChannel<T,TPacked>` | Packs and unpacks one event type. Raises a typed `OnReceived`. |
 | `Dispatcher` | Reads the id byte from the transport and hands the bytes to that channel. |
-| `ITransport` | Byte pipe. `NgoTransport`, `LoopbackTransport`, `NullTransport`. |
+| `ITransport` | Byte pipe: `Send(ReadOnlySpan<byte>)` and `OnReceived` (`TransportReceive`). The span is valid only during the call. `LoopbackTransport`, `NullTransport`; `NgoTransport` in `Framework.Wire.Ngo`. |
 | `WireForwarder` / `NetworkInboundBridge` | Server stream to network; network to client stream. |
 | `BlockScope` | Allocates block ids and emits block start and end events. |
 
