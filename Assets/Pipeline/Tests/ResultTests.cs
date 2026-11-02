@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 
 namespace Framework.Pipeline.Tests
@@ -45,6 +46,40 @@ namespace Framework.Pipeline.Tests
         [Test]
         public void FromT_Rejected_ReturnsDefault()
             => Assert.That(Result<int>.From(Rejected("no mana")).Value, Is.EqualTo(0));
+
+        [Test]
+        public void From_Listed_Throws()
+            => Assert.Throws<InvalidOperationException>(() => Result.From(Listed()));
+
+        [Test]
+        public void From_Running_Throws()
+        {
+            var e = Listed();
+            e.Start();
+
+            Assert.Throws<InvalidOperationException>(() => Result.From(e));
+        }
+
+        [Test]
+        public void From_Faulted_Throws()
+        {
+            var e = Listed();
+            e.Fault();
+
+            Assert.Throws<InvalidOperationException>(() => Result.From(e));
+        }
+
+        [Test]
+        public void FromT_Listed_Throws()
+            => Assert.Throws<InvalidOperationException>(() => Result<int>.From(Listed()));
+
+        [Test]
+        public void FromT_WrongValueType_Throws()
+            => Assert.Throws<InvalidOperationException>(() => Result<int>.From(Accepted("five")));
+
+        [Test]
+        public void FromT_NullValueForReferenceType_ReturnsNull()
+            => Assert.IsNull(Result<string>.From(Accepted(null)).Value);
 
         [Test]
         public void Envelope_Message_ReturnsTypedAndBaseMessage()
