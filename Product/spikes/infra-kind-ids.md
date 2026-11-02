@@ -7,6 +7,7 @@ references:
   - docs/coding-standards.md
   - Product/spikes/infra-record-ids.md
   - Product/spikes/infra-block-wire.md
+  - Product/spikes/infra-type-router.md
 sandbox: Assets/Framework/Core/Runtime/
 tags: [#spike, #infra, #kinds, #registry, #wire]
 ---
@@ -23,10 +24,10 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 1. Keep the standard in `docs/lookup-patterns.md`: a kind is a record over a `TypeKey` base, and a registry maps slots to members.
 2. The slot stays an authored `int`. It is the only identity on the wire and in data. The record is the identity in code.
 3. The slot is `private` to `TypeKey`. The registry is nested in `TypeKey` (`TypeKey.Registry<TKey>`), so it is the only reader: `SlotOf(key)` and `BySlot(slot)`.
-4. Code members register through a scan (`RegisterCodeMembers()`, reflection in v1, a source generator in v2). Data members register through `Register(member)`. Then the registry freezes.
-5. `Tag<T>` is concrete. `PoisonTag : Tag<int>(1001)` and `new Tag<int>(1002)` both work.
-6. The framework keeps slots 0–999. Games use 1000 and up.
-7. Three gate rules: KIND-01 (unique slots), KIND-02 (slot ranges), KIND-03 (a kind root record is not positional).
+4. Code members register through a scan of all loaded assemblies (`RegisterCodeMembers()`). Data members register through `Define(slot)` or `Register(member)`. Then the registry freezes.
+5. A member type has no public constructor with a slot parameter. Data tags come only from `tags.Define<int>(slot)`.
+6. The framework has no slot ranges. An on-demand `KindValidator` checks the member shapes. A project adds its own number rules.
+7. `TypeKey` implements `IKind`, which carries `[RequireImplementors]`, so IL2CPP stripping keeps the member types.
 
 ### Decisions
 
@@ -36,27 +37,35 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 4. (2026-11-01) Scope follows the two-tab page template (§2). Block kind, tag values, the state stack, the wire path and the asset format are out.
 5. (2026-11-01) The registry is nested in `TypeKey`, and the slot is `private`. No `internal` slot and no friend assembly.
 6. (2026-11-01) No `AddKind` installer call. v1: a reflection scan calls `Register<T>()` for each sealed member type. v2: a source generator writes the same list. Kinds are an exception to the "explicit registration" rule.
-7. (2026-11-01) `Tag<T>` is a concrete record with a public `int` constructor, so data tags are instances. Data members have no name: code holds a reference, or uses `BySlot`.
+7. (2026-11-01) `Tag<T>` is a concrete record, so data tags are instances. Data members have no name: code holds a reference, or uses `BySlot`.
+8. (2026-11-02) The scan reads all loaded assemblies, test assemblies included. Test members appear on purpose; a test filter can come later. The scan uses the router's `TypeScan` (`infra-type-router.md`) with one new parameter: `ConcreteTypesOf(baseType, includeTests: true)`.
+9. (2026-11-02) The framework has no slot ranges. The old KIND-02 rule (0–999 for the framework) is removed. Each project writes its own number guidance. `KindValidator.Validate()` in Core runs on demand, returns issues and throws nothing. An analyzer can use it later.
+10. (2026-11-02) `Register` of a member that is equal to a registered member (same type and slot) does nothing. A different member on a used slot throws, and the message names both types.
+11. (2026-11-02) The `Tag<T>` constructor is `protected internal`. `TagRegistry.Define<T>(slot)` makes and registers a data tag. The base registry has `Define(slot, make)` for other kind spaces. `KindValidator` reports a member type with a public constructor that has parameters. `SlotOf` has no extra check: it stays one field read.
+12. (2026-11-02) Stripping: `TypeKey` implements `IKind`, and `IKind` carries the router's own `[RequireImplementorsAttribute]`. The router smoke build proved this attribute on IL2CPP at stripping level High. Add one kind member to that build, because kind members get `IKind` through a base class.
+13. (2026-11-02) Tag value types stay a manual registration. One call, `builder.RegisterTagValueType<T>()`, registers the handlers and the wire channel, so the two lists become one. A validator check or a source generator can come later.
+14. (2026-11-02) The data asset format is out of scope. This spike gives only `Define<T>(slot)`. The data work comes after this spike.
 
 ## 2. Scope
 
 | Concern | In / Out | Owner if out |
 |---|---|---|
 | Kind root record and its members (`Tag`, `EntityType`, `GameState`) | in | — |
-| Slot number for each member: unique in its kind space, in the correct range | in | — |
+| Slot number for each member: unique in its kind space | in | — |
 | Registry: slot to member, member to slot, type to member | in | — |
 | Registration at composition: code members, data members, then freeze | in | — |
 | Slot access: only the registry reads the slot | in | — |
-| Members from data, added before the freeze | in | — |
-| Rules: unique slots, slot ranges, no positional root record | in | — |
-| Instance ids (`EntityId`, `RequestId`, `BlockId`, `MessageId`) and their allocation | out | `infra-record-ids.md` |
+| Members from data, added before the freeze (`Define`) | in | — |
+| Checks: unique slots, no public slot constructor, no positional root record | in | — |
+| Slot ranges and number guidance | out | each project |
+| Instance ids (`EntityId`, `BlockId`, `MessageId`) and their allocation | out | `infra-record-ids.md` |
 | Wire event fields, packing and apply handlers | out | `Framework.Wire` and each feature |
 | Asset format for data members | out | data-authoring work |
 | Tag values: value types, `TagStore`, value checks | out | `Framework.Tags` |
 | Game state stack (`Push`, `Pop`, current state) | out | `Framework.States` |
 | `BlockKind`: change from an `enum` to a kind space | out | `infra-block-wire.md` (it can use this pattern) |
 | Card definition ids in `Catalog` | out | `Framework.Entities` (Catalog) |
-| Handler lookup by message type | out | `infra-type-router.md` |
+| Handler lookup by message type, `TypeScan` | out | `infra-type-router.md` |
 | VS `TagKey` and `[TagSlot]` attribute | out | VS spike (deletable, not promoted) |
 
 Boundary: the pattern receives kind records from code and from data at composition. It gives each feature a frozen registry. The feature turns a member into a slot (`SlotOf`) and a slot into a member (`BySlot`). What the feature does with the slot is out of scope.
@@ -79,7 +88,7 @@ Five findings:
 2. **Games cannot add kinds.** `EntityInstaller` and `StateInstaller` register `WithBaselines()` as an instance. No installer call adds a game member.
 3. **A clash shows late.** `SlotRegistry.Add` throws when the registry fills, when a match starts. Nothing checks in the gate.
 4. **Any code reads the slot.** `Slot` is a public positional property, so code can use a slot with no registry.
-5. **No slot ranges.** The framework uses 0–5. The samples use 1001 and 2001. Nothing keeps a game out of the framework numbers.
+5. **Tag value types are in two lists.** `TagInstaller.cs:19-20` registers the handlers for `int` and `bool`. `WireRegistrar.cs:28` gives channels to the same two types. `Tag<float>` compiles, but it has no handler and no channel.
 
 ### 3.2 What repeats
 
@@ -90,7 +99,6 @@ Five findings:
 | Sealed registry subclass over `SlotRegistry<TKey>` | all three | Tag: empty; others: a hand-written `WithBaselines()` list |
 | Feature code reads `key.Slot` | all three | Number of sites |
 
-
 ## 4. Proposal
 
 ### 4.1 API
@@ -98,17 +106,20 @@ Five findings:
 | Audience | Entry point | Does |
 |---|---|---|
 | author | `sealed record X() : Root(slot)` | Defines a code member. |
-| author | `new Tag<int>(slot)` | Defines a data member. Only roots that allow data, for example tags. |
+| author | `tags.Define<int>(slot)` | Defines a data member. Only roots that allow data, for example tags. |
 | author | `abstract record Root : TypeKey` + `TypeKey.Registry<Root>` | Defines a kind space. Feature authors only. |
 | composition | `registry.RegisterCodeMembers()` | Finds every sealed member type and registers it. |
-| composition | `registry.Register(member)`, `Freeze()` | Adds a data member; closes the registry. |
+| composition | `registry.Register(member)`, `Freeze()` | Adds one member; closes the registry. |
 | runtime | `registry.SlotOf(key)`, `BySlot(slot)` | Member to slot, slot to member. |
 | runtime | `registry.Of<T>()`, `is T` | Type to member; branch on a member. |
+| gate, tools | `KindValidator.Validate()` | Returns the shape issues. Throws nothing. |
 
 Shape:
 
 ```csharp
-public abstract record TypeKey
+[RequireImplementors] public interface IKind { }
+
+public abstract record TypeKey : IKind
 {
     protected TypeKey(int slot);
     private readonly int _slot;                         // only Registry reads it
@@ -117,7 +128,8 @@ public abstract record TypeKey
     {
         public void RegisterCodeMembers();              // scan: Register<T>() for each sealed member
         public void Register<T>() where T : TKey, new(); // one code member
-        public void Register(TKey member);              // one data member
+        public void Register(TKey member);              // equal member: no-op; slot clash: throws
+        public T    Define<T>(int slot, Func<int, T> make) where T : TKey;  // make + Register
         public void Freeze();                           // Register then throws
 
         public int  SlotOf(TKey key);                   // member → slot
@@ -127,13 +139,18 @@ public abstract record TypeKey
         public IReadOnlyCollection<TKey> Members { get; }
     }
 }
+
+public static class KindValidator
+{
+    public static IReadOnlyList<string> Validate();     // shape issues, no throw
+}
 ```
 
 Call site:
 
 ```csharp
 public sealed record PoisonTag() : Tag<int>(1001);     // code tag
-Tag<int> shield = new Tag<int>(1002);                  // data tag
+Tag<int> shield = tags.Define<int>(1002);              // data tag
 if (entity.Type is Card) { ... }
 ```
 
@@ -142,28 +159,28 @@ Access:
 | Bypass route | What stops it |
 |---|---|
 | Read the slot with no registry | The slot is `private` to `TypeKey`. Only the nested `Registry` reads it. |
-| A positional root `record X(int Slot) : TypeKey(Slot)` makes a new public `Slot` | KIND-03. |
+| A positional root `record X(int Slot) : TypeKey(Slot)` makes a new public `Slot` | `KindValidator` (KIND-03). |
+| `new Tag<int>(1002)` in game code, never registered | The `Tag<T>` constructor is `protected internal`. The code does not compile. |
+| A member type with a public slot constructor: `new CustomKind(5)` | `KindValidator` (KIND-02). The scan also skips it. |
 | Pass a tag to the entity type registry | `SlotOf` takes only `TKey`. The code does not compile. |
 | Add a member during a match | `Freeze()`. `Register` then throws. |
-| Two members with the same slot | `Register` throws at composition. KIND-01 fails the gate. |
-| A game member in the framework range | KIND-02 fails the gate. |
-| A data tag that was never registered | In the editor and dev builds, `SlotOf` checks that the member is registered. |
+| Two different members with the same slot | `Register` throws at composition and names both types (KIND-01). |
 
 ### 4.2 Parts
 
 | Part | Home | Serves |
 |---|---|---|
-| `TypeKey` with a private slot | `Framework.Core` | define a member |
-| `TypeKey.Registry<TKey>` | `Framework.Core` | `SlotOf`, `BySlot`, `Of<T>`, `Freeze` |
-| Code member scan | `Framework.Core` | `RegisterCodeMembers()` |
-| Data members: concrete `Tag<T>` | `Framework.Tags` | `new Tag<int>(slot)`, `Register(member)` |
+| `TypeKey` with a private slot, `IKind` | `Framework.Core` | define a member, keep it in IL2CPP builds |
+| `TypeKey.Registry<TKey>` | `Framework.Core` | `SlotOf`, `BySlot`, `Of<T>`, `Define`, `Freeze` |
+| Code member scan | `Framework.Core` (`TypeScan`) | `RegisterCodeMembers()` |
+| `KindValidator` | `Framework.Core` | KIND-01/02/03 on demand |
+| Data tags: `Tag<T>` + `TagRegistry.Define<T>` | `Framework.Tags` | `tags.Define<int>(slot)` |
 | Kind space: root record + registry subclass | the feature | define a kind space |
-| KIND-01, KIND-02, KIND-03 | rulebook | slot checks in the gate |
 
 **TypeKey and Registry.** A nested type can read the private members of its outer type. So only the registry can read the slot.
 
 ```csharp
-public abstract record TypeKey
+public abstract record TypeKey : IKind
 {
     protected TypeKey(int slot) => _slot = slot;
     private readonly int _slot;
@@ -171,7 +188,7 @@ public abstract record TypeKey
     public class Registry<TKey> where TKey : TypeKey
     {
         public int SlotOf(TKey key) => key._slot;    // one field read
-        // Register, Freeze, BySlot, Of<T> as today
+        // Register, Define, Freeze, BySlot, Of<T>
     }
 }
 ```
@@ -189,40 +206,56 @@ public sealed record Card() : EntityType(4);
 
 Before step 1 lands, a compile test must prove two things: a positional member (`Card() : EntityType(4)`) can call the protected constructor of a non-positional root, and code outside `TypeKey` cannot read `_slot`.
 
-**Code member scan.** The scan finds each sealed subtype of `TKey` with a parameterless constructor and calls the `Register<T>()` path for it. A source generator replaces the scan in v2, with the same result.
+**Code member scan.** The scan finds each sealed subtype of `TKey` with a parameterless constructor and calls the `Register<T>()` path for it. It reads all loaded assemblies, test assemblies included. A source generator replaces the scan in v2, with the same result.
 
 ```csharp
 public void RegisterCodeMembers()
 {
-    foreach (var type in AllTypes())
-        if (type.IsSealed && typeof(TKey).IsAssignableFrom(type)
-            && type.GetConstructor(Type.EmptyTypes) != null)
+    foreach (var type in TypeScan.ConcreteTypesOf(typeof(TKey), includeTests: true))
+        if (type.IsSealed && type.GetConstructor(Type.EmptyTypes) != null)
             RegisterType(type);                     // same path as Register<T>()
 }
 ```
 
-**Data members.** A data tag is an instance, not a class. Code holds a reference to it. An asset can hold a list of them, and a loop registers each one before the freeze. Record equality includes the slot, so two instances with the same slot and `T` are equal.
+**Register.** Record equality compares the type and the slot. So a second `Register` of an equal member does nothing, and a different member on the same slot throws.
+
+```csharp
+if (_bySlot.TryGetValue(member._slot, out var old))
+{
+    if (old.Equals(member)) return;
+    throw new InvalidOperationException($"Slot {member._slot}: {old.GetType().Name} and {member.GetType().Name}.");
+}
+```
+
+**Data tags.** A data tag is an instance, not a class. Only `TagRegistry` can make one, so each data tag is registered. Code holds the reference that `Define` returns.
 
 ```csharp
 public record Tag<T> : Tag where T : unmanaged
 {
-    public Tag(int slot) : base(slot) { }
+    protected internal Tag(int slot) : base(slot) { }
     public override Type ValueType => typeof(T);
 }
-
-foreach (var tag in tagAsset.Tags) tags.Register(tag);
+public sealed class TagRegistry : TypeKey.Registry<Tag>
+{
+    public Tag<T> Define<T>(int slot) where T : unmanaged => Define(slot, s => new Tag<T>(s));
+}
 ```
 
 `EntityType` and `GameState` stay abstract. Each root chooses whether it accepts data members.
 
-**Slot ranges.**
+**KindValidator.** It runs on demand: in the gate test, in a menu item, or later in an analyzer. It returns issues and throws nothing.
 
-| Range | Owner |
+| Id | Check |
 |---|---|
-| 0–999 | framework members |
-| 1000 and up | game and test members |
+| KIND-01 | Each registry fills with no slot clash. |
+| KIND-02 | A kind member type has no public constructor with parameters. |
+| KIND-03 | A kind root record (a direct abstract subtype of `TypeKey`) is not positional. |
 
-The range applies to each kind space separately. Current framework slots (0–5) and sample slots (1001+, 2001+) already fit.
+**Stripping.** IL2CPP at stripping level High removes member types that no code uses, so the scan finds nothing. The router test (`infra-type-router.md` §5.5) proved that our own `RequireImplementorsAttribute` in Core keeps them. The linker reads the attribute by its short name.
+
+```csharp
+[RequireImplementors] public interface IKind { }   // the router's attribute, Framework.Core
+```
 
 ### 4.3 Architecture
 
@@ -231,7 +264,7 @@ composition, both sides
 TagInstaller.Install
 ├─ new TagRegistry()
 ├─ RegisterCodeMembers() → Register<PoisonTag>()   (clash → throw)
-├─ foreach tag in asset → Register(tag)
+├─ tags.Define<int>(1002)                          (data tags, before the freeze)
 ├─ Freeze()
 └─ builder.RegisterInstance(tags)
 
@@ -245,57 +278,66 @@ TagService.Set(entity, GameTags.Poison, 3)
 | Loss | Why it matters | Mitigation |
 |---|---|---|
 | Slot numbers stay hand-written | An author must pick a free number for each new member. | A clash throws at composition and fails the gate. The number does not change across builds. |
+| No slot ranges | A later framework member can take a number that a game uses. | Each project writes its own guidance. `KindValidator` can get a project check. |
 | Registration is not explicit | `docs/lookup-patterns.md` asks for explicit registration. | Kinds become a written exception. `registry.Members` lists them. The v2 source generator gives a visible list. |
-| Reflection scan at startup | The scan costs time, and IL2CPP stripping can remove a member type that no code uses. | The scan runs once at composition. A `link.xml` keeps the kind assemblies. The source generator removes both costs. |
-| Data tags have no type | `Of<T>` and `is` do not find a data tag. | Code keeps a reference to the instance, or uses `BySlot`. |
+| Reflection scan at startup | The scan costs time, and IL2CPP stripping can remove a member type. | The scan runs once at composition. `IKind` with `[RequireImplementors]` keeps the types. The source generator removes both costs. |
+| Test members appear in the scan | A test kind can take a slot in a game build that loads test assemblies. | Wanted for now. A test filter can come later. |
+| A public slot constructor still compiles | C# cannot block `new CustomKind(5)` for a member type. | `KindValidator` reports it. An analyzer can come later. |
+| Tag value types are manual | `Tag<float>` needs one `RegisterTagValueType<float>()` line. | One call registers the handlers and the channel. A validator check or a generator can come later. |
+| Data tags have no type | `Of<T>` and `is` do not find a data tag. | Code keeps the reference from `Define`, or uses `BySlot`. |
 | Root records are not positional | A root needs a protected constructor in place of one line. | Only a feature author writes a root. KIND-03 catches a positional root. |
-| Frozen registries | No kind can be added during a match. | Data loads before composition, through `Register(member)`. |
-| Reserved range 0–999 | A game cannot use low numbers. | The range is per kind space. |
+| Frozen registries | No kind can be added during a match. | Data loads before composition, through `Define`. |
 
 ## 5. Call-site migration
 
 | Current code | New code | Change needed |
 |---|---|---|
-| `abstract record TypeKey(int Slot)` | `abstract record TypeKey` with protected ctor and `private int _slot` | Core |
-| `SlotRegistry<TKey>` | `TypeKey.Registry<TKey>` + `SlotOf`, `Freeze`, `RegisterCodeMembers`, `Members` | Core; three registry subclasses |
+| `abstract record TypeKey(int Slot)` | `abstract record TypeKey : IKind` with protected ctor and `private int _slot` | Core |
+| `SlotRegistry<TKey>` | `TypeKey.Registry<TKey>` + `SlotOf`, `Define`, `Freeze`, `RegisterCodeMembers`, `Members` | Core; three registry subclasses |
+| — | `KindValidator`, `IKind`, `TypeScan(includeTests)` | Core |
 | `abstract record Tag(int Slot) : TypeKey(Slot)` | `Tag : TypeKey`, protected `int` ctor | the same for `EntityType`, `GameState` |
-| `abstract record Tag<T>(int Slot)` | concrete `record Tag<T>` with a public `int` ctor | Tags |
+| `abstract record Tag<T>(int Slot)` | concrete `record Tag<T>` with a `protected internal` ctor; `TagRegistry.Define<T>` | Tags |
 | `HealthTag() : Tag<int>(2001)` | no change | — |
 | `key.Slot` in `TagService`, `type.Slot` in `EntityService`, `new TState().Slot` in `StateService` | `registry.SlotOf(key)` | inject the registry |
 | `SampleTags.Health.Slot` in integration tests | `tags.SlotOf(SampleTags.Health)` | tests |
-| `WithBaselines()` lists; empty `TagRegistry` | `new XRegistry()`, `RegisterCodeMembers()`, data loop, `Freeze()`, `RegisterInstance` | three feature installers |
+| `WithBaselines()` lists; empty `TagRegistry` | `new XRegistry()`, `RegisterCodeMembers()`, `Define` for data, `Freeze()`, `RegisterInstance` | three feature installers |
+| `RegisterTagValueType<T>()` + `WireRegistrar.ValueTypes` | one `RegisterTagValueType<T>()` for handlers and channel | Tags, Wire |
 
 Wire fields stay `[Packed] int`. Apply handlers do not change.
 
 ## 6. Rulebook rules to propose
 
-Proposals only. `rulebook.json` does not change in this spike.
+Proposals only. `rulebook.json` does not change in this spike. The framework has no slot range rule (decision 9).
 
 | Id | Rule | Why | Check |
 |---|---|---|---|
-| KIND-01 | Slots are unique in each kind space. | A clash shows only at match start today, and never for tags. | `attached`: a test in `Framework.Testing.Integration.Tests` builds each registry with `RegisterCodeMembers()`. `Register` throws on a clash. |
-| KIND-02 | Framework members use slots 0–999. Members outside `Framework.*` use 1000 and up. | A game member must not take a framework slot that a later framework version needs. | The same test: for each entry in `Members`, check `SlotOf` against the assembly name. |
-| KIND-03 | A kind root record (a direct abstract subtype of `TypeKey`) is not positional. | A positional `Slot` parameter makes a public property and bypasses the registry. | The same test: fail if the root declares a public `Slot` property. |
+| KIND-01 | Slots are unique in each kind space. | A clash shows only at match start today, and never for tags. | `attached`: a test in `Framework.Testing.Integration.Tests` builds each registry with `RegisterCodeMembers()` and asserts that `KindValidator.Validate()` is empty. |
+| KIND-02 | A kind member type has no public constructor with parameters. | A public slot constructor lets code make members that are not registered. | The same test, through `KindValidator`. |
+| KIND-03 | A kind root record (a direct abstract subtype of `TypeKey`) is not positional. | A positional `Slot` parameter makes a public property and bypasses the registry. | The same test, through `KindValidator`. |
 
 ## 7. Migration steps
 
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green.
 
-1. **Core.** Change `TypeKey` to the protected ctor and the private slot. Nest the registry, and add `SlotOf`, `Freeze`, `RegisterCodeMembers` and `Members`. Add the compile test from §4.2.
+1. **Core.** Change `TypeKey` to the protected ctor, the private slot and `IKind`. Nest the registry, and add `SlotOf`, `Define`, `Freeze`, `RegisterCodeMembers` and `Members`. Add `KindValidator`. Add the compile test from §4.2. Add one kind member to the router's IL2CPP smoke build.
 2. **States.** Move `GameState` to the non-positional root. `StateService` uses `SlotOf`. The installer builds the registry with the scan and freezes it. This is the smallest space, so it proves the shape.
 3. **Entities.** The same for `EntityType`, `EntityService` and `EntityTypeRegistry`.
-4. **Tags.** The same for `Tag` and `TagService`. Make `Tag<T>` concrete. Fill and freeze `TagRegistry`, with the value-type check.
+4. **Tags.** The same for `Tag` and `TagService`. Make `Tag<T>` concrete with a `protected internal` ctor, and add `TagRegistry.Define<T>`. Merge the two value-type lists into `RegisterTagValueType<T>()`. Gate with `-With playmode`.
 5. **Rules.** Add the KIND-01/02/03 test and write the rules into `rulebook.json`, in a separate PR for user review.
-6. **Docs.** Update `docs/lookup-patterns.md` (private slot, nested registry, scan, data members, freeze, ranges, the exception to explicit registration, and remove "no framework lookup is off-standard") and `docs/architecture.md`.
+6. **Docs.** Update `docs/lookup-patterns.md` (private slot, nested registry, scan, `Define`, freeze, the validator, the exception to explicit registration, and remove "no framework lookup is off-standard") and `docs/architecture.md`.
 7. **v2.** Replace the scan with a source generator.
 
 ## 8. Interfaces for the other pieces
 
+- **Type-keyed router.** Kinds use `TypeScan` and the `[RequireImplementors]` attribute from `infra-type-router.md`. `TypeScan.ConcreteTypesOf` gets one optional parameter, `includeTests`. The router smoke build gets one kind member.
 - **Block and wire.** If the block piece moves `BlockKind` to a kind space, it uses this shape: `BlockKind : TypeKey`, `BlockKindRegistry : TypeKey.Registry<BlockKind>`, `[Packed] int Kind`, `SlotOf` on emit.
-- **Record ids.** `TagStore` keys become `(EntityId, int slot)`. The order of the two migrations does not matter.
-- **Type-keyed router.** A router key is a C# `Type` or a channel `byte`, not a slot. No shared interface.
+- **Wire.** `WireRegistrar.ValueTypes` goes away. `RegisterTagValueType<T>()` gives the wire channel for each tag value type.
+- **Record ids.** The `TagStore` key is the entity id and the `int` slot. `infra-record-ids.md` decides the form of the entity id. The order of the two migrations does not matter.
 
-## 9. Open questions
+## 9. Follow-ups
 
-1. **Scan scope.** Scan all loaded assemblies, or only assemblies that reference `Framework.Core`? The second is faster.
-2. **Data asset.** Which asset type holds data tags, and how does it serialize `Tag<T>`? This depends on the data-authoring work.
+1. **Data asset.** The format for data tags. The data work comes after this spike. It calls `Define<T>(slot)`.
+2. **Analyzer.** Move KIND-02 and KIND-03 from `KindValidator` to a Roslyn analyzer.
+3. **Test filter.** Keep test members out of the scan in player builds.
+4. **Value types.** A validator check or a source generator for `RegisterTagValueType<T>()`.
+5. **v2 generator.** Replace the reflection scan.
