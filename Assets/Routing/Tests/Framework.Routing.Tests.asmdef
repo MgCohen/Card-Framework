@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Routing.Tests",
     "references": [
         "Framework.Routing",
+        "VContainer",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

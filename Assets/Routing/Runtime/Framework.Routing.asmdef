@@ -1,7 +1,9 @@
 {
     "name": "Framework.Routing",
     "rootNamespace": "Framework.Routing",
-    "references": [],
+    "references": [
+        "VContainer"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
