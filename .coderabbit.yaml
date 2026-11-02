@@ -1,0 +1,101 @@
+# CodeRabbit configuration. Schema: https://docs.coderabbit.ai/reference/configuration
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: >-
+  Be short and direct. Give each finding with the file, the rule it breaks and one fix.
+  Do not praise. Do not restate the diff.
+
+reviews:
+  profile: assertive
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: true
+  sequence_diagrams: true
+  auto_review:
+    enabled: true
+    drafts: false
+
+  # Unity-generated and third-party files. Do not review them.
+  path_filters:
+    - "!**/*.meta"
+    - "!Library/**"
+    - "!Logs/**"
+    - "!Temp/**"
+    - "!UserSettings/**"
+    - "!ProjectSettings/**"
+    - "!Packages/packages-lock.json"
+    - "!Assets/TextMesh Pro/**"
+    - "!Assets/Settings/**"
+    - "!Assets/Scenes/**"
+    - "!**/*.unity"
+    - "!**/*.prefab"
+    - "!**/*.asset"
+    - "!**/*.inputactions"
+
+  path_instructions:
+    - path: "Assets/**/*.cs"
+      instructions: |
+        Unity card-game framework. It is server-authoritative and event-sourced. Read docs/architecture.md.
+        Examine these rules:
+        - Services emit events into the EventStream. A service never writes a store.
+        - Only WireEventHandler<T> subclasses (apply handlers) call internal store writers (rule ARCH-05).
+        - An apply handler never calls a service (ARCH-06).
+        - GameEngine exposes only services, read-only store views, the event stream and the network (ARCH-07).
+        - Client and server run the same apply handlers. Code that only the server can run must not be on the client path.
+        - Use int or Guid for identity, not string.
+        - For open or author-extensible type sets, use int or a readonly struct around int, not a C# enum.
+        - One top-level type per file, named as the file. Exceptions: nested types and generic families.
+        - Comments warn about what the code does not show. Flag header comments and comments that narrate the code (CODE-01).
+        - Prefer small changes. Flag unrelated refactors.
+    - path: "Assets/*/Runtime/**"
+      instructions: |
+        Runtime code of a Framework feature. Read docs/feature-layout.md and the feature page in docs/systems/.
+        - A Runtime assembly references only other features' Runtime assemblies. Editor, Tests and Sample are leaves.
+        - No Framework assembly references a spike assembly (ARCH-03).
+        - If the PR changes the behaviour of a feature, docs/systems/<feature>.md must change in the same PR. Flag it if not.
+        - Look for allocation in hot paths (event dispatch, network pack and unpack).
+    - path: "Assets/Wire/**"
+      instructions: |
+        Wire holds no domain events. Only the Block events are WireEvent subtypes here (ARCH-09).
+        Examine packing, channel ids and transport code for client and server divergence.
+    - path: "Assets/**/*.asmdef"
+      instructions: |
+        Name must be Framework.<Feature>[.Editor|.Tests|.Sample]. Examine references against docs/feature-layout.md:
+        no cycles (ARCH-01), only allowed layer references (ARCH-02), no new InternalsVisibleTo grants without reason (ARCH-04).
+        A Runtime sub-asmdef is allowed only to gate an optional package dependency.
+    - path: "Assets/**/Tests/**"
+      instructions: |
+        Unit tests for one feature. Read docs/testing.md.
+        - The test assembly references only its own feature. It does not use Framework.Testing.Support.
+        - A test that carries [Rule("ID")] must fail if that rule breaks (REV-02).
+        - Do not accept skipped, ignored or weakened tests.
+    - path: "Assets/Testing/Acceptance/**"
+      instructions: |
+        Acceptance tier. Read docs/testing.md and Assets/Testing/Acceptance/Scenarios/_how-to-bind.md.
+        - Each binding has a [Picture] that names an existing scenario file, and each scenario has a binding (TEST-01).
+        - A binding does the Given and When of its picture and asserts every Then and Invariant line. It does no other step (REV-03).
+        - Scenarios describe player or designer behaviour, not mechanism. Mechanism belongs in the Integration tier.
+    - path: "Assets/Testing/Integration/**"
+      instructions: |
+        Integration tier: hand-written tests of wiring and composition. Reuse Framework.Testing.Support. Do not copy its helpers.
+    - path: "Tools/Rulebook/rulebook.json"
+      instructions: |
+        Each rule states one checkable thing, gives a real reason and an actionable fix (REV-01).
+        Flag any change that weakens a rule, lowers its severity or adds an exception without a reason in the PR.
+    - path: "docs/**/*.md"
+      instructions: |
+        Docs must agree with the code. Flag statements that the diff makes false.
+    - path: "Packages/manifest.json"
+      instructions: |
+        Scaffold is the source of truth for internal packages (docs/scaffold.md). Flag new third-party dependencies.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "CLAUDE.md"
+      - "AGENTS.md"
+      - "docs/*.md"
+      - "docs/systems/*.md"
+  learnings:
+    scope: auto
