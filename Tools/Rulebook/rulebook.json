@@ -153,6 +153,28 @@
               "Framework.Blocks",
               "Framework.RecordIds",
               "Framework.Wire"
+            ],
+            "Framework.Samples.FrameworkSample": [
+              "Framework.Blocks",
+              "Framework.Pipeline",
+              "Framework.RecordIds",
+              "Framework.TypeKeys",
+              "Framework.TypeRouting",
+              "Framework.Wire"
+            ],
+            "Framework.Samples.FrameworkSample.Tests": [
+              "Framework.Samples.FrameworkSample",
+              "Framework.Blocks",
+              "Framework.Blocks.Install",
+              "Framework.Pipeline",
+              "Framework.Pipeline.Install",
+              "Framework.RecordIds",
+              "Framework.RecordIds.Install",
+              "Framework.TypeKeys",
+              "Framework.TypeKeys.Install",
+              "Framework.TypeRouting",
+              "Framework.TypeRouting.Install",
+              "Framework.Wire"
             ]
           }
         }
