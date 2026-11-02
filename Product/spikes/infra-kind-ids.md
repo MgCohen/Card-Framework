@@ -43,7 +43,7 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 10. (2026-11-02) `Register` of a member that is equal to a registered member (same type and slot) does nothing. A different member on a used slot throws, and the message names both types.
 11. (2026-11-02) The `Tag<T>` constructor is `protected internal`. `TagRegistry.Define<T>(slot)` makes and registers a data tag. The base registry has `Define(slot, make)` for other kind spaces. `KindValidator` reports a member type with a public constructor that has parameters. `SlotOf` has no extra check: it stays one field read.
 12. (2026-11-02) Stripping: `TypeKey` implements `IKind`, and `IKind` carries the router's own `[RequireImplementorsAttribute]`. The router smoke build proved this attribute on IL2CPP at stripping level High. Add one kind member to that build, because kind members get `IKind` through a base class.
-13. (2026-11-02) Tag value types stay a manual registration. One call, `builder.RegisterTagValueType<T>()`, registers the handlers and the wire channel, so the two lists become one. A validator check or a source generator can come later.
+13. (2026-11-02) Tag value types (the `T` in `Tag<T>`) are out of scope. They are a `Framework.Tags` concern. The "Framework.Tags refactor" issue holds them, with the other tag gaps.
 14. (2026-11-02) The data asset format is out of scope. This spike gives only `Define<T>(slot)`. The data work comes after this spike.
 
 ## 2. Scope
@@ -61,7 +61,7 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 | Instance ids (`EntityId`, `BlockId`, `MessageId`) and their allocation | out | `infra-record-ids.md` |
 | Wire event fields, packing and apply handlers | out | `Framework.Wire` and each feature |
 | Asset format for data members | out | data-authoring work |
-| Tag values: value types, `TagStore`, value checks | out | `Framework.Tags` |
+| Tag values: value types, `TagStore`, value checks | out | `Framework.Tags` refactor (issue) |
 | Game state stack (`Push`, `Pop`, current state) | out | `Framework.States` |
 | `BlockKind`: change from an `enum` to a kind space | out | `infra-block-wire.md` (it can use this pattern) |
 | Card definition ids in `Catalog` | out | `Framework.Entities` (Catalog) |
@@ -82,13 +82,12 @@ Boundary: the pattern receives kind records from code and from data at compositi
 
 Paths are under `Assets/Framework/`. `key.Slot` is public. Runtime code reads it at 10 sites (`TagService.cs:18-50`, `EntityService.cs:23`, `StateService.cs:15`). Tests read it at 3 sites (`TwoSidedMatchIntegrationTests.cs:45-47`).
 
-Five findings:
+Four findings:
 
 1. **Tag slots have no check.** `TagInstaller` registers an empty `TagRegistry`. Two tags with the same slot and the same value type share one storage cell. No error shows.
 2. **Games cannot add kinds.** `EntityInstaller` and `StateInstaller` register `WithBaselines()` as an instance. No installer call adds a game member.
 3. **A clash shows late.** `SlotRegistry.Add` throws when the registry fills, when a match starts. Nothing checks in the gate.
 4. **Any code reads the slot.** `Slot` is a public positional property, so code can use a slot with no registry.
-5. **Tag value types are in two lists.** `TagInstaller.cs:19-20` registers the handlers for `int` and `bool`. `WireRegistrar.cs:28` gives channels to the same two types. `Tag<float>` compiles, but it has no handler and no channel.
 
 ### 3.2 What repeats
 
@@ -283,7 +282,6 @@ TagService.Set(entity, GameTags.Poison, 3)
 | Reflection scan at startup | The scan costs time, and IL2CPP stripping can remove a member type. | The scan runs once at composition. `IKind` with `[RequireImplementors]` keeps the types. The source generator removes both costs. |
 | Test members appear in the scan | A test kind can take a slot in a game build that loads test assemblies. | Wanted for now. A test filter can come later. |
 | A public slot constructor still compiles | C# cannot block `new CustomKind(5)` for a member type. | `KindValidator` reports it. An analyzer can come later. |
-| Tag value types are manual | `Tag<float>` needs one `RegisterTagValueType<float>()` line. | One call registers the handlers and the channel. A validator check or a generator can come later. |
 | Data tags have no type | `Of<T>` and `is` do not find a data tag. | Code keeps the reference from `Define`, or uses `BySlot`. |
 | Root records are not positional | A root needs a protected constructor in place of one line. | Only a feature author writes a root. KIND-03 catches a positional root. |
 | Frozen registries | No kind can be added during a match. | Data loads before composition, through `Define`. |
@@ -301,7 +299,6 @@ TagService.Set(entity, GameTags.Poison, 3)
 | `key.Slot` in `TagService`, `type.Slot` in `EntityService`, `new TState().Slot` in `StateService` | `registry.SlotOf(key)` | inject the registry |
 | `SampleTags.Health.Slot` in integration tests | `tags.SlotOf(SampleTags.Health)` | tests |
 | `WithBaselines()` lists; empty `TagRegistry` | `new XRegistry()`, `RegisterCodeMembers()`, `Define` for data, `Freeze()`, `RegisterInstance` | three feature installers |
-| `RegisterTagValueType<T>()` + `WireRegistrar.ValueTypes` | one `RegisterTagValueType<T>()` for handlers and channel | Tags, Wire |
 
 Wire fields stay `[Packed] int`. Apply handlers do not change.
 
@@ -322,7 +319,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 1. **Core.** Change `TypeKey` to the protected ctor, the private slot and `IKind`. Nest the registry, and add `SlotOf`, `Define`, `Freeze`, `RegisterCodeMembers` and `Members`. Add `KindValidator`. Add the compile test from §4.2. Add one kind member to the router's IL2CPP smoke build.
 2. **States.** Move `GameState` to the non-positional root. `StateService` uses `SlotOf`. The installer builds the registry with the scan and freezes it. This is the smallest space, so it proves the shape.
 3. **Entities.** The same for `EntityType`, `EntityService` and `EntityTypeRegistry`.
-4. **Tags.** The same for `Tag` and `TagService`. Make `Tag<T>` concrete with a `protected internal` ctor, and add `TagRegistry.Define<T>`. Merge the two value-type lists into `RegisterTagValueType<T>()`. Gate with `-With playmode`.
+4. **Tags.** The same for `Tag` and `TagService`. Make `Tag<T>` concrete with a `protected internal` ctor, and add `TagRegistry.Define<T>`.
 5. **Rules.** Add the KIND-01/02/03 test and write the rules into `rulebook.json`, in a separate PR for user review.
 6. **Docs.** Update `docs/lookup-patterns.md` (private slot, nested registry, scan, `Define`, freeze, the validator, the exception to explicit registration, and remove "no framework lookup is off-standard") and `docs/architecture.md`.
 7. **v2.** Replace the scan with a source generator.
@@ -331,7 +328,6 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 - **Type-keyed router.** Kinds use `TypeScan` and the `[RequireImplementors]` attribute from `infra-type-router.md`. `TypeScan.ConcreteTypesOf` gets one optional parameter, `includeTests`. The router smoke build gets one kind member.
 - **Block and wire.** If the block piece moves `BlockKind` to a kind space, it uses this shape: `BlockKind : TypeKey`, `BlockKindRegistry : TypeKey.Registry<BlockKind>`, `[Packed] int Kind`, `SlotOf` on emit.
-- **Wire.** `WireRegistrar.ValueTypes` goes away. `RegisterTagValueType<T>()` gives the wire channel for each tag value type.
 - **Record ids.** The `TagStore` key is the entity id and the `int` slot. `infra-record-ids.md` decides the form of the entity id. The order of the two migrations does not matter.
 
 ## 9. Follow-ups
@@ -339,5 +335,5 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 1. **Data asset.** The format for data tags. The data work comes after this spike. It calls `Define<T>(slot)`.
 2. **Analyzer.** Move KIND-02 and KIND-03 from `KindValidator` to a Roslyn analyzer.
 3. **Test filter.** Keep test members out of the scan in player builds.
-4. **Value types.** A validator check or a source generator for `RegisterTagValueType<T>()`.
+4. **Framework.Tags refactor.** Tag value types and the other tag gaps. This is a separate issue, not part of this pattern.
 5. **v2 generator.** Replace the reflection scan.
