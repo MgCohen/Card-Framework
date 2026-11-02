@@ -153,17 +153,29 @@ Tag<int> shield = tags.Define<int>(1002);              // data tag
 if (entity.Type is Card) { ... }
 ```
 
-Access:
+Dependencies:
 
-| Bypass route | What stops it |
+| Depends on | Why |
 |---|---|
-| Read the slot with no registry | The slot is `private` to `TypeKey`. Only the nested `Registry` reads it. |
-| A positional root `record X(int Slot) : TypeKey(Slot)` makes a new public `Slot` | `KindValidator` (KIND-03). |
-| `new Tag<int>(1002)` in game code, never registered | The `Tag<T>` constructor is `protected internal`. The code does not compile. |
-| A member type with a public slot constructor: `new CustomKind(5)` | `KindValidator` (KIND-02). The scan also skips it. |
-| Pass a tag to the entity type registry | `SlotOf` takes only `TKey`. The code does not compile. |
-| Add a member during a match | `Freeze()`. `Register` then throws. |
-| Two different members with the same slot | `Register` throws at composition and names both types (KIND-01). |
+| `Scaffold.Records` | Record types in Core (existing reference). |
+| `TypeScan` in `Framework.Core` | `RegisterCodeMembers()` finds the member types. The TypeRouter build step adds it. |
+| `RequireImplementorsAttribute` in `Framework.Core` | `IKind` keeps the member types in IL2CPP builds. The TypeRouter build step adds it. |
+
+asmdef references: `Framework.Core` → `Scaffold.Records` only. `Framework.Tags`, `Framework.Entities` and `Framework.States` → `Framework.Core`.
+Must NOT depend on this part: `Framework.Wire`. Wire fields stay `[Packed] int`. `Framework.Core` references no other Framework assembly and no `UnityEngine`.
+
+Rules:
+
+| Rule | Enforced by |
+|---|---|
+| Only a registry reads the slot. | C# access: `private _slot`, read by the nested `TypeKey.Registry` (compiler). |
+| Slots are unique in each kind space. | `Register` throws at composition. KIND-01: `KindValidator` in an `attached` gate test. |
+| A kind member type has no public constructor with parameters. | KIND-02: `KindValidator` in the same gate test. |
+| A kind root record is not positional. | KIND-03: `KindValidator` in the same gate test. |
+| Only `TagRegistry` makes a data tag. | C# access: `protected internal` `Tag<T>` constructor (compiler). |
+| `SlotOf` takes only members of its kind space. | Generic constraint `TKey : TypeKey` (compiler). |
+| No member is added during a match. | `Freeze()`: `Register` throws at runtime. |
+| IL2CPP keeps the member types. | `[RequireImplementors]` on `IKind`; the TypeRouter IL2CPP smoke build. |
 
 ### 4.2 Parts
 
@@ -203,7 +215,7 @@ public sealed class EntityTypeRegistry : TypeKey.Registry<EntityType> { }
 public sealed record Card() : EntityType(4);
 ```
 
-Before step 1 lands, a compile test must prove two things: a positional member (`Card() : EntityType(4)`) can call the protected constructor of a non-positional root, and code outside `TypeKey` cannot read `_slot`.
+Before M4 lands, a compile test must prove two things: a positional member (`Card() : EntityType(4)`) can call the protected constructor of a non-positional root, and code outside `TypeKey` cannot read `_slot`.
 
 **Code member scan.** The scan finds each sealed subtype of `TKey` with a parameterless constructor and calls the `Register<T>()` path for it. It reads all loaded assemblies, test assemblies included. A source generator replaces the scan in v2, with the same result.
 
@@ -302,38 +314,157 @@ TagService.Set(entity, GameTags.Poison, 3)
 
 Wire fields stay `[Packed] int`. Apply handlers do not change.
 
-## 6. Rulebook rules to propose
+## 6. Later
 
-Proposals only. `rulebook.json` does not change in this spike. The framework has no slot range rule (decision 9).
+| Item | Why later | Trigger to reopen |
+|---|---|---|
+| v2 source generator for code members | The reflection scan is enough for v1. | The scan shows in a startup profile, or the IL2CPP smoke build loses a member. |
+| Roslyn analyzer for KIND-02 and KIND-03 | `KindValidator` gives the same result on demand. | Authors often see KIND-02 or KIND-03 only at gate time. |
+| Test filter for the scan | Test members are wanted now. | A player build loads test assemblies, or a test slot clashes with a game slot. |
+| Data asset format | The data work comes after this spike. It only calls `Define<T>(slot)`. | The data-authoring work starts. |
+| Slot ranges | Each project writes its own guidance. | A game asks the framework for a reserved range. |
+| Tag value types | A `Framework.Tags` concern: https://github.com/MgCohen/Card-Framework/issues/196 (sub-issues #197–#200). | The Tags refactor starts. |
+| `BlockKind` as a kind space | `infra-block-wire.md` owns it. | The block piece moves `BlockKind` from an `enum`. |
 
-| Id | Rule | Why | Check |
-|---|---|---|---|
-| KIND-01 | Slots are unique in each kind space. | A clash shows only at match start today, and never for tags. | `attached`: a test in `Framework.Testing.Integration.Tests` builds each registry with `RegisterCodeMembers()` and asserts that `KindValidator.Validate()` is empty. |
-| KIND-02 | A kind member type has no public constructor with parameters. | A public slot constructor lets code make members that are not registered. | The same test, through `KindValidator`. |
-| KIND-03 | A kind root record (a direct abstract subtype of `TypeKey`) is not positional. | A positional `Slot` parameter makes a public property and bypasses the registry. | The same test, through `KindValidator`. |
+## 7. Plan
 
-## 7. Migration steps
+### 7.1 Folder structure
 
-Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green.
+```
+Assets/Framework/
+├─ Core/
+│  ├─ Runtime/                       Framework.Core.asmdef → Scaffold.Records
+│  │  ├─ IKind.cs                    B1
+│  │  ├─ TypeKey.cs                  B1, M4
+│  │  ├─ TypeKey.Registry.cs         B2
+│  │  ├─ KindValidator.cs            B3
+│  │  ├─ TypeScan.cs                 TypeRouter build
+│  │  ├─ RequireImplementorsAttribute.cs   TypeRouter build
+│  │  └─ SlotRegistry.cs             deleted in M4
+│  └─ Tests/                         Framework.Core.Tests.asmdef
+│     ├─ TypeKeyRegistryTests.cs     B2
+│     └─ KindValidatorTests.cs       B3
+├─ States/Runtime/Registry/GameStateRegistry.cs      M1
+├─ Entities/Runtime/Registry/EntityTypeRegistry.cs   M2
+├─ Tags/Runtime/Tag.cs, Registry/TagRegistry.cs      M3
+└─ Testing/Integration/KindRulesTests.cs             M4
+```
 
-1. **Core.** Change `TypeKey` to the protected ctor, the private slot and `IKind`. Nest the registry, and add `SlotOf`, `Define`, `Freeze`, `RegisterCodeMembers` and `Members`. Add `KindValidator`. Add the compile test from §4.2. Add one kind member to the router's IL2CPP smoke build.
-2. **States.** Move `GameState` to the non-positional root. `StateService` uses `SlotOf`. The installer builds the registry with the scan and freezes it. This is the smallest space, so it proves the shape.
-3. **Entities.** The same for `EntityType`, `EntityService` and `EntityTypeRegistry`.
-4. **Tags.** The same for `Tag` and `TagService`. Make `Tag<T>` concrete with a `protected internal` ctor, and add `TagRegistry.Define<T>`.
-5. **Rules.** Add the KIND-01/02/03 test and write the rules into `rulebook.json`, in a separate PR for user review.
-6. **Docs.** Update `docs/lookup-patterns.md` (private slot, nested registry, scan, `Define`, freeze, the validator, the exception to explicit registration, and remove "no framework lookup is off-standard") and `docs/architecture.md`.
-7. **v2.** Replace the scan with a source generator.
+### 7.2 Dependency graph
+
+```mermaid
+flowchart BT
+  Core["Framework.Core"] --> Rec["Scaffold.Records"]
+  Tags["Framework.Tags"] --> Core
+  Ent["Framework.Entities"] --> Core
+  St["Framework.States"] --> Core
+  CoreT["Framework.Core.Tests"] --> Core
+  Int["Framework.Testing.Integration.Tests"] --> Tags
+  Int --> Ent
+  Int --> St
+```
+
+### 7.3 Steps
+
+Build steps change no current caller. Migrate steps follow the cross-spike order on the catalog.
+
+**B1 · Build — `IKind` on `TypeKey`.** Needs the TypeRouter build step (`TypeScan`, `RequireImplementorsAttribute`).
+
+```csharp
+[RequireImplementors] public interface IKind { }
+public abstract partial record TypeKey(int Slot) : IKind;   // Slot stays public until M4
+```
+
+```
+powershell -NoProfile -File Tools/Rulebook/gate.ps1
+```
+
+Done: gate PASS; the TypeRouter IL2CPP smoke build finds one kind member.
+
+**B2 · Build — `TypeKey.Registry<TKey>`.** New file. `SlotOf` reads `key.Slot` until M4.
+
+```csharp
+public abstract partial record TypeKey
+{
+    public class Registry<TKey> where TKey : TypeKey
+    {
+        public void Register(TKey member) { /* equal: no-op; clash: throw with both names */ }
+        public T Define<T>(int slot, Func<int, T> make) where T : TKey { var m = make(slot); Register(m); return m; }
+        public int SlotOf(TKey key) => key.Slot;
+    }
+}
+```
+
+Test (`TypeKeyRegistryTests`): clash throws and names both types; equal member is a no-op; `Register` after `Freeze` throws; `Define` returns a registered member; `RegisterCodeMembers` finds a sealed test member and skips a type with a public slot constructor.
+
+Done: gate PASS; `TypeKeyRegistryTests` green; no current caller changed.
+
+**B3 · Build — `KindValidator`.**
+
+```csharp
+public static class KindValidator
+{
+    public static IReadOnlyList<string> Validate();   // KIND-01, KIND-02, KIND-03
+}
+```
+
+Test (`KindValidatorTests`): a positional root gives KIND-03; a public slot constructor gives KIND-02; two members on one slot give KIND-01; a clean kind space gives no issue.
+
+Done: gate PASS; `KindValidatorTests` green.
+
+**M1 · Migrate — States.**
+
+```csharp
+public sealed class GameStateRegistry : TypeKey.Registry<GameState> { }   // WithBaselines() deleted
+var states = new GameStateRegistry(); states.RegisterCodeMembers(); states.Freeze();
+emit(states.SlotOf(new TState()));                                        // StateService
+```
+
+Done: gate PASS; `WithBaselines` deleted in States.
+
+**M2 · Migrate — Entities.** The same as M1 for `EntityTypeRegistry`, `EntityService` and `EntityInstaller`.
+
+Done: gate PASS; `WithBaselines` deleted in Entities.
+
+**M3 · Migrate — Tags.**
+
+```csharp
+public record Tag<T> : Tag where T : unmanaged { protected internal Tag(int slot) : base(slot) { } }
+public sealed class TagRegistry : TypeKey.Registry<Tag>
+{ public Tag<T> Define<T>(int slot) where T : unmanaged => Define(slot, s => new Tag<T>(s)); }
+_store.Has(entityId, _tags.SlotOf(key));                                  // TagService
+```
+
+```
+powershell -NoProfile -File Tools/Rulebook/gate.ps1 -With playmode
+```
+
+Done: gate PASS; no `.Slot` read in Tags or in the integration tests.
+
+**M4 · Migrate — Core: private slot.**
+
+```csharp
+public abstract partial record TypeKey : IKind
+{
+    protected TypeKey(int slot) => _slot = slot;
+    private readonly int _slot;
+}
+public abstract record EntityType : TypeKey { protected EntityType(int slot) : base(slot) { } }
+Assert.IsEmpty(KindValidator.Validate());                                 // KindRulesTests
+```
+
+Done: gate PASS with `-With playmode`; `SlotRegistry` deleted; `KindRulesTests` green.
+
+**M5 · Migrate — Rules.** Write KIND-01/02/03 into `Tools/Rulebook/rulebook.json`, in a separate PR for user review.
+
+Done: gate PASS; the rulebook lists KIND-01/02/03 as `attached` to `KindRulesTests`.
+
+**M6 · Migrate — Docs.** Update `docs/lookup-patterns.md` and `docs/architecture.md`.
+
+Done: no doc names `SlotRegistry`, `WithBaselines` or a public `Slot`.
 
 ## 8. Interfaces for the other pieces
 
 - **Type-keyed router.** Kinds use `TypeScan` and the `[RequireImplementors]` attribute from `infra-type-router.md`. `TypeScan.ConcreteTypesOf` gets one optional parameter, `includeTests`. The router smoke build gets one kind member.
 - **Block and wire.** If the block piece moves `BlockKind` to a kind space, it uses this shape: `BlockKind : TypeKey`, `BlockKindRegistry : TypeKey.Registry<BlockKind>`, `[Packed] int Kind`, `SlotOf` on emit.
 - **Record ids.** The `TagStore` key is the entity id and the `int` slot. `infra-record-ids.md` decides the form of the entity id. The order of the two migrations does not matter.
-
-## 9. Follow-ups
-
-1. **Data asset.** The format for data tags. The data work comes after this spike. It calls `Define<T>(slot)`.
-2. **Analyzer.** Move KIND-02 and KIND-03 from `KindValidator` to a Roslyn analyzer.
-3. **Test filter.** Keep test members out of the scan in player builds.
-4. **Framework.Tags refactor.** Tag value types and the other tag gaps. This is a separate issue (https://github.com/MgCohen/Card-Framework/issues/196), not part of this pattern.
-5. **v2 generator.** Replace the reflection scan.
