@@ -413,6 +413,30 @@
       }
     },
     {
+      "id": "ARCH-10",
+      "book": "architecture",
+      "title": "Wire core has no NGO reference",
+      "rule": "Framework.Wire references no Netcode, Networking or Unity.Collections assembly.",
+      "why": "The Wire core runs without the engine. NGO code lives in Framework.Wire.Ngo.",
+      "fix": "Move the NGO code into Framework.Wire.Ngo.",
+      "status": "enforced",
+      "severity": "blocking",
+      "check": {
+        "kind": "asmdef.forbiddenReferences",
+        "params": {
+          "roots": [
+            "Assets"
+          ],
+          "from": "Framework.Wire",
+          "forbidden": [
+            "Unity.Netcode.*",
+            "Unity.Networking.*",
+            "Unity.Collections"
+          ]
+        }
+      }
+    },
+    {
       "id": "TEST-01",
       "book": "testing",
       "title": "Acceptance tests and pictures are paired",
