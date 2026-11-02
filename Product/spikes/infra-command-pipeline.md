@@ -569,6 +569,7 @@ These items are not open for v0. Each row says why it waits and what reopens it.
 | Hooks: build the decision 27 model | The body starts an effect on the layer above | Two or more pipelines |
 | Rules with a state condition (for example the death rule): a hook with a condition, or a separate trigger kind | Part of the hooks build | Hooks build |
 | Live subscription: a router that can change, or a fixed hook with a condition | No current caller; VS uses a condition | A card adds a hook at runtime |
+| Per-card trigger lookup (VS `EffectStore._direct`, `SetDirect`): (entity, trigger) to effect | Not a hook; belongs to effects. Router D8 gave it to this spike | Effects pipeline |
 | Reaction timing: run before the trigger group closes | v0 has no groups | Hooks build |
 | `Ask` split: close the group with `Waiting`, continue in a new group | v0 has no groups | Groups enter the pipeline |
 | `Task<object>` boxing in the handler entry, and the `Result` allocation | Works now; one box and one object for each run | Before the migration, or a benchmark |
