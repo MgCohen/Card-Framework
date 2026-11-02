@@ -14,6 +14,9 @@ namespace Framework.Blocks
 
         public GroupService(IEventEmitter events) => _events = events;
 
+        // Null when no group is open.
+        public BlockId Current => _open.Count > 0 ? _open.Peek() : null;
+
         public BlockId Open(IEntity source = null, BlockId trigger = null)
         {
             var start = new GroupStart { TriggerId = trigger, SourceId = source?.Id };
@@ -26,35 +29,45 @@ namespace Framework.Blocks
 
         public void Close(BlockId id, GroupOutcome outcome = GroupOutcome.Completed)
         {
-            if (_open.Count == 0 || _open.Peek() != id)
+            if (Current == null || Current != id)
                 throw new InvalidOperationException($"Group {id?.Value} is not the innermost open group.");
             _open.Pop();
             _events.Emit(new GroupEnd { StartId = id, Outcome = (byte)outcome });
         }
 
         public void Create(IEntity source, Action logic, BlockId trigger = null)
+            => Create<object>(source, () => { logic(); return null; }, trigger);
+
+        public T Create<T>(IEntity source, Func<T> logic, BlockId trigger = null)
         {
             var id = Open(source, trigger);
-            try { logic(); }
+            T result;
+            try { result = logic(); }
             catch (OperationCanceledException) { CloseFrom(id, GroupOutcome.Cancelled); throw; }
             catch { CloseFrom(id, GroupOutcome.Errored); throw; }
             Close(id);
+            return result;
         }
 
-        public async Task CreateAsync(IEntity source, Func<Task> logic, BlockId trigger = null)
+        public Task CreateAsync(IEntity source, Func<Task> logic, BlockId trigger = null)
+            => CreateAsync<object>(source, async () => { await logic(); return null; }, trigger);
+
+        public async Task<T> CreateAsync<T>(IEntity source, Func<Task<T>> logic, BlockId trigger = null)
         {
             var id = Open(source, trigger);
-            try { await logic(); }
+            T result;
+            try { result = await logic(); }
             catch (OperationCanceledException) { CloseFrom(id, GroupOutcome.Cancelled); throw; }
             catch { CloseFrom(id, GroupOutcome.Errored); throw; }
             Close(id);
+            return result;
         }
 
         // Closes the open child groups of id, then id, all with the same outcome.
         void CloseFrom(BlockId id, GroupOutcome outcome)
         {
             if (!_open.Contains(id)) return;
-            while (_open.Peek() != id) Close(_open.Peek(), outcome);
+            while (Current != id) Close(Current, outcome);
             Close(id, outcome);
         }
     }

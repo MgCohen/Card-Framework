@@ -129,6 +129,35 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
+        public void Current_FollowsTheInnermostOpenGroup()
+        {
+            Assert.IsNull(Groups.Current);
+
+            var outer = Groups.Open();
+            Groups.Create(null, () => Assert.AreEqual(new BlockId { Value = 2 }, Groups.Current));
+            Assert.AreEqual(outer, Groups.Current);
+
+            Groups.Close(outer);
+            Assert.IsNull(Groups.Current);
+        }
+
+        [Test]
+        public void CreateOfT_ReturnsTheValue()
+        {
+            Assert.AreEqual(7, Groups.Create(null, () => 7));
+
+            CollectionAssert.AreEqual(new[] { GroupOutcome.Completed }, _wire.ClientOutcomes());
+        }
+
+        [Test]
+        public async Task CreateAsyncOfT_ReturnsTheValue()
+        {
+            Assert.AreEqual(7, await Groups.CreateAsync(null, () => Task.FromResult(7)));
+
+            CollectionAssert.AreEqual(new[] { GroupOutcome.Completed }, _wire.ClientOutcomes());
+        }
+
+        [Test]
         public void CreateAsync_Throw_ClosesAsErrored()
         {
             Assert.ThrowsAsync<TestError>(() => Groups.CreateAsync(null, () => Task.FromException(new TestError())));
