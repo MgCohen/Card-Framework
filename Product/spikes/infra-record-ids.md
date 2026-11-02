@@ -84,9 +84,9 @@ The user made these decisions for all four infra spikes:
 | Nested `TagStore` | out | Tags feature |
 | Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
 | Messages hold ids, not refs | out | Pipeline (`infra-command-pipeline.md`). Design text in the appendix. |
-| Request cross-space fields | out | Requests feature (§9 Q2, Q3) |
+| Request cross-space fields | out | Requests feature (§9) |
 | Kind slots | out | `infra-kind-ids.md` |
-| Client correlation id | out | Pipeline, phase 2 (§9 Q4) |
+| Client correlation id | out | Pipeline, phase 2 (§9) |
 | Channel ids, seats | out | Wire, Multiplayer (§5) |
 
 Boundary: the owning service on the server asks for a new id. The pattern gives back a typed id. The service puts it in its wire event. Stores and the wire use the id after that, and never make one.
@@ -134,7 +134,7 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 | block | `BlockId` | `Framework.Blocks` | `EventStream.Add` (position) | no (both sides compute it) | match |
 | request | — (uses `BlockId`) | `Framework.Requests` | `EventStream.Add` (a request is a block) | no | match |
 | message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
-| definition | `DefinitionId` | `Framework.Entities` | authored data (§9 Q7) | yes | build |
+| definition | `DefinitionId` | `Framework.Entities` | authored data (§9) | yes | build |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
 
@@ -358,7 +358,7 @@ _tags.Set(card, Health, 5);
 | `TagService.Set<T>(int entityId, …)` | `Set<T>(IEntity entity, …)` | author API takes the record (decision 20) |
 | `TagStore.Get<T>(int, int)` | `Get<T>(IEntity, …)`; maps keyed on `EntityId` | Tags piece |
 | `RequestStore` with `Dictionary<int, Request>` | `RequestStore : RecordStore<Request, BlockId>`; `Get<T>(BlockId)` stays | `IReadOnlyRequestStore.Open` key type |
-| `Catalog<TDef>` with `Dictionary<int, TDef>` | `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | `IEntityDefinition : IRecord<DefinitionId>`; §9 Q7 |
+| `Catalog<TDef>` with `Dictionary<int, TDef>` | `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | `IEntityDefinition : IRecord<DefinitionId>`; id source in §9 |
 | `Network`, `PeerRoster` | no change | see §5 |
 
 ## 5. What stays specialized, and why
@@ -396,7 +396,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 2. **Blocks piece.** `BlockId`, positions, `GroupStore` and the removal of `RequestId` land in the Blocks PRs (`infra-block-wire.md`).
 3. **Add `EntityId` and `IEntity`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`.
 4. **Move Tags to `EntityId` and `IEntity`.** Change the Tag events (ids), `TagService` and `IReadOnlyTagStore` (records), `TagStore` maps and the apply handlers.
-5. **Add `DefinitionId`** in `Entities/Runtime/`. Change `IEntityDefinition`, `Catalog<TDef>`, `Entity.DefinitionId`, `EntityCreatedEvent.DefinitionId` and `CatalogTests`. This step needs the answer to §9 Q7.
+5. **Add `DefinitionId`** in `Entities/Runtime/`. Change `IEntityDefinition`, `Catalog<TDef>`, `Entity.DefinitionId`, `EntityCreatedEvent.DefinitionId` and `CatalogTests`. The definitions feature decides the id source (§9).
 6. **(Handed off to the pipeline.) Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings.
 7. **(Handed off to rollback.) Add the inverse fields.** See appendix A.1.
 8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review.
@@ -417,7 +417,7 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 - `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
 - `MessageId` is local to the server. An intent opens no block (decision 6).
 - Messages hold typed ids (MSG-01). The handler resolves records through read views (`IReadOnlyEntityStore.ById`).
-- Client submit (phase 2) needs a correlation id that the client makes. See §9 Q4.
+- Client submit (phase 2) needs a correlation id that the client makes. See §9.
 - The pump must resume `await` continuations on the pump. Then allocation order is deterministic (§3.4).
 
 **Type-keyed router.**
@@ -431,14 +431,16 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 
 ## 9. Open questions
 
-1. ~~**Allocator home.**~~ **Closed 2026-10-31:** `Framework.Core` (decision 2). `Framework.Wire` references `Framework.Core`, and ARCH-02 changes to allow it.
-2. **Typed cross-space fields.** The Blocks piece removed `Request.ParentId` and set `TriggerId` to `BlockId`. `Request.ResponderId` is a seat or a player entity, and that depends on phase 3.
-3. **Closed requests.** Keep a `Closed` set in `RequestStore` so a Response can be undone (appendix A.1)? Or put the full request data in the Response? This affects `request-service.md` L5 ("no AnswersStore").
-4. **Client correlation id.** Does a client intent carry a client-made `SubmitId` for accept and reject replies? Who owns it: one allocator per client scope?
-5. ~~**Save watermarks.**~~ **Closed 2026-11-02:** out of scope (decision 22).
-6. ~~**Id scope across matches.**~~ **Closed 2026-11-02:** ids belong to their match (decision 23). Data that lives longer than a match adds a match id when it comes.
-7. **`DefinitionId` source.** Definitions are authored data. Recommended: an `EntityDefinition` base in Entities holds a serialized `int` and returns `new DefinitionId { Value = _id }`. The other option is an id that the catalog gives at load. Catalog loading is still open (`definition-entity-setup.md`).
-8. ~~**Seat migration.**~~ **Closed 2026-11-02:** seats stay as they are (decision 24).
+None. The questions on the base pattern are closed: allocator home (decision 2), save and load (decision 22), id scope (decision 23) and seats (decision 24).
+
+These questions do not affect the base pattern. They go to their owners:
+
+| Question | Owner |
+|---|---|
+| Type of `Request.ResponderId`: seat or player entity (phase 3) | Requests feature |
+| Undo of a `Response`: a `Closed` set in `RequestStore`, or the full request in the `Response` (appendix A.1) | Requests feature, rollback |
+| A client-made `SubmitId` for accept and reject replies | Pipeline, phase 2 |
+| `DefinitionId` source: a serialized `int`, or an id that the catalog gives at load. Both give `TId Id`, so `RecordStore` does not change. | Entities (definitions, `definition-entity-setup.md`) |
 
 ## Appendix: handed off
 
