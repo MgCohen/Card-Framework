@@ -1,3 +1,5 @@
+using System;
+
 namespace Framework.RecordIds
 {
     public class IdAllocator<TId> where TId : Id, new()
@@ -7,6 +9,8 @@ namespace Framework.RecordIds
 
         public IdAllocator(int first = 1)
         {
+            // -1 is "no id" and 0 is "never set", so a real id is 1 or more.
+            if (first < 1) throw new ArgumentOutOfRangeException(nameof(first), first, "The first id must be 1 or more.");
             _first = first;
             _next = first;
         }

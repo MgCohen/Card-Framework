@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 
 namespace Framework.RecordIds.Tests
@@ -18,6 +19,13 @@ namespace Framework.RecordIds.Tests
         public void Next_StartsAtFirst()
         {
             Assert.AreEqual(10, new IdAllocator<AId>(first: 10).Next().Value);
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void Constructor_RejectsFirstBelowOne(int first)
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => new IdAllocator<AId>(first));
         }
 
         [Test]
