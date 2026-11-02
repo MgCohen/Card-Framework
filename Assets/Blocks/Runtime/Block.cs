@@ -1,4 +1,4 @@
-using Framework.TypeRouting;
+using Framework.Stripping;
 using Framework.Wire;
 
 namespace Framework.Blocks

@@ -2,6 +2,7 @@
     "name": "Framework.Wire.Tests",
     "rootNamespace": "Framework.Wire.Tests",
     "references": [
+        "Framework.Stripping",
         "Framework.Wire",
         "Scaffold.Autopacker"
     ],

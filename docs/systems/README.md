@@ -9,6 +9,7 @@ Each feature lives in `Assets/<Feature>/` as assembly `Framework.<Feature>`.
 | System | What it is for |
 |---|---|
 | [Core](core.md) | Typed slot ids and the registry that rejects slot clashes. |
+| [Stripping](stripping.md) | Attributes that keep types and members in a stripped player, for engine-free assemblies. |
 | [Wire](wire.md) | Event stream, apply-handler dispatch, blocks, network channels and transports. |
 | [Tags](tags.md) | Unmanaged values per (entity, tag slot), synced to clients through events. |
 | [Entities](entities.md) | Entity ids, entity types and the link to a card definition. |

@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Reflection;
+using Framework.Stripping;
 using Framework.TypeRouting;
 using NUnit.Framework;
 

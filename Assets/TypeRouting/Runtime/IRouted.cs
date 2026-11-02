@@ -1,4 +1,5 @@
 using System;
+using Framework.Stripping;
 
 namespace Framework.TypeRouting
 {

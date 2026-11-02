@@ -2,6 +2,7 @@
     "name": "Framework.Wire",
     "rootNamespace": "Framework.Wire",
     "references": [
+        "Framework.Stripping",
         "Scaffold.Autopacker"
     ],
     "includePlatforms": [],

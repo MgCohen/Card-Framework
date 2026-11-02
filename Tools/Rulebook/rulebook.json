@@ -80,17 +80,23 @@
           ],
           "allowed": {
             "Framework.Core": [],
-            "Framework.TypeRouting": [],
+            "Framework.Stripping": [],
+            "Framework.TypeRouting": [
+              "Framework.Stripping"
+            ],
             "Framework.TypeRouting.Install": [
               "Framework.TypeRouting"
             ],
             "Framework.TypeKeys": [
+              "Framework.Stripping",
               "Framework.TypeRouting"
             ],
             "Framework.TypeKeys.Install": [
               "Framework.TypeKeys"
             ],
-            "Framework.Wire": [],
+            "Framework.Wire": [
+              "Framework.Stripping"
+            ],
             "Framework.Wire.Ngo": [
               "Framework.Wire"
             ],
@@ -151,7 +157,7 @@
             ],
             "Framework.Blocks": [
               "Framework.RecordIds",
-              "Framework.TypeRouting",
+              "Framework.Stripping",
               "Framework.Wire"
             ],
             "Framework.Blocks.Install": [

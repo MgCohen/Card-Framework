@@ -2,6 +2,7 @@
     "name": "Framework.TypeRouting.Tests",
     "rootNamespace": "Framework.TypeRouting.Tests",
     "references": [
+        "Framework.Stripping",
         "Framework.TypeRouting",
         "Framework.TypeRouting.Install",
         "VContainer",

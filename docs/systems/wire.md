@@ -2,7 +2,7 @@
 
 Wire carries every state change as a `WireEvent`: it records events in a stream, dispatches them to apply handlers, and ships them between server and client.
 
-**Code:** `Assets/Wire/` · assembly `Framework.Wire` · depends on `Scaffold.Autopacker` only (no engine, no Framework assemblies; rulebook ARCH-10)
+**Code:** `Assets/Wire/` · assembly `Framework.Wire` · depends on `Framework.Stripping` and `Scaffold.Autopacker` (no engine; rulebook ARCH-10). `WireEvent` has `[RequireDerived]`, so a stripped player keeps every event type and the channel ids stay equal
 
 **NGO adapter:** `Assets/Wire/Runtime/Ngo/` · assembly `Framework.Wire.Ngo` · depends on `Framework.Wire`, `Unity.Netcode.Runtime`, `Unity.Collections`
 
