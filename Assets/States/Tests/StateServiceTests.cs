@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Framework.Wire;
 using NUnit.Framework;
-using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.States.Tests
 {
@@ -36,7 +35,7 @@ namespace Framework.States.Tests
 
         static (Side server, Side client, WireConnection w) Build()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             // One channel for every state — slot-discriminated, both sides.
             w.ServerNetwork.Register<StatePushEvent, StatePushEvent.Packed>();
             w.ClientNetwork.Register<StatePushEvent, StatePushEvent.Packed>();

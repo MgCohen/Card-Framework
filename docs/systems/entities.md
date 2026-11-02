@@ -35,7 +35,7 @@ Entities give every game object (player, zone, card, modifier) an integer id, a 
 ## Example
 From `Assets/Entities/Tests/MirrorIntegrationTests.cs`:
 ```csharp
-var (server, client, _) = Build();   // two TestStacks joined by Wire.Connect()
+var (server, client, _) = Build();   // two TestStacks joined by WireConnection.Loopback()
 
 var serverCard = server.Entities.Create(new Card(), definitionId: 101);
 

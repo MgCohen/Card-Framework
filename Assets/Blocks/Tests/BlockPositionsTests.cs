@@ -34,7 +34,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void Positions_MatchOnBothSides()
         {
-            var w = Wire.Wire.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TestBlock, TestBlock.Packed>();
             w.ClientNetwork.Register<TestBlock, TestBlock.Packed>();
             _ = new BlockPositions(w.ServerStream);

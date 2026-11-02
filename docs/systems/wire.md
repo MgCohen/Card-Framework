@@ -51,9 +51,9 @@ EventStream.Emit ── append ── OnAppended
 | `BlockScope` | Allocates block ids and emits block start and end events. |
 
 ## Example
-From `Assets/Wire/Tests/RoundTripTests.cs`. `Wire.Connect()` builds a loopback server/client pair with both bridges:
+From `Assets/Wire/Tests/RoundTripTests.cs`. `WireConnection.Loopback()` builds a loopback server/client pair with both bridges:
 ```csharp
-var w = Wire.Connect();
+var w = WireConnection.Loopback();
 w.ServerNetwork.Register<PingEvent, PingEvent.Packed>();
 w.ClientNetwork.Register<PingEvent, PingEvent.Packed>();
 

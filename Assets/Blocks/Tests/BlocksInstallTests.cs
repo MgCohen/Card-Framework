@@ -80,7 +80,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void WithNetwork_RegistersEachBlockType_OnBothEnds()
         {
-            var wire = Wire.Wire.Connect();
+            var wire = WireConnection.Loopback();
             var server = new ContainerBuilder();
             server.RegisterInstance(wire.ServerStream).AsSelf().As<IEventEmitter>();
             server.RegisterInstance(wire.ServerNetwork);

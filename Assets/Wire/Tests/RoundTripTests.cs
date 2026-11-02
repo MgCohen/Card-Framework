@@ -8,7 +8,7 @@ namespace Framework.Wire.Tests
     {
         static WireConnection NewWired(IPackingHandler handler = null)
         {
-            var w = Wire.Connect(handler);
+            var w = WireConnection.Loopback(handler);
             w.ServerNetwork.Register<PingEvent, PingEvent.Packed>();           w.ClientNetwork.Register<PingEvent, PingEvent.Packed>();
             w.ServerNetwork.Register<PongEvent, PongEvent.Packed>();           w.ClientNetwork.Register<PongEvent, PongEvent.Packed>();
             w.ServerNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();     w.ClientNetwork.Register<EntityMovedEvent, EntityMovedEvent.Packed>();
@@ -86,7 +86,7 @@ namespace Framework.Wire.Tests
             catalog.Add(fireball);
             catalog.Add(healing);
 
-            var w = Wire.Connect(new CatalogPackingHandler(catalog));
+            var w = WireConnection.Loopback(new CatalogPackingHandler(catalog));
             w.ServerNetwork.Register<CardPlayedEvent, CardPlayedEvent.Packed>();
             w.ClientNetwork.Register<CardPlayedEvent, CardPlayedEvent.Packed>();
 
