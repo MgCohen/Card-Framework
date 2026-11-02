@@ -39,6 +39,8 @@ namespace Framework.Blocks
 
             public BlocksRegistration Blocks { get; }
 
+            // Warning: a child scope reuses the parent BlockPositions, which is bound to the parent
+            // EventStream. An EventStream registered in the child scope gets no positions.
             public object SpawnInstance(IObjectResolver resolver) => new BlockPositions(resolver.Resolve<EventStream>());
         }
     }
