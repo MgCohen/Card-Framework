@@ -61,7 +61,8 @@ The user made these decisions for all four infra spikes:
 23. **Ids belong to their match.** Each match starts again at 1. Two matches can have the same ids, because they are different contexts.
 24. **Seats stay as they are.** A game mode has a known, small number of players (1 to 4). The shared allocator is for instance spaces of unknown size. Examine this again only if a mode has a large, changing number of players.
 25. **Extraction, not refactor (catalog v12).** The system lives in one root folder, `Assets/RecordIds/` (`Framework.RecordIds`). The plan builds it next to the current systems and changes none of them. The migration of the current systems is one item in §9 Later.
-26. **One install method (catalog v14).** The system has one public setup call, `builder.AddRecordIds(o => ...)`, in `Runtime/RecordIdsInstall.cs`, with `RecordIdsOptions`. It registers every part and holds all configuration, for example the role (allocators on the server only). The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later item.
+26. **Each system registers its own id space.** `builder.AddIdSpace<TId>(role, first = 1, stack = false)` in `Runtime/RecordIdsInstall.cs`. A repeated call for the same `TId` does nothing, so there is one allocator for each space. The client role registers no allocator. There is no `AddRecordIds`, because no shared setup is left. A `Framework.Bootstrap.IInstaller` adapter is a Later item.
+27. **One shared `Role` enum.** `enum Role { Server, Client }` lives in `Framework.RecordIds` for now. Every options class uses it. #202 moves it to a network abstraction layer later.
 
 ## 2a. Scope
 
@@ -193,7 +194,7 @@ namespace Framework.RecordIds
 }
 ```
 
-Registration goes through the one install method (§3.8). Each id space has its own closed type, so VContainer resolves each one without keys. The client role has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
+Registration goes through `AddIdSpace` (§3.8). Each id space has its own closed type, so VContainer resolves each one without keys. The client role has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
 
 ### 3.3a Release
 
@@ -335,30 +336,25 @@ _tags.Set(card, Health, 5);
 ### 3.8 Install
 
 ```csharp
-public enum RecordIdsRole { Server, Client }
+public enum Role { Server, Client }                          // Runtime/Role.cs; temporary home (#202)
 
-public sealed class RecordIdsOptions
+public static class RecordIdsInstall                         // Runtime/RecordIdsInstall.cs
 {
-    public RecordIdsRole Role { get; set; } = RecordIdsRole.Server;   // Client: no allocators
-    public RecordIdsOptions Allocator<TId>(bool stack = false) where TId : Id, new();
+    // Registers IdAllocator<TId> (or StackIdAllocator<TId>) on the server role only.
+    // A second call for the same TId does nothing: one allocator for each space.
+    public static void AddIdSpace<TId>(this IContainerBuilder builder, Role role, int first = 1, bool stack = false)
+        where TId : Id, new();
 }
 
-public static class RecordIdsInstall                                  // Runtime/RecordIdsInstall.cs
-{
-    public static void AddRecordIds(this IContainerBuilder builder, Action<RecordIdsOptions> configure);
-}
-
-builder.AddRecordIds(o =>
-{
-    o.Role = isServer ? RecordIdsRole.Server : RecordIdsRole.Client;
-    o.Allocator<EntityId>();
-});
+builder.AddIdSpace<EntityId>(role);                          // in the Entities install
+builder.AddIdSpace<MessageId>(role);                         // in the Pipeline install
 ```
 
-- `Allocator<TId>()` registers `IdAllocator<TId>`. With `stack: true`, it registers a `StackIdAllocator<TId>` as `IdAllocator<TId>`.
-- `Role = Client` registers no allocator.
-- The same id space twice throws `InvalidOperationException`.
-- The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later item.
+- Each system registers its own id space. There is no other setup call.
+- `stack: true` registers a `StackIdAllocator<TId>` as `IdAllocator<TId>`.
+- `Role.Client` registers no allocator.
+- A second call for the same `TId` does nothing. It never registers a second allocator.
+- `Role` is temporary in `Framework.RecordIds` (#202).
 - VContainer in a `noEngineReferences` asmdef is not proven yet. Use the same solution as TypeRouter.
 
 ## 4. Call-site migration
@@ -396,7 +392,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 |---|---|---|---|
 | ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. |
 | ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from `EntityService` and the `Pipeline` (`Add`, `RunInline`, which take an `IdAllocator<MessageId>`). | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`. |
-| ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. `AddRecordIds` with `Role = Client` registers none. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
+| ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. `AddIdSpace` with `Role.Client` registers none. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
 | ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. A field that points to a record has a type that derives from `Id`. | A bare `int` id lets an entity id go into a block slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. |
 | ID-05 | A scope that has `Network` registers only the base `IdAllocator<T>`. No `Release` override gives ids back in it. | An id given back after the wire sent it gives the client two records with one id. | `attached`: a test in `BootstrapWiringIntegrationTests`. Status `planned` until rollback is scheduled. |
 | ID-06 | Author APIs take records. No public method of a `Framework.*` service takes a parameter whose type derives from `Id`, if a record type exists for that id. | Records at call sites (decision 20). | `attached`: a reflection test over service types. Status `planned`. |
@@ -420,7 +416,7 @@ Assets/RecordIds/
 │  ├─ RecordStore.cs
 │  ├─ EntityId.cs
 │  ├─ IEntity.cs
-│  ├─ RecordIdsOptions.cs
+│  ├─ Role.cs
 │  └─ RecordIdsInstall.cs
 └─ Tests/                         Framework.RecordIds.Tests.asmdef
    ├─ Fixtures/
@@ -464,7 +460,7 @@ flowchart BT
 | 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/RecordIds/` |
 | 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/RecordIds/` |
 | 4 | `Runtime/EntityId.cs`, `IEntity.cs` | `EntityIdTests` (`EntityId` 5 ≠ `AId` 5) | gate PASS; diff only in `Assets/RecordIds/` |
-| 5 | `Runtime/RecordIdsOptions.cs`, `RecordIdsInstall.cs` | `RecordIdsInstallTests`: each test builds a container with only `AddRecordIds`. Server resolves one allocator for each space; client resolves none; the stack option gives back the last id; the same space twice throws | gate PASS; diff only in `Assets/RecordIds/` |
+| 5 | `Runtime/Role.cs`, `RecordIdsInstall.cs` | `RecordIdsInstallTests`: each test builds a container with only `AddIdSpace` calls. Server registers one allocator for each space; two calls for the same `TId` give one allocator; the client role gives none; the stack option gives back the last id | gate PASS; diff only in `Assets/RecordIds/` |
 
 ## 8. Interfaces for the other three pieces
 
@@ -506,7 +502,8 @@ No open questions. Deferred items:
 | Object pooling of records | A match has hundreds of records (appendix A.4) | The profiler shows record allocation cost |
 | Allocation cost of id records | Accepted (decision 17) | A benchmark shows id hashing or allocation cost |
 | Rules ID-01 to ID-07 | They check callers in current systems | The migration starts |
-| `Framework.Bootstrap.IInstaller` adapter for `AddRecordIds` | One setup call is enough now (decision 26) | Bootstrap composes systems through installers |
+| `Role` home | Temporary in `Framework.RecordIds` (decision 27) | A network abstraction layer: #202 |
+| `Framework.Bootstrap.IInstaller` adapter for `AddIdSpace` | One setup call is enough now (decision 26) | Bootstrap composes systems through installers |
 | VContainer in a `noEngineReferences` asmdef | Not proven yet | TypeRouter proves it; use its solution |
 | Migration of current systems: Entities, Tags and Catalog on `RecordStore`; Blocks and Requests on `BlockId`; pipeline `MessageId`; rules in `rulebook.json`; docs | Extraction first (decision 25) | The catalog cross-spike order schedules it |
 
