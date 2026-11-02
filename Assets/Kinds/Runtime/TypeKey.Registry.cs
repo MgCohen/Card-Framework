@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Framework.Routing;
 
 namespace Framework.Kinds
 {
@@ -15,6 +16,13 @@ namespace Framework.Kinds
 
             // Sorted by slot, so the order does not depend on the scan order.
             public IReadOnlyCollection<TKey> Members => _members ??= _bySlot.OrderBy(p => p.Key).Select(p => p.Value).ToList().AsReadOnly();
+
+            public void RegisterCodeMembers(bool includeTests)
+            {
+                foreach (var type in TypeScan.ConcreteTypesOf(typeof(TKey), includeTests))
+                    if (IsCodeMember(type))
+                        Register((TKey)Activator.CreateInstance(type));
+            }
 
             public void Register<T>() where T : TKey, new() => Register(new T());
 
