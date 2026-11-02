@@ -435,12 +435,12 @@ None. The questions on the base pattern are closed: allocator home (decision 2),
 
 These questions do not affect the base pattern. They go to their owners:
 
-| Question | Owner |
-|---|---|
-| Type of `Request.ResponderId`: seat or player entity (phase 3) | Requests feature |
-| Undo of a `Response`: a `Closed` set in `RequestStore`, or the full request in the `Response` (appendix A.1) | Requests feature, rollback |
-| A client-made `SubmitId` for accept and reject replies | Pipeline, phase 2 |
-| `DefinitionId` source: a serialized `int`, or an id that the catalog gives at load. Both give `TId Id`, so `RecordStore` does not change. | Entities (definitions, `definition-entity-setup.md`) |
+| Question | Owner | Issue |
+|---|---|---|
+| Type of `Request.ResponderId`: seat or player entity (phase 3) | Requests feature | #192 (child of #191) |
+| Undo of a `Response`: a `Closed` set in `RequestStore`, or the full request in the `Response` (appendix A.1) | Requests feature, rollback | #193 (child of #191) |
+| A client-made `SubmitId` for accept and reject replies | Pipeline, phase 2 | #194 |
+| `DefinitionId` source: a serialized `int`, or an id that the catalog gives at load. Both give `TId Id`, so `RecordStore` does not change. | Entities (definitions, `definition-entity-setup.md`) | #195 |
 
 ## Appendix: handed off
 
