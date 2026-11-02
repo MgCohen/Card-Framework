@@ -1,3 +1,4 @@
+using System;
 using VContainer;
 
 namespace Framework.RecordIds
@@ -8,12 +9,27 @@ namespace Framework.RecordIds
         public static IContainerBuilder AddIdSpace<TId>(this IContainerBuilder builder, Role role, int first = 1)
             where TId : Id, new()
         {
+            if (first < 1) throw new ArgumentOutOfRangeException(nameof(first), first, "The first id must be 1 or more.");
             if (role != Role.Server) return builder;
 
             // Each system declares the id spaces it uses, so two systems can declare the same one.
-            if (builder.Exists(typeof(IdAllocator<TId>))) return builder;
+            for (var i = 0; i < builder.Count; i++)
+            {
+                if (builder[i] is IdSpaceRegistration<TId> space)
+                {
+                    space.Match(first);
+                    return builder;
+                }
+            }
 
-            builder.RegisterInstance(new IdAllocator<TId>(first));
+            if (builder.Exists(typeof(IdAllocator<TId>), includeInterfaceTypes: true, findParentScopes: true))
+            {
+                // A parent scope has the space; its first value is only readable from the built scope.
+                builder.RegisterBuildCallback(scope => IdSpaceRegistration<TId>.InParents(scope)?.Match(first));
+                return builder;
+            }
+
+            builder.Register(new IdSpaceRegistration<TId>(first));
             return builder;
         }
     }

@@ -60,12 +60,49 @@ namespace Framework.RecordIds.Tests
             Assert.AreEqual(100, builder.Build().Resolve<IdAllocator<AId>>().Next().Value);
         }
 
-        [Test]
-        public void FirstBelowOne_FailsAtInstall()
+        [TestCase(Role.Server)]
+        [TestCase(Role.Client)]
+        public void FirstBelowOne_FailsAtInstall(Role role)
         {
             var builder = new ContainerBuilder();
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddIdSpace<AId>(Role.Server, first: 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => builder.AddIdSpace<AId>(role, first: 0));
+        }
+
+        [Test]
+        public void TwoCalls_WithDifferentFirst_Fail()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddIdSpace<AId>(Role.Server, first: 1);
+
+            var error = Assert.Throws<InvalidOperationException>(() => builder.AddIdSpace<AId>(Role.Server, first: 5));
+
+            StringAssert.Contains("AId", error.Message);
+            StringAssert.Contains("1", error.Message);
+            StringAssert.Contains("5", error.Message);
+        }
+
+        [Test]
+        public void ChildScope_ForTheSameSpace_UsesTheParentAllocator()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddIdSpace<AId>(Role.Server);
+            var root = builder.Build();
+
+            using var child = root.CreateScope(scope => scope.AddIdSpace<AId>(Role.Server));
+
+            Assert.AreSame(root.Resolve<IdAllocator<AId>>(), child.Resolve<IdAllocator<AId>>());
+            Assert.AreEqual(1, child.Resolve<IReadOnlyList<IdAllocator<AId>>>().Count);
+        }
+
+        [Test]
+        public void ChildScope_WithDifferentFirst_Fails()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddIdSpace<AId>(Role.Server);
+            var root = builder.Build();
+
+            Assert.Throws<InvalidOperationException>(() => root.CreateScope(scope => scope.AddIdSpace<AId>(Role.Server, first: 5)));
         }
     }
 }
