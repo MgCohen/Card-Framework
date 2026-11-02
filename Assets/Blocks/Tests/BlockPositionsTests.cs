@@ -19,12 +19,12 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
-        public void ListenerAfterPositions_ReadsSetPosition()
+        public void ListenerSubscribedBeforePositions_ReadsSetPosition()
         {
             var stream = new EventStream();
-            _ = new BlockPositions(stream);
             var seen = 0;
             stream.OnAppended += ev => seen = ((Block)ev).Position;
+            _ = new BlockPositions(stream);
 
             stream.Emit(new TestBlock());
 

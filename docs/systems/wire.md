@@ -7,7 +7,7 @@ Wire carries every state change as a `WireEvent`: it records events in a stream,
 **NGO adapter:** `Assets/Wire/Runtime/Ngo/` · assembly `Framework.Wire.Ngo` · depends on `Framework.Wire`, `Unity.Netcode.Runtime`, `Unity.Collections`
 
 ## What it does
-- Keeps an append-only `EventStream` of `WireEvent`s and raises `OnAppended` for each one.
+- Keeps an append-only `EventStream` of `WireEvent`s and raises `OnAppending`, then `OnAppended`, for each one.
 - Routes each event by runtime type to every `WireEventHandler<T>` registered for it (`HandlerRegistry`).
 - Packs each event into a fixed-size struct (`[AutoPack]` / `[Packed]`) and sends it over an `ITransport` with a one-byte channel id.
 - Provides transports: `LoopbackTransport` (in-process pair), `NullTransport` (drops everything), and `NgoTransport` (Netcode named messages) in `Framework.Wire.Ngo`.
@@ -40,7 +40,7 @@ EventStream.Emit ── append ── OnAppended
 | Type | Job |
 |---|---|
 | `WireEvent` | Abstract `[AutoPack]` base of every networked event. |
-| `EventStream` | Ordered event history. Implements `IEventEmitter`. Raises `OnAppended`. |
+| `EventStream` | Ordered event history. Implements `IEventEmitter`. Raises `OnAppending` (for example `BlockPositions`), then `OnAppended`. |
 | `WireEventHandler<T>` | Apply handler base. Subclasses override `Apply(T)`. |
 | `HandlerRegistry` | Groups handlers by event type and calls `Apply` on each append. |
 | `Network` | Owns the channel table. `Register<T,TPacked>()` adds a channel; `Send` looks one up by type. |

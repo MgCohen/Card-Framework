@@ -7,6 +7,8 @@ namespace Framework.Wire
     {
         readonly List<WireEvent> _events = new();
 
+        // Raised before OnAppended, with the same event. Use it to set data that OnAppended listeners read.
+        public event Action<WireEvent> OnAppending;
         public event Action<WireEvent> OnAppended;
 
         public int Count => _events.Count;
@@ -15,6 +17,7 @@ namespace Framework.Wire
         public void Emit(WireEvent ev)
         {
             _events.Add(ev);
+            OnAppending?.Invoke(ev);
             OnAppended?.Invoke(ev);
         }
     }

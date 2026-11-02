@@ -102,7 +102,7 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
-        public void ListenerBeforeAddBlocks_ReadsZero_ListenerAfter_ReadsPosition()
+        public void ListenerBeforeOrAfterAddBlocks_ReadsPosition()
         {
             var builder = Builder();
             var before = -1;
@@ -113,7 +113,7 @@ namespace Framework.Blocks.Tests
 
             builder.Build().Resolve<EventStream>().Emit(new TestBlock());
 
-            Assert.AreEqual(0, before);
+            Assert.AreEqual(1, before);
             Assert.AreEqual(1, after);
         }
 
