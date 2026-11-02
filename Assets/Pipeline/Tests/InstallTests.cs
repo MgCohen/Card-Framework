@@ -12,9 +12,7 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_RunsOneMessage()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>();
-            // The scan skips test assemblies by default, so the fixture registers by hand.
-            builder.Register<PingHandler>(Lifetime.Singleton).As<Handler<Message, TestScope>>();
+            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
             var pipeline = builder.Build().Resolve<TestPipeline>();
 
             var e = pipeline.Add(new Ping());
@@ -94,6 +92,38 @@ namespace Framework.Pipeline.Tests
             var b = child.Resolve<OtherPipeline>().Add(new Ping());
 
             Assert.That(b.Id.Value, Is.EqualTo(a.Id.Value + 1));
+        }
+
+        [Test]
+        public void AddPipeline_DifferentIncludeTests_Throws()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+                builder.AddPipeline<OtherPipeline, Message, TestScope>());
+            Assert.That(ex.Message, Does.Contain("IncludeTests"));
+        }
+
+        [Test]
+        public void AddPipeline_ChildScope_DifferentIncludeTests_Throws()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            var root = builder.Build();
+
+            Assert.Throws<InvalidOperationException>(() =>
+                root.CreateScope(b => b.AddPipeline<OtherPipeline, Message, TestScope>()));
+        }
+
+        [Test]
+        public void AddPipeline_DifferentFirstMessageId_Throws()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddPipeline<TestPipeline, Message, TestScope>();
+
+            Assert.Throws<InvalidOperationException>(() =>
+                builder.AddPipeline<OtherPipeline, Message, TestScope>(o => o.FirstMessageId = 100));
         }
 
         [Test]

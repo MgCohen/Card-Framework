@@ -31,8 +31,25 @@ namespace Framework.Pipeline
 
         static void AddRouterOnce<T>(IContainerBuilder builder, bool includeTests) where T : class, IRouted
         {
-            if (!builder.Exists(typeof(TypeRouter<T>), includeInterfaceTypes: true, findParentScopes: true))
-                builder.RegisterTypeRouter<T>(RouteMode.Single, includeTests: includeTests);
+            for (var i = 0; i < builder.Count; i++)
+            {
+                if (builder[i] is PipelineRouterRegistration<T> router)
+                {
+                    router.Match(includeTests);
+                    return;
+                }
+            }
+
+            if (builder.Exists(typeof(TypeRouter<T>), includeInterfaceTypes: true, findParentScopes: true))
+            {
+                // A parent scope has the router; its scan option is only readable from the built scope.
+                builder.RegisterBuildCallback(scope => PipelineRouterRegistration<T>.InParents(scope)?.Match(includeTests));
+                return;
+            }
+
+            foreach (var type in TypeScan.ConcreteTypesOf(typeof(T), includeTests))
+                builder.Register(type, Lifetime.Singleton).As<T>();
+            builder.Register(new PipelineRouterRegistration<T>(includeTests));
         }
     }
 }
