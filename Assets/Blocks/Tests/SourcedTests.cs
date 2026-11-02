@@ -12,7 +12,7 @@ namespace Framework.Blocks.Tests
         {
             var wire = new GroupWire();
 
-            wire.Groups.Create(SourceOf(new TestMessage(new TestEntity(4))), () => { });
+            wire.Groups.Create(() => { }, SourceOf(new TestMessage(new TestEntity(4))));
 
             Assert.AreEqual(new EntityId { Value = 4 }, ((GroupStart)wire.ClientBlocks()[0]).SourceId);
         }
@@ -22,7 +22,7 @@ namespace Framework.Blocks.Tests
         {
             var wire = new GroupWire();
 
-            wire.Groups.Create(SourceOf(new object()), () => { });
+            wire.Groups.Create(() => { }, SourceOf(new object()));
 
             Assert.IsNull(((GroupStart)wire.ClientBlocks()[0]).SourceId);
         }

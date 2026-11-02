@@ -5,10 +5,10 @@ namespace Framework.TypeRouting
 {
     public static class TypeRoutingInstall
     {
-        public static IContainerBuilder AddTypeRouting(this IContainerBuilder builder, Action<TypeRoutingOptions> configure)
+        public static IContainerBuilder AddTypeRouting(this IContainerBuilder builder, Action<TypeRoutingOptions> configure = null)
         {
             var options = new TypeRoutingOptions();
-            configure(options);
+            configure?.Invoke(options);
             options.Apply(builder);
             return builder;
         }

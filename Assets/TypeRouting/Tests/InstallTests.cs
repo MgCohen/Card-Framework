@@ -35,6 +35,15 @@ namespace Framework.TypeRouting.Tests
         }
 
         [Test]
+        public void AddTypeRouting_NoConfigure_RegistersNoRouter()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddTypeRouting();
+
+            Assert.That(builder.Build().TryResolve<TypeRouter<INoteReader>>(out _), Is.False);
+        }
+
+        [Test]
         public void AddTypeRouting_ScanOff_RegistersEmptyRouter()
         {
             var builder = new ContainerBuilder();

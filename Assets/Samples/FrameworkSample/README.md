@@ -15,7 +15,6 @@ A server plays a card from Hand to Board. A client gets the same blocks over a l
 
 ```csharp
 server.AddBlocks();
-server.AddTypeRouting(_ => { });
 server.AddIdSpace<CardId>(Role.Server);
 server.AddTypeKeys(o => o.Validate = true);
 server.AddKeySpace<Zone, ZoneRegistry>();
@@ -27,13 +26,15 @@ client.AddKeySpace<Zone, ZoneRegistry>();
 
 Each side also registers its `EventStream` (as `IEventEmitter`) from `Wire.Connect()`. The server also registers `CardStore`.
 
+The sample does not call `AddTypeRouting`. `AddPipeline` registers its own handler router and validator router (`RouteMode.Single`).
+
 ## Call flow
 
 ```
 pipeline.Add(PlayCard) -> Run
   PlayCardValidator   card not in Hand -> Rejected, no blocks
   GamePipeline.CreateScope -> GameScope
-  PlayCardHandler -> Groups.Create { scope.Move(card, Board) }
+  PlayCardHandler -> Groups.Create(() => scope.Move(card, Board))
     GroupStart, CardMoved(From, To), GroupEnd -> server EventStream -> LoopbackTransport -> client EventStream
 ```
 

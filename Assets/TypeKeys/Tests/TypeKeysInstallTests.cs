@@ -116,6 +116,15 @@ namespace Framework.TypeKeys.Tests
         }
 
         [Test]
+        public void AddTypeKeys_NoConfigure_ResolvesDefaultOptions()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddTypeKeys();
+
+            Assert.That(builder.Build().Resolve<TypeKeysOptions>().IncludeTests, Is.False);
+        }
+
+        [Test]
         public void AddKeySpace_SlotClash_ThrowsAtContainerBuild()
         {
             var builder = WithTests();

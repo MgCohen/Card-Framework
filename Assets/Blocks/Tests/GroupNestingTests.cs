@@ -12,10 +12,10 @@ namespace Framework.Blocks.Tests
             var wire = new GroupWire();
             var groups = wire.Groups;
 
-            groups.Create(null, () =>
+            groups.Create(() =>
             {
-                groups.Create(null, () => groups.Create(null, () => { }));
-                groups.Create(null, () => { });
+                groups.Create(() => groups.Create(() => { }));
+                groups.Create(() => { });
             });
 
             var walk = new Stack<BlockId>();

@@ -54,7 +54,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void NestedCreate_InnerStartAfterOuterStart()
         {
-            Groups.Create(null, () => Groups.Create(null, () => { }));
+            Groups.Create(() => Groups.Create(() => { }));
 
             var blocks = _wire.ClientBlocks();
             Assert.AreEqual(4, blocks.Count);
@@ -69,7 +69,7 @@ namespace Framework.Blocks.Tests
         {
             var error = new TestError();
 
-            var thrown = Assert.Throws<TestError>(() => Groups.Create(null, () => throw error));
+            var thrown = Assert.Throws<TestError>(() => Groups.Create(() => throw error));
 
             Assert.AreSame(error, thrown);
             CollectionAssert.AreEqual(new[] { GroupOutcome.Errored }, _wire.ClientOutcomes());
@@ -78,7 +78,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void Throw_WithOpenChild_ClosesBothAsErrored()
         {
-            Assert.Throws<TestError>(() => Groups.Create(null, () =>
+            Assert.Throws<TestError>(() => Groups.Create(() =>
             {
                 Groups.Open();
                 throw new TestError();
@@ -93,7 +93,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void Cancel_ClosesAsCancelled()
         {
-            Assert.Throws<OperationCanceledException>(() => Groups.Create(null, () => throw new OperationCanceledException()));
+            Assert.Throws<OperationCanceledException>(() => Groups.Create(() => throw new OperationCanceledException()));
 
             CollectionAssert.AreEqual(new[] { GroupOutcome.Cancelled }, _wire.ClientOutcomes());
         }
@@ -125,7 +125,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void Create_LeavesManualChildOpen_ClosesBothAsErrored()
         {
-            Assert.Throws<InvalidOperationException>(() => Groups.Create(null, () => Groups.Open()));
+            Assert.Throws<InvalidOperationException>(() => Groups.Create(() => Groups.Open()));
 
             CollectionAssert.AreEqual(new[] { GroupOutcome.Errored, GroupOutcome.Errored }, _wire.ClientOutcomes());
             Assert.IsNull(Groups.Current);
@@ -163,7 +163,7 @@ namespace Framework.Blocks.Tests
         {
             var gate = new TaskCompletionSource<bool>();
 
-            var run = Groups.CreateAsync(null, async () => await gate.Task);
+            var run = Groups.CreateAsync(async () => await gate.Task);
             Assert.AreEqual(1, _wire.Client.Count);
             gate.SetResult(true);
             await run;
@@ -177,7 +177,7 @@ namespace Framework.Blocks.Tests
             Assert.IsNull(Groups.Current);
 
             var outer = Groups.Open();
-            Groups.Create(null, () => Assert.AreEqual(new BlockId { Value = 2 }, Groups.Current));
+            Groups.Create(() => Assert.AreEqual(new BlockId { Value = 2 }, Groups.Current));
             Assert.AreEqual(outer, Groups.Current);
 
             Groups.Close(outer);
@@ -187,7 +187,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void CreateOfT_ReturnsTheValue()
         {
-            Assert.AreEqual(7, Groups.Create(null, () => 7));
+            Assert.AreEqual(7, Groups.Create(() => 7));
 
             CollectionAssert.AreEqual(new[] { GroupOutcome.Completed }, _wire.ClientOutcomes());
         }
@@ -195,7 +195,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public async Task CreateAsyncOfT_ReturnsTheValue()
         {
-            Assert.AreEqual(7, await Groups.CreateAsync(null, () => Task.FromResult(7)));
+            Assert.AreEqual(7, await Groups.CreateAsync(() => Task.FromResult(7)));
 
             CollectionAssert.AreEqual(new[] { GroupOutcome.Completed }, _wire.ClientOutcomes());
         }
@@ -203,7 +203,7 @@ namespace Framework.Blocks.Tests
         [Test]
         public void CreateAsync_Throw_ClosesAsErrored()
         {
-            Assert.ThrowsAsync<TestError>(() => Groups.CreateAsync(null, () => Task.FromException(new TestError())));
+            Assert.ThrowsAsync<TestError>(() => Groups.CreateAsync(() => Task.FromException(new TestError())));
 
             CollectionAssert.AreEqual(new[] { GroupOutcome.Errored }, _wire.ClientOutcomes());
         }

@@ -12,7 +12,6 @@
         "Framework.TypeKeys",
         "Framework.TypeKeys.Install",
         "Framework.TypeRouting",
-        "Framework.TypeRouting.Install",
         "Framework.Wire",
         "Scaffold.Autopacker",
         "Scaffold.Records",

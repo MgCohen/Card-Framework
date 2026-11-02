@@ -46,14 +46,14 @@ namespace Framework.TypeKeys
             return builder;
         }
 
-        public static IContainerBuilder AddTypeKeys(this IContainerBuilder builder, Action<TypeKeysOptions> configure)
+        public static IContainerBuilder AddTypeKeys(this IContainerBuilder builder, Action<TypeKeysOptions> configure = null)
         {
             TypeKeysOptionsRegistration options = null;
             for (var i = 0; i < builder.Count && options == null; i++)
                 options = builder[i] as TypeKeysOptionsRegistration;
             options ??= builder.Register(new TypeKeysOptionsRegistration());
 
-            configure(options.Options);
+            configure?.Invoke(options.Options);
             return builder;
         }
 

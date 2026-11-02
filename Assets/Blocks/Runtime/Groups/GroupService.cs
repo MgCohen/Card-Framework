@@ -41,10 +41,10 @@ namespace Framework.Blocks
             End(id, outcome);
         }
 
-        public void Create(IEntity source, Action logic, BlockId trigger = null)
-            => Create<object>(source, () => { logic(); return null; }, trigger);
+        public void Create(Action logic, IEntity source = null, BlockId trigger = null)
+            => Create<object>(() => { logic(); return null; }, source, trigger);
 
-        public T Create<T>(IEntity source, Func<T> logic, BlockId trigger = null)
+        public T Create<T>(Func<T> logic, IEntity source = null, BlockId trigger = null)
         {
             var id = Open(source, trigger);
             T result;
@@ -55,10 +55,10 @@ namespace Framework.Blocks
             return result;
         }
 
-        public Task CreateAsync(IEntity source, Func<Task> logic, BlockId trigger = null)
-            => CreateAsync<object>(source, async () => { await logic(); return null; }, trigger);
+        public Task CreateAsync(Func<Task> logic, IEntity source = null, BlockId trigger = null)
+            => CreateAsync<object>(async () => { await logic(); return null; }, source, trigger);
 
-        public async Task<T> CreateAsync<T>(IEntity source, Func<Task<T>> logic, BlockId trigger = null)
+        public async Task<T> CreateAsync<T>(Func<Task<T>> logic, IEntity source = null, BlockId trigger = null)
         {
             var id = Open(source, trigger);
             T result;

@@ -2,7 +2,6 @@ using Framework.Blocks;
 using Framework.Pipeline;
 using Framework.RecordIds;
 using Framework.TypeKeys;
-using Framework.TypeRouting;
 using Framework.Wire;
 using NUnit.Framework;
 using VContainer;
@@ -34,7 +33,6 @@ namespace Framework.Samples.FrameworkSample.Tests
             server.RegisterInstance(_serverStream).AsSelf().As<IEventEmitter>();
             server.Register<CardStore>(Lifetime.Singleton);
             server.AddBlocks();
-            server.AddTypeRouting(_ => { });
             server.AddIdSpace<CardId>(Role.Server);
             server.AddTypeKeys(o => o.Validate = true);
             server.AddKeySpace<Zone, ZoneRegistry>();

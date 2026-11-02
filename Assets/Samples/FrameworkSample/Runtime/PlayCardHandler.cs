@@ -11,7 +11,7 @@ namespace Framework.Samples.FrameworkSample
         protected override Task<object> Handle(GameMessage message, GameScope scope)
         {
             var play = (PlayCard)message;
-            scope.Groups.Create(null, () => scope.Move(play.Card, new Zone.Board()));
+            scope.Groups.Create(() => scope.Move(play.Card, new Zone.Board()));
             return Task.FromResult<object>(null);
         }
     }
