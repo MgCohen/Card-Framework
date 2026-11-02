@@ -1,16 +1,12 @@
-using System;
-
 namespace Framework.Pipeline.Tests
 {
-    public sealed class DeniedValidator : Validator<Message>
+    public sealed class DeniedValidator : Validator<Message, Denied, TestView>
     {
-        public override Type RouteType => typeof(Denied);
-
         // InternalsVisibleTo makes this assembly a friend; an author assembly writes "protected override".
-        protected internal override bool Validate(Message message, out string reason)
+        protected internal override bool Validate(Denied message, TestView view, out string reason)
         {
-            reason = "no mana";
-            return false;
+            reason = view.Mana > 0 ? null : "no mana";
+            return reason == null;
         }
     }
 }

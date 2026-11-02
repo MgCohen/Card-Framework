@@ -12,7 +12,7 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_RunsOneMessage()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
             var pipeline = builder.Build().Resolve<TestPipeline>();
 
             var e = pipeline.Add(new Ping());
@@ -25,7 +25,7 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_Default_SkipsTestAssemblies()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>();
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>();
             var router = builder.Build().Resolve<TypeRouter<Handler<Message, TestScope>>>();
 
             Assert.That(router.RoutedTypes, Is.Empty);
@@ -35,19 +35,19 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_IncludeTests_ScansFixtures()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
             var resolver = builder.Build();
 
             Assert.That(resolver.Resolve<TypeRouter<Handler<Message, TestScope>>>().Get(typeof(Ping)), Is.TypeOf<PingHandler>());
-            Assert.That(resolver.Resolve<TypeRouter<Validator<Message>>>().Get(typeof(Denied)), Is.TypeOf<DeniedValidator>());
+            Assert.That(resolver.Resolve<TypeRouter<Validator<Message, TestView>>>().Get(typeof(Denied)), Is.TypeOf<DeniedValidator>());
         }
 
         [Test]
         public void AddPipeline_SameCallTwice_RegistersOnce()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
             var resolver = builder.Build();
 
             Assert.That(resolver.Resolve<TestPipeline>(), Is.SameAs(resolver.Resolve<TestPipeline>()));
@@ -55,11 +55,25 @@ namespace Framework.Pipeline.Tests
         }
 
         [Test]
+        public void AddPipeline_RegistersPipelineServices()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
+            builder.AddPipeline<OtherPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
+            var resolver = builder.Build();
+
+            var services = resolver.Resolve<PipelineServices<Message, TestScope, TestView>>();
+            Assert.That(services.Handlers, Is.SameAs(resolver.Resolve<TypeRouter<Handler<Message, TestScope>>>()));
+            Assert.That(services.Validators, Is.SameAs(resolver.Resolve<TypeRouter<Validator<Message, TestView>>>()));
+            Assert.That(services.Ids, Is.SameAs(resolver.Resolve<IdAllocator<MessageId>>()));
+        }
+
+        [Test]
         public void AddPipeline_TwoPipelines_ShareOneIdAllocator()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>();
-            builder.AddPipeline<OtherPipeline, Message, TestScope>();
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>();
+            builder.AddPipeline<OtherPipeline, Message, TestScope, TestView>();
             var resolver = builder.Build();
 
             var a = resolver.Resolve<TestPipeline>().Add(new Ping());
@@ -73,7 +87,7 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_FirstMessageId_StartsTheSpace()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.FirstMessageId = 100);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.FirstMessageId = 100);
 
             var e = builder.Build().Resolve<TestPipeline>().Add(new Ping());
 
@@ -84,9 +98,9 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_ChildScope_UsesParentIdSpace()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>();
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>();
             var root = builder.Build();
-            var child = root.CreateScope(b => b.AddPipeline<OtherPipeline, Message, TestScope>());
+            var child = root.CreateScope(b => b.AddPipeline<OtherPipeline, Message, TestScope, TestView>());
 
             var a = root.Resolve<TestPipeline>().Add(new Ping());
             var b = child.Resolve<OtherPipeline>().Add(new Ping());
@@ -98,10 +112,10 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_DifferentIncludeTests_Throws()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
 
             var ex = Assert.Throws<InvalidOperationException>(() =>
-                builder.AddPipeline<OtherPipeline, Message, TestScope>());
+                builder.AddPipeline<OtherPipeline, Message, TestScope, TestView>());
             Assert.That(ex.Message, Does.Contain("IncludeTests"));
         }
 
@@ -109,21 +123,21 @@ namespace Framework.Pipeline.Tests
         public void AddPipeline_ChildScope_DifferentIncludeTests_Throws()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.IncludeTests = true);
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.IncludeTests = true);
             var root = builder.Build();
 
             Assert.Throws<InvalidOperationException>(() =>
-                root.CreateScope(b => b.AddPipeline<OtherPipeline, Message, TestScope>()));
+                root.CreateScope(b => b.AddPipeline<OtherPipeline, Message, TestScope, TestView>()));
         }
 
         [Test]
         public void AddPipeline_DifferentFirstMessageId_Throws()
         {
             var builder = new ContainerBuilder();
-            builder.AddPipeline<TestPipeline, Message, TestScope>();
+            builder.AddPipeline<TestPipeline, Message, TestScope, TestView>();
 
             Assert.Throws<InvalidOperationException>(() =>
-                builder.AddPipeline<OtherPipeline, Message, TestScope>(o => o.FirstMessageId = 100));
+                builder.AddPipeline<OtherPipeline, Message, TestScope, TestView>(o => o.FirstMessageId = 100));
         }
 
         [Test]
@@ -132,7 +146,7 @@ namespace Framework.Pipeline.Tests
             var builder = new ContainerBuilder();
 
             var ex = Assert.Throws<InvalidOperationException>(() =>
-                builder.AddPipeline<TestPipeline, Message, TestScope>(o => o.Role = Role.Client));
+                builder.AddPipeline<TestPipeline, Message, TestScope, TestView>(o => o.Role = Role.Client));
             Assert.That(ex.Message, Does.Contain("runs only on the server"));
         }
     }

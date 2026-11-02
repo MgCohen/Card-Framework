@@ -1,16 +1,13 @@
-using Framework.RecordIds;
-using Framework.TypeRouting;
-
 namespace Framework.Pipeline.Tests
 {
-    public sealed class OtherPipeline : Pipeline<Message, TestScope>
+    public sealed class OtherPipeline : Pipeline<Message, TestScope, TestView>
     {
-        public OtherPipeline(TypeRouter<Handler<Message, TestScope>> handlers, TypeRouter<Validator<Message>> validators,
-                             IdAllocator<MessageId> ids)
-            : base(handlers, validators, ids)
+        public OtherPipeline(PipelineServices<Message, TestScope, TestView> services) : base(services)
         {
         }
 
         protected override TestScope CreateScope(Envelope<Message> e) => new(m => RunInline(e, m));
+
+        protected override TestView CreateView(Envelope<Message> e) => new();
     }
 }

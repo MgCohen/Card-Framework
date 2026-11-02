@@ -2,12 +2,10 @@ using System;
 
 namespace Framework.Pipeline.Tests
 {
-    public sealed class CrashValidator : Validator<Message>
+    public sealed class CrashValidator : Validator<Message, Crash, TestView>
     {
-        public override Type RouteType => typeof(Crash);
-
         // InternalsVisibleTo makes this assembly a friend; an author assembly writes "protected override".
-        protected internal override bool Validate(Message message, out string reason)
+        protected internal override bool Validate(Crash message, TestView view, out string reason)
             => throw new InvalidOperationException("crash");
     }
 }

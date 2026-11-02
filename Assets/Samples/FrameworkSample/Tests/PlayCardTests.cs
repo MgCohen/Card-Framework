@@ -36,7 +36,7 @@ namespace Framework.Samples.FrameworkSample.Tests
             server.AddIdSpace<CardId>(Role.Server);
             server.AddTypeKeys(o => o.Validate = true);
             server.AddKeySpace<Zone, ZoneRegistry>();
-            server.AddPipeline<GamePipeline, GameMessage, GameScope>();
+            server.AddPipeline<GamePipeline, GameMessage, GameScope, GameView>();
             _server = server.Build();
 
             var client = new ContainerBuilder();

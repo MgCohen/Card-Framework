@@ -1,14 +1,11 @@
-using System;
 using System.Threading.Tasks;
 
 namespace Framework.Pipeline.Tests
 {
-    public sealed class EchoHandler : Handler<Message, TestScope>
+    public sealed class EchoHandler : Handler<Message, Echo, TestScope>
     {
-        public override Type RouteType => typeof(Echo);
-
         // InternalsVisibleTo makes this assembly a friend; an author assembly writes "protected override".
-        protected internal override Task<object> Handle(Message message, TestScope scope)
-            => Task.FromResult<object>(((Echo)message).Value);
+        protected internal override Task<object> Handle(Echo message, TestScope scope)
+            => Task.FromResult<object>(message.Value);
     }
 }

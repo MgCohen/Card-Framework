@@ -6,20 +6,19 @@ using Framework.TypeRouting;
 
 namespace Framework.Pipeline
 {
-    public abstract class Pipeline<TMessage, TScope> where TMessage : Message
+    public abstract class Pipeline<TMessage, TScope, TView> where TMessage : Message
     {
         readonly TypeRouter<Handler<TMessage, TScope>> _handlers;
-        readonly TypeRouter<Validator<TMessage>> _validators;
+        readonly TypeRouter<Validator<TMessage, TView>> _validators;
         readonly IdAllocator<MessageId> _ids;
         readonly List<Envelope<TMessage>> _items = new();
 
-        protected Pipeline(TypeRouter<Handler<TMessage, TScope>> handlers,
-                           TypeRouter<Validator<TMessage>> validators,
-                           IdAllocator<MessageId> ids)
+        protected Pipeline(PipelineServices<TMessage, TScope, TView> services)
         {
-            _handlers = handlers;
-            _validators = validators;
-            _ids = ids;
+            if (services == null) throw new ArgumentNullException(nameof(services));
+            _handlers = services.Handlers;
+            _validators = services.Validators;
+            _ids = services.Ids;
         }
 
         public IReadOnlyList<Envelope<TMessage>> Items => _items;
@@ -73,16 +72,20 @@ namespace Framework.Pipeline
         /// <summary>Makes the scope for one run. The scope must be a <see cref="PipelineScope"/>; if not, the run faults.</summary>
         protected abstract TScope CreateScope(Envelope<TMessage> e);
 
+        /// <summary>Makes the read-only view that the validator of the message reads. Not called when the message has no validator.</summary>
+        protected abstract TView CreateView(Envelope<TMessage> e);
+
         protected virtual bool Validate(Envelope<TMessage> e, out string reason)
         {
             reason = null;
-            return !_validators.TryGet(e.Message.GetType(), out var validator) || validator.Validate(e.Message, out reason);
+            return !_validators.TryGet(e.Message.GetType(), out var validator)
+                || validator.Dispatch(e.Message, CreateView(e), out reason);
         }
 
         protected virtual Task Before(Envelope<TMessage> e, TScope scope) => Task.CompletedTask;
 
         protected virtual Task<object> Handle(Envelope<TMessage> e, TScope scope)
-            => _handlers.Get(e.Message.GetType()).Handle(e.Message, scope);
+            => _handlers.Get(e.Message.GetType()).Dispatch(e.Message, scope);
 
         protected virtual Task After(Envelope<TMessage> e, TScope scope) => Task.CompletedTask;
 

@@ -45,6 +45,20 @@ namespace Framework.Pipeline.Tests
         }
 
         [Test]
+        public void Validate_ReadsThePipelineView()
+        {
+            var pipeline = new TestPipeline(new DeniedValidator()) { View = new TestView(mana: 1) };
+            var e = pipeline.Add(new Denied());
+
+            var run = pipeline.Run();
+
+            // The validator accepts, so the run reaches Handle, and Denied has no handler.
+            Assert.IsTrue(run.IsFaulted);
+            Assert.That(pipeline.Steps, Is.EqualTo(new[] { "validate", "scope", "before", "handle" }));
+            Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+        }
+
+        [Test]
         public void Fault_ClosesScope()
         {
             var pipeline = new TestPipeline(new BoomHandler());

@@ -7,21 +7,22 @@ using VContainer;
 
 namespace Framework.Pipeline.Tests
 {
-    public sealed class TestPipeline : Pipeline<Message, TestScope>
+    public sealed class TestPipeline : Pipeline<Message, TestScope, TestView>
     {
         [Inject]
-        public TestPipeline(TypeRouter<Handler<Message, TestScope>> handlers, TypeRouter<Validator<Message>> validators,
-                            IdAllocator<MessageId> ids)
-            : base(handlers, validators, ids)
+        public TestPipeline(PipelineServices<Message, TestScope, TestView> services) : base(services)
         {
         }
 
         public TestPipeline(params object[] members)
-            : base(new TypeRouter<Handler<Message, TestScope>>(Of<Handler<Message, TestScope>>(members), RouteMode.Single),
-                   new TypeRouter<Validator<Message>>(Of<Validator<Message>>(members), RouteMode.Single),
-                   new IdAllocator<MessageId>())
+            : base(new PipelineServices<Message, TestScope, TestView>(
+                new TypeRouter<Handler<Message, TestScope>>(Of<Handler<Message, TestScope>>(members), RouteMode.Single),
+                new TypeRouter<Validator<Message, TestView>>(Of<Validator<Message, TestView>>(members), RouteMode.Single),
+                new IdAllocator<MessageId>()))
         {
         }
+
+        public TestView View { get; set; } = new();
 
         public bool Lifo { get; set; }
         public bool ScopeThrows { get; set; }
@@ -49,6 +50,8 @@ namespace Framework.Pipeline.Tests
             Scopes.Add(scope);
             return scope;
         }
+
+        protected override TestView CreateView(Envelope<Message> e) => View;
 
         protected override bool Validate(Envelope<Message> e, out string reason)
         {

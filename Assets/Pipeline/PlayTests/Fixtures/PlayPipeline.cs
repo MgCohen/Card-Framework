@@ -5,12 +5,13 @@ using Framework.TypeRouting;
 
 namespace Framework.Pipeline.PlayTests
 {
-    public sealed class PlayPipeline : Pipeline<Message, PlayScope>
+    public sealed class PlayPipeline : Pipeline<Message, PlayScope, PlayView>
     {
         public PlayPipeline(params Handler<Message, PlayScope>[] handlers)
-            : base(new TypeRouter<Handler<Message, PlayScope>>(handlers, RouteMode.Single),
-                   new TypeRouter<Validator<Message>>(new List<Validator<Message>>(), RouteMode.Single),
-                   new IdAllocator<MessageId>())
+            : base(new PipelineServices<Message, PlayScope, PlayView>(
+                new TypeRouter<Handler<Message, PlayScope>>(handlers, RouteMode.Single),
+                new TypeRouter<Validator<Message, PlayView>>(new List<Validator<Message, PlayView>>(), RouteMode.Single),
+                new IdAllocator<MessageId>()))
         {
         }
 
@@ -21,5 +22,7 @@ namespace Framework.Pipeline.PlayTests
         }
 
         protected override PlayScope CreateScope(Envelope<Message> e) => new(m => RunInline(e, m));
+
+        protected override PlayView CreateView(Envelope<Message> e) => new();
     }
 }

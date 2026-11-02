@@ -1,12 +1,9 @@
-using System;
 using System.Threading.Tasks;
 
 namespace Framework.Pipeline.PlayTests
 {
-    public sealed class NestHandler : Handler<Message, PlayScope>
+    public sealed class NestHandler : Handler<Message, Nest, PlayScope>
     {
-        public override Type RouteType => typeof(Nest);
-
-        protected override async Task<object> Handle(Message message, PlayScope scope) => await scope.Run(new Ping());
+        protected override async Task<object> Handle(Nest message, PlayScope scope) => await scope.Run(new Ping());
     }
 }

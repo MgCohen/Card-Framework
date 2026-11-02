@@ -7,9 +7,9 @@ namespace Framework.Pipeline
 {
     public static class PipelineInstall
     {
-        public static IContainerBuilder AddPipeline<TPipeline, TMessage, TScope>(this IContainerBuilder builder,
+        public static IContainerBuilder AddPipeline<TPipeline, TMessage, TScope, TView>(this IContainerBuilder builder,
             Action<PipelineOptions> configure = null)
-            where TPipeline : Pipeline<TMessage, TScope>
+            where TPipeline : Pipeline<TMessage, TScope, TView>
             where TMessage : Message
         {
             var options = new PipelineOptions();
@@ -22,8 +22,10 @@ namespace Framework.Pipeline
 
             // Two pipelines can share a router; a second scan would register each member twice.
             AddRouterOnce<Handler<TMessage, TScope>>(builder, options.IncludeTests);
-            AddRouterOnce<Validator<TMessage>>(builder, options.IncludeTests);
+            AddRouterOnce<Validator<TMessage, TView>>(builder, options.IncludeTests);
             builder.AddIdSpace<MessageId>(options.Role, options.FirstMessageId);
+            if (!builder.Exists(typeof(PipelineServices<TMessage, TScope, TView>), includeInterfaceTypes: true, findParentScopes: true))
+                builder.Register<PipelineServices<TMessage, TScope, TView>>(Lifetime.Singleton);
             if (!builder.Exists(typeof(TPipeline), includeInterfaceTypes: true, findParentScopes: true))
                 builder.Register<TPipeline>(Lifetime.Singleton);
             return builder;

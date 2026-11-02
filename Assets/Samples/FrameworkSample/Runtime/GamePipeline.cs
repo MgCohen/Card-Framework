@@ -1,30 +1,30 @@
 using Framework.Blocks;
 using Framework.Pipeline;
-using Framework.RecordIds;
-using Framework.TypeRouting;
 using Framework.Wire;
 
 namespace Framework.Samples.FrameworkSample
 {
-    public sealed class GamePipeline : Pipeline<GameMessage, GameScope>
+    public sealed class GamePipeline : Pipeline<GameMessage, GameScope, GameView>
     {
         readonly CardStore _cards;
         readonly GroupService _groups;
         readonly IEventEmitter _events;
         readonly ZoneRegistry _zones;
+        readonly GameView _view;
 
-        public GamePipeline(TypeRouter<Handler<GameMessage, GameScope>> handlers,
-                            TypeRouter<Validator<GameMessage>> validators,
-                            IdAllocator<MessageId> ids,
+        public GamePipeline(PipelineServices<GameMessage, GameScope, GameView> services,
                             CardStore cards, GroupService groups, IEventEmitter events, ZoneRegistry zones)
-            : base(handlers, validators, ids)
+            : base(services)
         {
             _cards = cards;
             _groups = groups;
             _events = events;
             _zones = zones;
+            _view = new GameView(cards);
         }
 
         protected override GameScope CreateScope(Envelope<GameMessage> e) => new(_cards, _groups, _events, _zones);
+
+        protected override GameView CreateView(Envelope<GameMessage> e) => _view;
     }
 }
