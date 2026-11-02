@@ -4,6 +4,7 @@
     "references": [
         "Framework.Pipeline",
         "Framework.RecordIds",
+        "Framework.RecordIds.Install",
         "Scaffold.Records",
         "Framework.Routing",
         "VContainer",

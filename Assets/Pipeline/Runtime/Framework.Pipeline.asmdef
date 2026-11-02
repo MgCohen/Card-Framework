@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Pipeline",
     "references": [
         "Framework.RecordIds",
+        "Framework.RecordIds.Install",
         "Framework.Routing",
         "Scaffold.Autopacker",
         "VContainer"

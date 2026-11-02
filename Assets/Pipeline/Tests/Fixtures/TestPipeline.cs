@@ -3,11 +3,19 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Framework.RecordIds;
 using Framework.Routing;
+using VContainer;
 
 namespace Framework.Pipeline.Tests
 {
     public sealed class TestPipeline : Pipeline<Message, TestScope>
     {
+        [Inject]
+        public TestPipeline(TypeRouter<Handler<Message, TestScope>> handlers, TypeRouter<Validator<Message>> validators,
+                            IdAllocator<MessageId> ids)
+            : base(handlers, validators, ids)
+        {
+        }
+
         public TestPipeline(params object[] members)
             : base(new TypeRouter<Handler<Message, TestScope>>(Of<Handler<Message, TestScope>>(members), RouteMode.Single),
                    new TypeRouter<Validator<Message>>(Of<Validator<Message>>(members), RouteMode.Single),
