@@ -133,6 +133,10 @@
               "Framework.RecordIds",
               "Framework.RecordIds.Install",
               "Framework.Routing"
+            ],
+            "Framework.Blocks": [
+              "Framework.RecordIds",
+              "Framework.Wire"
             ]
           }
         }
