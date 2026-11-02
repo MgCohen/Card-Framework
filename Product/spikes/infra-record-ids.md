@@ -84,9 +84,9 @@ The user made these decisions for all four infra spikes:
 | Nested `TagStore` | out | Tags feature |
 | Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
 | Messages hold ids, not refs | out | Pipeline (`infra-command-pipeline.md`). Design text in the appendix. |
-| Request cross-space fields | out | Requests feature (§9) |
+| Request cross-space fields | out | Requests feature (§9 Later) |
 | Kind slots | out | `infra-kind-ids.md` |
-| Client correlation id | out | Pipeline, phase 2 (§9) |
+| Client correlation id | out | Pipeline, phase 2 (§9 Later) |
 | Channel ids, seats | out | Wire, Multiplayer (§5) |
 
 Boundary: the owning service on the server asks for a new id. The pattern gives back a typed id. The service puts it in its wire event. Stores and the wire use the id after that, and never make one.
@@ -134,7 +134,7 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 | block | `BlockId` | `Framework.Blocks` | `EventStream.Add` (position) | no (both sides compute it) | match |
 | request | — (uses `BlockId`) | `Framework.Requests` | `EventStream.Add` (a request is a block) | no | match |
 | message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
-| definition | `DefinitionId` | `Framework.Entities` | authored data (§9) | yes | build |
+| definition | `DefinitionId` | `Framework.Entities` | authored data (§9 Later) | yes | build |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
 
@@ -358,7 +358,7 @@ _tags.Set(card, Health, 5);
 | `TagService.Set<T>(int entityId, …)` | `Set<T>(IEntity entity, …)` | author API takes the record (decision 20) |
 | `TagStore.Get<T>(int, int)` | `Get<T>(IEntity, …)`; maps keyed on `EntityId` | Tags piece |
 | `RequestStore` with `Dictionary<int, Request>` | `RequestStore : RecordStore<Request, BlockId>`; `Get<T>(BlockId)` stays | `IReadOnlyRequestStore.Open` key type |
-| `Catalog<TDef>` with `Dictionary<int, TDef>` | `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | `IEntityDefinition : IRecord<DefinitionId>`; id source in §9 |
+| `Catalog<TDef>` with `Dictionary<int, TDef>` | `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | `IEntityDefinition : IRecord<DefinitionId>`; id source in §9 Later |
 | `Network`, `PeerRoster` | no change | see §5 |
 
 ## 5. What stays specialized, and why
@@ -387,20 +387,70 @@ Proposals only. `rulebook.json` does not change in this spike.
 | EV-01 (handed off) | An event can be undone from its own fields. | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event. Status `planned`. |
 | MSG-01 (handed off) | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. | `attached`: a reflection test over `Command` subtypes. |
 
-## 7. Migration steps
+## 7. Plan
 
-Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 2–5 touch wire events, so they also run `-With playmode`.
+Build steps add standalone code and change no current caller. The cross-spike order on the catalog owns the Migrate steps. Each step is one PR and keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green.
 
-0. **AutoPacker upgrade.** Done: merged in https://github.com/MgCohen/Scaffold/pull/63 (merge commit `8b27bacf`). Update the package in `Packages/manifest.json`. Add a Wire test that packs and unpacks an event with a nested id field and a `null` id.
-1. **Add `Id`, the `IsExternalInit` shim, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `StackIdAllocator` gives back only the last id, `ById` throws on a miss, `EntityId` 5 ≠ `BlockId` 5). No callers.
-2. **Blocks piece.** `BlockId`, positions, `GroupStore` and the removal of `RequestId` land in the Blocks PRs (`infra-block-wire.md`).
-3. **Add `EntityId` and `IEntity`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`.
-4. **Move Tags to `EntityId` and `IEntity`.** Change the Tag events (ids), `TagService` and `IReadOnlyTagStore` (records), `TagStore` maps and the apply handlers.
-5. **Add `DefinitionId`** in `Entities/Runtime/`. Change `IEntityDefinition`, `Catalog<TDef>`, `Entity.DefinitionId`, `EntityCreatedEvent.DefinitionId` and `CatalogTests`. The definitions feature decides the id source (§9).
-6. **(Handed off to the pipeline.) Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings.
-7. **(Handed off to rollback.) Add the inverse fields.** See appendix A.1.
-8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review.
-9. **Update docs.** Update `docs/architecture.md` (id spaces) and the live-ref text in `command-service.md`. In `docs/lookup-patterns.md`, change "no `Store<T>` base" to "`RecordStore<TRecord, TId>` for id → record stores only".
+### 7.1 Folder structure
+
+```text
+Assets/Framework/Core/
+├─ Runtime/                       Framework.Core.asmdef  (+ Scaffold.Autopacker)
+│  └─ Ids/
+│     ├─ IsExternalInit.cs
+│     ├─ Id.cs
+│     ├─ EntityId.cs
+│     ├─ IRecord.cs
+│     ├─ IEntity.cs
+│     ├─ IdAllocator.cs
+│     ├─ StackIdAllocator.cs
+│     └─ RecordStore.cs
+└─ Tests/                         Framework.Core.Tests.asmdef  (+ Scaffold.Autopacker)
+   └─ Ids/
+      ├─ IdTests.cs
+      ├─ IdPackingTests.cs
+      ├─ IdAllocatorTests.cs
+      └─ RecordStoreTests.cs
+```
+
+### 7.2 Dependencies
+
+```mermaid
+flowchart BT
+  C["Framework.Core"] --> AP["Scaffold.Autopacker"]
+  C --> R["Scaffold.Records"]
+  T["Framework.Core.Tests"] --> C
+  T --> AP
+  E["Framework.Entities"] --> C
+  G["Framework.Tags"] --> C
+  B["Framework.Blocks"] --> C
+  W["Framework.Wire"] --> C
+```
+
+`Framework.Core` must not reference `Framework.Wire`, `Framework.Entities`, `Framework.Blocks` or VContainer.
+
+### 7.3 Build steps
+
+| Step | Files | Tests | Done |
+|---|---|---|---|
+| B1 | `Packages/packages-lock.json`: AutoPacker hash at or after Scaffold `8b27bacf` | existing Wire tests | gate PASS with `-With playmode` |
+| B2 | `Ids/IsExternalInit.cs`, `Id.cs`, `EntityId.cs`; Core asmdef + `Scaffold.Autopacker` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS |
+| B3 | `Ids/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS |
+| B4 | `Ids/IRecord.cs`, `IEntity.cs`, `RecordStore.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; no caller outside Core |
+
+### 7.4 Migrate steps
+
+The catalog cross-spike order decides when each step runs.
+
+| Step | Change | Done |
+|---|---|---|
+| M1 | Entities: `IdAllocator<EntityId>` in `EntityService`; `EntityStore : RecordStore<Entity, EntityId>`; `EntityCreatedEvent.EntityId : EntityId` | gate PASS with `-With playmode`; no `_nextId` in Entities |
+| M2 | Tags: APIs take `IEntity`; Tag events carry `EntityId`; `TagStore` maps keyed on `EntityId` | gate PASS with `-With playmode` |
+| M3 | Catalog: `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | gate PASS; #195 closed first |
+| M4 | Blocks and Requests: positions, `RequestStore : RecordStore<Request, BlockId>` | owned by `infra-block-wire.md` |
+| M5 | Pipeline: `MessageId`, typed ids in sample commands | owned by `infra-command-pipeline.md` |
+| M6 | Rules: §6 into `rulebook.json`, in a separate PR for user review | gate PASS; user approval |
+| M7 | Docs: `docs/architecture.md`, `docs/lookup-patterns.md` ("`RecordStore<TRecord, TId>` for id → record stores only") | — |
 
 ## 8. Interfaces for the other three pieces
 
@@ -429,11 +479,20 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 - An event that changes a store follows the appendix A.1 table (owner: rollback).
 - An id → record store derives from `RecordStore<TRecord, TId>` and has no allocator (ID-01).
 
-## 9. Open questions
+## 9. Later
 
-None. The questions on the base pattern are closed: allocator home (decision 2), save and load (decision 22), id scope (decision 23) and seats (decision 24).
+No open questions. Deferred items:
 
-These questions do not affect the base pattern. They go to their owners:
+| Item | Why later | Trigger to reopen |
+|---|---|---|
+| Save and load of a match in progress | No feature loads a match; undo is only the top of the stack (decision 22) | A match recovery feature |
+| Ids across matches (`MatchId`) | Ids belong to their match (decision 23) | A replay archive or analytics |
+| Seats on `IdAllocator` | A mode has 1 to 4 players (decision 24) | A mode with many, changing players |
+| Object pooling of records | A match has hundreds of records (appendix A.4) | The profiler shows record allocation cost |
+| Allocation cost of id records | Accepted (decision 17) | A benchmark shows id hashing or allocation cost |
+| Rules ID-05, ID-06, ID-07 | Need rollback or migrated APIs | Rollback is scheduled; the first API migrates to records |
+
+Questions for other owners:
 
 | Question | Owner | Issue |
 |---|---|---|
