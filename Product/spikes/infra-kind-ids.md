@@ -43,7 +43,7 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 10. (2026-11-02) `Register` of a member that is equal to a registered member (same type and slot) does nothing. A different member on a used slot throws, and the message names both types.
 11. (2026-11-02) The `Tag<T>` constructor is `protected internal`. `TagRegistry.Define<T>(slot)` makes and registers a data tag. The base registry has `Define(slot, make)` for other kind spaces. `KindValidator` reports a member type with a public constructor that has parameters. `SlotOf` has no extra check: it stays one field read.
 12. (2026-11-02) Stripping: `TypeKey` implements `IKind`, and `IKind` carries the router's own `[RequireImplementorsAttribute]`. The router smoke build proved this attribute on IL2CPP at stripping level High. Add one kind member to that build, because kind members get `IKind` through a base class.
-13. (2026-11-02) Tag value types (the `T` in `Tag<T>`) are out of scope. They are a `Framework.Tags` concern. The "Framework.Tags refactor" issue holds them, with the other tag gaps.
+13. (2026-11-02) Tag value types (the `T` in `Tag<T>`) are out of scope. They are a `Framework.Tags` concern. The "Framework.Tags refactor" issue (https://github.com/MgCohen/Card-Framework/issues/196) holds them, with the other tag gaps.
 14. (2026-11-02) The data asset format is out of scope. This spike gives only `Define<T>(slot)`. The data work comes after this spike.
 
 ## 2. Scope
@@ -61,7 +61,7 @@ tags: [#spike, #infra, #kinds, #registry, #wire]
 | Instance ids (`EntityId`, `BlockId`, `MessageId`) and their allocation | out | `infra-record-ids.md` |
 | Wire event fields, packing and apply handlers | out | `Framework.Wire` and each feature |
 | Asset format for data members | out | data-authoring work |
-| Tag values: value types, `TagStore`, value checks | out | `Framework.Tags` refactor (issue) |
+| Tag values: value types, `TagStore`, value checks | out | `Framework.Tags` refactor (https://github.com/MgCohen/Card-Framework/issues/196) |
 | Game state stack (`Push`, `Pop`, current state) | out | `Framework.States` |
 | `BlockKind`: change from an `enum` to a kind space | out | `infra-block-wire.md` (it can use this pattern) |
 | Card definition ids in `Catalog` | out | `Framework.Entities` (Catalog) |
@@ -335,5 +335,5 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 1. **Data asset.** The format for data tags. The data work comes after this spike. It calls `Define<T>(slot)`.
 2. **Analyzer.** Move KIND-02 and KIND-03 from `KindValidator` to a Roslyn analyzer.
 3. **Test filter.** Keep test members out of the scan in player builds.
-4. **Framework.Tags refactor.** Tag value types and the other tag gaps. This is a separate issue, not part of this pattern.
+4. **Framework.Tags refactor.** Tag value types and the other tag gaps. This is a separate issue (https://github.com/MgCohen/Card-Framework/issues/196), not part of this pattern.
 5. **v2 generator.** Replace the reflection scan.
