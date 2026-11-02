@@ -6,7 +6,7 @@ namespace Framework.Kinds.Tests
 {
     public class TypeKeyRegistryTests
     {
-        ColorRegistry _colors;
+        private ColorRegistry _colors;
 
         [SetUp]
         public void SetUp()

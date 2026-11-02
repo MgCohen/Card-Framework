@@ -7,7 +7,7 @@ namespace Framework.Kinds
 {
     public abstract partial record TypeKey
     {
-        public class Registry<TKey> where TKey : TypeKey
+        public class Registry<TKey> : ICodeMemberScan where TKey : TypeKey
         {
             private readonly Dictionary<int, TKey> _bySlot = new();
             private readonly Dictionary<Type, TKey> _byType = new();

@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 
 namespace Framework.Kinds.Tests
@@ -30,6 +31,25 @@ namespace Framework.Kinds.Tests
             colors.RegisterCodeMembers(includeTests: false);
 
             Assert.That(colors.Members, Is.Empty);
+        }
+
+        [Test]
+        public void RegisterCodeMembers_Twice_KeepsTheSameMembers()
+        {
+            var colors = new ColorRegistry();
+            colors.RegisterCodeMembers(includeTests: true);
+            colors.RegisterCodeMembers(includeTests: true);
+
+            Assert.That(colors.Members, Is.EqualTo(new Color[] { new Red(), new Green() }));
+        }
+
+        [Test]
+        public void RegisterCodeMembers_AfterFreeze_Throws()
+        {
+            var colors = new ColorRegistry();
+            colors.Freeze();
+
+            Assert.Throws<InvalidOperationException>(() => colors.RegisterCodeMembers(includeTests: true));
         }
     }
 }
