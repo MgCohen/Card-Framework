@@ -3,6 +3,8 @@
     "rootNamespace": "Framework.RecordIds.Tests",
     "references": [
         "Framework.RecordIds",
+        "Framework.RecordIds.Install",
+        "VContainer",
         "Scaffold.Autopacker",
         "Scaffold.Records"
     ],
