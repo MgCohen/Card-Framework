@@ -26,6 +26,21 @@ namespace Framework.Routing.Tests
         }
 
         [Test]
+        public void NamesThatReach_KeepsTwoLevelChain_SkipsUnrelated()
+        {
+            // Game derives a Pipeline class and references only Pipeline. It is listed first, so one pass is not enough.
+            var reaching = TypeScan.NamesThatReach("Framework.Routing", new (string, System.Collections.Generic.IEnumerable<string>)[]
+            {
+                ("Game", new[] { "Framework.Pipeline" }),
+                ("Framework.Pipeline", new[] { "Framework.Routing" }),
+                ("Framework.Routing", new[] { "VContainer" }),
+                ("Other", new[] { "VContainer" }),
+            });
+
+            Assert.That(reaching, Is.EquivalentTo(new[] { "Framework.Routing", "Framework.Pipeline", "Game" }));
+        }
+
+        [Test]
         public void Cache_KeysOnBaseTypeAndIncludeTests()
         {
             var withTests = TypeScan.ConcreteTypesOf(typeof(INoteReader), true);

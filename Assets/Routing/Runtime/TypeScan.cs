@@ -16,13 +16,15 @@ namespace Framework.Routing
             if (Cache.TryGetValue(key, out var cached))
                 return cached;
 
-            var home = baseType.Assembly;
+            var loaded = AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic).ToArray();
+            var reaching = NamesThatReach(
+                baseType.Assembly.GetName().Name,
+                loaded.Select(a => (a.GetName().Name, a.GetReferencedAssemblies().Select(r => r.Name))));
+
             var found = new List<Type>();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            foreach (var assembly in loaded)
             {
-                if (assembly.IsDynamic)
-                    continue;
-                if (assembly != home && !References(assembly, home.GetName().Name))
+                if (!reaching.Contains(assembly.GetName().Name))
                     continue;
                 if (!includeTests && References(assembly, "nunit.framework"))
                     continue;
@@ -39,6 +41,24 @@ namespace Framework.Routing
             LoadableTypes(assembly)
                 .Where(t => !t.IsAbstract && !t.IsInterface && !t.IsGenericTypeDefinition && baseType.IsAssignableFrom(t))
                 .ToArray();
+
+        // A member can derive through an intermediate assembly and not reference the home assembly directly.
+        // So keep each assembly that reaches the home assembly through any chain of references.
+        public static HashSet<string> NamesThatReach(string home, IEnumerable<(string Name, IEnumerable<string> References)> assemblies)
+        {
+            var graph = assemblies.Select(a => (a.Name, References: a.References.ToArray())).ToArray();
+            var reaching = new HashSet<string> { home };
+            bool added;
+            do
+            {
+                added = false;
+                foreach (var (name, references) in graph)
+                    if (!reaching.Contains(name) && references.Any(reaching.Contains))
+                        added = reaching.Add(name);
+            }
+            while (added);
+            return reaching;
+        }
 
         static bool References(Assembly assembly, string name) =>
             assembly.GetReferencedAssemblies().Any(r => r.Name == name);
