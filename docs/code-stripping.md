@@ -164,5 +164,5 @@ Unity.exe -batchmode -quit -nographics -projectPath <project> -executeMethod Bui
 
 ## 7. Related
 
-- The scan and the router: [Product/spikes/infra-type-router.md](../Product/spikes/infra-type-router.md) § 5.5.
+- The scan and the router: the TypeRouter spike, `infra-type-router.md` § 5.5, in [PR #190](https://github.com/MgCohen/Card-Framework/pull/190).
 - Unity: [Preserve code during managed code stripping](https://docs.unity3d.com/Manual/managed-code-stripping-preserving.html).
