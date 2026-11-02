@@ -9,6 +9,7 @@ references:
   - Product/spikes/entity-identity-model.md
   - Product/spikes/request-service.md
   - Product/spikes/command-service.md
+  - Product/spikes/infra-block-wire.md
   - Product/decisions/0014-service-first-state-model.md
 sandbox: Assets/Framework/Core/Runtime/Ids/
 tags: [#spike, #infra, #ids, #records, #wire, #rollback]
@@ -24,22 +25,22 @@ tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 
 ## 1. TL;DR
 
-1. Base pattern: typed id structs, `IdAllocator<TId>` (`Next`, `Release`) and `RecordStore<TRecord, TId>`. It knows nothing about the wire or the server.
-2. Framework usage: one allocator for each id space, server-only, in the match scope. Typed ids on the wire. The wire and the server are consumers of the base pattern.
-3. Ids are typed `readonly struct`s around `int` (`EntityId`, `RequestId`, `BlockId`, `MessageId`, `DefinitionId`). The wire cost is zero bytes (evidence in §3.2).
-4. One store base, `RecordStore<TRecord, TId> where TRecord : IRecord<TId>`, for id → record stores: Entity, Request, Block and `Catalog`. It replaces the "no `Store<T>` base" convention for these stores.
-5. No code outside the owning asmdef can make an id from an `int` or read the `int` back.
+1. Base pattern: typed ids, `IdAllocator<TId>` (`Next`, `Release`) and `RecordStore<TRecord, TId>`. It knows nothing about the wire or the server.
+2. A typed id is a one-line `sealed record` that derives from `abstract record Id`. The base holds `[Packed] int Value` (default `-1`). Inheritance removes the repeated members.
+3. Records name their id type: `Entity : IRecord<EntityId>`. Events carry ids. Author APIs take records.
+4. An AutoPacker upgrade packs an id field inline (nested packing). The wire cost stays 4 bytes for each id.
+5. Blocks and requests have no allocator. `BlockId` is the stream position, and `RequestId` is removed (`infra-block-wire.md`).
 6. Out of scope: inverse events (rollback), "messages hold ids" (pipeline) and the nested `TagStore` (Tags). See §2a and the appendix.
 
 ### Decisions (2026-10-31)
 
 The user made these decisions for all four infra spikes:
 
-1. Ids are typed `readonly struct`s around `int`: `EntityId`, `RequestId`, `BlockId`, `MessageId`. This spike's proposal is accepted.
-2. Shared infrastructure lives in `Framework.Core`: routers, `IdAllocator<TId>`, `EntityId`. `Framework.Wire` references `Framework.Core`. This needs an ARCH-02 edit. This spike does not edit `rulebook.json`.
+1. ~~Ids are typed `readonly struct`s around `int`.~~ Replaced by decision 17.
+2. Shared infrastructure lives in `Framework.Core`: routers, `IdAllocator<TId>`, `Id`, `EntityId`. `Framework.Wire` references `Framework.Core`. This needs an ARCH-02 edit. This spike does not edit `rulebook.json`.
 3. A new `Framework.Blocks` feature owns all `Block*` types and `BlockId`. `Framework.Wire` does not.
 4. The async core uses `System.Threading.Tasks.Task`, not UniTask.
-5. The block events carry `CauseId` only. The nesting parent comes from the order of the brackets. There is no `ParentId` on the wire and no parent override.
+5. ~~The block events carry `CauseId` only.~~ The Blocks piece renamed it: `TriggerId` (decision 18).
 6. An intent opens no block.
 7. Hooks exist only at the command level.
 
@@ -47,7 +48,7 @@ The user made these decisions for all four infra spikes:
 
 8. Kind ids (tag, entity type, game state and block kind slots) are a different pattern from record ids. They moved to `infra-kind-ids.md`. This spike covers instance ids only.
 9. Scope (§2a) is approved. "Events carry their inverse" and "messages hold ids" are out. Their design text moves to the appendix and is kept for the owners.
-10. Typed ids have no public `int`. The constructor and `Value` are `internal` to the owning asmdef. `Framework.Core` makes the entity allocator (`EntityIds.NewAllocator()`), because `EntityId` lives in Core and `EntityService` lives in Entities. Tests get `InternalsVisibleTo` grants on the allowlist rule, as other features do today.
+10. ~~Typed ids have no public `int`.~~ Replaced by decision 17. A future gate rule limits who makes ids (ID-07).
 11. ~~Rewind with a mark stack and `IdPolicy`.~~ Replaced by decision 13.
 12. Object pooling and disposal are a v2 concern of the feature stores. The idea of a record base nested in the allocator is kept in appendix A.4.
 13. `IdAllocator<TId>.Release(TId)` is `virtual`. The base does nothing. A subclass can give the id back if it is the last id given (last in, first out). There is no `Mark`, `RewindTo`, `Keep`, `IdPolicy` or `IdMark`. Ids are never pooled.
@@ -55,27 +56,34 @@ The user made these decisions for all four infra spikes:
 15. One store base: `RecordStore<TRecord, TId>`, with `IRecord<TId>`. The record comes first in the type parameters. The read names are `ById` and `TryGetById`. There is no `KeyedStore` base.
 16. `Catalog<TDef>` and a typed `DefinitionId` are in scope, as a store user with no allocator. The nested `TagStore` is out; the Tags feature owns it.
 
+### Decisions (2026-11-02)
+
+17. **Typed ids are record classes.** `abstract record Id` holds `[Packed] int Value { get; init; } = -1`. Each typed id is one line: `public sealed record EntityId : Id;`. The user accepts the cost of one allocation for each id.
+18. **Blocks changes are adopted.** `BlockId` is the stream position (no allocator). `RequestId` is removed: a request is a block. `CauseId` is now `TriggerId`. `GroupStore : RecordStore<GroupRecord, BlockId>`.
+19. **"No id" has one form.** In code, "no id" is `null`. On the wire it is `-1`. `0` means "never set" (a bug), and an unpack can assert on it.
+20. **Records at call sites.** Author APIs take the record (`_tags.Set(card, Health, 5)`), not the id. Events and queued messages carry ids. A gate rule follows later (ID-06).
+21. **AutoPacker: nested packing.** A `[Packed]` field whose type is an `[AutoPack]` class packs its members inline. The `AsReference` work is not used.
+
 ## 2a. Scope
 
 | Concern | In / out | Owner if out |
 |---|---|---|
-| Typed instance id structs | in (base) | — |
-| Access to the `int` inside an id | in (base) | — |
+| Typed id records (`Id` base) | in (base) | — |
 | Allocator: `Next`, `Release`, save, load | in (base) | — |
 | Record store base `RecordStore<TRecord, TId>` | in (base) | — |
 | Definition ids as a store user (`Catalog`) | in (base) | — |
 | One server allocator for each space | in (framework usage) | — |
 | Determinism: start value, pump order | in (framework usage) | — |
-| Typed ids on the wire | in (framework usage) | — |
+| Typed ids on the wire, nested packing | in (framework usage) | — |
+| AutoPacker generator change | out | Scaffold (`MgCohen/Scaffold`) |
+| Block ids, request ids, `GroupStore` | out | `infra-block-wire.md` |
 | Nested `TagStore` | out | Tags feature |
 | Events carry their inverse | out | Rollback (no page yet). Design text in the appendix. |
 | Messages hold ids, not refs | out | Pipeline (`infra-command-pipeline.md`). Design text in the appendix. |
-| Closed requests, request cross-space fields | out | Requests feature (§9 Q2, Q3) |
+| Request cross-space fields | out | Requests feature (§9 Q2, Q3) |
 | Kind slots | out | `infra-kind-ids.md` |
-| Block nesting and `BlockStore` | out | `infra-block-wire.md` |
 | Client correlation id | out | Pipeline, phase 2 (§9 Q4) |
 | Channel ids, seats | out | Wire, Multiplayer (§5) |
-| Object pooling and disposal | out | Feature stores, v2 (appendix A.4) |
 
 Boundary: the owning service on the server asks for a new id. The pattern gives back a typed id. The service puts it in its wire event. Stores and the wire use the id after that, and never make one.
 
@@ -91,118 +99,100 @@ Boundary: the owning service on the server asks for a new id. The pattern gives 
 | VS `World._nextBlockId++` (`long`) | block | `World` (shared by effects and commands) | log | `Spike/ECS/VerticalSlice/Engine/Pipeline/World.cs:31,49` |
 | VS `RequestsService._nextId++` | request | `RequestsService` | log | `.../Pipeline/RequestsService.cs:25,37` |
 | VS `EntityStore._nextId++` | entity | **the store** (breaks "a Store never allocates ids") | log | `.../Pipeline/EntityStore.cs:45,74` |
-| `SlotRegistry<TKey>`, `TypeKey(int Slot)` | slot (frozen kinds; see `infra-kind-ids.md`) | composition root | wire (`TypeSlot`, `Slot`) | `Core/Runtime/SlotRegistry.cs:6`, `TypeKey.cs:3` |
-| `EntityTypeRegistry`, `GameStateRegistry`, `TagRegistry` | slot | composition root | wire | `Entities/Runtime/Registry/EntityTypeRegistry.cs:5`, `States/.../GameStateRegistry.cs:5`, `Tags/.../TagRegistry.cs:5` |
 | `Catalog<TDef>.Add` | definition | authored data (`def.Id`) | wire (`DefinitionId`) | `Entities/Runtime/Catalog.cs:10-22` |
-| `Entity.Id` | entity | record | — | `Entities/Runtime/Entity.cs:5` |
+| `Entity.Id`, `Entity.DefinitionId` | entity, definition | record | — | `Entities/Runtime/Entity.cs:5` |
 | `Request.Id`, `Response.RequestId` | request | record = event | wire | `Requests/Runtime/Request.cs:8`, `Response.cs:8` |
 | `EntityStore.ById` / `TryGetById` | entity | store read | — | `Entities/Runtime/EntityStore.cs:18-21` |
 | `RequestStore.Get<T>(int)` | request | store read (typed, `null` on miss) | — | `Requests/Runtime/RequestStore.cs:13` |
-| `TagRemovedEvent` (no `Prev`) | — | event | wire | `Tags/Runtime/Events/TagRemovedEvent.cs:8-9` |
-| `StatePushEvent` (no `Prev`) | — | event | wire | `States/Runtime/Events/StatePushEvent.cs:8` |
-| VS `TagRemovedEvent` (has `Prev`) | — | event | log | `.../Engine/Stream/WireEvent.cs:142-151` |
-| VS `MirrorWorld.Unapply` | — | mirror | — | `Spike/ECS/VerticalSlice/Mirror/MirrorWorld.cs:64-97` |
-| `WireEventHandler<T>.Unapply` throws | — | handler base | — | `Wire/Runtime/Stream/WireEventHandler.cs:11` |
-| VS `DealDamage.Target : IEntity` | — | queued command holds a ref | — | `Spike/ECS/VerticalSlice/Sample/DealDamage.cs:20-21` |
+| `TagService.Set<T>(int entityId, …)` | entity | author API takes an id | — | `Tags/Runtime/TagService.cs` |
 | Framework `SetHealth.EntityId : int` | — | command holds an id | — | `Framework/Testing/Support/SampleCommands.cs:13` |
 
 Framework paths are under `Assets/Framework/`. Three findings:
 
-- Five counters have the same shape: a private `int` field and `++`. Four start at 1. `Network` starts at 0 and casts to `byte`. None can be reset or restored. None is shared, so a second block emitter (effects) needs the comment at `BlockScope.cs:7` to stay true.
+- Five counters have the same shape: a private `int` field and `++`. Four start at 1. `Network` starts at 0 and casts to `byte`. None can be reset or restored.
 - Every id is a bare `int`. `Request.ParentId`, `Request.SourceId`, `Request.ResponderId` and `BlockStartEvent.SourceId` do not say which id space they use.
-- Two events cannot be undone from their own fields: `TagRemovedEvent` and `StatePushEvent`.
+- Author APIs take bare ids, so a caller can pass a request id where an entity id goes.
 
 ## 3. Generalized contract
 
 | Part | Sections | Knows about |
 |---|---|---|
 | Base pattern | §3.2 typed id, §3.3 allocator, §3.3a release, §3.5 record store, ID-01, ID-02 | ids and records only |
-| Framework usage | §3.1 id spaces, §3.4 determinism, ID-03 to ID-05 | the server scope, the wire, the pump |
+| Framework usage | §3.1 id spaces, §3.4 determinism, §3.6 wire, ID-03 to ID-07 | the server scope, the wire, the pump |
 
 The wire and the server are consumers. A test or a tool can use the base pattern with no wire.
 
 ### 3.1 Id spaces
 
-| Space | Type | Home asmdef | Allocated by | On the wire | Lifetime |
+| Space | Type | Home asmdef | Made by | On the wire | Lifetime |
 |---|---|---|---|---|---|
-| entity | `EntityId` | `Framework.Core` | `EntityService` | yes | match, never reused |
-| request | `RequestId` | `Framework.Requests` | `RequestService` | yes | match, never reused |
-| block | `BlockId` | `Framework.Blocks` | `BlockService` (today `BlockScope`) | yes (`Id`, `CauseId`) | match, never reused |
-| message | `MessageId` | pipeline asmdef | pipeline `Enqueue` | no (local, see §8) | match |
+| entity | `EntityId` | `Framework.Core` | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
+| block | `BlockId` | `Framework.Blocks` | `EventStream.Add` (position) | no (both sides compute it) | match |
+| request | — (uses `BlockId`) | `Framework.Requests` | `EventStream.Add` (a request is a block) | no | match |
+| message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
+| definition | `DefinitionId` | `Framework.Entities` | authored data (§9 Q7) | yes | build |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
-| slot | see `infra-kind-ids.md` | — | — | — | — |
-| definition | `DefinitionId` | `Framework.Entities` | nobody (authored data, §9 Q7) | yes | build |
 
-`IdAllocator<TId>` and `EntityId` live in `Framework.Core` (decision 2). `EntityId` must be in Core because `Framework.Tags` uses it and Tags cannot reference Entities (Entities references Tags). `BlockId` lives in `Framework.Blocks` with the block events (decision 3). Then `Framework.Wire` holds no block types, and the ARCH-09 `Block*` exception can go.
+`Id`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core` (decision 2). `EntityId` must be in Core because `Framework.Tags` uses it and Tags cannot reference Entities (Entities references Tags). For the same reason, `IEntity : IRecord<EntityId>` lives in Core, so Tags APIs can take the record (§3.7).
 
 ### 3.2 Typed id
 
 ```csharp
 namespace Framework.Core
 {
-    public readonly struct EntityId : IEquatable<EntityId>
+    [AutoPack]
+    public abstract partial record Id
     {
-        public static readonly EntityId None = default;
-
-        internal readonly int Value;
-
-        internal EntityId(int value) => Value = value;
-
-        public bool IsNone => Value == 0;
-
-        public bool Equals(EntityId other)      => Value == other.Value;
-        public override bool Equals(object obj) => obj is EntityId other && Equals(other);
-        public override int GetHashCode()       => Value;
-        public override string ToString()       => $"Entity#{Value}";
-
-        public static bool operator ==(EntityId a, EntityId b) => a.Value == b.Value;
-        public static bool operator !=(EntityId a, EntityId b) => a.Value != b.Value;
+        [Packed] public int Value { get; init; } = -1;   // -1 = None on the wire, 0 = never set
+        public override string ToString() => $"{GetType().Name}#{Value}";
     }
 }
+
+public sealed record EntityId : Id;           // Framework.Core
+public sealed record BlockId : Id;            // Framework.Blocks
+public sealed record MessageId : Id;          // pipeline asmdef
+public sealed record DefinitionId : Id;       // Framework.Entities
 ```
 
-`RequestId`, `BlockId` and `MessageId` have the same shape. There is no implicit conversion to or from `int`, because an implicit conversion removes the type safety. The constructor and `Value` are `internal` (decision 10). AutoPacker copies the struct as raw bytes, so the wire needs no access to `Value`. Unity C# 9 has no `record struct`, so the members are written by hand.
+| Property | How C# gives it |
+|---|---|
+| Value equality | The record makes `Equals`, `GetHashCode`, `==` and `!=`. |
+| Type safety | `EqualityContract` compares the type. `EntityId` 5 is not equal to `BlockId` 5. |
+| No mix at compile time | `EntityId` and `BlockId` are different types. A method that takes one rejects the other. |
+| No repeated members | All members are on the base. |
 
-**Why typed.** `docs/coding-standards.md` allows "a `readonly struct` wrapper around `int`, TagKey-style". `Scaffold.Maps` `Index<TPrimary,TSecondary>` uses `EqualityComparer<T>.Default`, so an `IEquatable` key does not box. The cost is churn at call sites. Code outside the owner cannot index arrays by id; it uses a dictionary.
+Unity C# 9 needs a shim for `init`. Add it one time in Core:
 
-**AutoPacker cost (verified 2026-10-31).** A typed id costs zero extra wire bytes. It also takes the same pack path as `int`. The generator ships only as `AutoPackerGenerator.dll`, so the evidence comes from the compiled IL and the package files:
+```csharp
+namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
+```
 
-1. The generator accepts an unmanaged user struct in a `[Packed]` field with no target type. Only managed fields fail (CSG002): `com.scaffold.autopacker/README.md:20,27`. A test packs and restores such a field (`Vector3 SpawnPoint`): `Tests/AutoPackerTests.cs:13,231-241`.
-2. The `Packed` field has the same type as the source field. In the compiled `Framework.Wire.dll`, `BlockStartEvent::Id` and `BlockStartEvent/Packed::Id` both have the field signature `int`. So an `EntityId` field gives an `EntityId` field in `Packed` (4 bytes, alignment 4, the same layout).
-3. Each field is copied through `IPackingHandler.Resolve<TSource,TTarget>`, also for `int`. `BlockStartEvent/Packed::.ctor` calls `Resolve<int,int>` once for each field. A typed id calls `Resolve<EntityId,EntityId>`.
-4. `DefaultPackingHandler.Resolve` (in `AutoPackerContracts.dll`) does: return `default` on null, then `source is TTarget t ? t : Convert.ChangeType(...)`. When `TSource` is `TTarget`, the `is` branch runs. This is the same for `int` and for a typed id. `Convert.ChangeType` never runs.
-5. `NetworkChannel` copies `sizeof(TPacked)` raw bytes: `Wire/Runtime/Network/NetworkChannel.cs:38,48,62`.
+**"No id".** In code, "no id" is `null`. There is no `None` object, so the code has only one form. On the wire, `null` packs as `-1` (decision 19).
 
-A side finding that is not caused by typed ids: `Network` is built with no handler (`Bootstrap/Runtime/EngineInstaller.cs:22`). Thus each generated `Pack` and `Unpack` creates a new `DefaultPackingHandler`. The `is` check on a generic value type can also box. This cost is the same for `int` today. If a benchmark shows it, pass one shared handler to `Network`. That fix is outside this spike.
+**Cost.** Each id is a heap object. A new id, and each unpack, allocates 24 bytes. Dictionary lookups use the record `GetHashCode`, which also hashes the type. The user accepts this cost (decision 17). Records are long lived, so most ids are made one time.
 
-**Why not one generic `Id<TSpace>`.** A phantom generic needs a marker type for each space (there is no `Block` class). It also puts a closed generic name into the AutoPacker `Packed` struct, which no current test covers. Four small named structs are clearer and carry no generator risk.
+**Why not structs.** A C# 9 struct cannot inherit. Each typed id needed about 15 hand-written lines (equality, hash, operators), or a source generator.
 
 ### 3.3 Allocator
 
 ```csharp
 namespace Framework.Core
 {
-    public class IdAllocator<TId> where TId : unmanaged, IEquatable<TId>
+    public class IdAllocator<TId> where TId : Id, new()
     {
-        readonly Func<int, TId> _make;
         int _next;
 
-        public IdAllocator(Func<int, TId> make, int first = 1)
-        {
-            _make = make;
-            _next = first;
-        }
+        public IdAllocator(int first = 1) => _next = first;
 
         public int Watermark => _next;
 
-        public TId Next() => _make(_next++);
+        public TId Next() => new TId { Value = _next++ };
 
         // Base: does nothing. The id stays used. See §3.3a.
         public virtual void Release(TId id) { }
 
-        protected TId  Make(int value) => _make(value);
-        protected void StepBack()      => _next--;
+        protected void StepBack() => _next--;
 
         public void Restore(int watermark)
         {
@@ -219,12 +209,10 @@ Registration, server only, in the installer that registers the owning service:
 ```csharp
 if (_isServer)
 {
-    builder.Register(_ => EntityIds.NewAllocator(), Lifetime.Singleton);
+    builder.Register<IdAllocator<EntityId>>(Lifetime.Singleton);
     builder.Register<EntityService>(Lifetime.Singleton);
 }
 ```
-
-`EntityIds.NewAllocator()` lives in `Framework.Core` beside `EntityId`, so Entities never sees the constructor. The other spaces pass their own lambda, because the constructor is internal to the same asmdef: `new IdAllocator<RequestId>(v => new RequestId(v))`.
 
 Each id space has its own closed type, so VContainer resolves each one without keys. The client scope has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
 
@@ -233,17 +221,15 @@ Each id space has its own closed type, so VContainer resolves each one without k
 The owner calls `Release(id)` when it undoes a record. The base allocator does nothing, so the id stays used. A subclass can give the id back:
 
 ```csharp
-public sealed class StackIdAllocator<TId> : IdAllocator<TId> where TId : unmanaged, IEquatable<TId>
+public sealed class StackIdAllocator<TId> : IdAllocator<TId> where TId : Id, new()
 {
     // Gives the id back only if it is the last id given (last in, first out).
     public override void Release(TId id)
     {
-        if (Watermark > 1 && id.Equals(Make(Watermark - 1))) StepBack();
+        if (Watermark > 1 && id.Value == Watermark - 1) StepBack();
     }
 }
 ```
-
-The allocator compares typed ids with `Equals`, so it does not read `Value`. `Make` and `StepBack` are `protected` members of the base.
 
 | Undo shape | Base allocator | `StackIdAllocator` |
 |---|---|---|
@@ -253,30 +239,31 @@ The allocator compares typed ids with `Equals`, so it does not read `Value`. `Ma
 
 Contract on the caller: release the ids in the reverse order of `Next`. `Restore` (load) stays forward only.
 
-Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. Reuse breaks logs, replays, saves and old `CauseId` links.
+Why no id pool: an `int` holds about 2 billion ids, and a match uses thousands. Reuse breaks logs, replays, saves and old `TriggerId` links.
 
 ### 3.4 Determinism
 
 - **Seed.** No random seed. Every allocator starts at 1 in each new match scope. Two runs that allocate in the same order get the same ids.
-- **Order.** The pump runs one message at a time, so allocation order is the pump order. An `await` on a request must resume on the pump. Then ids allocated after the response follow the arrival order of the response.
+- **Order.** The pump runs one message at a time, so allocation order is the pump order. An `await` on a request must resume on the pump.
+- **Positions.** `BlockId` comes from `EventStream.Add` on both sides. The stream order is the same on both sides, so the ids are the same.
 - **Replay.** Replay runs events through apply handlers. Apply handlers never allocate (ARCH-06 forbids service calls). The ids come from the events.
-- **Two-sided tests.** `MatchPair.Start` builds two scopes over `LoopbackTransport.Pair()`. Only the server scope has allocators. Client ids are copies of server ids by construction.
-- **Save and load.** A save stores each allocator `Watermark`. Load builds fresh stores from the event stream, then calls `Restore`. `Restore` moves forward only, so a bad save cannot reissue a live id.
-- **Rollback.** A client view scrub or replay does not touch allocators, because the client has none. A server undo calls `Release`. Only a `StackIdAllocator` gives an id back (§3.3a). Ids that the wire already sent are never reused (ID-05).
+- **Two-sided tests.** `MatchPair.Start` builds two scopes over `LoopbackTransport.Pair()`. Only the server scope has allocators.
+- **Save and load.** A save stores each allocator `Watermark`. Load builds fresh stores from the event stream, then calls `Restore`.
+- **Rollback.** A server undo calls `Release`. Only a `StackIdAllocator` gives an id back (§3.3a). Ids that the wire already sent are never reused (ID-05).
 
 ### 3.5 Record and record store
 
 A record is a type whose identity is one typed id. It implements `IRecord<TId>`:
 
 ```csharp
-public interface IRecord<TId> where TId : unmanaged, IEquatable<TId>
+public interface IRecord<TId> where TId : Id
 {
     TId Id { get; }
 }
 
 public abstract class RecordStore<TRecord, TId>
     where TRecord : IRecord<TId>
-    where TId : unmanaged, IEquatable<TId>
+    where TId : Id
 {
     readonly Dictionary<TId, TRecord> _byId = new();
 
@@ -293,45 +280,88 @@ public abstract class RecordStore<TRecord, TId>
 | Store | Declaration | Writes |
 |---|---|---|
 | `EntityStore` | `RecordStore<Entity, EntityId>` | `Insert` (apply handler, does nothing on replay) |
-| `RequestStore` | `RecordStore<Request, RequestId>` | `Insert`, `Remove`; keeps `Get<T>` as an extra read |
-| `BlockStore` | `RecordStore<BlockRecord, BlockId>` | the block piece decides |
+| `RequestStore` | `RecordStore<Request, BlockId>` | `Insert`, `Remove`; keeps `Get<T>` as an extra read |
+| `GroupStore` | `RecordStore<GroupRecord, BlockId>` | the Blocks piece decides |
 | `Catalog<TDef>` | `RecordStore<TDef, DefinitionId>` | `Add` at startup (strict) |
 
 Rules of the base:
 
-- The compiler rejects a wrong pair. `RecordStore<Entity, RequestId>` does not compile, because `Entity` is `IRecord<EntityId>`.
+- The compiler rejects a wrong pair. `RecordStore<Entity, BlockId>` does not compile, because `Entity` is `IRecord<EntityId>`.
 - `Write` takes the id from the record. A store cannot put a record under a different id.
 - The writes are `protected`. Each store exposes its own `internal` writers, so only apply handlers (or the startup loader) write.
-- A field that points to another record is named `<Space>Id` and has that typed id (`EntityCreatedEvent.EntityId`, `Response.RequestId`).
-- `None` (value 0) means "no record". Do not use `-1` or nullable ids.
+- A field that points to another record is named `<Space>Id` and has that typed id (`EntityCreatedEvent.EntityId`, `Response.TriggerId`).
 
-**Wire records.** `request-service.md` L3 says that `[Packed]` needs fields, and an interface declares properties. An explicit implementation solves this. The field keeps its name, and AutoPacker packs only the field:
+**Wire records.** `request-service.md` L3 says that `[Packed]` needs fields, and an interface declares properties. A request is a block, so its id is the position and is not packed:
 
 ```csharp
-public abstract partial class Request : WireEvent, IRecord<RequestId>
+public abstract partial class Request : Block, IRecord<BlockId>
 {
-    [Packed] public RequestId Id;
-    RequestId IRecord<RequestId>.Id => Id;
+    // Block.Id => new BlockId { Value = Position }; not packed
 }
 ```
 
 **Not a record store.** `TagStore` holds a value for each (entity, tag kind) pair. A tag value has no `Id`, so it is not a record. `StateStore` holds kinds. Both stay outside this base.
+
+### 3.6 Ids on the wire (nested packing)
+
+```csharp
+[AutoPack]
+public partial class EntityCreatedEvent : WireEvent
+{
+    [Packed] public EntityId     EntityId;      // nested: packs Value inline
+    [Packed] public DefinitionId DefinitionId;
+}
+```
+
+The AutoPacker upgrade (decision 21) has four parts. The Scaffold generator work owns them:
+
+| Part | Why |
+|---|---|
+| `[AutoPack]` on `record` types | `Id` is a record |
+| Inherited `[Packed]` members | `Value` is on the base |
+| A field of an `[AutoPack]` class packs inline | `EntityId` in events |
+| `null` packs as `-1`; `-1` unpacks as `null` | decision 19 |
+
+The unpack makes a new object: `new EntityId { Value = v }`. This is correct for ids, because ids compare by value. It is not correct for a record such as `Entity`, because the reader needs the object in the store. Thus events carry ids, not records.
+
+**Wire cost.** The `Packed` struct holds `int Value` for each id. The size stays 4 bytes for each id, the same as `int` today.
+
+### 3.7 Records at call sites
+
+Author APIs take the record. The API reads the id internally:
+
+```csharp
+// Framework.Core
+public interface IEntity : IRecord<EntityId> { }
+
+// Framework.Tags
+public void Set<T>(IEntity entity, TagKey<T> tag, T value) => Emit(new TagSetEvent<T> { EntityId = entity.Id, ... });
+
+// Author code
+_tags.Set(card, Health, 5);
+```
+
+| Place | Holds | Why |
+|---|---|---|
+| Author API parameter | record | the caller already has it; no mix of ids |
+| Wire event field | id | the unpack cannot give the store object |
+| Queued message field | id | the record can change before the handler runs (appendix A.2) |
+| Handler of an event or message | resolves the id once | `_entities.ById(e.EntityId)` |
 
 ## 4. Call-site migration
 
 | Current code | New code | Change needed |
 |---|---|---|
 | `int _nextId = 1;` + `var id = _nextId++;` in `EntityService` | inject `IdAllocator<EntityId>`; `var id = _ids.Next();` | ctor parameter; `EntityInstaller` registers allocator (server) |
-| `request.Id = _nextId++;` in `RequestService` | `request.Id = _ids.Next();` | `Request.Id : RequestId`; `RequestInstaller` registers allocator |
-| `Dictionary<int, IPendingRequest> _pending` in `RequestService` | `Dictionary<RequestId, IPendingRequest>` | `Open`, `Complete` (key from `Response.RequestId`) |
-| `var id = _nextId++;` in `Wire` `BlockScope` | `var id = _ids.Next();` in `Framework.Blocks` `BlockService`, returns `BlockId` | `BlockService` replaces `BlockScope`; the Blocks installer registers the allocator (server) |
-| `[Packed] public int Id; ParentId; SourceId;` on `BlockStartEvent`, `int Id` on `BlockEndEvent` | `[Packed] public BlockId Id;`, `[Packed] public BlockId CauseId;` (no `ParentId`) | events move to `Framework.Blocks`; tests that read `Id` or `ParentId` |
-| `[Packed] public int EntityId;` on Entity and Tag events | `[Packed] public EntityId EntityId;` | event fields; apply handlers |
-| `Entity.Id : int`, `Entity.DefinitionId : int` | `Entity : IRecord<EntityId>`, `DefinitionId : DefinitionId` | `Entity` constructor, `EntityCreatedEvent` |
+| `request.Id = _nextId++;` in `RequestService` | none: the id is the position | Blocks piece: `Request : Block` |
+| `Dictionary<int, IPendingRequest> _pending` in `RequestService` | `Dictionary<BlockId, IPendingRequest>` | `Open`, `Complete` (key from `Response.TriggerId`) |
+| `var id = _nextId++;` in `Wire` `BlockScope` | none: `EventStream.Add` sets `Position` | Blocks piece |
+| `[Packed] public int EntityId;` on Entity and Tag events | `[Packed] public EntityId EntityId;` | event fields; apply handlers; needs the AutoPacker upgrade |
+| `Entity.Id : int`, `Entity.DefinitionId : int` | `Entity : IEntity`, `EntityId Id`, `DefinitionId DefinitionId` | `Entity` constructor, `EntityCreatedEvent` |
 | `EntityStore` with its own `Dictionary<int, Entity>` | `EntityStore : RecordStore<Entity, EntityId>` | the base gives `ById` and `TryGetById`; `Insert` stays |
-| `TagService.Set<T>(int entityId, …)`, `TagStore.Get<T>(int, int)` | `EntityId entityId` | `TagStore` maps become `Map<EntityId,int,T>` |
-| `RequestStore` with `Dictionary<int, Request>` | `RequestStore : RecordStore<Request, RequestId>`; `Get<T>(RequestId)` stays | `Request : IRecord<RequestId>`; `IReadOnlyRequestStore.Open` key type |
-| `Response.RequestId : int` | `RequestId` | `RequestService.Complete` |
+| `TagService.Set<T>(int entityId, …)` | `Set<T>(IEntity entity, …)` | author API takes the record (decision 20) |
+| `TagStore.Get<T>(int, int)` | `Get<T>(IEntity, …)`; maps keyed on `EntityId` | Tags piece |
+| `RequestStore` with `Dictionary<int, Request>` | `RequestStore : RecordStore<Request, BlockId>`; `Get<T>(BlockId)` stays | `IReadOnlyRequestStore.Open` key type |
 | `Catalog<TDef>` with `Dictionary<int, TDef>` | `Catalog<TDef> : RecordStore<TDef, DefinitionId>` | `IEntityDefinition : IRecord<DefinitionId>`; §9 Q7 |
 | `Network`, `PeerRoster` | no change | see §5 |
 
@@ -339,9 +369,10 @@ public abstract partial class Request : WireEvent, IRecord<RequestId>
 
 - **Kind slots.** A slot is an id for a type, not for an instance. See `infra-kind-ids.md`.
 - **Tag values (`TagStore`).** A tag value has no id of its own. The Tags feature can make `TagStore` a nested store later. It does not use `RecordStore`.
-- **Channel ids (`Network`).** A channel id is a Router key, not a record id. It is a `byte`, it has a capacity limit, and both sides must compute the same id from the sorted registration. `WireRegistrar` replacement is its own roadmap item.
-- **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store (`lookup-patterns.md`). Seats live for the lobby, not the match. The seat → player-entity map is phase 3 work. Seat can use `IdAllocator<T>` later, but it gets no benefit now.
-- **VerticalSlice.** No migration. Phase 8 deletes it. Its `TagRemovedEvent.Prev` and `MirrorWorld` are the reference for appendix A.1.
+- **Channel ids (`Network`).** A channel id is a Router key, not a record id. It is a `byte`, it has a capacity limit, and both sides must compute the same id from the sorted registration.
+- **Seats (`PeerRoster`).** Seat 0 is the host (`Peer.IsHost`), and `Session` is a coordinator, not a Store. Seats live for the lobby, not the match. Seat can use `IdAllocator<T>` later, but it gets no benefit now.
+- **Block ids.** A block id is a position, not an allocated id. Both sides compute it, so it needs no allocator and no wire field.
+- **VerticalSlice.** No migration. Phase 8 deletes it.
 - **`RequestStore.Get<T>`.** A typed read with `null` on miss stays, as an extra read beside the base pair.
 
 ## 6. Rulebook rules to propose
@@ -350,51 +381,52 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 | Id | Rule | Why | Check |
 |---|---|---|---|
-| ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. Confirm `callers` accepts a type glob (ARCH-06 uses `subclassOf`). |
-| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from the owning service listed for `T`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`, allowed callers `EntityService`, `RequestService`, `BlockService`, the pipeline `Enqueue`. |
+| ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. |
+| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from `EntityService` and the pipeline `Enqueue`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`. |
 | ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
-| ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. (`infra-kind-ids.md` KIND-03 adds `Slot` to the same test.) | A bare `int` id lets an entity id go into a request slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. Or a new kind `type.memberTypes` with `baseType`. |
+| ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. A field that points to a record has a type that derives from `Id`. | A bare `int` id lets an entity id go into a block slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. |
 | ID-05 | A scope that has `Network` registers only the base `IdAllocator<T>`. No `Release` override gives ids back in it. | An id given back after the wire sent it gives the client two records with one id. | `attached`: a test in `BootstrapWiringIntegrationTests`. Status `planned` until rollback is scheduled. |
-| EV-01 (handed off) | An event can be undone from its own fields. Each state-changing event is a Create, Set, Change(`Prev`,`Next`), Remove(`Prev`) or cell Replace(`Prev`,`Next`). | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event: snapshot, `Apply`, `Unapply`, compare. Status `planned` until rollback is scheduled. |
-| MSG-01 (handed off) | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. Client intents cannot carry refs. | `attached`: a reflection test over `Command` subtypes. Or the `type.memberTypes` + `baseType` kind. |
+| ID-06 | Author APIs take records. No public method of a `Framework.*` service takes a parameter whose type derives from `Id`, if a record type exists for that id. | Records at call sites (decision 20). | `attached`: a reflection test over service types. Status `planned`. |
+| ID-07 | Only allocators, store loaders and generated unpack code make an `Id` subtype. | `init` is public, so author code can forge an id with `new` or `with`. | `il.callersOnly` on the `Id` subtype constructors. Status `planned`. |
+| EV-01 (handed off) | An event can be undone from its own fields. | Rollback and `Unapply` must not read state that the event already changed. | `attached`: one round-trip test for each event. Status `planned`. |
+| MSG-01 (handed off) | Queued messages hold ids, not live refs. No `Command` subtype has a field or property of type `Entity` or `Request`. | A queued ref can describe state that changed before the handler runs. | `attached`: a reflection test over `Command` subtypes. |
 
 ## 7. Migration steps
 
 Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook/gate.ps1` green. Steps 2–5 touch wire events, so they also run `-With playmode`.
 
-1. **Add `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `Restore` forward only, `ById` throws on a miss). No callers. No new asmdef reference yet.
-2. **Add `BlockId`** in `Framework.Blocks`. This step comes after the block piece creates `Framework.Blocks` and moves the `Block*` types out of Wire. That PR also makes the ARCH-02 and ARCH-09 edits with user approval. Add a Blocks test that packs and unpacks a block event with a `BlockId` field. This proves AutoPacker for typed ids before a wide change. Change `BlockStartEvent` (`Id`, `CauseId`) and `BlockEndEvent` (`Id`), inject `IdAllocator<BlockId>` into `BlockService`, and update the block tests.
-3. **Add `RequestId`** in `Requests/Runtime/`. Change `Request.Id`, `Response.RequestId`, `RequestStore`, `IReadOnlyRequestStore`, `RequestService`, `RequestInstaller` and the request tests. `Request.ParentId`, `SourceId` and `ResponderId` stay `int` until §9 Q2 is answered.
-4. **Add `EntityId`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`. Tags still takes `int` in this step. Thus Core gives `Framework.Entities` a temporary `InternalsVisibleTo` grant, so Entities can pass `id.Value` to Tags.
-5. **Move Tags to `EntityId`.** Change the Tag events, `TagStore` maps, `TagService`, `IReadOnlyTagStore` and the apply handlers. Remove the temporary grant from step 4.
-5a. **Add `DefinitionId`** in `Entities/Runtime/`. Change `IEntityDefinition`, `Catalog<TDef>`, `Entity.DefinitionId`, `EntityCreatedEvent.DefinitionId` and `CatalogTests`. This step needs the answer to §9 Q7.
-6. **(Handed off to the pipeline.) Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings. The pictures do not change, because they name `#1`, not types.
-7. **(Handed off to rollback.) Add the inverse fields.** `StatePushEvent.PrevSlot`; `TagRemovedEvent<T>` with `Prev`; the per-`T` handler and channel in `TagInstaller`; and tests that the fields hold the earlier value. `Unapply` stays unimplemented.
-8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review. ID-03, ID-04 and MSG-01 can be `enforced` at once. EV-01 stays `planned`.
+0. **AutoPacker upgrade** in `MgCohen/Scaffold` (decision 21). Update the package in `Packages/manifest.json`. Add a Wire test that packs and unpacks an event with a nested id field and a `null` id.
+1. **Add `Id`, the `IsExternalInit` shim, `IdAllocator<TId>`, `IRecord<TId>` and `RecordStore<TRecord, TId>`** in `Core/Runtime/Ids/` with unit tests in `Framework.Core.Tests` (starts at 1, `Next` is monotonic, base `Release` does nothing, `Restore` forward only, `ById` throws on a miss, `EntityId` 5 ≠ `BlockId` 5). No callers.
+2. **Blocks piece.** `BlockId`, positions, `GroupStore` and the removal of `RequestId` land in the Blocks PRs (`infra-block-wire.md`).
+3. **Add `EntityId` and `IEntity`** in `Core/Runtime/`. Change `Entity`, `EntityStore`, `IReadOnlyEntityStore`, `EntityService`, `EntityCreatedEvent`, `EntityInstaller`.
+4. **Move Tags to `EntityId` and `IEntity`.** Change the Tag events (ids), `TagService` and `IReadOnlyTagStore` (records), `TagStore` maps and the apply handlers.
+5. **Add `DefinitionId`** in `Entities/Runtime/`. Change `IEntityDefinition`, `Catalog<TDef>`, `Entity.DefinitionId`, `EntityCreatedEvent.DefinitionId` and `CatalogTests`. This step needs the answer to §9 Q7.
+6. **(Handed off to the pipeline.) Move sample commands to typed ids.** Change `Framework/Testing/Support/SampleCommands.cs`, `Commands/Tests/SampleCommands.cs`, and the acceptance bindings.
+7. **(Handed off to rollback.) Add the inverse fields.** See appendix A.1.
+8. **Propose the rules.** Write §6 into `rulebook.json` with their linked tests, in a separate PR for user review.
 9. **Update docs.** Update `docs/architecture.md` (id spaces) and the live-ref text in `command-service.md`. In `docs/lookup-patterns.md`, change "no `Store<T>` base" to "`RecordStore<TRecord, TId>` for id → record stores only".
 
 ## 8. Interfaces for the other three pieces
 
 **Block and wire system.**
 
-- `BlockId` in `Framework.Blocks`, with `BlockId.None` for "no cause". Use it for `BlockStartEvent.Id`, `BlockEndEvent.Id` and `BlockStartEvent.CauseId`. There is no `ParentId` field.
-- `IdAllocator<BlockId>` from `Framework.Core`, a server singleton. Only `BlockService` (today `BlockScope`) calls `Next`. Effects and triggers open blocks through `BlockService.Run`. They never inject the allocator (ID-02).
-- The nesting parent comes from the order of the brackets, not from an id. The block piece owns nesting. This piece owns only the id.
-- `BlockStore : RecordStore<BlockRecord, BlockId>`, with `BlockRecord : IRecord<BlockId>`. The read names are `ById` and `TryGetById` (not `TryById`).
-- EV-01: block events create and close a `BlockRecord` in `BlockStore`. `Unapply` of start calls `Remove`. `Unapply` of end calls `Reopen`. The block piece owns these handlers.
+- `BlockId : Id` in `Framework.Blocks`. `Block.Id => new BlockId { Value = Position }`, not packed.
+- "No trigger" is `null` in code and `-1` on the wire. There is no `BlockId.None` object (decision 19). API defaults change from `= default` to `= null`.
+- `GroupStore : RecordStore<GroupRecord, BlockId>`, with `GroupRecord : IRecord<BlockId>`. The read names are `ById` and `TryGetById`.
+- `GroupService.Open` and `Create` take the source as a record (`IEntity source`), not `EntityId` (decision 20). `GroupStart.SourceId` stays an `EntityId` on the wire.
+- `RequestStore : RecordStore<Request, BlockId>`. `Response.TriggerId` is the request key.
 
 **Command pipeline.**
 
-- `MessageId` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
-- `MessageId` is local to the server. An intent opens no block (decision 6), so an intent id never appears in a block event. It goes on the wire only if the deferred "block payload + source capture" item adds it to `BlockStartEvent`.
+- `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.Core`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
+- `MessageId` is local to the server. An intent opens no block (decision 6).
 - Messages hold typed ids (MSG-01). The handler resolves records through read views (`IReadOnlyEntityStore.ById`).
-- Client submit (phase 2) needs a correlation id that the client makes. That is a separate per-client space. See §9 Q4.
-- The async core uses `System.Threading.Tasks.Task` (decision 4). The pump must resume `await` continuations on the pump, for example with `TaskCompletionSource` made without `RunContinuationsAsynchronously`, or with a pump `SynchronizationContext`. Then allocation order is deterministic (§3.4).
+- Client submit (phase 2) needs a correlation id that the client makes. See §9 Q4.
+- The pump must resume `await` continuations on the pump. Then allocation order is deterministic (§3.4).
 
 **Type-keyed router.**
 
-- No new interface. Router keys are `Type` or `byte`, not record ids. Typed ids give the router nothing to dispatch on, and the router does not see ids.
-- The router and `IdAllocator<TId>` both live in `Framework.Core` (decision 2). They have no dependency on each other.
+- No new interface. Router keys are `Type` or `byte`, not record ids.
 
 **All pieces.**
 
@@ -404,13 +436,13 @@ Each step is one PR. Each step keeps `powershell -NoProfile -File Tools/Rulebook
 ## 9. Open questions
 
 1. ~~**Allocator home.**~~ **Closed 2026-10-31:** `Framework.Core` (decision 2). `Framework.Wire` references `Framework.Core`, and ARCH-02 changes to allow it.
-2. **Typed cross-space fields.** Which space do `Request.ParentId`, `Request.SourceId` and `Request.ResponderId` use? `ResponderId` is a seat or a player entity, and that depends on phase 3. Is `BlockStartEvent.CauseId` always a `BlockId`, or can a cause also be a request? The block piece decides.
+2. **Typed cross-space fields.** The Blocks piece removed `Request.ParentId` and set `TriggerId` to `BlockId`. `Request.ResponderId` is a seat or a player entity, and that depends on phase 3.
 3. **Closed requests.** Keep a `Closed` set in `RequestStore` so a Response can be undone (appendix A.1)? Or put the full request data in the Response? This affects `request-service.md` L5 ("no AnswersStore").
 4. **Client correlation id.** Does a client intent carry a client-made `SubmitId` for accept and reject replies? Who owns it: one allocator per client scope?
 5. **Save watermarks.** Store the watermarks in the save, or compute them on load from the highest id in the stream?
 6. **Id scope across matches.** Are ids unique only in a match (`entity-identity-model.md` Q3)? A replay archive would then need a match id.
-7. **`DefinitionId` construction.** Definitions are authored data, but the constructor is `internal` to Entities. Recommended: an `EntityDefinition` base in Entities holds a serialized `int` and returns `DefinitionId`. The other option is a public constructor for this one id type, because its `int` is authored data.
-8. **Seat migration.** Move `PeerRoster` to `IdAllocator<int>` now for one pattern, or leave it until phase 3 links seats to player entities?
+7. **`DefinitionId` source.** Definitions are authored data. Recommended: an `EntityDefinition` base in Entities holds a serialized `int` and returns `new DefinitionId { Value = _id }`. The other option is an id that the catalog gives at load. Catalog loading is still open (`definition-entity-setup.md`).
+8. **Seat migration.** Add `SeatId : Id` and move `PeerRoster` to `IdAllocator<SeatId>` now for one pattern, or leave it until phase 3 links seats to player entities?
 
 ## Appendix: handed off
 
