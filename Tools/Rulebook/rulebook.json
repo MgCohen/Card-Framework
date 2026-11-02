@@ -91,6 +91,9 @@
               "Framework.TypeKeys"
             ],
             "Framework.Wire": [],
+            "Framework.Wire.Ngo": [
+              "Framework.Wire"
+            ],
             "Framework.Tags": [
               "Framework.Core",
               "Framework.Wire"
@@ -129,7 +132,8 @@
               "Framework.Wire"
             ],
             "Framework.Multiplayer": [
-              "Framework.Wire"
+              "Framework.Wire",
+              "Framework.Wire.Ngo"
             ],
             "Framework.RecordIds": [],
             "Framework.RecordIds.Install": [

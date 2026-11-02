@@ -2,7 +2,7 @@ using System;
 using Unity.Collections;
 using Unity.Netcode;
 
-namespace Framework.Wire
+namespace Framework.Wire.Ngo
 {
     public sealed class NgoTransport : ITransport, IDisposable
     {
