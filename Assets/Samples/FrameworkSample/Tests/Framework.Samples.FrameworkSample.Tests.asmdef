@@ -15,8 +15,7 @@
         "Framework.Wire",
         "Scaffold.Autopacker",
         "Scaffold.Records",
-        "VContainer",
-        "Unity.Netcode.Runtime"
+        "VContainer"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
