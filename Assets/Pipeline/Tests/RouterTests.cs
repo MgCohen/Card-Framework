@@ -36,5 +36,23 @@ namespace Framework.Pipeline.Tests
 
             Assert.That(handler.Handle(new Ping(), new TestScope()).Result, Is.EqualTo("pong"));
         }
+
+        [Test]
+        public void Validate_Denied_ReturnsFalseWithReason()
+        {
+            Validator<Message> validator = new DeniedValidator();
+
+            Assert.IsFalse(validator.Validate(new Denied(), out var reason));
+            Assert.That(reason, Is.EqualTo("no mana"));
+        }
+
+        [Test]
+        public void Validate_Ping_ReturnsTrueWithoutReason()
+        {
+            Validator<Message> validator = new PingValidator();
+
+            Assert.IsTrue(validator.Validate(new Ping(), out var reason));
+            Assert.IsNull(reason);
+        }
     }
 }

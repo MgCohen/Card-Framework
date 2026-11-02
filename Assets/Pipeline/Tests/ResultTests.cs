@@ -74,6 +74,15 @@ namespace Framework.Pipeline.Tests
             => Assert.Throws<InvalidOperationException>(() => Result<int>.From(Listed()));
 
         [Test]
+        public void FromT_Faulted_Throws()
+        {
+            var e = Listed();
+            e.Fault();
+
+            Assert.Throws<InvalidOperationException>(() => Result<int>.From(e));
+        }
+
+        [Test]
         public void FromT_WrongValueType_Throws()
             => Assert.Throws<InvalidOperationException>(() => Result<int>.From(Accepted("five")));
 

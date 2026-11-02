@@ -4,7 +4,7 @@ using Framework.Routing;
 
 namespace Framework.Pipeline
 {
-    public abstract class Handler<TMessage, TScope> : IRouted
+    public abstract class Handler<TMessage, TScope> : IRouted where TMessage : Message
     {
         public abstract Type RouteType { get; }
 

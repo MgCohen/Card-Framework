@@ -20,6 +20,8 @@ namespace Framework.Pipeline
         // Sole writer: the pipeline run.
         internal void Start() => State = EnvelopeState.Running;
 
+        internal void SetResult(object result) => Result = result;
+
         internal void Accept(object result)
         {
             State = EnvelopeState.Accepted;
