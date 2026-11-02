@@ -11,19 +11,29 @@ namespace Framework.Kinds
         {
             for (var i = 0; i < builder.Count; i++)
             {
-                if (builder[i] is KindSpaceRegistration<TKey, TRegistry> known)
+                if (builder[i] is IKindSpaceRegistration known && known.KeyType == typeof(TKey))
                 {
-                    known.AddData(data);
+                    if (known.RegistryType != typeof(TRegistry))
+                        throw Mismatch<TKey, TRegistry>(known.RegistryType);
+                    ((KindSpaceRegistration<TKey, TRegistry>)known).AddData(data);
                     return builder;
                 }
             }
 
-            if (builder.Exists(typeof(TRegistry), findParentScopes: true))
+            // Every space also registers as TypeKey.Registry<TKey>, so this finds a parent space of any registry type.
+            if (builder.Exists(typeof(TypeKey.Registry<TKey>), includeInterfaceTypes: true, findParentScopes: true))
             {
                 // A parent scope has the space, and it is frozen: a child scope cannot add data to it.
                 if (data != null)
                     throw new InvalidOperationException(
                         $"{typeof(TRegistry).Name} is registered in a parent scope. Give the data to the parent AddKindSpace call.");
+                // The parent registry type is only readable from the built scope.
+                builder.RegisterBuildCallback(scope =>
+                {
+                    var parentType = ParentRegistryType<TKey>(scope);
+                    if (parentType != null && parentType != typeof(TRegistry))
+                        throw Mismatch<TKey, TRegistry>(parentType);
+                });
                 return builder;
             }
 
@@ -46,5 +56,16 @@ namespace Framework.Kinds
             configure(options.Options);
             return builder;
         }
+
+        static Type ParentRegistryType<TKey>(IObjectResolver scope) where TKey : TypeKey
+        {
+            for (var parent = (scope as IScopedObjectResolver)?.Parent; parent != null; parent = parent.Parent)
+                if (parent.TryGetRegistration(typeof(TypeKey.Registry<TKey>), out var registration))
+                    return registration.ImplementationType;
+            return null;
+        }
+
+        static InvalidOperationException Mismatch<TKey, TRegistry>(Type other) =>
+            new($"The kind space {typeof(TKey).Name} already has the registry {other.Name}; AddKindSpace asks for {typeof(TRegistry).Name}.");
     }
 }

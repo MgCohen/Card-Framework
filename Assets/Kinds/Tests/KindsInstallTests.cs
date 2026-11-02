@@ -58,11 +58,35 @@ namespace Framework.Kinds.Tests
             builder.AddKindSpace<Color, ColorRegistry>();
             var parent = builder.Build();
 
-            var child = parent.CreateScope(b => b.AddKindSpace<Color, ColorRegistry>());
+            using var child = parent.CreateScope(b => b.AddKindSpace<Color, ColorRegistry>());
 
             Assert.That(child.Resolve<ColorRegistry>(), Is.SameAs(parent.Resolve<ColorRegistry>()));
             Assert.Throws<InvalidOperationException>(() =>
                 parent.CreateScope(b => b.AddKindSpace<Color, ColorRegistry>(c => c.Define(10, s => new CustomColor(s)))));
+        }
+
+        [Test]
+        public void AddKindSpace_OtherRegistryForTheSameKey_ThrowsAndNamesBoth()
+        {
+            var builder = WithTests();
+            builder.AddKindSpace<Color, ColorRegistry>();
+
+            var e = Assert.Throws<InvalidOperationException>(() => builder.AddKindSpace<Color, TypeKey.Registry<Color>>());
+
+            Assert.That(e.Message, Does.Contain(nameof(ColorRegistry)).And.Contain("Registry`1"));
+        }
+
+        [Test]
+        public void AddKindSpace_OtherRegistryThanTheParentScope_ThrowsAndNamesBoth()
+        {
+            var builder = WithTests();
+            builder.AddKindSpace<Color, ColorRegistry>();
+            var parent = builder.Build();
+
+            var e = Assert.Throws<InvalidOperationException>(() =>
+                parent.CreateScope(b => b.AddKindSpace<Color, TypeKey.Registry<Color>>()));
+
+            Assert.That(e.Message, Does.Contain(nameof(ColorRegistry)).And.Contain("Registry`1"));
         }
 
         [Test]

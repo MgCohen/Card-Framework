@@ -5,12 +5,16 @@ namespace Framework.Kinds
 {
     // Registers one TRegistry singleton and keeps the data actions, so a second
     // AddKindSpace call for the same registry adds its data to the first call.
-    sealed class KindSpaceRegistration<TKey, TRegistry> : RegistrationBuilder
+    sealed class KindSpaceRegistration<TKey, TRegistry> : RegistrationBuilder, IKindSpaceRegistration
         where TKey : TypeKey where TRegistry : TypeKey.Registry<TKey>, new()
     {
         Action<TRegistry> _data;
 
         public KindSpaceRegistration() : base(typeof(TRegistry), Lifetime.Singleton) { }
+
+        public Type KeyType => typeof(TKey);
+
+        public Type RegistryType => typeof(TRegistry);
 
         public void AddData(Action<TRegistry> data) => _data += data;
 
@@ -41,5 +45,12 @@ namespace Framework.Kinds
             public object SpawnInstance(IObjectResolver resolver) =>
                 _space.Create(resolver.ResolveOrDefault<KindsOptions>() ?? new KindsOptions());
         }
+    }
+
+    // Lets AddKindSpace find a space for the same key with a different registry type.
+    interface IKindSpaceRegistration
+    {
+        Type KeyType { get; }
+        Type RegistryType { get; }
     }
 }
