@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Framework.Kinds
 {
@@ -7,18 +8,21 @@ namespace Framework.Kinds
     {
         public class Registry<TKey> where TKey : TypeKey
         {
-            readonly Dictionary<int, TKey> _bySlot = new();
-            readonly Dictionary<Type, TKey> _byType = new();
-            bool _frozen;
+            private readonly Dictionary<int, TKey> _bySlot = new();
+            private readonly Dictionary<Type, TKey> _byType = new();
+            private IReadOnlyCollection<TKey> _members;
+            private bool _frozen;
 
-            public IReadOnlyCollection<TKey> Members => _bySlot.Values;
+            // Sorted by slot, so the order does not depend on the scan order.
+            public IReadOnlyCollection<TKey> Members => _members ??= _bySlot.OrderBy(p => p.Key).Select(p => p.Value).ToList().AsReadOnly();
 
             public void Register<T>() where T : TKey, new() => Register(new T());
 
             public void Register(TKey member)
             {
                 Add(member);
-                _byType.TryAdd(member.GetType(), member);
+                if (IsCodeMember(member.GetType()))
+                    _byType.TryAdd(member.GetType(), member);
             }
 
             // A data member has no type of its own, so Of<T> does not find it.
@@ -45,7 +49,7 @@ namespace Framework.Kinds
                     ? (T)member
                     : throw new KeyNotFoundException($"{GetType().Name}: {typeof(T).Name} is not registered.");
 
-            void Add(TKey member)
+            private void Add(TKey member)
             {
                 if (member == null)
                     throw new ArgumentNullException(nameof(member));
@@ -59,7 +63,10 @@ namespace Framework.Kinds
                         $"{GetType().Name}: slot {member._slot} has {old.GetType().Name} and {member.GetType().Name}.");
                 }
                 _bySlot.Add(member._slot, member);
+                _members = null;
             }
+
+            private static bool IsCodeMember(Type type) => type.IsSealed && type.GetConstructor(Type.EmptyTypes) != null;
         }
     }
 }

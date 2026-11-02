@@ -17,11 +17,40 @@ namespace Framework.Kinds.Tests
         }
 
         [Test]
-        public void Register_SlotClash_ThrowsAndNamesBothTypes()
+        public void Define_SlotClash_ThrowsAndNamesBothTypes()
         {
             var e = Assert.Throws<InvalidOperationException>(() => _colors.Define(1, s => new CustomColor(s)));
 
-            Assert.That(e.Message, Does.Contain(nameof(Red)).And.Contain(nameof(CustomColor)).And.Contain("1"));
+            Assert.That(e.Message, Does.Contain(nameof(Red)).And.Contain(nameof(CustomColor)).And.Contain("slot 1"));
+        }
+
+        [Test]
+        public void Register_SlotClash_ThrowsAndNamesBothTypes()
+        {
+            var e = Assert.Throws<InvalidOperationException>(() => _colors.Register(new CustomColor(2)));
+
+            Assert.That(e.Message, Does.Contain(nameof(Green)).And.Contain(nameof(CustomColor)).And.Contain("slot 2"));
+        }
+
+        [Test]
+        public void Register_DataMember_GetsASlotButNotOf()
+        {
+            var custom = new CustomColor(10);
+            _colors.Register(custom);
+
+            Assert.That(_colors.BySlot(10), Is.SameAs(custom));
+            Assert.Throws<KeyNotFoundException>(() => _colors.Of<CustomColor>());
+        }
+
+        [Test]
+        public void Members_AreSortedBySlot()
+        {
+            var colors = new ColorRegistry();
+            colors.Define(10, s => new CustomColor(s));
+            colors.Register<Green>();
+            colors.Register<Red>();
+
+            Assert.That(colors.Members, Is.EqualTo(new Color[] { new Red(), new Green(), new CustomColor(10) }));
         }
 
         [Test]
