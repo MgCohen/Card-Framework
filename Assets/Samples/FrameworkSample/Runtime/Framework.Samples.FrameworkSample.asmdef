@@ -1,0 +1,23 @@
+{
+    "name": "Framework.Samples.FrameworkSample",
+    "rootNamespace": "Framework.Samples.FrameworkSample",
+    "references": [
+        "Framework.Blocks",
+        "Framework.Pipeline",
+        "Framework.RecordIds",
+        "Framework.TypeKeys",
+        "Framework.TypeRouting",
+        "Framework.Wire",
+        "Scaffold.Autopacker",
+        "Scaffold.Records"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

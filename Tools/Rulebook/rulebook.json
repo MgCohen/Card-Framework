@@ -80,8 +80,26 @@
           ],
           "allowed": {
             "Framework.Core": [],
-            "Framework.Routing": [],
-            "Framework.Wire": [],
+            "Framework.Stripping": [],
+            "Framework.TypeRouting": [
+              "Framework.Stripping"
+            ],
+            "Framework.TypeRouting.Install": [
+              "Framework.TypeRouting"
+            ],
+            "Framework.TypeKeys": [
+              "Framework.Stripping",
+              "Framework.TypeRouting"
+            ],
+            "Framework.TypeKeys.Install": [
+              "Framework.TypeKeys"
+            ],
+            "Framework.Wire": [
+              "Framework.Stripping"
+            ],
+            "Framework.Wire.Ngo": [
+              "Framework.Wire"
+            ],
             "Framework.Tags": [
               "Framework.Core",
               "Framework.Wire"
@@ -120,6 +138,54 @@
               "Framework.Wire"
             ],
             "Framework.Multiplayer": [
+              "Framework.Wire",
+              "Framework.Wire.Ngo"
+            ],
+            "Framework.RecordIds": [],
+            "Framework.RecordIds.Install": [
+              "Framework.RecordIds"
+            ],
+            "Framework.Pipeline": [
+              "Framework.RecordIds",
+              "Framework.TypeRouting"
+            ],
+            "Framework.Pipeline.Install": [
+              "Framework.Pipeline",
+              "Framework.RecordIds",
+              "Framework.RecordIds.Install",
+              "Framework.TypeRouting"
+            ],
+            "Framework.Blocks": [
+              "Framework.RecordIds",
+              "Framework.Stripping",
+              "Framework.Wire"
+            ],
+            "Framework.Blocks.Install": [
+              "Framework.Blocks",
+              "Framework.RecordIds",
+              "Framework.TypeRouting",
+              "Framework.Wire"
+            ],
+            "Framework.Samples.FrameworkSample": [
+              "Framework.Blocks",
+              "Framework.Pipeline",
+              "Framework.RecordIds",
+              "Framework.TypeKeys",
+              "Framework.TypeRouting",
+              "Framework.Wire"
+            ],
+            "Framework.Samples.FrameworkSample.Tests": [
+              "Framework.Samples.FrameworkSample",
+              "Framework.Blocks",
+              "Framework.Blocks.Install",
+              "Framework.Pipeline",
+              "Framework.Pipeline.Install",
+              "Framework.RecordIds",
+              "Framework.RecordIds.Install",
+              "Framework.TypeKeys",
+              "Framework.TypeKeys.Install",
+              "Framework.TypeRouting",
+              "Framework.TypeRouting.Install",
               "Framework.Wire"
             ]
           }
@@ -206,6 +272,9 @@
               "Framework.Bootstrap",
               "Framework.Wire.Tests",
               "Framework.Wire.PlayTests"
+            ],
+            "Framework.Pipeline": [
+              "Framework.Pipeline.Tests"
             ]
           }
         }
@@ -347,6 +416,64 @@
           "allowed": [
             "Framework.Wire.Block*"
           ]
+        }
+      }
+    },
+    {
+      "id": "ARCH-10",
+      "book": "architecture",
+      "title": "Wire core has no NGO reference",
+      "rule": "Framework.Wire references no Netcode, Networking or Unity.Collections assembly.",
+      "why": "The Wire core runs without the engine. NGO code lives in Framework.Wire.Ngo.",
+      "fix": "Move the NGO code into Framework.Wire.Ngo.",
+      "status": "enforced",
+      "severity": "blocking",
+      "check": {
+        "kind": "asmdef.forbiddenReferences",
+        "params": {
+          "roots": [
+            "Assets"
+          ],
+          "from": "Framework.Wire",
+          "forbidden": [
+            "Unity.Netcode.*",
+            "Unity.Networking.*",
+            "Unity.Collections"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ARCH-11",
+      "book": "architecture",
+      "title": "Engine-free systems set noEngineReferences",
+      "rule": "The Runtime and Install assemblies of Stripping, TypeRouting, RecordIds, TypeKeys, Pipeline, Blocks and Wire set \"noEngineReferences\": true.",
+      "why": "These systems run without the engine. The flag makes the compiler reject any UnityEngine use in them.",
+      "fix": "Set \"noEngineReferences\": true in the asmdef, and keep the assembly engine-free: move engine code to an adapter assembly.",
+      "status": "enforced",
+      "severity": "blocking",
+      "check": {
+        "kind": "asmdef.requireFlag",
+        "params": {
+          "roots": [
+            "Assets"
+          ],
+          "assemblies": [
+            "Framework.Stripping",
+            "Framework.TypeRouting",
+            "Framework.TypeRouting.Install",
+            "Framework.RecordIds",
+            "Framework.RecordIds.Install",
+            "Framework.TypeKeys",
+            "Framework.TypeKeys.Install",
+            "Framework.Pipeline",
+            "Framework.Pipeline.Install",
+            "Framework.Blocks",
+            "Framework.Blocks.Install",
+            "Framework.Wire"
+          ],
+          "flag": "noEngineReferences",
+          "value": true
         }
       }
     },

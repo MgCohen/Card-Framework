@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using Framework.Wire;
+using Framework.Wire.Ngo;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;

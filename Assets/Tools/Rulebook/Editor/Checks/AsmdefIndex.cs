@@ -15,6 +15,7 @@ namespace Tools.Rulebook
             public string Name;
             public string Path;
             public string[] References;
+            public JObject Json;
         }
 
         public IReadOnlyList<Entry> Entries { get; }
@@ -39,7 +40,7 @@ namespace Tools.Rulebook
                 var refs = (json["references"]?.Values<string>() ?? Enumerable.Empty<string>())
                     .Select(r => r.StartsWith("GUID:") && guidToName.TryGetValue(r.Substring(5), out var n) ? n : r)
                     .ToArray();
-                entries.Add(new Entry { Name = json.Value<string>("name"), Path = ProjectPaths.Relative(file), References = refs });
+                entries.Add(new Entry { Name = json.Value<string>("name"), Path = ProjectPaths.Relative(file), References = refs, Json = json });
             }
             Entries = entries.OrderBy(e => e.Name).ToList();
         }

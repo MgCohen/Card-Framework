@@ -1,0 +1,39 @@
+{
+    "name": "Framework.Samples.FrameworkSample.Tests",
+    "rootNamespace": "Framework.Samples.FrameworkSample.Tests",
+    "references": [
+        "Framework.Samples.FrameworkSample",
+        "Framework.Blocks",
+        "Framework.Blocks.Install",
+        "Framework.Pipeline",
+        "Framework.Pipeline.Install",
+        "Framework.RecordIds",
+        "Framework.RecordIds.Install",
+        "Framework.TypeKeys",
+        "Framework.TypeKeys.Install",
+        "Framework.TypeRouting",
+        "Framework.Wire",
+        "Scaffold.Autopacker",
+        "Scaffold.Records",
+        "VContainer"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

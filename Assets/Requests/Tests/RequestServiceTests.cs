@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using Framework.Wire;
 using NUnit.Framework;
-using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.Requests.Tests
 {
@@ -40,7 +39,7 @@ namespace Framework.Requests.Tests
 
         static (Side server, Side client, WireConnection w) Build()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TestPickRequest,  TestPickRequest.Packed>();
             w.ClientNetwork.Register<TestPickRequest,  TestPickRequest.Packed>();
             w.ServerNetwork.Register<TestPickResponse, TestPickResponse.Packed>();

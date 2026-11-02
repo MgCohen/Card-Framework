@@ -129,6 +129,7 @@
                   "asmdef.noCycles",
                   "asmdef.allowedReferences",
                   "asmdef.forbiddenReferences",
+                  "asmdef.requireFlag",
                   "ivt.allowlist",
                   "il.callersOnly",
                   "il.forbiddenCalls",

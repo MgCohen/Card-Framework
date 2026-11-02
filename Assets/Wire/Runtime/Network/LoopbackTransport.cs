@@ -1,6 +1,4 @@
 using System;
-using Unity.Collections;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
@@ -8,20 +6,9 @@ namespace Framework.Wire
     {
         LoopbackTransport _peer;
 
-        public event Action<FastBufferReader> OnReceived;
+        public event TransportReceive OnReceived;
 
-        public void Send(in FastBufferWriter writer)
-        {
-            var reader = new FastBufferReader(writer, Allocator.Temp);
-            try
-            {
-                _peer.OnReceived?.Invoke(reader);
-            }
-            finally
-            {
-                reader.Dispose();
-            }
-        }
+        public void Send(ReadOnlySpan<byte> bytes) => _peer.OnReceived?.Invoke(bytes);
 
         public static void Pair(out LoopbackTransport serverSide, out LoopbackTransport clientSide)
         {

@@ -84,5 +84,21 @@ namespace Framework.Wire.Tests
             Assert.AreEqual(1, a.Applied);
             Assert.AreEqual(1, b.Applied);
         }
+
+        [Test]
+        public void OnAppending_RaisesBeforeOnAppended_WithTheSameEvent()
+        {
+            var stream = new EventStream();
+            var order = "";
+            WireEvent appending = null;
+            stream.OnAppended += _ => order += "appended;";
+            stream.OnAppending += ev => { order += "appending;"; appending = ev; };
+            var ping = new PingEvent();
+
+            stream.Emit(ping);
+
+            Assert.AreEqual("appending;appended;", order);
+            Assert.AreSame(ping, appending);
+        }
     }
 }

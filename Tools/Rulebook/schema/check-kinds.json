@@ -86,6 +86,36 @@
         }
       ]
     },
+    "asmdef.requireFlag": {
+      "judge": "static",
+      "description": "Fails when a checked asmdef does not set a field to the required value, or when a listed name has no asmdef.",
+      "params": [
+        {
+          "name": "roots",
+          "type": "list",
+          "required": true,
+          "help": "Folders to scan for *.asmdef."
+        },
+        {
+          "name": "assemblies",
+          "type": "list",
+          "required": true,
+          "help": "Names or globs of asmdefs to check. A plain name with no asmdef fails."
+        },
+        {
+          "name": "flag",
+          "type": "string",
+          "required": true,
+          "help": "Asmdef field to read, for example noEngineReferences."
+        },
+        {
+          "name": "value",
+          "type": "bool",
+          "required": true,
+          "help": "Required value of the field."
+        }
+      ]
+    },
     "ivt.allowlist": {
       "judge": "static",
       "description": "InternalsVisibleTo grants must match the table.",

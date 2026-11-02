@@ -1,1 +1,1 @@
-{ "name": "Fx.A", "references": ["Fx.B"] }
+{ "name": "Fx.A", "references": ["Fx.B"], "noEngineReferences": true }

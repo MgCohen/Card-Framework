@@ -11,6 +11,7 @@ namespace Tools.Rulebook
             new AsmdefNoCyclesCheck(),
             new AsmdefAllowedReferencesCheck(),
             new AsmdefForbiddenReferencesCheck(),
+            new AsmdefRequireFlagCheck(),
             new IvtAllowlistCheck(),
             new IlCallsCheck(IlCallsCheck.CallersOnly),
             new IlCallsCheck(IlCallsCheck.ForbiddenCalls),

@@ -1,0 +1,29 @@
+{
+    "name": "Framework.TypeKeys.Tests",
+    "rootNamespace": "Framework.TypeKeys.Tests",
+    "references": [
+        "Framework.Stripping",
+        "Framework.TypeKeys",
+        "Framework.TypeKeys.Install",
+        "Framework.TypeRouting",
+        "VContainer",
+        "Scaffold.Records",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

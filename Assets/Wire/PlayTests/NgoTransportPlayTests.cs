@@ -1,4 +1,5 @@
 using System.Collections;
+using Framework.Wire.Ngo;
 using NUnit.Framework;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;

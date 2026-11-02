@@ -181,11 +181,20 @@ if ($reviewStage) {
 
 # --- collect results -------------------------------------------------------------------------
 
+# The Unity Editor can hold the log for some seconds after the CLI exits. Wait for it, then read it shared.
+function Read-UnityLog([string] $path) {
+  for ($i = 0; $i -lt 60; $i++) {
+    try { return [IO.File]::ReadAllLines($path) } catch [IO.IOException] { Start-Sleep -Milliseconds 500 }
+  }
+  $fs = [IO.File]::Open($path, 'Open', 'Read', 'ReadWrite')
+  try { return (New-Object IO.StreamReader($fs)).ReadToEnd() -split "`r?`n" } finally { $fs.Dispose() }
+}
+
 $compileErrors = @()
 $infraErrors   = @()
 foreach ($run in $runs) {
   if (-not (Test-Path $run.log)) { $infraErrors += "$($run.mode): Unity wrote no log (exit $($run.exit))."; continue }
-  $lines = [IO.File]::ReadAllLines($run.log)
+  $lines = Read-UnityLog $run.log
   foreach ($l in $lines) {
     if ($l -match '^(?<file>[^()]+)\((?<line>\d+),(?<col>\d+)\): error (?<code>CS\d+): (?<msg>.*)$') {
       $compileErrors += [pscustomobject]@{ file = $Matches.file.Replace('\', '/'); line = [int]$Matches.line; code = $Matches.code; message = $Matches.msg.Trim() }

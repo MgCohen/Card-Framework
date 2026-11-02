@@ -1,6 +1,5 @@
 using Framework.Wire;
 using NUnit.Framework;
-using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.Entities.Tests
 {
@@ -13,7 +12,7 @@ namespace Framework.Entities.Tests
         public void EntityCreatedEvent_RoundTripsThroughWire()
         {
             var types = EntityTypeRegistry.WithBaselines();
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
             w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
 

@@ -1,11 +1,13 @@
 using System;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
+    // The span is valid only during the call. Copy the bytes to keep them.
+    public delegate void TransportReceive(ReadOnlySpan<byte> bytes);
+
     public interface ITransport
     {
-        void Send(in FastBufferWriter writer);
-        event Action<FastBufferReader> OnReceived;
+        void Send(ReadOnlySpan<byte> bytes);
+        event TransportReceive OnReceived;
     }
 }
