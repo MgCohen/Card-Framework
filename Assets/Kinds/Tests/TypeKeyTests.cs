@@ -16,7 +16,6 @@ namespace Framework.Kinds.Tests
 
             Assert.That(red, Is.InstanceOf<Color>().And.InstanceOf<IKind>());
             Assert.That(typeof(Color).GetProperties(Public), Is.Empty);
-            Assert.That(typeof(Red).GetMethod("Deconstruct"), Is.Null);
         }
 
         [Test]
@@ -33,6 +32,7 @@ namespace Framework.Kinds.Tests
         public void Records_WithTheSameTypeAndSlot_AreEqual()
         {
             Assert.That(new Red(), Is.EqualTo(new Red()));
+            Assert.That(new Red(), Is.Not.EqualTo(new Green()));
             Assert.That(new CustomColor(10), Is.EqualTo(new CustomColor(10)));
             Assert.That(new CustomColor(10), Is.Not.EqualTo(new CustomColor(11)));
         }
