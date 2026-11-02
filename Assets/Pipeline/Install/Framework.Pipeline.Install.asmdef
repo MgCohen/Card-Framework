@@ -1,0 +1,20 @@
+{
+    "name": "Framework.Pipeline.Install",
+    "rootNamespace": "Framework.Pipeline",
+    "references": [
+        "Framework.Pipeline",
+        "Framework.RecordIds",
+        "Framework.RecordIds.Install",
+        "Framework.TypeRouting",
+        "VContainer"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

@@ -3,10 +3,8 @@
     "rootNamespace": "Framework.Pipeline",
     "references": [
         "Framework.RecordIds",
-        "Framework.RecordIds.Install",
         "Framework.TypeRouting",
-        "Scaffold.Autopacker",
-        "VContainer"
+        "Scaffold.Autopacker"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

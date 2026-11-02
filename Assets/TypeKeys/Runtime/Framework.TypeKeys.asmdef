@@ -3,7 +3,6 @@
     "rootNamespace": "Framework.TypeKeys",
     "references": [
         "Framework.TypeRouting",
-        "VContainer",
         "Scaffold.Records"
     ],
     "includePlatforms": [],

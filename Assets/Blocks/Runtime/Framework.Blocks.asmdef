@@ -5,8 +5,7 @@
         "Framework.RecordIds",
         "Framework.Wire",
         "Scaffold.Autopacker",
-        "Scaffold.Records",
-        "VContainer"
+        "Scaffold.Records"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

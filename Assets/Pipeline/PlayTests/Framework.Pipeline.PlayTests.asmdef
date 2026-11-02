@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Pipeline.PlayTests",
     "references": [
         "Framework.Pipeline",
+        "Framework.Pipeline.Install",
         "Framework.RecordIds",
         "Framework.TypeRouting",
         "UnityEngine.TestRunner"

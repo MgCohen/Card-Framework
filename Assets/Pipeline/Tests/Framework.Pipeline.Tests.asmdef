@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Pipeline.Tests",
     "references": [
         "Framework.Pipeline",
+        "Framework.Pipeline.Install",
         "Framework.RecordIds",
         "Framework.RecordIds.Install",
         "Scaffold.Records",

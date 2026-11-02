@@ -81,8 +81,14 @@
           "allowed": {
             "Framework.Core": [],
             "Framework.TypeRouting": [],
+            "Framework.TypeRouting.Install": [
+              "Framework.TypeRouting"
+            ],
             "Framework.TypeKeys": [
               "Framework.TypeRouting"
+            ],
+            "Framework.TypeKeys.Install": [
+              "Framework.TypeKeys"
             ],
             "Framework.Wire": [],
             "Framework.Tags": [
@@ -131,10 +137,20 @@
             ],
             "Framework.Pipeline": [
               "Framework.RecordIds",
+              "Framework.TypeRouting"
+            ],
+            "Framework.Pipeline.Install": [
+              "Framework.Pipeline",
+              "Framework.RecordIds",
               "Framework.RecordIds.Install",
               "Framework.TypeRouting"
             ],
             "Framework.Blocks": [
+              "Framework.RecordIds",
+              "Framework.Wire"
+            ],
+            "Framework.Blocks.Install": [
+              "Framework.Blocks",
               "Framework.RecordIds",
               "Framework.Wire"
             ]

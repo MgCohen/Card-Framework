@@ -1,0 +1,19 @@
+{
+    "name": "Framework.Blocks.Install",
+    "rootNamespace": "Framework.Blocks",
+    "references": [
+        "Framework.Blocks",
+        "Framework.RecordIds",
+        "Framework.Wire",
+        "VContainer"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

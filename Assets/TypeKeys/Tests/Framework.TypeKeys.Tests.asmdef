@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.TypeKeys.Tests",
     "references": [
         "Framework.TypeKeys",
+        "Framework.TypeKeys.Install",
         "Framework.TypeRouting",
         "VContainer",
         "Scaffold.Records",

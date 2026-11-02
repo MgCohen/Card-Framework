@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Blocks.Tests",
     "references": [
         "Framework.Blocks",
+        "Framework.Blocks.Install",
         "Framework.Wire",
         "Framework.RecordIds",
         "Scaffold.Autopacker",
