@@ -1,68 +1,50 @@
 using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using VContainer;
 
 namespace Framework.Kinds
 {
     public static class KindsInstall
     {
-        // Per-builder state, so a repeated call for one space merges into the first call.
-        static readonly ConditionalWeakTable<IContainerBuilder, BuilderState> States = new();
-
+        // Each system registers its own kind space, so two systems can register the same one.
         public static IContainerBuilder AddKindSpace<TKey, TRegistry>(this IContainerBuilder builder, Action<TRegistry> data = null)
             where TKey : TypeKey where TRegistry : TypeKey.Registry<TKey>, new()
         {
-            var state = States.GetOrCreateValue(builder);
-            if (state.Spaces.TryGetValue(typeof(TRegistry), out var known))
+            for (var i = 0; i < builder.Count; i++)
             {
-                ((Space<TKey, TRegistry>)known).Data += data;
+                if (builder[i] is KindSpaceRegistration<TKey, TRegistry> known)
+                {
+                    known.AddData(data);
+                    return builder;
+                }
+            }
+
+            if (builder.Exists(typeof(TRegistry), findParentScopes: true))
+            {
+                // A parent scope has the space, and it is frozen: a child scope cannot add data to it.
+                if (data != null)
+                    throw new InvalidOperationException(
+                        $"{typeof(TRegistry).Name} is registered in a parent scope. Give the data to the parent AddKindSpace call.");
                 return builder;
             }
 
-            var space = new Space<TKey, TRegistry> { Data = data };
-            state.Spaces.Add(typeof(TRegistry), space);
-            builder.Register(r => space.Build(r.ResolveOrDefault<KindsOptions>() ?? new KindsOptions()), Lifetime.Singleton);
+            var space = builder.Register(new KindSpaceRegistration<TKey, TRegistry>());
+            space.AddData(data);
+            space.AsSelf();
+            if (typeof(TRegistry) != typeof(TypeKey.Registry<TKey>))
+                space.As<TypeKey.Registry<TKey>>();
             builder.RegisterBuildCallback(r => r.Resolve<TRegistry>());
             return builder;
         }
 
         public static IContainerBuilder AddKinds(this IContainerBuilder builder, Action<KindsOptions> configure)
         {
-            var state = States.GetOrCreateValue(builder);
-            if (state.Options == null)
-            {
-                state.Options = new KindsOptions();
-                builder.RegisterInstance(state.Options);
-            }
-            configure(state.Options);
+            KindsOptionsRegistration options = null;
+            for (var i = 0; i < builder.Count && options == null; i++)
+                options = builder[i] as KindsOptionsRegistration;
+            options ??= builder.Register(new KindsOptionsRegistration());
+
+            configure(options.Options);
             return builder;
-        }
-
-        sealed class BuilderState
-        {
-            public readonly Dictionary<Type, object> Spaces = new();
-            public KindsOptions Options;
-        }
-
-        sealed class Space<TKey, TRegistry> where TKey : TypeKey where TRegistry : TypeKey.Registry<TKey>, new()
-        {
-            public Action<TRegistry> Data;
-
-            public TRegistry Build(KindsOptions options)
-            {
-                var registry = new TRegistry();
-                registry.RegisterCodeMembers(options.IncludeTests);
-                Data?.Invoke(registry);
-                registry.Freeze();
-                if (options.Validate)
-                {
-                    var issues = KindValidator.Validate(options.IncludeTests, typeof(TKey));
-                    if (issues.Count > 0)
-                        throw new InvalidOperationException($"{typeof(TRegistry).Name}: {string.Join(" ", issues)}");
-                }
-                return registry;
-            }
         }
     }
 }

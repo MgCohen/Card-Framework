@@ -64,6 +64,12 @@ namespace Framework.Kinds.Tests
         }
 
         [Test]
+        public void KindValidator_ProductionRoots_HaveNoIssues()
+        {
+            Assert.IsEmpty(KindValidator.Validate());
+        }
+
+        [Test]
         public void Validate_NotAKindRoot_GivesAnIssueAndDoesNotThrow()
         {
             var issues = KindValidator.Validate(typeof(string), null);

@@ -6,10 +6,17 @@ namespace Framework.Kinds.Tests
 {
     public class KindsInstallTests
     {
+        private static ContainerBuilder WithTests()
+        {
+            var builder = new ContainerBuilder();
+            builder.AddKinds(o => o.IncludeTests = true);
+            return builder;
+        }
+
         [Test]
         public void AddKindSpace_Only_ResolvesTheFrozenRegistry()
         {
-            var builder = new ContainerBuilder();
+            var builder = WithTests();
             builder.AddKindSpace<Color, ColorRegistry>(c => c.Define(10, s => new CustomColor(s)));
 
             var colors = builder.Build().Resolve<ColorRegistry>();
@@ -20,9 +27,20 @@ namespace Framework.Kinds.Tests
         }
 
         [Test]
+        public void AddKindSpace_ResolvesAsTheBaseRegistry_ToTheSameInstance()
+        {
+            var builder = WithTests();
+            builder.AddKindSpace<Color, ColorRegistry>();
+
+            var container = builder.Build();
+
+            Assert.That(container.Resolve<TypeKey.Registry<Color>>(), Is.SameAs(container.Resolve<ColorRegistry>()));
+        }
+
+        [Test]
         public void AddKindSpace_Twice_GivesOneRegistryWithBothDataMembers()
         {
-            var builder = new ContainerBuilder();
+            var builder = WithTests();
             builder.AddKindSpace<Color, ColorRegistry>(c => c.Define(10, s => new CustomColor(s)));
             builder.AddKindSpace<Color, ColorRegistry>(c => c.Define(11, s => new CustomColor(s)));
 
@@ -34,32 +52,49 @@ namespace Framework.Kinds.Tests
         }
 
         [Test]
-        public void AddKindSpace_WithoutAddKinds_UsesTheDefaults()
+        public void AddKindSpace_InAChildScope_UsesTheParentRegistry()
         {
-            var defaults = new KindsOptions();
-            Assert.That(defaults.IncludeTests, Is.True);
-            Assert.That(defaults.Validate, Is.True);
-
-            var builder = new ContainerBuilder();
+            var builder = WithTests();
             builder.AddKindSpace<Color, ColorRegistry>();
+            var parent = builder.Build();
 
-            Assert.That(builder.Build().Resolve<ColorRegistry>().Members, Has.Count.EqualTo(2));
+            var child = parent.CreateScope(b => b.AddKindSpace<Color, ColorRegistry>());
+
+            Assert.That(child.Resolve<ColorRegistry>(), Is.SameAs(parent.Resolve<ColorRegistry>()));
+            Assert.Throws<InvalidOperationException>(() =>
+                parent.CreateScope(b => b.AddKindSpace<Color, ColorRegistry>(c => c.Define(10, s => new CustomColor(s)))));
         }
 
         [Test]
-        public void AddKinds_IncludeTestsOff_ScansNoTestMember()
+        public void AddKindSpace_WithoutAddKinds_UsesTheDefaults()
         {
+            var defaults = new KindsOptions();
+            Assert.That(defaults.IncludeTests, Is.False);
+            Assert.That(defaults.Validate, Is.True);
+
             var builder = new ContainerBuilder();
-            builder.AddKinds(o => o.IncludeTests = false);
             builder.AddKindSpace<Color, ColorRegistry>();
 
             Assert.That(builder.Build().Resolve<ColorRegistry>().Members, Is.Empty);
         }
 
         [Test]
-        public void AddKindSpace_SlotClash_ThrowsAtContainerBuild()
+        public void AddKinds_Only_ResolvesOptions()
         {
             var builder = new ContainerBuilder();
+            builder.AddKinds(o => o.Validate = false);
+            builder.AddKinds(o => o.IncludeTests = true);
+
+            var options = builder.Build().Resolve<KindsOptions>();
+
+            Assert.That(options.Validate, Is.False);
+            Assert.That(options.IncludeTests, Is.True);
+        }
+
+        [Test]
+        public void AddKindSpace_SlotClash_ThrowsAtContainerBuild()
+        {
+            var builder = WithTests();
             builder.AddKindSpace<ClashKind, TypeKey.Registry<ClashKind>>();
 
             var e = Assert.Catch(() => builder.Build());
@@ -70,7 +105,7 @@ namespace Framework.Kinds.Tests
         [Test]
         public void AddKindSpace_ValidateOn_ThrowsOnAShapeIssue()
         {
-            var builder = new ContainerBuilder();
+            var builder = WithTests();
             builder.AddKindSpace<OpenKind, TypeKey.Registry<OpenKind>>();
 
             var e = Assert.Catch(() => builder.Build());
@@ -81,7 +116,7 @@ namespace Framework.Kinds.Tests
         [Test]
         public void AddKinds_ValidateOff_SkipsTheShapeChecks()
         {
-            var builder = new ContainerBuilder();
+            var builder = WithTests();
             builder.AddKinds(o => o.Validate = false);
             builder.AddKindSpace<OpenKind, TypeKey.Registry<OpenKind>>();
 

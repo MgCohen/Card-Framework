@@ -43,7 +43,7 @@ namespace Framework.Kinds
             return issues;
         }
 
-        // The abstract direct subtypes of TypeKey that have at least one concrete member.
+        // Warning: this scan does not find a root with no concrete member. Name such a root in roots.
         static Type[] AllRoots(bool includeTests) =>
             TypeScan.ConcreteTypesOf(typeof(TypeKey), includeTests)
                 .Select(RootOf)
