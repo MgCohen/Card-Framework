@@ -21,7 +21,7 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "15f5e5d202cdaa881dd64a2ae43160526c5416a9"
+      "hash": "8b27bacf8b2c1cf5c1758589b87c03bab4281e1d"
     },
     "com.scaffold.graphflow": {
       "version": "file:com.scaffold.graphflow",
