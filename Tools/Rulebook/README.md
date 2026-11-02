@@ -79,6 +79,7 @@ pictures.
 | `asmdef.noCycles` | No cycles in asmdef references | `roots` |
 | `asmdef.allowedReferences` | Each in-scope asmdef references only its listed assemblies; unlisted asmdefs fail | `roots`, `scope`, `exclude`, `allowed` |
 | `asmdef.forbiddenReferences` | No reference matches a forbidden pattern | `roots`, `from`, `forbidden` |
+| `asmdef.requireFlag` | Each listed asmdef sets a field to a value; a listed name with no asmdef fails | `roots`, `assemblies`, `flag`, `value` |
 | `ivt.allowlist` | `InternalsVisibleTo` grants match a table | `assemblies`, `exclude`, `allowed` |
 | `il.callersOnly` | Only subclasses of a base type call matching methods (IL scan) | `assemblies`, `callees`, `allowedCallers` |
 | `il.forbiddenCalls` | Subclasses of a base type do not call matching methods (IL scan) | `assemblies`, `callers`, `callees` |

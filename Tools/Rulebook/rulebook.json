@@ -444,6 +444,40 @@
       }
     },
     {
+      "id": "ARCH-11",
+      "book": "architecture",
+      "title": "Engine-free systems set noEngineReferences",
+      "rule": "The Runtime and Install assemblies of Stripping, TypeRouting, RecordIds, TypeKeys, Pipeline, Blocks and Wire set \"noEngineReferences\": true.",
+      "why": "These systems run without the engine. The flag makes the compiler reject any UnityEngine use in them.",
+      "fix": "Set \"noEngineReferences\": true in the asmdef, and keep the assembly engine-free: move engine code to an adapter assembly.",
+      "status": "enforced",
+      "severity": "blocking",
+      "check": {
+        "kind": "asmdef.requireFlag",
+        "params": {
+          "roots": [
+            "Assets"
+          ],
+          "assemblies": [
+            "Framework.Stripping",
+            "Framework.TypeRouting",
+            "Framework.TypeRouting.Install",
+            "Framework.RecordIds",
+            "Framework.RecordIds.Install",
+            "Framework.TypeKeys",
+            "Framework.TypeKeys.Install",
+            "Framework.Pipeline",
+            "Framework.Pipeline.Install",
+            "Framework.Blocks",
+            "Framework.Blocks.Install",
+            "Framework.Wire"
+          ],
+          "flag": "noEngineReferences",
+          "value": true
+        }
+      }
+    },
+    {
       "id": "TEST-01",
       "book": "testing",
       "title": "Acceptance tests and pictures are paired",

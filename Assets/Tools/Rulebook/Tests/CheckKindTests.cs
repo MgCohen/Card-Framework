@@ -38,6 +38,20 @@ namespace Tools.Rulebook.Tests
                              "Fx.D -> Spike.Thing");
 
         [Test]
+        public void Asmdef_RequireFlag_Passes_When_The_Flag_Is_True()
+            => AssertTargets(Run("asmdef.requireFlag", $"{{ 'roots': ['{Dir}/asmdefs'], 'assemblies': ['Fx.A'], 'flag': 'noEngineReferences', 'value': true }}"));
+
+        [Test]
+        public void Asmdef_RequireFlag_Finds_False_Missing_And_Unknown()
+            => AssertTargets(Run("asmdef.requireFlag", $"{{ 'roots': ['{Dir}/asmdefs'], 'assemblies': ['Fx.A', 'Fx.B', 'Fx.C', 'Fx.Gone'], 'flag': 'noEngineReferences', 'value': true }}"),
+                             "Fx.B: noEngineReferences", "Fx.C: noEngineReferences", "Fx.Gone: noEngineReferences");
+
+        [Test]
+        public void Asmdef_RequireFlag_Matches_A_Glob()
+            => AssertTargets(Run("asmdef.requireFlag", $"{{ 'roots': ['{Dir}/asmdefs'], 'assemblies': ['Fx.*'], 'flag': 'noEngineReferences', 'value': true }}"),
+                             "Fx.B: noEngineReferences", "Fx.C: noEngineReferences", "Fx.D: noEngineReferences", "Fx.E: noEngineReferences");
+
+        [Test]
         public void Ivt_Allowlist_Finds_The_Extra_Grant()
             => AssertTargets(Run("ivt.allowlist", $"{{ 'assemblies': ['{Fx}'], 'allowed': {{ '{Fx}': ['Tools.Rulebook.Tests'] }} }}"),
                              $"{Fx} -> Not.Allowed");
