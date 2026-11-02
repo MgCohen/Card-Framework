@@ -83,6 +83,7 @@ User decisions, 2026-11-02:
 33. **Routers** live in `Framework.Routing` (TypeRouter decision D14). Ids live in `Framework.RecordIds` (decision 34).
 34. **Record Ids assembly** (Record Ids, 2026-11-02). `Id`, `EntityId` and `IEntity` live in `Framework.RecordIds` (`Assets/RecordIds/`). `Framework.Blocks` references it, not `Framework.Core`.
 35. **One install method** (catalog rule). `builder.AddBlocks(o => ...)` with `BlocksOptions` is the only setup call. It registers every part and holds all configuration. The caller only registers the current Wire. No `Framework.Bootstrap.IInstaller`; a Bootstrap adapter is later.
+36. **Role and channels** (user, 2026-11-02). `BlocksOptions.Role` uses the shared `enum Role { Server, Client }` from `Framework.RecordIds` (temporary home, [issue 202](https://github.com/MgCohen/Card-Framework/issues/202)). The idle live channels for `GroupStart` and `GroupEnd` from step 2 are accepted.
 
 ## 2. Scope
 
@@ -151,7 +152,7 @@ Paths in rows 1–10 start at `Assets/` (the flat layout on `main`).
 | author | `IEventEmitter.Emit(block)` | Writes one block (server services only) |
 | author | `sealed partial class XBlock : Block` | Adds a block type |
 | author | `ISourced` | A message gives its source entity |
-| composition | `builder.AddBlocks(o => o.Server = true)` | Registers every part; the only setup call |
+| composition | `builder.AddBlocks(o => o.Role = Role.Server)` | Registers every part; the only setup call |
 | runtime | `EventStream[i]`, `Block.Id` | Reads the log; no group store |
 
 Shape:
@@ -198,13 +199,13 @@ groups.Create(effect.Source, () =>
 Install:
 
 ```csharp
-public sealed class BlocksOptions { public bool Server { get; set; } }   // true: also GroupService
+public sealed class BlocksOptions { public Role Role { get; set; } = Role.Client; }   // Role.Server: also GroupService
 
 public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null);
 
 // caller: registers the current Wire (read only), then one call
 builder.Register<EventStream>(Lifetime.Singleton).AsSelf().As<IEventEmitter>();
-builder.AddBlocks(o => o.Server = isServer);
+builder.AddBlocks(o => o.Role = role);
 ```
 
 `AddBlocks` in `Runtime/BlocksInstall.cs` registers `BlockPositions` (both roles, resolved at build)
@@ -216,7 +217,7 @@ Dependencies:
 | Depends on | Why |
 |---|---|
 | `Framework.Wire` | `WireEvent`, `IEventEmitter`, `EventStream` |
-| `Framework.RecordIds` | `Id`, `EntityId`, `IEntity` (Record Ids) |
+| `Framework.RecordIds` | `Id`, `EntityId`, `IEntity`, `Role` (Record Ids) |
 | `Scaffold.Autopacker` | `[Packed]` fields; a null record id packs as `-1` |
 | `VContainer` | `AddBlocks` |
 
@@ -460,7 +461,7 @@ order schedules them.
 | `BlockStartEvent`, `BlockEndEvent` | `GroupStart`, `GroupEnd` | Delete from Wire. `BlockEndEvent.Id` → `GroupEnd.StartId`. |
 | `BlockKind` enum, `BlockOutcome` | removed; `GroupOutcome` (+ `Waiting`) | Tests stop asserting the kind. |
 | `CommandService.Execute` open / try / catch / close | `_groups.Create(SourceOf(cmd), () => handler.Handle(cmd))` | Validation stays above it. |
-| `CommandInstaller`: `Register<BlockScope>` | `builder.AddBlocks(o => o.Server = isServer)` through a Bootstrap adapter | `AddBlocks` registers every part. |
+| `CommandInstaller`: `Register<BlockScope>` | `builder.AddBlocks(o => o.Role = role)` through a Bootstrap adapter | `AddBlocks` registers every part. |
 | `TagSetEvent<T>`, `TagChangeEvent<T>`, `EntityCreatedEvent`, `StatePushEvent`, … | Derive from `Block` | Base class change only. |
 | `Request.Id`, `Request.ParentId`, `Response.RequestId` | `Request.Id` (position), `Response.TriggerId` | `RequestStore` keys on `BlockId`. |
 | `BlockPositions` on `OnAppended` | `EventStream` sets `Position` on append | Removes the subscribe-order requirement. |
@@ -718,7 +719,7 @@ Done: gate PASS; `GroupServiceTests` green; diff in `Assets/Blocks/` only.
 Add `"VContainer"` to the `references` of both asmdefs.
 
 ```csharp
-public sealed class BlocksOptions { public bool Server { get; set; } }   // true: also GroupService
+public sealed class BlocksOptions { public Role Role { get; set; } = Role.Client; }   // Role.Server: also GroupService
 
 public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null)
 {
@@ -726,29 +727,29 @@ public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action
     configure?.Invoke(options);
     builder.Register<BlockPositions>(Lifetime.Singleton);
     builder.RegisterBuildCallback(c => c.Resolve<BlockPositions>());   // subscribes at build
-    if (options.Server) builder.Register<GroupService>(Lifetime.Singleton);
+    if (options.Role == Role.Server) builder.Register<GroupService>(Lifetime.Singleton);
     return builder;
 }
 ```
 
 ```csharp
-static IObjectResolver Build(bool server)
+static IObjectResolver Build(Role role)
 {
     var b = new ContainerBuilder();
     b.Register<EventStream>(Lifetime.Singleton).AsSelf().As<IEventEmitter>();   // current Wire, read only
-    b.AddBlocks(o => o.Server = server);
+    b.AddBlocks(o => o.Role = role);
     return b.Build();
 }
 
 [Test] public void Server_OpensGroup()
 {
-    using var c = Build(server: true);
+    using var c = Build(Role.Server);
     Assert.AreEqual(new BlockId { Value = 1 }, c.Resolve<GroupService>().Open());
 }
 
 [Test] public void Client_SetsPositions_HasNoGroupService()
 {
-    using var c = Build(server: false);
+    using var c = Build(Role.Client);
     var stream = c.Resolve<EventStream>();
     stream.Emit(new TestBlock());
     Assert.AreEqual(1, ((Block)stream[0]).Position);
@@ -798,7 +799,8 @@ Done: gate PASS; `BlocksInstallTests` green (one test for each role); diff in `A
 | Reaction timing | Belongs to the hooks discussion | Hooks and reactions discussion |
 | Rules BLK-01, -02, -03, -05, EVT-01, -02 | Edit the rulebook outside the folder | Migration |
 | Bootstrap adapter (`IInstaller`) for `AddBlocks` | `Framework.Bootstrap` is a current system | Migration |
-| Side effect: `GroupStart`, `GroupEnd` become live channels | `WireRegistrar` finds them by reflection in the current engine | Step 2 lands; migration uses them |
+| Side effect: `GroupStart`, `GroupEnd` become live channels | Accepted (decision 36): idle, and both ends run the same build | Migration uses them |
+| `Role` lives in `Framework.RecordIds` | Temporary home | A network abstraction layer exists ([issue 202](https://github.com/MgCohen/Card-Framework/issues/202)) |
 | Hidden information | Not designed | The hidden-information design |
 | "What ran" for presentation | No reader needs it today | Presentation needs it |
 | Read helper: parent, depth, outcome | One reader today (VS log view) | A second reader walks the stream |
