@@ -390,7 +390,7 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 ## 7. Plan
 
-The plan builds a new system next to the current systems. No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/Framework/RecordIds/`.
+The plan builds a new system next to the current systems. No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/Framework/RecordIds/`. One exception (catalog v13): the step that adds the asmdef also adds its ARCH-02 row to `Tools/Rulebook/rulebook.json`.
 
 ### 7.1 Folder structure
 
@@ -432,7 +432,7 @@ Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker
 
 | Step | Files | Tests | Done |
 |---|---|---|---|
-| 1 | `Runtime/Framework.RecordIds.asmdef`, `IsExternalInit.cs`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
+| 1 | `Runtime/Framework.RecordIds.asmdef`, `IsExternalInit.cs`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs`; ARCH-02 row `"Framework.RecordIds": []` in `Tools/Rulebook/rulebook.json` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/Framework/RecordIds/` and `Tools/Rulebook/rulebook.json` (ARCH-02 row) |
 | 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
 | 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
 
