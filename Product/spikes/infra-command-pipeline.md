@@ -31,8 +31,8 @@ tags: [#spike, #pipeline, #commands]
 
 From 2026-10-31 (all four infra spikes):
 
-1. Ids are typed `readonly struct`s: `EntityId`, `RequestId`, `MessageId` (`infra-record-ids.md`). `BlockId` is the position of a block in the stream (`infra-block-wire.md`).
-2. `IdAllocator<TId>` and `EntityId` live in `Framework.Core`. `TypeRouter<T>` lives in `Framework.Routing` (router decision D14).
+1. Ids are typed records on the `Id` base: `EntityId`, `RequestId`, `MessageId` (`infra-record-ids.md`). `BlockId` is the position of a block in the stream (`infra-block-wire.md`).
+2. `Id`, `IdAllocator<TId>` and `EntityId` live in `Framework.RecordIds` (Record Ids decision 25). `TypeRouter<T>` lives in `Framework.Routing` (router decision D14).
 3. A new `Framework.Blocks` feature owns `Block`, `Group` and `GroupService` (`infra-block-wire.md`).
 4. The async core uses `System.Threading.Tasks.Task`.
 5. The wire carries `TriggerId` only. The parent comes only from group nesting.
@@ -233,11 +233,11 @@ if (!result.Accepted) Show(result.Reason);
 | Depends on | Why |
 |---|---|
 | `Framework.Routing`: `TypeRouter<T>`, `IRouted`, `RouteMode` | The stores; `[RequireImplementors]` keeps author subclasses |
-| `Framework.Core`: `Id`, `IdAllocator<TId>` | One `MessageId` for each envelope |
+| `Framework.RecordIds`: `Id`, `IdAllocator<TId>` | One `MessageId` for each envelope |
 | `System.Threading.Tasks` | The async run (decision 4) |
 | `Framework.Blocks` (later) | `GroupService.Open` and `Close` wrap `Before`, `Handle`, `After` |
 
-asmdef references: `Framework.Core`, `Framework.Routing`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Routing`, `Framework.Wire`, `Framework.Blocks`. · No current system references it until the migration (section 11).
+asmdef references: `Framework.RecordIds`, `Framework.Routing`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.RecordIds`, `Framework.Routing`, `Framework.Wire`, `Framework.Blocks`. · No current system references it until the migration (section 11).
 
 ### Rules
 
@@ -439,10 +439,10 @@ Assets/Framework/Pipeline/
 
 ```mermaid
 flowchart BT
-  P["Framework.Pipeline"] --> C["Framework.Core"]
+  P["Framework.Pipeline"] --> I["Framework.RecordIds"]
   P --> R["Framework.Routing"]
   T["Framework.Pipeline.Tests"] --> P
-  T --> C
+  T --> I
   PT["Framework.Pipeline.PlayTests"] --> P
 ```
 
@@ -452,9 +452,9 @@ flowchart BT
 
 ```json
 // Runtime/Framework.Pipeline.asmdef
-{ "name": "Framework.Pipeline", "references": ["Framework.Core", "Framework.Routing"], "noEngineReferences": true }
+{ "name": "Framework.Pipeline", "references": ["Framework.RecordIds", "Framework.Routing"], "noEngineReferences": true }
 // Tools/Rulebook/rulebook.json, ARCH-02 "allowed"
-"Framework.Pipeline": ["Framework.Core", "Framework.Routing"]
+"Framework.Pipeline": ["Framework.RecordIds", "Framework.Routing"]
 ```
 
 ```csharp
