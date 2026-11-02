@@ -5,13 +5,7 @@ created: 2026-10-31
 references:
   - docs/lookup-patterns.md
   - docs/coding-standards.md
-  - Product/spikes/framework-roadmap.md
-  - Product/spikes/entity-identity-model.md
-  - Product/spikes/request-service.md
-  - Product/spikes/command-service.md
-  - Product/spikes/infra-block-wire.md
-  - Product/decisions/0014-service-first-state-model.md
-sandbox: Assets/Framework/RecordIds/
+sandbox: Assets/RecordIds/
 tags: [#spike, #infra, #ids, #records, #wire, #rollback]
 ---
 
@@ -66,7 +60,8 @@ The user made these decisions for all four infra spikes:
 22. **No save and load.** Loading a match in progress is out of scope. `Watermark` and `Restore` are removed. Undo affects only the top of the stack (`Release`).
 23. **Ids belong to their match.** Each match starts again at 1. Two matches can have the same ids, because they are different contexts.
 24. **Seats stay as they are.** A game mode has a known, small number of players (1 to 4). The shared allocator is for instance spaces of unknown size. Examine this again only if a mode has a large, changing number of players.
-25. **Extraction, not refactor (catalog v12).** The system lives in one root folder, `Assets/Framework/RecordIds/` (`Framework.RecordIds`). The plan builds it next to the current systems and changes none of them. The migration of the current systems is one item in §9 Later.
+25. **Extraction, not refactor (catalog v12).** The system lives in one root folder, `Assets/RecordIds/` (`Framework.RecordIds`). The plan builds it next to the current systems and changes none of them. The migration of the current systems is one item in §9 Later.
+26. **One install method (catalog v14).** The system has one public setup call, `builder.AddRecordIds(o => ...)`, in `Runtime/RecordIdsInstall.cs`, with `RecordIdsOptions`. It registers every part and holds all configuration, for example the role (allocators on the server only). The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later item.
 
 ## 2a. Scope
 
@@ -112,7 +107,7 @@ Boundary: the owning service on the server asks for a new id. The pattern gives 
 | `TagService.Set<T>(int entityId, …)` | entity | author API takes an id | — | `Tags/Runtime/TagService.cs` |
 | Framework `SetHealth.EntityId : int` | — | command holds an id | — | `Framework/Testing/Support/SampleCommands.cs:13` |
 
-Framework paths are under `Assets/Framework/`. Three findings:
+Framework paths are under `Assets/`. Three findings:
 
 - Five counters have the same shape: a private `int` field and `++`. Four start at 1. `Network` starts at 0 and casts to `byte`. None can be reset or restored.
 - Every id is a bare `int`. `Request.ParentId`, `Request.SourceId`, `Request.ResponderId` and `BlockStartEvent.SourceId` do not say which id space they use.
@@ -134,7 +129,7 @@ The wire and the server are consumers. A test or a tool can use the base pattern
 | entity | `EntityId` | `Framework.RecordIds` | `IdAllocator<EntityId>` in `EntityService` | yes | match, never reused |
 | block | `BlockId` | `Framework.Blocks` | `BlockPositions` (position) | no (both sides compute it) | match |
 | request | — (uses `BlockId`) | `Framework.Requests` | `BlockPositions` (a request is a block) | no | match |
-| message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in pipeline `Enqueue` | no (local, see §8) | match |
+| message | `MessageId` | pipeline asmdef | `IdAllocator<MessageId>` in `Pipeline` (`Add`, `RunInline`) | no (local, see §8) | match |
 | definition | `DefinitionId` | `Framework.Entities` | authored data (§9 Later) | yes | build |
 | channel | `byte` | `Framework.Wire` | `Network.Register` | header byte | process, frozen |
 | seat | `int` | `Framework.Multiplayer` | `PeerRoster` | yes (lobby events) | lobby session |
@@ -150,7 +145,6 @@ namespace Framework.RecordIds
     public abstract partial record Id
     {
         [Packed] public int Value { get; init; } = -1;   // -1 = None on the wire, 0 = never set
-        public override string ToString() => $"{GetType().Name}#{Value}";
     }
 }
 
@@ -167,11 +161,9 @@ public sealed record DefinitionId : Id;       // Framework.Entities
 | No mix at compile time | `EntityId` and `BlockId` are different types. A method that takes one rejects the other. |
 | No repeated members | All members are on the base. |
 
-Unity C# 9 needs a shim for `init`. Add it one time in `Framework.RecordIds`:
+Unity C# 9 needs `IsExternalInit` for `init`. `Framework.RecordIds` references `Scaffold.Records`, which has a public `IsExternalInit`. `Framework.Core` uses it the same way, so the system adds no shim.
 
-```csharp
-namespace System.Runtime.CompilerServices { internal static class IsExternalInit { } }
-```
+There is no base `ToString` override. Each record makes its own `ToString`, for example `EntityId { Value = 5 }`.
 
 **"No id".** In code, "no id" is `null`. There is no `None` object, so the code has only one form. On the wire, `null` packs as `-1` (decision 19).
 
@@ -201,17 +193,7 @@ namespace Framework.RecordIds
 }
 ```
 
-Registration, server only, in the installer that registers the owning service:
-
-```csharp
-if (_isServer)
-{
-    builder.Register<IdAllocator<EntityId>>(Lifetime.Singleton);
-    builder.Register<EntityService>(Lifetime.Singleton);
-}
-```
-
-Each id space has its own closed type, so VContainer resolves each one without keys. The client scope has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
+Registration goes through the one install method (§3.8). Each id space has its own closed type, so VContainer resolves each one without keys. The client role has no allocator. A client that tries to allocate fails at resolve time, the same as a service today.
 
 ### 3.3a Release
 
@@ -274,6 +256,8 @@ public abstract class RecordStore<TRecord, TId>
 }
 ```
 
+*Migration example (Later): uses current systems.*
+
 | Store | Declaration | Writes |
 |---|---|---|
 | `EntityStore` | `RecordStore<Entity, EntityId>` | `Insert` (apply handler, does nothing on replay) |
@@ -300,6 +284,8 @@ public abstract partial class Request : Block, IRecord<BlockId>
 
 ### 3.6 Ids on the wire (nested packing)
 
+*Migration example (Later): uses current systems.*
+
 ```csharp
 [AutoPack]
 public partial class EntityCreatedEvent : WireEvent
@@ -324,7 +310,9 @@ The unpack makes a new object: `new EntityId { Value = v }`. This is correct for
 
 ### 3.7 Records at call sites
 
-Author APIs take the record. The API reads the id internally:
+Author APIs take the record. The API reads the id internally.
+
+*Migration example (Later): uses current systems.*
 
 ```csharp
 // Framework.RecordIds
@@ -343,6 +331,35 @@ _tags.Set(card, Health, 5);
 | Wire event field | id | the unpack cannot give the store object |
 | Queued message field | id | the record can change before the handler runs (appendix A.2) |
 | Handler of an event or message | resolves the id once | `_entities.ById(e.EntityId)` |
+
+### 3.8 Install
+
+```csharp
+public enum RecordIdsRole { Server, Client }
+
+public sealed class RecordIdsOptions
+{
+    public RecordIdsRole Role { get; set; } = RecordIdsRole.Server;   // Client: no allocators
+    public RecordIdsOptions Allocator<TId>(bool stack = false) where TId : Id, new();
+}
+
+public static class RecordIdsInstall                                  // Runtime/RecordIdsInstall.cs
+{
+    public static void AddRecordIds(this IContainerBuilder builder, Action<RecordIdsOptions> configure);
+}
+
+builder.AddRecordIds(o =>
+{
+    o.Role = isServer ? RecordIdsRole.Server : RecordIdsRole.Client;
+    o.Allocator<EntityId>();
+});
+```
+
+- `Allocator<TId>()` registers `IdAllocator<TId>`. With `stack: true`, it registers a `StackIdAllocator<TId>` as `IdAllocator<TId>`.
+- `Role = Client` registers no allocator.
+- The same id space twice throws `InvalidOperationException`.
+- The caller registers nothing else. A `Framework.Bootstrap.IInstaller` adapter is a Later item.
+- VContainer in a `noEngineReferences` asmdef is not proven yet. Use the same solution as TypeRouter.
 
 ## 4. Call-site migration
 
@@ -378,8 +395,8 @@ Proposals only. `rulebook.json` does not change in this spike.
 | Id | Rule | Why | Check |
 |---|---|---|---|
 | ID-01 | A Store never allocates ids. No `*Store` type calls `IdAllocator<T>.Next`. | The client has stores and no allocators. A store that allocates gives different ids on each side. | `il.forbiddenCalls`, callers `type: *Store`, callee `IdAllocator`1.Next`. |
-| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from `EntityService` and the pipeline `Enqueue`. | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`. |
-| ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
+| ID-02 | Each id space has one allocating caller. `IdAllocator<T>.Next` is called only from `EntityService` and the `Pipeline` (`Add`, `RunInline`, which take an `IdAllocator<MessageId>`). | Two callers on one space make ids collide or depend on call order. | `il.callersOnly`, callee `IdAllocator`1.Next`. |
+| ID-03 | Allocators are server-only. The client scope cannot resolve any `IdAllocator<T>`. `AddRecordIds` with `Role = Client` registers none. | Clients take ids from events. A client allocator is a divergence bug. | `attached`: a test in `BootstrapWiringIntegrationTests`. |
 | ID-04 | Ids on the wire are typed. No `WireEvent` subtype in `Framework.*` has a public `int` field whose name ends in `Id`. A field that points to a record has a type that derives from `Id`. | A bare `int` id lets an entity id go into a block slot without a compile error. | `attached`: a reflection test over `WireEvent` subtypes. |
 | ID-05 | A scope that has `Network` registers only the base `IdAllocator<T>`. No `Release` override gives ids back in it. | An id given back after the wire sent it gives the client two records with one id. | `attached`: a test in `BootstrapWiringIntegrationTests`. Status `planned` until rollback is scheduled. |
 | ID-06 | Author APIs take records. No public method of a `Framework.*` service takes a parameter whose type derives from `Id`, if a record type exists for that id. | Records at call sites (decision 20). | `attached`: a reflection test over service types. Status `planned`. |
@@ -389,55 +406,65 @@ Proposals only. `rulebook.json` does not change in this spike.
 
 ## 7. Plan
 
-The plan builds a new system next to the current systems. No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/Framework/RecordIds/`. One exception (catalog v13): the step that adds the asmdef also adds its ARCH-02 row to `Tools/Rulebook/rulebook.json`.
+The plan builds a new system next to the current systems. No step edits, moves or migrates a current system. The diff of each step stays inside `Assets/RecordIds/`. Two exceptions: step 0 changes `Packages/packages-lock.json`, and step 1 adds its ARCH-02 row to `Tools/Rulebook/rulebook.json`.
 
 ### 7.1 Folder structure
 
 ```text
-Assets/Framework/RecordIds/
+Assets/RecordIds/
 ├─ Runtime/                       Framework.RecordIds.asmdef
-│  ├─ IsExternalInit.cs
 │  ├─ Id.cs
 │  ├─ IRecord.cs
 │  ├─ IdAllocator.cs
 │  ├─ StackIdAllocator.cs
 │  ├─ RecordStore.cs
 │  ├─ EntityId.cs
-│  └─ IEntity.cs
+│  ├─ IEntity.cs
+│  ├─ RecordIdsOptions.cs
+│  └─ RecordIdsInstall.cs
 └─ Tests/                         Framework.RecordIds.Tests.asmdef
    ├─ Fixtures/
-   │  ├─ TestIds.cs               (AId, BId : Id)
-   │  └─ TestRecords.cs           (TestRecord : IRecord<AId>, TestStore)
+   │  ├─ TestIds.cs               AId, BId : Id
+   │  └─ TestRecords.cs           TestRecord : IRecord<AId>, TestStore
    ├─ IdTests.cs
    ├─ IdPackingTests.cs
    ├─ IdAllocatorTests.cs
    ├─ RecordStoreTests.cs
-   └─ EntityIdTests.cs
+   ├─ EntityIdTests.cs
+   └─ RecordIdsInstallTests.cs
 ```
 
 The system has no data, so it has no `Assets/` subfolder.
+
+| asmdef | Fields |
+|---|---|
+| `Framework.RecordIds` | `noEngineReferences: true`; references `Scaffold.Autopacker`, `Scaffold.Records`, VContainer |
+| `Framework.RecordIds.Tests` | `includePlatforms: [Editor]`; references `Framework.RecordIds`, `Scaffold.Autopacker`, VContainer; `overrideReferences: true`; `precompiledReferences: [nunit.framework.dll]`; `defineConstraints: [UNITY_INCLUDE_TESTS]` |
 
 ### 7.2 Dependencies
 
 ```mermaid
 flowchart BT
   R["Framework.RecordIds"] --> AP["Scaffold.Autopacker"]
+  R --> SR["Scaffold.Records"]
+  R --> VC["VContainer"]
   T["Framework.RecordIds.Tests"] --> R
   T --> AP
+  T --> VC
 ```
 
-`Framework.RecordIds` references only `Scaffold.Autopacker`. It must not reference any `Framework.*` assembly or VContainer.
-
-Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker at or after Scaffold `8b27bacf` (Scaffold #63). Today it pins `15f5e5d2`.
+`Framework.RecordIds` must not reference any `Framework.*` assembly.
 
 ### 7.3 Steps
 
 | Step | Files | Tests | Done |
 |---|---|---|---|
-| 1 | `Runtime/Framework.RecordIds.asmdef`, `IsExternalInit.cs`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs`; ARCH-02 row `"Framework.RecordIds": []` in `Tools/Rulebook/rulebook.json` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/Framework/RecordIds/` and `Tools/Rulebook/rulebook.json` (ARCH-02 row) |
-| 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
-| 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
-| 4 | `Runtime/EntityId.cs`, `IEntity.cs` | `EntityIdTests` (`EntityId` 5 ≠ `AId` 5; `IEntity.Id` is an `EntityId`) | gate PASS; diff only in `Assets/Framework/RecordIds/` |
+| 0 | `Packages/packages-lock.json`: AutoPacker hash `15f5e5d2` → `8b27bacf` (Scaffold #63) | existing tests | gate PASS with `-With playmode`; diff only in `Packages/packages-lock.json` |
+| 1 | `Runtime/Framework.RecordIds.asmdef`, `Id.cs`; `Tests/Framework.RecordIds.Tests.asmdef`, `Fixtures/TestIds.cs`; ARCH-02 row `"Framework.RecordIds": []` | `IdTests` (equality, type, default `-1`), `IdPackingTests` (round trip, `null` stays `null`) | gate PASS; diff only in `Assets/RecordIds/` and the ARCH-02 row in `Tools/Rulebook/rulebook.json` |
+| 2 | `Runtime/IdAllocator.cs`, `StackIdAllocator.cs` | `IdAllocatorTests` (starts at 1, base `Release` keeps the id, stack gives back only the last id) | gate PASS; diff only in `Assets/RecordIds/` |
+| 3 | `Runtime/IRecord.cs`, `RecordStore.cs`; `Fixtures/TestRecords.cs` | `RecordStoreTests` (`ById` hit and miss, equal id from another object) | gate PASS; diff only in `Assets/RecordIds/` |
+| 4 | `Runtime/EntityId.cs`, `IEntity.cs` | `EntityIdTests` (`EntityId` 5 ≠ `AId` 5) | gate PASS; diff only in `Assets/RecordIds/` |
+| 5 | `Runtime/RecordIdsOptions.cs`, `RecordIdsInstall.cs` | `RecordIdsInstallTests`: each test builds a container with only `AddRecordIds`. Server resolves one allocator for each space; client resolves none; the stack option gives back the last id; the same space twice throws | gate PASS; diff only in `Assets/RecordIds/` |
 
 ## 8. Interfaces for the other three pieces
 
@@ -452,7 +479,7 @@ Prerequisite outside the plan: `Packages/packages-lock.json` must pin AutoPacker
 
 **Command pipeline.**
 
-- `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.RecordIds`. `Enqueue` allocates one id for each queued intent and each pushed `StackFrame`.
+- `MessageId : Id` (pipeline asmdef) and `IdAllocator<MessageId>` from `Framework.RecordIds`. The `Pipeline` takes an `IdAllocator<MessageId>`. `Add` and `RunInline` allocate one id for each message.
 - `MessageId` is local to the server. An intent opens no block (decision 6).
 - Messages hold typed ids (MSG-01). The handler resolves records through read views (`IReadOnlyEntityStore.ById`).
 - Client submit (phase 2) needs a correlation id that the client makes. See §9.
@@ -479,6 +506,8 @@ No open questions. Deferred items:
 | Object pooling of records | A match has hundreds of records (appendix A.4) | The profiler shows record allocation cost |
 | Allocation cost of id records | Accepted (decision 17) | A benchmark shows id hashing or allocation cost |
 | Rules ID-01 to ID-07 | They check callers in current systems | The migration starts |
+| `Framework.Bootstrap.IInstaller` adapter for `AddRecordIds` | One setup call is enough now (decision 26) | Bootstrap composes systems through installers |
+| VContainer in a `noEngineReferences` asmdef | Not proven yet | TypeRouter proves it; use its solution |
 | Migration of current systems: Entities, Tags and Catalog on `RecordStore`; Blocks and Requests on `BlockId`; pipeline `MessageId`; rules in `rulebook.json`; docs | Extraction first (decision 25) | The catalog cross-spike order schedules it |
 
 Questions for other owners:
