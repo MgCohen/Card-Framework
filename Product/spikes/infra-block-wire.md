@@ -4,15 +4,12 @@ status: proposed
 created: 2026-10-31
 updated: 2026-11-02
 references:
-  - Product/spikes/framework-roadmap.md
-  - Product/spikes/wire-block-events.md
-  - Product/spikes/wire-network-protocol.md
-  - Product/spikes/command-service.md
-  - Product/spikes/infra-command-pipeline.md
-  - Product/spikes/infra-type-router.md
-  - Product/spikes/infra-record-ids.md
+  - https://claude.ai/artifact/Y1iBedUs8htkxDpkg6QYGU   # catalog
+  - https://claude.ai/artifact/74vPp64abx63ubpagvdpAg   # Pipeline
+  - https://claude.ai/artifact/XuUm6w84yt5zw4BHMfz9u4   # TypeRouter
+  - https://claude.ai/artifact/66MvZgwWo8hSEeKJ6KMDms   # Record Ids
   - docs/architecture.md
-sandbox: Assets/Framework/Blocks/
+sandbox: Assets/Blocks/
 tags: [#spike, #events, #blocks, #groups, #wire, #causality, #infra]
 ---
 
@@ -81,10 +78,11 @@ User decisions, 2026-11-02:
 28. **Author APIs take records** (Record Ids decision 20). `Open` and `Create` take `IEntity source`. `GroupStart.SourceId` stays an `EntityId` on the wire.
 29. **No group store.** The stream is the source of truth. `GroupService` keeps the open-group stack as private state (server only). A reader that needs the parent, the depth or the outcome reads the stream.
 30. **`GroupEnd` links to its start.** `GroupEnd { StartId, Outcome }`. `StartId` is the `BlockId` of the `GroupStart` that it closes. The trigger and the source are not copied: a reader uses `stream[StartId]`.
-31. **Two group types.** `GroupStart` and `GroupEnd` stay separate types. No flag and no shared base: `HandlerRegistry.Dispatch` uses the exact type, so a base handler does not run.
-32. **Extraction plan** (catalog rule). The plan builds `Framework.Blocks` in `Assets/Framework/Blocks/` and changes no current system. Thus `Position` lives on `Block`, not on `WireEvent`. The two listen stages, requests as blocks and the change-block base move to the migration (§10).
+31. **Two group types.** `GroupStart` and `GroupEnd` stay separate types. No flag and no shared base: dispatch uses the exact type, so a base handler does not run.
+32. **Extraction plan** (catalog rule). The plan builds `Framework.Blocks` in `Assets/Blocks/` and changes no current system. Thus `Position` lives on `Block`, not on `WireEvent`. The two listen stages, requests as blocks and the change-block base move to the migration (§10).
 33. **Routers** live in `Framework.Routing` (TypeRouter decision D14). Ids live in `Framework.RecordIds` (decision 34).
-34. **Record Ids assembly** (Record Ids, 2026-11-02). `Id`, `EntityId` and `IEntity` live in `Framework.RecordIds` (`Assets/Framework/RecordIds/`). `Framework.Blocks` references it, not `Framework.Core`.
+34. **Record Ids assembly** (Record Ids, 2026-11-02). `Id`, `EntityId` and `IEntity` live in `Framework.RecordIds` (`Assets/RecordIds/`). `Framework.Blocks` references it, not `Framework.Core`.
+35. **One install method** (catalog rule). `builder.AddBlocks(o => ...)` with `BlocksOptions` is the only setup call. It registers every part and holds all configuration. The caller only registers the current Wire. No `Framework.Bootstrap.IInstaller`; a Bootstrap adapter is later.
 
 ## 2. Scope
 
@@ -97,10 +95,10 @@ User decisions, 2026-11-02:
 | Groups: `Open` / `Close` / `Create`, nesting rule | in | — |
 | Links: parent, `TriggerId`, `SourceId`, `StartId` | in | — |
 | Request and response as blocks | in (later): shape and links | request store: `Framework.Requests` |
-| React to a block | in: observer contract only | scheduling, timing, hooks: `infra-command-pipeline.md` |
-| Find handlers by type | out | `infra-type-router.md` (`Framework.Routing`) |
-| Id record shape, `RecordStore` base | out | `infra-record-ids.md` |
-| Undo, replay cursor | out | `infra-record-ids.md` |
+| React to a block | in: observer contract only | scheduling, timing, hooks: [Pipeline](https://claude.ai/artifact/74vPp64abx63ubpagvdpAg) |
+| Find handlers by type | out | [TypeRouter](https://claude.ai/artifact/XuUm6w84yt5zw4BHMfz9u4) (`Framework.Routing`) |
+| Id record shape, `RecordStore` base | out | [Record Ids](https://claude.ai/artifact/66MvZgwWo8hSEeKJ6KMDms) |
+| Undo, replay cursor | out | [Record Ids](https://claude.ai/artifact/66MvZgwWo8hSEeKJ6KMDms) |
 | `WireEvent` transport, packing, channels | out | `Framework.Wire` network (no change) |
 | Lobby and membership events | out | `Framework.Multiplayer` |
 | Hidden information | out (deferred) | not designed |
@@ -130,7 +128,7 @@ gives the "react" contract to the pipeline, which schedules the work.
 | 14 | VS source capture | Reflection: property named `Source`, all public properties into a dictionary. | VS `PayloadCapture.cs:16,37-45` |
 | 15 | VS readers | `MirrorWorld` skips brackets. The log view indents with a stack and scans to match an end to its start. | VS `Mirror/MirrorWorld.cs:60`; `Unity/SliceBootstrap.cs:385-430` |
 
-Paths in rows 1–10 start at `Assets/Framework/`.
+Paths in rows 1–10 start at `Assets/` (the flat layout on `main`).
 
 ### What repeats
 
@@ -151,9 +149,9 @@ Paths in rows 1–10 start at `Assets/Framework/`.
 |---|---|---|
 | author | `GroupService.Open` / `Close` / `Create` / `CreateAsync` | Brackets work in a group (server) |
 | author | `IEventEmitter.Emit(block)` | Writes one block (server services only) |
-| author | `partial class XBlock : Block` | Adds a block type |
+| author | `sealed partial class XBlock : Block` | Adds a block type |
 | author | `ISourced` | A message gives its source entity |
-| composition | `new BlockPositions(stream)` | Sets `Block.Position` (both sides) |
+| composition | `builder.AddBlocks(o => o.Server = true)` | Registers every part; the only setup call |
 | runtime | `EventStream[i]`, `Block.Id` | Reads the log; no group store |
 
 Shape:
@@ -175,6 +173,7 @@ public sealed class BlockPositions                       // both sides
 
 public sealed class GroupService                         // server only
 {
+    public GroupService(IEventEmitter events);           // BlockPositions subscribes first on the same stream
     public BlockId Current { get; }                      // null when no group is open
     public BlockId Open(IEntity source = null, BlockId trigger = null);
     public void    Close(BlockId id, GroupOutcome outcome = GroupOutcome.Completed); // throws if a child is open
@@ -196,6 +195,22 @@ groups.Create(effect.Source, () =>
 }, trigger: damageBlock.Id);
 ```
 
+Install:
+
+```csharp
+public sealed class BlocksOptions { public bool Server { get; set; } }   // true: also GroupService
+
+public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null);
+
+// caller: registers the current Wire (read only), then one call
+builder.Register<EventStream>(Lifetime.Singleton).AsSelf().As<IEventEmitter>();
+builder.AddBlocks(o => o.Server = isServer);
+```
+
+`AddBlocks` in `Runtime/BlocksInstall.cs` registers `BlockPositions` (both roles, resolved at build)
+and `GroupService` (server only). The caller registers nothing else. It does not use
+`Framework.Bootstrap.IInstaller`; a Bootstrap adapter is later (§10).
+
 Dependencies:
 
 | Depends on | Why |
@@ -203,8 +218,9 @@ Dependencies:
 | `Framework.Wire` | `WireEvent`, `IEventEmitter`, `EventStream` |
 | `Framework.RecordIds` | `Id`, `EntityId`, `IEntity` (Record Ids) |
 | `Scaffold.Autopacker` | `[Packed]` fields; a null record id packs as `-1` |
+| `VContainer` | `AddBlocks` |
 
-asmdef references: `Framework.RecordIds`, `Framework.Wire`, `Scaffold.Autopacker`. Must not depend on
+asmdef references: `Framework.RecordIds`, `Framework.Wire`, `Scaffold.Autopacker`, `VContainer` (`noEngineReferences: true`). Must not depend on
 `Framework.Blocks`: `Framework.Core`, `Framework.RecordIds`, `Framework.Wire`, `Framework.Routing`.
 
 Rules:
@@ -213,7 +229,7 @@ Rules:
 |---|---|
 | A group closes only when it is the innermost open group | runtime: `GroupService.Close` throws `InvalidOperationException` |
 | Each `GroupEnd.StartId` is the innermost open `GroupStart` | test: `GroupNestingTests` walks the stream (rule BLK-03, later in the rulebook) |
-| Blocks references only RecordIds, Wire and AutoPacker | rulebook ARCH-02 row, asmdef check in the gate |
+| Blocks references only RecordIds, Wire, AutoPacker and VContainer | rulebook ARCH-02 row, asmdef check in the gate |
 | Only Blocks sets `Block.Position` | compiler: `internal set` |
 | Only `GroupService` constructs `GroupStart` or `GroupEnd` | rulebook BLK-01, `il.callersOnly` (later) |
 | Game-log types derive from `Block` | rulebook BLK-05, IL base-type check (later) |
@@ -268,12 +284,12 @@ Emit(block) → EventStream: append
   → OnAppended subscribers, in subscribe order:
       WireForwarder → Network.Send (server only)
       BlockPositions → block.Position = stream.Count
-      HandlerRegistry.Dispatch → apply handlers of the exact type
+      HandlerRegistry.Dispatch → apply handlers of the exact type (later: WireEventDispatcher)
 ```
 
 New block type, one recipe:
 
-1. Add `public partial class XBlock : Block` with `[Packed]` fields in the feature `Runtime/Blocks/`.
+1. Add `public sealed partial class XBlock : Block` (ROUTE-03) with `[Packed]` fields in the feature `Runtime/Blocks/`.
 2. Add `XHandler : WireEventHandler<XBlock>` if the block changes a store.
 3. Add `builder.RegisterHandler<XHandler>()` in the feature installer (both roles).
 4. Emit the block from the feature service. `WireRegistrar` finds the type.
@@ -283,13 +299,13 @@ New block type, one recipe:
 ```csharp
 namespace Framework.Blocks
 {
-    public partial class GroupStart : Block
+    public sealed partial class GroupStart : Block
     {
         [Packed] public BlockId  TriggerId;  // null = no trigger
         [Packed] public EntityId SourceId;   // null = no source
     }
 
-    public partial class GroupEnd : Block
+    public sealed partial class GroupEnd : Block
     {
         [Packed] public BlockId StartId;     // the GroupStart that this block closes
         [Packed] public byte    Outcome;
@@ -312,9 +328,9 @@ public BlockPositions(EventStream stream)
 **Requirements:**
 
 - The server and the client append the same events in the same order. Lobby events stay off the game stream. If a block is ever filtered for one client, the positions differ (§10).
-- A listener that subscribed before `BlockPositions` reads `Position = 0`. The migration moves the line into `EventStream` (§10).
+- `BlockPositions` subscribes first on the stream. `AddBlocks` resolves it at build. A listener that subscribed earlier reads `Position = 0`. The migration moves the line into `EventStream` (§10).
 
-The record fields need the AutoPacker upgrade for record ids (generator session, in progress).
+The record fields need the AutoPacker pin from Record Ids step 0 (`8b27bacf`, Scaffold PR 63).
 
 ### 4.4 No kind
 
@@ -430,7 +446,7 @@ until no group is open (rule 2). Pipeline v0 has no groups, so this is later (§
 - **Parent, trigger, source.** Parent answers "where did it run", trigger "why", source "who". They often differ: in the example in §4.2, group `#8` has 3 different values.
 - **No emit while dispatch runs.** An emit inside a handler starts a second dispatch before the first one ends. Later handlers of the first block then see the state after the second block.
 - **No kind.** A kind field with no reader adds a registry and wire bytes. A field is easy to add later, because no saved data exists yet.
-- **No payload.** `wire-block-events.md` L1 holds: change blocks carry the truth.
+- **No payload.** Change blocks carry the truth.
 - **Own feature.** Presentation can read groups without the pipeline.
 
 ## 5. Call-site migration (later)
@@ -444,11 +460,11 @@ order schedules them.
 | `BlockStartEvent`, `BlockEndEvent` | `GroupStart`, `GroupEnd` | Delete from Wire. `BlockEndEvent.Id` → `GroupEnd.StartId`. |
 | `BlockKind` enum, `BlockOutcome` | removed; `GroupOutcome` (+ `Waiting`) | Tests stop asserting the kind. |
 | `CommandService.Execute` open / try / catch / close | `_groups.Create(SourceOf(cmd), () => handler.Handle(cmd))` | Validation stays above it. |
-| `CommandInstaller`: `Register<BlockScope>` | `BlocksInstaller` in `Framework.Bootstrap`, before `CommandInstaller` | `BlockPositions` on both sides; `GroupService` on the server. |
+| `CommandInstaller`: `Register<BlockScope>` | `builder.AddBlocks(o => o.Server = isServer)` through a Bootstrap adapter | `AddBlocks` registers every part. |
 | `TagSetEvent<T>`, `TagChangeEvent<T>`, `EntityCreatedEvent`, `StatePushEvent`, … | Derive from `Block` | Base class change only. |
 | `Request.Id`, `Request.ParentId`, `Response.RequestId` | `Request.Id` (position), `Response.TriggerId` | `RequestStore` keys on `BlockId`. |
 | `BlockPositions` on `OnAppended` | `EventStream` sets `Position` on append | Removes the subscribe-order requirement. |
-| `HandlerRegistry` | Two stages: apply, then observe | Add `WireEventObserver<T>`, `RegisterObserver<T>()`. |
+| `HandlerRegistry` (TypeRouter renames it `WireEventDispatcher`) | Two stages: apply, then observe | Add `WireEventObserver<T>`, `RegisterObserver<T>()`. |
 | Tests on `OnAppended` | `RecordingObserver` in `Framework.Testing.Support` | `OnAppended` becomes `internal`. |
 | `RoundTripTests` / `NgoTransportPlayTests` use bracket events | `PingEvent` / `PongEvent` | Wire tests stop using domain events. |
 | VS `World.OpenBlock(parentOverride)` | `groups.Open(source, trigger: frame.TriggerId)` | Pattern for phase 4. |
@@ -499,24 +515,29 @@ ARCH-02 rows in the migration (changed rows only):
 
 ## 8. Plan
 
-Build only. Each step is one PR. The diff of each step stays in `Assets/Framework/Blocks/`, except
-the ARCH-02 row in step 1.
+Build only. Each step is one PR. The diff of each step stays in `Assets/Blocks/`, except the
+ARCH-02 row in step 1.
 
-Prerequisites (other pieces):
+Prerequisites:
 
-- Record Ids: `Id` base (its step 1), `EntityId` and `IEntity` (its step 4), in `Framework.RecordIds`.
-- AutoPacker: packing of record-id fields.
+| Needs | From |
+|---|---|
+| AutoPacker pin: `Packages/packages-lock.json` `15f5e5d2` → `8b27bacf` (Scaffold PR 63) | Record Ids, step 0 |
+| `Id` base | Record Ids, step 1 (`Assets/RecordIds/`) |
+| `EntityId`, `IEntity` | Record Ids, step 4 (`Assets/RecordIds/`) |
+| VContainer in a `noEngineReferences` asmdef | TypeRouter checks it; use its solution |
 
-Folder structure:
+### 8.1 Folder structure
 
 ```
-Assets/Framework/Blocks/
+Assets/Blocks/
 ├─ Runtime/                       Framework.Blocks.asmdef
-│  ├─ AssemblyInfo.cs             InternalsVisibleTo Framework.Blocks.Tests
 │  ├─ BlockId.cs
 │  ├─ Block.cs
 │  ├─ BlockPositions.cs
 │  ├─ ISourced.cs
+│  ├─ BlocksOptions.cs
+│  ├─ BlocksInstall.cs            AddBlocks
 │  └─ Groups/
 │     ├─ GroupStart.cs
 │     ├─ GroupEnd.cs
@@ -528,22 +549,26 @@ Assets/Framework/Blocks/
    ├─ GroupWireTests.cs
    ├─ GroupServiceTests.cs
    ├─ GroupNestingTests.cs
+   ├─ BlocksInstallTests.cs
    └─ Fixtures/
       ├─ TestBlock.cs
       └─ TestEntity.cs
 ```
 
-Dependency graph:
+### 8.2 Dependency graph
 
 ```mermaid
 flowchart BT
   B["Framework.Blocks"] --> W["Framework.Wire"]
-  B --> C["Framework.RecordIds"]
+  B --> R["Framework.RecordIds"]
   B --> P["Scaffold.Autopacker"]
+  B --> V["VContainer"]
   T["Framework.Blocks.Tests"] --> B
   T --> W
-  T --> C
+  T --> R
 ```
+
+### 8.3 Steps
 
 Gate command for each step:
 
@@ -551,21 +576,197 @@ Gate command for each step:
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-1. **Assembly, `Block`, `BlockId`.** Add both asmdefs, `AssemblyInfo.cs`, `BlockId.cs`, `Block.cs`, `Fixtures/TestBlock.cs`. Add the ARCH-02 row. Test `BlockTests`: `Id` reads `Position`; a new block has `Position = 0`. Done: gate PASS; diff in `Assets/Framework/Blocks/` and `Tools/Rulebook/rulebook.json` (ARCH-02 row only).
-2. **`BlockPositions`.** Test `BlockPositionsTests` with `Wire.Connect()`: 3 blocks on the server give positions 1, 2, 3 on both streams. Done: gate PASS; diff in `Assets/Framework/Blocks/` only.
-3. **Group blocks.** Add `GroupStart`, `GroupEnd`, `GroupOutcome`. Test `GroupWireTests`: round trip keeps `TriggerId = null`, a set `TriggerId`, `SourceId` and `StartId`. Done: gate PASS; diff in `Assets/Framework/Blocks/` only.
-4. **`GroupService`.** Add `Open`, `Close`, `Create`, `CreateAsync`, `CloseFrom`. Tests `GroupServiceTests`: nested `Create` → inner start inside outer; `StartId` matches; throw → `Errored` and the original error; cancel → `Cancelled`; close with an open child throws; throw with an open manual child → both `Errored`. Test `GroupNestingTests`: a walk with a stack finds each `StartId` on top. Done: gate PASS; diff in `Assets/Framework/Blocks/` only.
-5. **`ISourced`.** Add `ISourced.cs` and `Fixtures/TestEntity.cs`. Test: `Open(message.Source)` writes the entity id into `GroupStart.SourceId`; `null` writes `null`. Done: gate PASS; diff in `Assets/Framework/Blocks/` only.
+**1 · Assembly, `Block`, `BlockId`, `BlockPositions`**
+
+```json
+// Runtime/Framework.Blocks.asmdef
+{ "name": "Framework.Blocks", "rootNamespace": "Framework.Blocks",
+  "references": ["Framework.RecordIds", "Framework.Wire", "Scaffold.Autopacker"],
+  "noEngineReferences": true }
+
+// Tests/Framework.Blocks.Tests.asmdef
+{ "name": "Framework.Blocks.Tests",
+  "references": ["Framework.Blocks", "Framework.Wire", "Framework.RecordIds",
+                 "Scaffold.Autopacker", "Unity.Netcode.Runtime"],
+  "optionalUnityReferences": ["TestAssemblies"], "includePlatforms": ["Editor"],
+  "overrideReferences": true, "precompiledReferences": ["nunit.framework.dll", "AutoPackerContracts.dll"],
+  "autoReferenced": false, "defineConstraints": ["UNITY_INCLUDE_TESTS"] }
+
+// Tools/Rulebook/rulebook.json, ARCH-02 "allowed"
+"Framework.Blocks": ["Framework.RecordIds", "Framework.Wire"]
+```
+
+```csharp
+public sealed record BlockId : Id;
+
+public abstract partial class Block : WireEvent
+{
+    public int     Position { get; internal set; }
+    public BlockId Id => new BlockId { Value = Position };
+}
+
+public sealed class BlockPositions
+{
+    public BlockPositions(EventStream stream)
+        => stream.OnAppended += ev => { if (ev is Block b) b.Position = stream.Count; };
+}
+
+public sealed partial class TestBlock : Block { }   // Tests/Fixtures
+```
+
+```csharp
+[Test] public void Emit_SetsPositionAndId()
+{
+    var stream = new EventStream();
+    _ = new BlockPositions(stream);                  // subscribes first on the stream
+    var block = new TestBlock();
+    Assert.AreEqual(0, block.Position);
+    stream.Emit(block);
+    Assert.AreEqual(new BlockId { Value = 1 }, block.Id);
+}
+
+[Test] public void Positions_MatchOnBothSides()
+{
+    var w = Wire.Connect();
+    w.ServerNetwork.Register<TestBlock, TestBlock.Packed>();
+    w.ClientNetwork.Register<TestBlock, TestBlock.Packed>();
+    _ = new BlockPositions(w.ServerStream);
+    _ = new BlockPositions(w.ClientStream);
+    for (var i = 0; i < 3; i++) w.ServerStream.Emit(new TestBlock());
+    Assert.AreEqual(3, ((Block)w.ServerStream[2]).Position);
+    Assert.AreEqual(3, ((Block)w.ClientStream[2]).Position);
+}
+```
+
+Done: gate PASS; `BlockTests` and `BlockPositionsTests` green; diff in `Assets/Blocks/` and
+`Tools/Rulebook/rulebook.json` (ARCH-02 row only).
+
+**2 · Group blocks**
+
+```csharp
+public sealed partial class GroupStart : Block
+{
+    [Packed] public BlockId  TriggerId;
+    [Packed] public EntityId SourceId;
+}
+public sealed partial class GroupEnd : Block
+{
+    [Packed] public BlockId StartId;
+    [Packed] public byte    Outcome;
+}
+public enum GroupOutcome : byte { None, Completed, Errored, Cancelled, Waiting }
+```
+
+```csharp
+[Test] public void GroupStart_RoundTrips_NullTrigger()
+{
+    var w = Wire.Connect();
+    w.ServerNetwork.Register<GroupStart, GroupStart.Packed>(); w.ClientNetwork.Register<GroupStart, GroupStart.Packed>();
+    w.ServerNetwork.Register<GroupEnd, GroupEnd.Packed>();     w.ClientNetwork.Register<GroupEnd, GroupEnd.Packed>();
+    w.ServerStream.Emit(new GroupStart { TriggerId = null, SourceId = new EntityId { Value = 7 } });
+    var start = (GroupStart)w.ClientStream[0];
+    Assert.IsNull(start.TriggerId);
+    Assert.AreEqual(new EntityId { Value = 7 }, start.SourceId);
+}
+```
+
+Done: gate PASS; `GroupWireTests` green (null trigger, set trigger, `StartId`); diff in `Assets/Blocks/` only.
+
+**3 · `GroupService`**
+
+```csharp
+public GroupService(IEventEmitter events);   // BlockPositions subscribes first on the same stream
+public BlockId Open(IEntity source = null, BlockId trigger = null);
+public void    Close(BlockId id, GroupOutcome outcome = GroupOutcome.Completed);
+public void    Create(IEntity source, Action logic, BlockId trigger = null);
+public Task    CreateAsync(IEntity source, Func<Task> logic, BlockId trigger = null);
+void           CloseFrom(BlockId id, GroupOutcome outcome);
+```
+
+| Test | Expects |
+|---|---|
+| nested `Create` | inner start after outer start |
+| `GroupEnd.StartId` | the id that `Open` returned |
+| throw | `Errored`; the original error |
+| cancel | `Cancelled` |
+| close with an open child | `InvalidOperationException` |
+| throw with an open manual child | both `Errored` |
+| `GroupNestingTests` | each `StartId` is on top of the walk stack |
+
+Done: gate PASS; `GroupServiceTests` and `GroupNestingTests` green; diff in `Assets/Blocks/` only.
+
+**4 · `ISourced`**
+
+```csharp
+public interface ISourced { IEntity Source { get; } }
+```
+
+```csharp
+[Test] public void Open_WritesSourceId()
+{
+    groups.Open(new TestEntity(new EntityId { Value = 4 }));
+    Assert.AreEqual(new EntityId { Value = 4 }, ((GroupStart)stream[0]).SourceId);
+    groups.Open(null);
+    Assert.IsNull(((GroupStart)stream[1]).SourceId);
+}
+```
+
+Done: gate PASS; `GroupServiceTests` green; diff in `Assets/Blocks/` only.
+
+**5 · Install: `AddBlocks`**
+
+Add `"VContainer"` to the `references` of both asmdefs.
+
+```csharp
+public sealed class BlocksOptions { public bool Server { get; set; } }   // true: also GroupService
+
+public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null)
+{
+    var options = new BlocksOptions();
+    configure?.Invoke(options);
+    builder.Register<BlockPositions>(Lifetime.Singleton);
+    builder.RegisterBuildCallback(c => c.Resolve<BlockPositions>());   // subscribes at build
+    if (options.Server) builder.Register<GroupService>(Lifetime.Singleton);
+    return builder;
+}
+```
+
+```csharp
+static IObjectResolver Build(bool server)
+{
+    var b = new ContainerBuilder();
+    b.Register<EventStream>(Lifetime.Singleton).AsSelf().As<IEventEmitter>();   // current Wire, read only
+    b.AddBlocks(o => o.Server = server);
+    return b.Build();
+}
+
+[Test] public void Server_OpensGroup()
+{
+    using var c = Build(server: true);
+    Assert.AreEqual(new BlockId { Value = 1 }, c.Resolve<GroupService>().Open());
+}
+
+[Test] public void Client_SetsPositions_HasNoGroupService()
+{
+    using var c = Build(server: false);
+    var stream = c.Resolve<EventStream>();
+    stream.Emit(new TestBlock());
+    Assert.AreEqual(1, ((Block)stream[0]).Position);
+    Assert.Throws<VContainerException>(() => c.Resolve<GroupService>());
+}
+```
+
+Done: gate PASS; `BlocksInstallTests` green (one test for each role); diff in `Assets/Blocks/` only.
 
 ## 9. Interfaces with the other pieces
 
 **Needs from the record ids piece:**
 
 - `Id` base record, `EntityId`, `IEntity`. `BlockId : Id` lives in `Framework.Blocks`.
-- `null` packs as `-1` (AutoPacker upgrade).
+- `null` packs as `-1` (AutoPacker pin, Record Ids step 0).
 - Later: `Unapply` support.
 
-**Needs from the router piece:** later, `TypeMultiRouter<T>` in `Framework.Routing` for the apply list and the observe list in `HandlerRegistry`.
+**Needs from the router piece:** later, `TypeMultiRouter<T>` in `Framework.Routing` for the apply list and the observe list in `WireEventDispatcher` (today `HandlerRegistry`).
 
 **Gives to the pipeline piece:**
 
@@ -590,13 +791,14 @@ powershell -NoProfile -File Tools/Rulebook/gate.ps1
 | Item | Why later | Trigger to reopen |
 |---|---|---|
 | Migration of current callers (§5) | The plan changes no current system | The catalog cross-spike order reaches Blocks |
-| Two listen stages (observers) | Changes `HandlerRegistry` in Wire | Migration; `Framework.Routing` is ready |
+| Two listen stages (observers) | Changes `WireEventDispatcher` (today `HandlerRegistry`) in Wire | Migration; `Framework.Routing` is ready |
 | `Position` set in `EventStream` | Changes Wire | Migration |
 | Requests and responses as blocks | Changes Requests; Pipeline v0 has no groups | Groups come into the Pipeline |
 | Split at `Ask`, response queue | Pipeline v0 has no groups | Groups come into the Pipeline |
 | Reaction timing | Belongs to the hooks discussion | Hooks and reactions discussion |
 | Rules BLK-01, -02, -03, -05, EVT-01, -02 | Edit the rulebook outside the folder | Migration |
-| `BlocksInstaller` | Installers live in `Framework.Bootstrap` | Migration |
+| Bootstrap adapter (`IInstaller`) for `AddBlocks` | `Framework.Bootstrap` is a current system | Migration |
+| Side effect: `GroupStart`, `GroupEnd` become live channels | `WireRegistrar` finds them by reflection in the current engine | Step 2 lands; migration uses them |
 | Hidden information | Not designed | The hidden-information design |
 | "What ran" for presentation | No reader needs it today | Presentation needs it |
 | Read helper: parent, depth, outcome | One reader today (VS log view) | A second reader walks the stream |
