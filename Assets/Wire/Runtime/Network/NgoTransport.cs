@@ -1,4 +1,5 @@
 using System;
+using Unity.Collections;
 using Unity.Netcode;
 
 namespace Framework.Wire
@@ -12,7 +13,7 @@ namespace Framework.Wire
         readonly ulong? _targetClientId;
         bool _disposed;
 
-        public event Action<FastBufferReader> OnReceived;
+        public event TransportReceive OnReceived;
 
         public NgoTransport(
             NetworkManager networkManager,
@@ -25,21 +26,32 @@ namespace Framework.Wire
             _networkManager.CustomMessagingManager.RegisterNamedMessageHandler(_messageName, OnNgoMessageReceived);
         }
 
-        public void Send(in FastBufferWriter writer)
+        public unsafe void Send(ReadOnlySpan<byte> bytes)
         {
-            if (_targetClientId.HasValue)
+            var writer = new FastBufferWriter(bytes.Length, Allocator.Temp);
+            try
             {
-                _networkManager.CustomMessagingManager.SendNamedMessage(
-                    _messageName, _targetClientId.Value, writer);
+                fixed (byte* p = bytes) writer.WriteBytesSafe(p, bytes.Length);
+                if (_targetClientId.HasValue)
+                {
+                    _networkManager.CustomMessagingManager.SendNamedMessage(
+                        _messageName, _targetClientId.Value, writer);
+                }
+                else
+                {
+                    _networkManager.CustomMessagingManager.SendNamedMessageToAll(_messageName, writer);
+                }
             }
-            else
+            finally
             {
-                _networkManager.CustomMessagingManager.SendNamedMessageToAll(_messageName, writer);
+                writer.Dispose();
             }
         }
 
-        void OnNgoMessageReceived(ulong senderClientId, FastBufferReader payload)
-            => OnReceived?.Invoke(payload);
+        // NGO hands over the reader positioned after the named-message header.
+        unsafe void OnNgoMessageReceived(ulong senderClientId, FastBufferReader payload)
+            => OnReceived?.Invoke(new ReadOnlySpan<byte>(
+                   payload.GetUnsafePtrAtCurrentPosition(), payload.Length - payload.Position));
 
         public void Dispose()
         {

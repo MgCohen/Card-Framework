@@ -1,16 +1,15 @@
 using System;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
     public sealed class NullTransport : ITransport
     {
-        public event Action<FastBufferReader> OnReceived
+        public event TransportReceive OnReceived
         {
             add { }
             remove { }
         }
 
-        public void Send(in FastBufferWriter writer) { }
+        public void Send(ReadOnlySpan<byte> bytes) { }
     }
 }
