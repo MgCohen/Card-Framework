@@ -2,12 +2,12 @@ using Framework.Wire;
 
 namespace Framework.Blocks
 {
-    // Subscribe before all other listeners, so they read a set Position.
+    // Sets Position in OnAppending, so every OnAppended listener reads it.
     public sealed class BlockPositions
     {
         public BlockPositions(EventStream stream)
         {
-            stream.OnAppended += ev =>
+            stream.OnAppending += ev =>
             {
                 if (ev is Block block) block.Position = stream.Count;
             };

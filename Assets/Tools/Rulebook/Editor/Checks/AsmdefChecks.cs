@@ -87,4 +87,31 @@ namespace Tools.Rulebook
             }
         }
     }
+
+    // params: roots[], assemblies[] (names or globs of asmdefs checked), flag (asmdef field), value (bool).
+    //         A plain name with no matching asmdef is itself a violation, so a rename cannot hide an assembly.
+    sealed class AsmdefRequireFlagCheck : IRuleCheck
+    {
+        public string Kind => "asmdef.requireFlag";
+
+        public IEnumerable<Violation> Run(JObject p, CheckContext context)
+        {
+            var assemblies = Params.Strings(p, "assemblies");
+            var flag       = Params.String(p, "flag");
+            var value      = p["value"]?.Value<bool>()
+                ?? throw new System.ArgumentException("Check param 'value' is required.");
+            var entries    = new AsmdefIndex(context, Params.Strings(p, "roots")).Entries;
+
+            foreach (var name in assemblies.Where(a => !a.Contains("*") && entries.All(e => e.Name != a)))
+                yield return new Violation($"{name}: {flag}", "assembly is listed but no asmdef has this name");
+
+            foreach (var e in entries.Where(e => Glob.Any(assemblies, e.Name)))
+            {
+                var actual = e.Json[flag];
+                if (actual == null || actual.Type != JTokenType.Boolean || actual.Value<bool>() != value)
+                    yield return new Violation($"{e.Name}: {flag}",
+                        $"asmdef field '{flag}' must be {value.ToString().ToLowerInvariant()}", e.Path);
+            }
+        }
+    }
 }

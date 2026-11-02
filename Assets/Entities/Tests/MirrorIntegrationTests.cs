@@ -1,7 +1,6 @@
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
-using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.Entities.Tests
 {
@@ -12,7 +11,7 @@ namespace Framework.Entities.Tests
     {
         static (TestStack server, TestStack client, WireConnection w) Build()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             // Register the wire channels for every event we'll emit, both sides.
             w.ServerNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();
             w.ClientNetwork.Register<EntityCreatedEvent, EntityCreatedEvent.Packed>();

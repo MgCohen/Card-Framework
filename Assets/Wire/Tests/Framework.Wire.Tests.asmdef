@@ -2,9 +2,9 @@
     "name": "Framework.Wire.Tests",
     "rootNamespace": "Framework.Wire.Tests",
     "references": [
+        "Framework.Stripping",
         "Framework.Wire",
-        "Scaffold.Autopacker",
-        "Unity.Netcode.Runtime"
+        "Scaffold.Autopacker"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"

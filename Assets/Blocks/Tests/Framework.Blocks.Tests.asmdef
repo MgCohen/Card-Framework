@@ -8,8 +8,7 @@
         "Framework.RecordIds",
         "Scaffold.Autopacker",
         "Scaffold.Records",
-        "VContainer",
-        "Unity.Netcode.Runtime"
+        "VContainer"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"

@@ -14,7 +14,7 @@ A server plays a card from Hand to Board. A client gets the same blocks over a l
 ## Install calls
 
 ```csharp
-var wire = Framework.Wire.Wire.Connect();
+var wire = WireConnection.Loopback();
 
 server.RegisterInstance(wire.ServerStream).AsSelf().As<IEventEmitter>();
 server.RegisterInstance(wire.ServerNetwork);

@@ -1,14 +1,13 @@
 using System;
+using System.Runtime.InteropServices;
 using Scaffold.AutoPacker;
-using Unity.Collections;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
     public abstract class NetworkChannel
     {
         internal abstract void SendBoxed(WireEvent ev);
-        internal abstract WireEvent DeliverFromBytes(ref FastBufferReader reader);
+        internal abstract WireEvent DeliverFromBytes(ReadOnlySpan<byte> payload);
     }
 
     public abstract class NetworkChannel<T> : NetworkChannel where T : WireEvent, new()
@@ -38,28 +37,23 @@ namespace Framework.Wire
             unsafe { _sizeWithDisc = 1 + sizeof(TPacked); }
         }
 
-        public override unsafe void Send(T ev)
+        public override void Send(T ev)
         {
-            var writer = new FastBufferWriter(_sizeWithDisc, Allocator.Temp);
-            try
-            {
-                writer.WriteByteSafe(_id);
-                var packed = ev.PackTyped(_handler);
-                writer.WriteBytesSafe((byte*)&packed, sizeof(TPacked));
-                _dispatcher.Send(in writer);
-            }
-            finally
-            {
-                writer.Dispose();
-            }
+            Span<byte> frame = stackalloc byte[_sizeWithDisc];
+            frame[0] = _id;
+            var packed = ev.PackTyped(_handler);
+            MemoryMarshal.Write(frame.Slice(1), ref packed);
+            _dispatcher.Send(frame);
         }
 
         internal override void SendBoxed(WireEvent ev) => Send((T)ev);
 
-        internal override unsafe WireEvent DeliverFromBytes(ref FastBufferReader reader)
+        internal override WireEvent DeliverFromBytes(ReadOnlySpan<byte> payload)
         {
-            TPacked packed;
-            reader.ReadBytesSafe((byte*)&packed, sizeof(TPacked));
+            if (payload.Length != _sizeWithDisc - 1)
+                throw new InvalidOperationException(
+                    $"Wire frame for '{typeof(T).FullName}' has {payload.Length} payload bytes; expected {_sizeWithDisc - 1}.");
+            var packed = MemoryMarshal.Read<TPacked>(payload);
 
             var ev = new T();
             ev.UnpackTyped(packed, _handler);

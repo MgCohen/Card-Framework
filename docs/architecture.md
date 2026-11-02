@@ -66,17 +66,19 @@ flowchart TD
   TAG --> WIRE
   ENT --> WIRE
   MP["Multiplayer<br/>(lobby, not in GameplayLayer)"] --> WIRE
+  MP --> WNGO["Wire.Ngo<br/>(NgoTransport)"]
+  WNGO --> WIRE
   BOOT --> VC[(VContainer)]
   BOOT --> AF[(Scaffold.AppFlow)]
   WIRE --> AP[(Scaffold.Autopacker)]
-  WIRE --> NGO[(Netcode for GameObjects)]
+  WNGO --> NGO[(Netcode for GameObjects)]
   CORE --> REC[(Scaffold.Records)]
 ```
 
 | Feature | What it does | Key types |
 |---|---|---|
 | `Core/` | Typed slot ids and a registry that rejects slot clashes. | `TypeKey`, `SlotRegistry<TKey>` |
-| `Wire/` | Event stream, apply-handler dispatch, block brackets, network channels, transports. Holds no domain events. | `WireEvent`, `EventStream`, `HandlerRegistry`, `WireEventHandler<T>`, `BlockScope`, `Network`, `NetworkChannel<T,TPacked>`, `Dispatcher`, `ITransport`, `LoopbackTransport`, `NgoTransport`, `NullTransport`, `WireRegistrar` |
+| `Wire/` | Event stream, apply-handler dispatch, block brackets, network channels, transports. Engine-free (`noEngineReferences`). Holds no domain events. | `WireEvent`, `EventStream`, `HandlerRegistry`, `WireEventHandler<T>`, `BlockScope`, `Network`, `NetworkChannel<T,TPacked>`, `Dispatcher`, `ITransport`, `LoopbackTransport`, `NullTransport`, `WireRegistrar`; `NgoTransport` in the `Framework.Wire.Ngo` sub-assembly |
 | `Tags/` | Unmanaged values per (entity, tag slot). | `Tag<T>`, `TagService`, `TagStore`, `TagRegistry`; events `TagSetEvent<T>`, `TagChangeEvent<T>`, `TagRemovedEvent` |
 | `Entities/` | Entity ids, entity types, optional definition id. | `Entity`, `EntityType` (`Player`, `Zone`, `Card`, `Modifier`), `EntityService`, `EntityStore`, `EntityTypeRegistry`, `Catalog<TDef>`, `IEntityDefinition`; event `EntityCreatedEvent` |
 | `Requests/` | Server asks a player for a decision and awaits a `Task<TResponse>`. | `Request<TResponse>`, `Response`, `RequestService`, `RequestStore` |

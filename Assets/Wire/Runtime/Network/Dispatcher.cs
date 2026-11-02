@@ -1,5 +1,4 @@
 using System;
-using Unity.Netcode;
 
 namespace Framework.Wire
 {
@@ -20,14 +19,15 @@ namespace Framework.Wire
 
         internal void Register(byte id, NetworkChannel channel) => _channels[id] = channel;
 
-        internal void Send(in FastBufferWriter writer) => _transport.Send(in writer);
+        internal void Send(ReadOnlySpan<byte> frame) => _transport.Send(frame);
 
-        void OnTransportReceived(FastBufferReader reader)
+        void OnTransportReceived(ReadOnlySpan<byte> bytes)
         {
-            reader.ReadByteSafe(out var id);
+            if (bytes.IsEmpty) throw new InvalidOperationException("Empty wire frame.");
+            var id = bytes[0];
             var channel = _channels[id]
                 ?? throw new InvalidOperationException($"No wire channel registered for id {id}.");
-            var ev = channel.DeliverFromBytes(ref reader);
+            var ev = channel.DeliverFromBytes(bytes.Slice(1));
             OnAnyReceived?.Invoke(ev);
         }
     }

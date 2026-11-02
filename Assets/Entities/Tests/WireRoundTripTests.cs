@@ -1,7 +1,6 @@
 using Framework.Tags;
 using Framework.Wire;
 using NUnit.Framework;
-using WireBridge = Framework.Wire.Wire;
 
 namespace Framework.Entities.Tests
 {
@@ -13,7 +12,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void TagSet_Int_RoundTrips_Through_Wire()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();
             w.ClientNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();
 
@@ -34,7 +33,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void TagSet_Bool_RoundTrips_Through_Wire()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TagSetEvent<bool>, TagSetEvent<bool>.Packed>();
             w.ClientNetwork.Register<TagSetEvent<bool>, TagSetEvent<bool>.Packed>();
 
@@ -53,7 +52,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void TagChange_RoundTrips_Through_Wire()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TagChangeEvent<int>, TagChangeEvent<int>.Packed>();
             w.ClientNetwork.Register<TagChangeEvent<int>, TagChangeEvent<int>.Packed>();
 
@@ -74,7 +73,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void TagRemoved_RoundTrips_Through_Wire()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TagRemovedEvent, TagRemovedEvent.Packed>();
             w.ClientNetwork.Register<TagRemovedEvent, TagRemovedEvent.Packed>();
 
@@ -93,7 +92,7 @@ namespace Framework.Entities.Tests
         [Test]
         public void Mixed_Channels_Preserve_Send_Order()
         {
-            var w = WireBridge.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();
             w.ServerNetwork.Register<TagSetEvent<bool>, TagSetEvent<bool>.Packed>();
             w.ClientNetwork.Register<TagSetEvent<int>, TagSetEvent<int>.Packed>();

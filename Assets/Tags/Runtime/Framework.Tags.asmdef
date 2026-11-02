@@ -7,8 +7,7 @@
         "Scaffold.Autopacker",
         "Scaffold.AppFlow",
         "Scaffold.Maps",
-        "Scaffold.Records",
-        "Unity.Netcode.Runtime"
+        "Scaffold.Records"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

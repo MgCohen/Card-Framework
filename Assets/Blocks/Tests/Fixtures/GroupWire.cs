@@ -13,7 +13,7 @@ namespace Framework.Blocks.Tests
 
         public GroupWire()
         {
-            var w = Wire.Wire.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<GroupStart, GroupStart.Packed>();
             w.ClientNetwork.Register<GroupStart, GroupStart.Packed>();
             w.ServerNetwork.Register<GroupEnd, GroupEnd.Packed>();

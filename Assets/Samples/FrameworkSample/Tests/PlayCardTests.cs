@@ -19,7 +19,7 @@ namespace Framework.Samples.FrameworkSample.Tests
         public void SetUp()
         {
             // Inside a Framework.* namespace, "Wire" names the namespace, so write the full name.
-            var wire = Framework.Wire.Wire.Connect();
+            var wire = WireConnection.Loopback();
             _serverStream = wire.ServerStream;
             _clientStream = wire.ClientStream;
 

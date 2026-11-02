@@ -110,7 +110,7 @@ namespace Framework.Wire.Tests
         [Test]
         public void Client_Send_Does_Not_Enter_Server_Stream()
         {
-            var w = Wire.Connect();
+            var w = WireConnection.Loopback();
             w.ServerNetwork.Register<PingEvent, PingEvent.Packed>();
             w.ClientNetwork.Register<PingEvent, PingEvent.Packed>();
 

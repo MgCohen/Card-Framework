@@ -2,6 +2,7 @@
     "name": "Framework.TypeKeys.Tests",
     "rootNamespace": "Framework.TypeKeys.Tests",
     "references": [
+        "Framework.Stripping",
         "Framework.TypeKeys",
         "Framework.TypeKeys.Install",
         "Framework.TypeRouting",

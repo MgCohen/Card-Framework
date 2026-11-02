@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Multiplayer",
     "references": [
         "Framework.Wire",
+        "Framework.Wire.Ngo",
         "Scaffold.Autopacker",
         "Unity.Netcode.Runtime",
         "Unity.Netcode.Transports.UTP",
