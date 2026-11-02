@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using NUnit.Framework;
+using Scaffold.AutoPacker;
 
 namespace Framework.Wire.Tests
 {
@@ -24,6 +25,8 @@ namespace Framework.Wire.Tests
             var frame = transport.Sent[0];
             Assert.AreEqual(0, frame[0]);
             Assert.AreEqual(1 + Marshal.SizeOf<PingEvent.Packed>(), frame.Length);
+            var expected = ((IPackable<PingEvent.Packed>)new PingEvent { Value = 42 }).PackTyped(null);
+            Assert.AreEqual(expected, MemoryMarshal.Read<PingEvent.Packed>(frame.AsSpan(1)));
         }
 
         [Test]
@@ -57,7 +60,18 @@ namespace Framework.Wire.Tests
         public void Receive_ShortPayload_Throws()
         {
             var (transport, _) = Build();
-            Assert.Throws<ArgumentOutOfRangeException>(() => transport.Inject(new byte[] { 0, 1 }));
+            Assert.Throws<InvalidOperationException>(() => transport.Inject(new byte[] { 0, 1 }));
+        }
+
+        [Test]
+        public void Receive_LongPayload_Throws()
+        {
+            var (transport, channel) = Build();
+            channel.Send(new PingEvent { Value = 42 });
+            var frame = new byte[transport.Sent[0].Length + 1];
+            transport.Sent[0].CopyTo(frame, 0);
+
+            Assert.Throws<InvalidOperationException>(() => transport.Inject(frame));
         }
     }
 }

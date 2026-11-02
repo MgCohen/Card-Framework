@@ -36,6 +36,24 @@ namespace Framework.Wire.Tests
         }
 
         [Test]
+        public void Register_Twice_Throws()
+        {
+            var network = new Network(new NullTransport());
+            network.Register<PingEvent, PingEvent.Packed>();
+
+            Assert.Throws<InvalidOperationException>(() => network.Register<PingEvent, PingEvent.Packed>());
+        }
+
+        [Test]
+        public void TryRegister_ThenRegister_Throws()
+        {
+            var network = new Network(new NullTransport());
+            network.TryRegister(typeof(PingEvent));
+
+            Assert.Throws<InvalidOperationException>(() => network.Register<PingEvent, PingEvent.Packed>());
+        }
+
+        [Test]
         public void TryRegister_RoundTrips_OverLoopback()
         {
             var w = WireConnection.Loopback();

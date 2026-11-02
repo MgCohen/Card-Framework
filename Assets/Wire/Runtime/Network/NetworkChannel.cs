@@ -50,7 +50,10 @@ namespace Framework.Wire
 
         internal override WireEvent DeliverFromBytes(ReadOnlySpan<byte> payload)
         {
-            var packed = MemoryMarshal.Read<TPacked>(payload);   // throws if payload is short
+            if (payload.Length != _sizeWithDisc - 1)
+                throw new InvalidOperationException(
+                    $"Wire frame for '{typeof(T).FullName}' has {payload.Length} payload bytes; expected {_sizeWithDisc - 1}.");
+            var packed = MemoryMarshal.Read<TPacked>(payload);
 
             var ev = new T();
             ev.UnpackTyped(packed, _handler);

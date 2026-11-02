@@ -19,7 +19,7 @@ Wire carries every state change as a `WireEvent`: it records events in a stream,
 SERVER                                          CLIENT
 service (e.g. TagService)
   └─ IEventEmitter.Emit(ev)
-EventStream.Emit ── append ── OnAppended
+EventStream.Emit ── append ── OnAppending ── OnAppended
   ├─ HandlerRegistry.Dispatch ─> WireEventHandler<T>.Apply ─> store (internal writer)
   └─ WireForwarder ─> Network.Send
         └─ NetworkChannel<T,TPacked>.Send: [id byte][packed bytes]
@@ -35,6 +35,9 @@ EventStream.Emit ── append ── OnAppended
 3. Apply handlers are the only callers of internal store writers (ARCH-05) and never call services (ARCH-06).
 4. Dispatch is synchronous. A service can read the store right after `Emit` returns.
 5. `WireRegistrar.RegisterAll` runs on both ends at build time. It finds every concrete `WireEvent` by reflection, sorts by full name, and assigns channel ids in that order. Open generic events (`TagSetEvent<T>`) are closed over `int` and `bool`.
+6. Channel ids follow the registration order. Both ends must run the same installs in the same order. `Register<T,TPacked>` throws on a second registration of a type; `TryRegister(Type)` skips it.
+7. `Emit` appends the event, then raises `OnAppending`, then `OnAppended`. The listeners of each event run in subscription order. If an `OnAppending` listener throws, `OnAppended` does not run: the event stays in the stream, and nothing is dispatched or forwarded.
+8. A received frame must have exactly the size of the packed struct. A short or a long frame throws.
 
 ## Key types
 | Type | Job |

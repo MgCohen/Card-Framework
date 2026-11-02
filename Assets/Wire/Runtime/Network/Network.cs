@@ -35,6 +35,8 @@ namespace Framework.Wire
             where T : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>, new()
             where TPacked : unmanaged, IPackedStruct
         {
+            if (_byType.ContainsKey(typeof(T)))
+                throw new InvalidOperationException($"Wire channel for '{typeof(T).FullName}' is already registered. Use TryRegister to skip it.");
             if (_nextId >= Dispatcher.Capacity)
                 throw new InvalidOperationException($"Wire channel registry full: {Dispatcher.Capacity} channels max (byte-sized ids).");
             var id = (byte)_nextId++;

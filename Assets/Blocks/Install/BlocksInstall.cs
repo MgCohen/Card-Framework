@@ -42,9 +42,10 @@ namespace Framework.Blocks
             return builder;
         }
 
-        // Warning: channel ids are positional, so both ends must register the same block types in the same order.
-        // AddBlocks on both ends keeps them equal: TypeScan sorts by full name, and [RequireDerived] on Block keeps
-        // each block type in a stripped player. TryRegister skips a type that WireRegistrar already registered.
+        // Warning: channel ids follow the registration order, so both ends must run the same installs in the
+        // same order. AddBlocks on both ends registers the same block types: TypeScan sorts by full name, and
+        // [RequireDerived] on Block keeps each block type in a stripped player. TryRegister skips a type that
+        // WireRegistrar already registered.
         static void RegisterOn(Network network, bool includeTests)
         {
             foreach (var type in TypeScan.ConcreteTypesOf(typeof(Block), includeTests))
