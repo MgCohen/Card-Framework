@@ -7,7 +7,8 @@ namespace Framework.Blocks
     public static class BlocksInstall
     {
         // The caller registers EventStream, and IEventEmitter on the server.
-        // BlockPositions subscribes at build, before the listeners that resolve later.
+        // Warning: call AddBlocks before each install whose build callback subscribes to
+        // EventStream.OnAppended. Otherwise that listener reads Position == 0, with no error on the client.
         public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null)
         {
             var options = new BlocksOptions();
@@ -31,6 +32,7 @@ namespace Framework.Blocks
             }
 
             builder.Register(new BlocksRegistration(options.Role));
+            // Subscribes here, in the order of the build callbacks. See the warning above.
             builder.RegisterBuildCallback(scope => scope.Resolve<BlockPositions>());
             if (options.Role == Role.Server) builder.Register<GroupService>(Lifetime.Singleton);
             return builder;

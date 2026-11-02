@@ -17,7 +17,7 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
-        public void AddBlocks_Only_ResolvesGroupServiceAndBlockPositions()
+        public void AddBlocks_Default_ResolvesGroupServiceAndBlockPositions()
         {
             var builder = Builder();
             builder.AddBlocks();
@@ -64,6 +64,22 @@ namespace Framework.Blocks.Tests
             var error = Assert.Throws<InvalidOperationException>(() => builder.AddBlocks(o => o.Role = Role.Client));
 
             StringAssert.Contains("Server", error.Message);
+        }
+
+        [Test]
+        public void ListenerBeforeAddBlocks_ReadsZero_ListenerAfter_ReadsPosition()
+        {
+            var builder = Builder();
+            var before = -1;
+            var after = -1;
+            builder.RegisterBuildCallback(c => c.Resolve<EventStream>().OnAppended += ev => before = ((Block)ev).Position);
+            builder.AddBlocks(o => o.Role = Role.Client);
+            builder.RegisterBuildCallback(c => c.Resolve<EventStream>().OnAppended += ev => after = ((Block)ev).Position);
+
+            builder.Build().Resolve<EventStream>().Emit(new TestBlock());
+
+            Assert.AreEqual(0, before);
+            Assert.AreEqual(1, after);
         }
 
         [Test]
