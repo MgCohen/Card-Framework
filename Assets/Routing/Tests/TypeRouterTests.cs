@@ -37,6 +37,13 @@ namespace Framework.Routing.Tests
         }
 
         [Test]
+        public void Get_MissOnGeneric_NamesTypeArguments()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => Router(RouteMode.Single).Get(typeof(Gen<int>)));
+            Assert.That(ex.Message, Is.EqualTo("No Probe registered for Gen<Int32>."));
+        }
+
+        [Test]
         public void Get_Many_Throws()
         {
             var router = Router(RouteMode.Multiple, new Probe(typeof(Hello)), new Probe(typeof(Hello)));

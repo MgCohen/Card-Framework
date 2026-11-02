@@ -31,7 +31,7 @@ namespace Framework.Routing
                 if (exact.TryGetValue(type, out var same))
                 {
                     if (mode == RouteMode.Single)
-                        throw new InvalidOperationException($"Duplicate {typeof(T).Name} for {type.Name}.");
+                        throw new InvalidOperationException($"Duplicate {typeof(T).Name} for {NameOf(type)}.");
                 }
                 else
                 {
@@ -59,7 +59,7 @@ namespace Framework.Routing
         public T Get(Type type)
         {
             if (!_exact.TryGetValue(type, out var members))
-                throw new InvalidOperationException($"No {typeof(T).Name} registered for {type.Name}.");
+                throw new InvalidOperationException($"No {typeof(T).Name} registered for {NameOf(type)}.");
             return One(type, members);
         }
 
@@ -86,8 +86,18 @@ namespace Framework.Routing
         static T One(Type type, T[] members)
         {
             if (members.Length > 1)
-                throw new InvalidOperationException($"Many {typeof(T).Name} registered for {type.Name}. Use GetAll.");
+                throw new InvalidOperationException($"Many {typeof(T).Name} registered for {NameOf(type)}. Use GetAll.");
             return members[0];
+        }
+
+        // Type.Name shows "Gen`1" for a generic type. Show "Gen<Int32>" instead.
+        static string NameOf(Type type)
+        {
+            var tick = type.Name.IndexOf('`');
+            if (!type.IsGenericType || tick < 0)
+                return type.Name;
+            var name = type.Name.Substring(0, tick);
+            return $"{name}<{string.Join(", ", type.GetGenericArguments().Select(NameOf))}>";
         }
 
         static int OrderOf(T member) => member is IOrdered ordered ? ordered.Order : 0;
