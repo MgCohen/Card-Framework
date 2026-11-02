@@ -102,6 +102,38 @@ namespace Framework.Blocks.Tests
         }
 
         [Test]
+        public void WithoutNetwork_Builds()
+        {
+            var builder = Builder();
+            builder.AddBlocks(o => o.IncludeTests = true);
+
+            var container = builder.Build();
+
+            Assert.IsFalse(container.TryResolve<Network>(out _));
+            Assert.IsNotNull(container.Resolve<BlockPositions>());
+        }
+
+        [Test]
+        public void WireRegistrarAndAddBlocks_GiveOneChannelPerBlockType()
+        {
+            // The server registers each block type through both paths; the client through WireRegistrar only.
+            // A second channel on the server would take a new id that the client does not know.
+            var wire = WireConnection.Loopback();
+            WireRegistrar.RegisterAll(wire.ServerNetwork);
+            var server = new ContainerBuilder();
+            server.RegisterInstance(wire.ServerStream).AsSelf().As<IEventEmitter>();
+            server.RegisterInstance(wire.ServerNetwork);
+            server.AddBlocks(o => o.IncludeTests = true);
+            server.Build();
+            WireRegistrar.RegisterAll(wire.ClientNetwork);
+
+            wire.ServerStream.Emit(new TestBlock { Value = 4 });
+
+            Assert.IsFalse(wire.ServerNetwork.TryRegister(typeof(TestBlock)));
+            Assert.AreEqual(4, ((TestBlock)wire.ClientStream[0]).Value);
+        }
+
+        [Test]
         public void ListenerBeforeOrAfterAddBlocks_ReadsPosition()
         {
             var builder = Builder();

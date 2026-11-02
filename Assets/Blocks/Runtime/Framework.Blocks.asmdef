@@ -3,6 +3,7 @@
     "rootNamespace": "Framework.Blocks",
     "references": [
         "Framework.RecordIds",
+        "Framework.TypeRouting",
         "Framework.Wire",
         "Scaffold.Autopacker",
         "Scaffold.Records"

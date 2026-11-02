@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Framework.RecordIds;
 using Framework.TypeRouting;
 using Framework.Wire;
@@ -9,8 +8,6 @@ namespace Framework.Blocks
 {
     public static class BlocksInstall
     {
-        static readonly MethodInfo NetworkRegister = typeof(Network).GetMethod(nameof(Network.Register));
-
         // The caller registers EventStream, and IEventEmitter on the server. If the caller also registers
         // Network, AddBlocks registers each concrete Block type on it.
         public static IContainerBuilder AddBlocks(this IContainerBuilder builder, Action<BlocksOptions> configure = null)
@@ -45,16 +42,13 @@ namespace Framework.Blocks
             return builder;
         }
 
-        // Channel ids are positional. TypeScan sorts by full name, so both ends register in the same order.
+        // Warning: channel ids are positional, so both ends must register the same block types in the same order.
+        // AddBlocks on both ends keeps them equal: TypeScan sorts by full name, and [RequireDerived] on Block keeps
+        // each block type in a stripped player. TryRegister skips a type that WireRegistrar already registered.
         static void RegisterOn(Network network, bool includeTests)
         {
             foreach (var type in TypeScan.ConcreteTypesOf(typeof(Block), includeTests))
-            {
-                var packed = type.GetNestedType("Packed")
-                    ?? throw new InvalidOperationException(
-                        $"Block '{type.FullName}' has no nested Packed type. Make it partial with a [Packed] field.");
-                NetworkRegister.MakeGenericMethod(type, packed).Invoke(network, null);
-            }
+                network.TryRegister(type);
         }
     }
 }

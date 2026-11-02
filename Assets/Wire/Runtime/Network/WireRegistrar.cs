@@ -27,9 +27,7 @@ namespace Framework.Wire
     {
         static readonly Type[] ValueTypes = { typeof(int), typeof(bool) };
 
-        static readonly MethodInfo RegisterMethod = typeof(Network)
-            .GetMethod(nameof(Network.Register), BindingFlags.Public | BindingFlags.Instance);
-
+        // TryRegister skips a type that is already registered, for example a block type from AddBlocks.
         public static void RegisterAll(Network network)
         {
             var all = LoadedTypes().ToList();
@@ -38,7 +36,7 @@ namespace Framework.Wire
                          .Where(IsConcreteWireEvent)
                          .OrderBy(t => t.FullName, StringComparer.Ordinal))
             {
-                Register(network, type, NestedPacked(type));
+                network.TryRegister(type);
             }
 
             // Reordering ValueTypes shifts every channel id after it (invariant 1).
@@ -46,25 +44,11 @@ namespace Framework.Wire
                          .Where(IsOpenGenericWireEvent)
                          .OrderBy(t => t.FullName, StringComparer.Ordinal))
             {
-                var packedDef = NestedPacked(def);
                 foreach (var value in ValueTypes)
                 {
-                    Register(network, def.MakeGenericType(value), packedDef.MakeGenericType(value));
+                    network.TryRegister(def.MakeGenericType(value));
                 }
             }
-        }
-
-        static void Register(Network network, Type eventType, Type packedType)
-            => RegisterMethod.MakeGenericMethod(eventType, packedType).Invoke(network, null);
-
-        static Type NestedPacked(Type wireEventType)
-        {
-            var packed = wireEventType.GetNestedType("Packed");
-            if (packed == null)
-                throw new InvalidOperationException(
-                    $"WireEvent '{wireEventType.FullName}' has no nested 'Packed' type. " +
-                    "Every networked WireEvent must be [AutoPack]-ed.");
-            return packed;
         }
 
         static bool IsConcreteWireEvent(Type t)

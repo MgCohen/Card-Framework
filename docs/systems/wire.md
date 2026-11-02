@@ -43,7 +43,7 @@ EventStream.Emit ── append ── OnAppended
 | `EventStream` | Ordered event history. Implements `IEventEmitter`. Raises `OnAppending` (for example `BlockPositions`), then `OnAppended`. |
 | `WireEventHandler<T>` | Apply handler base. Subclasses override `Apply(T)`. |
 | `HandlerRegistry` | Groups handlers by event type and calls `Apply` on each append. |
-| `Network` | Owns the channel table. `Register<T,TPacked>()` adds a channel; `Send` looks one up by type. |
+| `Network` | Owns the channel table. `Register<T,TPacked>()` adds a channel; `TryRegister(Type)` adds one unless `IsRegistered(Type)`; `Send` looks one up by type. |
 | `NetworkChannel<T,TPacked>` | Packs and unpacks one event type. Raises a typed `OnReceived`. |
 | `Dispatcher` | Reads the id byte from the transport and hands the bytes to that channel. |
 | `ITransport` | Byte pipe: `Send(ReadOnlySpan<byte>)` and `OnReceived` (`TransportReceive`). The span is valid only during the call. `LoopbackTransport`, `NullTransport`; `NgoTransport` in `Framework.Wire.Ngo`. |
