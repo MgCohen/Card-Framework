@@ -32,7 +32,7 @@ tags: [#spike, #pipeline, #commands]
 From 2026-10-31 (all four infra spikes):
 
 1. Ids are typed `readonly struct`s: `EntityId`, `RequestId`, `MessageId` (`infra-record-ids.md`). `BlockId` is the position of a block in the stream (`infra-block-wire.md`).
-2. `TypeRouter<T>`, `IdAllocator<TId>` and `EntityId` live in `Framework.Core`.
+2. `IdAllocator<TId>` and `EntityId` live in `Framework.Core`. `TypeRouter<T>` lives in `Framework.Routing` (router decision D14).
 3. A new `Framework.Blocks` feature owns `Block`, `Group` and `GroupService` (`infra-block-wire.md`).
 4. The async core uses `System.Threading.Tasks.Task`.
 5. The wire carries `TriggerId` only. The parent comes only from group nesting.
@@ -232,12 +232,12 @@ if (!result.Accepted) Show(result.Reason);
 
 | Depends on | Why |
 |---|---|
-| `Framework.Core`: `TypeRouter<T>`, `IRouted`, `RouteMode` | The stores; `[RequireImplementors]` keeps author subclasses |
+| `Framework.Routing`: `TypeRouter<T>`, `IRouted`, `RouteMode` | The stores; `[RequireImplementors]` keeps author subclasses |
 | `Framework.Core`: `Id`, `IdAllocator<TId>` | One `MessageId` for each envelope |
 | `System.Threading.Tasks` | The async run (decision 4) |
 | `Framework.Blocks` (later) | `GroupService.Open` and `Close` wrap `Before`, `Handle`, `After` |
 
-asmdef references: `Framework.Core`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Wire`, `Framework.Blocks`. · No current system references it until the migration (section 11).
+asmdef references: `Framework.Core`, `Framework.Routing`. · Must NOT depend on `Framework.Pipeline`: `Framework.Core`, `Framework.Routing`, `Framework.Wire`, `Framework.Blocks`. · No current system references it until the migration (section 11).
 
 ### Rules
 
@@ -440,6 +440,7 @@ Assets/Framework/Pipeline/
 ```mermaid
 flowchart BT
   P["Framework.Pipeline"] --> C["Framework.Core"]
+  P --> R["Framework.Routing"]
   T["Framework.Pipeline.Tests"] --> P
   T --> C
   PT["Framework.Pipeline.PlayTests"] --> P
@@ -447,7 +448,14 @@ flowchart BT
 
 ## 10. Steps
 
-### 1 · Build — `Message`, `MessageId`, `Envelope`, `Result`
+### 1 · Build — asmdef, `Message`, `MessageId`, `Envelope`, `Result`
+
+```json
+// Runtime/Framework.Pipeline.asmdef
+{ "name": "Framework.Pipeline", "references": ["Framework.Core", "Framework.Routing"], "noEngineReferences": true }
+// Tools/Rulebook/rulebook.json, ARCH-02 "allowed"
+"Framework.Pipeline": ["Framework.Core", "Framework.Routing"]
+```
 
 ```csharp
 public abstract class Message { }
@@ -467,7 +475,7 @@ public sealed class Result<T> : Result { public T Value { get; } }
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Done: gate PASS; `ResultTests` green; the diff is only in `Assets/Framework/Pipeline/`.
+Done: gate PASS; `ResultTests` green; the diff is only in `Assets/Framework/Pipeline/` and the ARCH-02 row in `Tools/Rulebook/rulebook.json`.
 
 ### 2 · Build — `Handler<,>`, `Validator<>`
 
