@@ -375,7 +375,12 @@ Test (`TypeKeyTests`): a positional member compiles over a non-positional root; 
 powershell -NoProfile -File Tools/Rulebook/gate.ps1
 ```
 
-Done: gate PASS; `TypeKeyTests` green; `git diff --stat` shows only `Assets/Framework/Kinds/`.
+```json
+// Tools/Rulebook/rulebook.json, ARCH-02 "allowed"
+"Framework.Kinds": [ "<TypeRouter system asmdef>" ]
+```
+
+Done: gate PASS; `TypeKeyTests` green; `git diff --stat` shows only `Assets/Framework/Kinds/` and `Tools/Rulebook/rulebook.json` (one ARCH-02 row).
 
 **B2 · Build — `TypeKey.Registry<TKey>`.**
 
