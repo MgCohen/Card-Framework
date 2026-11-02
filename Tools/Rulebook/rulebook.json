@@ -121,6 +121,10 @@
             ],
             "Framework.Multiplayer": [
               "Framework.Wire"
+            ],
+            "Framework.RecordIds": [],
+            "Framework.RecordIds.Install": [
+              "Framework.RecordIds"
             ]
           }
         }

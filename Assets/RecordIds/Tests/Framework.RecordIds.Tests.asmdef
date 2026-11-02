@@ -1,0 +1,30 @@
+{
+    "name": "Framework.RecordIds.Tests",
+    "rootNamespace": "Framework.RecordIds.Tests",
+    "references": [
+        "Framework.RecordIds",
+        "Framework.RecordIds.Install",
+        "VContainer",
+        "Scaffold.Autopacker",
+        "Scaffold.Records"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "AutoPackerContracts.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
