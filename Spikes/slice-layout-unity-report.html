@@ -1,0 +1,474 @@
+<title>Slice Layout in Unity</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+/* Layout: one narrow report column; tables and code scroll inside their own boxes. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --fg: #1b2330; --muted: #5a6577; --line: #dde2ea;
+  --accent: #1f6f8b; --pass: #1d7a46; --pass-bg: #e3f3ea; --fail: #b3261e; --fail-bg: #fbe7e5;
+  --warn: #8a5a00; --warn-bg: #fdf1d8; --code-bg: #eef1f5;
+  --c-asmdef: #c2410c; --c-asmref: #a17c00; --c-csproj: #1d4ed8;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --panel: #1a2029; --fg: #e3e8ef; --muted: #98a3b3; --line: #2c3542;
+  --accent: #5fb4d3; --pass: #6fd39b; --pass-bg: #173326; --fail: #ff8a80; --fail-bg: #3a1c1a;
+  --warn: #f2c063; --warn-bg: #3a2e14; --code-bg: #0e1218; --c-asmdef: #fb923c; --c-asmref: #facc15; --c-csproj: #60a5fa; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a2029; --fg: #e3e8ef; --muted: #98a3b3; --line: #2c3542;
+  --accent: #5fb4d3; --pass: #6fd39b; --pass-bg: #173326; --fail: #ff8a80; --fail-bg: #3a1c1a;
+  --warn: #f2c063; --warn-bg: #3a2e14; --code-bg: #0e1218; --c-asmdef: #fb923c; --c-asmref: #facc15; --c-csproj: #60a5fa; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+main { max-width: 900px; margin: 0 auto; padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 36px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 1.9rem; }
+h2 { font-size: 1.25rem; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1rem; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 600 .75rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.meta { color: var(--muted); font-size: .9rem; }
+code, pre { font-family: var(--mono); font-size: .84rem; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; margin: 0; overflow-x: auto; line-height: 1.5; }
+pre.mermaid { background: var(--panel); text-align: center; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.chip { display: inline-block; font: 600 .72rem var(--mono); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pass { color: var(--pass); background: var(--pass-bg); }
+.fail { color: var(--fail); background: var(--fail-bg); }
+.warn { color: var(--warn); background: var(--warn-bg); }
+.verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.tile b { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: .85rem; }
+section > details { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+section > details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+section > details > summary:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+section > details > div { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tools { display: flex; gap: 8px; }
+button { font: 600 .8rem var(--sans); color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.err { color: var(--fail); }
+.ok { color: var(--pass); }
+section > ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+
+.tree { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 14px 16px; font-family: var(--mono); font-size: 13px; line-height: 1.7; overflow-x: auto; }
+.tree ul { list-style: none; margin: 0; padding-left: 20px; border-left: 1px dotted var(--line); }
+.tree > ul { padding-left: 0; border-left: 0; }
+.tree summary { cursor: pointer; list-style: none; display: inline-flex; gap: 8px; align-items: baseline; }
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); display: inline-block; margin-right: 2px; transition: transform .12s; }
+.tree details[open] > summary::before { transform: rotate(45deg); }
+.tree summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tree .dir { font-weight: 600; color: var(--fg); }
+.tree .file { padding-left: 14px; white-space: nowrap; }
+.tree li { white-space: nowrap; }
+.tree .tn { font-family: var(--sans); font-size: 12px; color: var(--muted); margin-left: 10px; font-weight: 400; font-style: normal; }
+.tree .f, .legend .file { color: var(--fg); }
+.tree .asmdef, .legend .asmdef { color: var(--c-asmdef); font-weight: 600; }
+.tree .asmref, .legend .asmref { color: var(--c-asmref); font-weight: 600; }
+.tree .csproj, .legend .csproj { color: var(--c-csproj); font-weight: 600; }
+.tree .ignored, .legend .ignored { color: var(--muted); font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .tree summary::before { transition: none; } }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font: .8rem var(--mono); }
+</style>
+
+<main>
+<header style="display:flex;flex-direction:column;gap:8px">
+  <div class="eyebrow">Spike report · Unity 6000.6.6f1 · 2026-11-03</div>
+  <h1>Slice Layout in Unity</h1>
+  <p>The .NET build and the architecture tests are the authority for dependencies. Unity must only compile the code. Layout B (the <code>.csproj</code> files, no asmdef) does this: Unity compiles all module files into <code>Assembly-CSharp</code>. Layout B needs one setting: dotnet must write <code>obj</code> and <code>bin</code> to folders that Unity does not import. The real vsa-template code does not compile in Unity in any layout: it needs C# 10 to 12 and the VSA and EF Core packages.</p>
+  <p class="meta">Spikes: <code>Card-Framework/Assets/Spikes/SliceLayout/</code> (A, asmref), <code>Assets/Spikes/SliceLayoutFlat/</code> (B, flat) and <code>Assets/Spikes/SliceLayoutBoth/</code> (C, both) · Evidence: <code>Logs/gate/history/&lt;run&gt;/report.json</code></p>
+</header>
+
+<div class="verdict">
+  <div class="tile"><b class="ok">13 / 13</b><span>asmref layout tests pass</span></div>
+  <div class="tile"><b class="ok">9 / 9</b><span>flat layout tests pass</span></div>
+  <div class="tile"><b class="ok">13 / 13</b><span>layout C tests pass, Unity and .NET</span></div>
+  <div class="tile"><b class="ok">369 / 369</b><span>repo gate tests pass with both spikes</span></div>
+  <div class="tile"><b class="err">118</b><span>compile errors: real Notes module as it is</span></div>
+</div>
+
+<section>
+  <h2>1 · Assumption</h2>
+  <p>Unity puts each file in an assembly by folder only. It ignores <code>.csproj</code> files and MSBuild globs. Without an <code>.asmdef</code>, all scripts go into <code>Assembly-CSharp</code>.</p>
+  <div class="scroll"><table>
+    <tr><th>ID</th><th>Hypothesis</th></tr>
+    <tr><td>H1</td><td>An <code>.asmref</code> in a slice subfolder adds its files to an assembly in a different folder.</td></tr>
+    <tr><td>H2</td><td>The asmdef references keep the vsa-template boundaries.</td></tr>
+    <tr><td>H3</td><td>Two modules can handle each other's events with no reference cycle.</td></tr>
+    <tr><td>H4</td><td>The generated IDE projects show the correct files.</td></tr>
+    <tr><td>H5</td><td>Without asmdef or asmref, Unity compiles the code into one assembly and ignores the <code>.csproj</code> files.</td></tr>
+    <tr><td>H6</td><td>The vsa-template code compiles in Unity as it is.</td></tr>
+    <tr><td>H7</td><td>A <code>.csproj</code> and an asmdef in the same folder work together: each build reads only its own file.</td></tr>
+  </table></div>
+  <h3>Layout A (asmref): an asmref subfolder puts its files in another assembly</h3>
+  <div class="legend"><span class="file">normal file</span><span class="asmdef">.asmdef</span><span class="asmref">.asmref</span><span class="csproj">.csproj</span><span class="ignored">folder~ (not imported)</span></div>
+<div class="tree"><ul><li><details open><summary><span class="dir">Assets/Spikes/SliceLayout/</span></summary><ul><li><details open><summary><span class="dir">Notes/</span><span class="tn">module</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Requests/</span><span class="tn">Spike.Notes.Contracts.Requests</span></summary><ul><li><span class="file asmdef">Spike.Notes.Contracts.Requests.asmdef</span></li><li><span class="file f">NoteDto.cs</span><span class="tn">shared contract</span></li></ul></details></li><li><details open><summary><span class="dir">Events/</span><span class="tn">Spike.Notes.Contracts.Events</span></summary><ul><li><span class="file asmdef">Spike.Notes.Contracts.Events.asmdef</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Domain/</span><span class="tn">Spike.Notes.Domain</span></summary><ul><li><span class="file asmdef">Spike.Notes.Domain.asmdef</span></li><li><span class="file f">Note.cs</span></li><li><span class="file f">NoteId.cs</span></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">Spike.Notes.Slices</span></summary><ul><li><span class="file asmdef">Spike.Notes.Slices.asmdef</span></li><li><details open><summary><span class="dir">CreateNote/</span><span class="tn">one slice</span></summary><ul><li><span class="file f">CreateNoteHandler.cs</span></li><li><span class="file f">CreateNoteValidator.cs</span><span class="tn">internal</span></li><li><details open><summary><span class="dir">Request/</span><span class="tn">Spike.Notes.Contracts.Requests</span></summary><ul><li><span class="file asmref">Request.asmref</span><span class="tn">→ Spike.Notes.Contracts.Requests</span></li><li><span class="file f">CreateNoteRequest.cs</span></li><li><span class="file f">CreateNoteResponse.cs</span></li></ul></details></li><li><details open><summary><span class="dir">Event/</span><span class="tn">Spike.Notes.Contracts.Events</span></summary><ul><li><span class="file asmref">Event.asmref</span><span class="tn">→ Spike.Notes.Contracts.Events</span></li><li><span class="file f">NoteCreatedEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">ArchiveNoteOnInvoicePaid/</span><span class="tn">reacts to Billing</span></summary><ul><li><span class="file f">InvoicePaidHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Billing/</span><span class="tn">module, same pattern</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Events/</span><span class="tn">Spike.Billing.Contracts.Events</span></summary><ul><li><span class="file asmdef">Spike.Billing.Contracts.Events.asmdef</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">Spike.Billing.Slices</span></summary><ul><li><span class="file asmdef">Spike.Billing.Slices.asmdef</span></li><li><details open><summary><span class="dir">PayInvoice/</span></summary><ul><li><span class="file f">PayInvoiceHandler.cs</span></li><li><details open><summary><span class="dir">Event/</span><span class="tn">Spike.Billing.Contracts.Events</span></summary><ul><li><span class="file asmref">Event.asmref</span><span class="tn">→ Spike.Billing.Contracts.Events</span></li><li><span class="file f">InvoicePaidEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">OpenInvoiceOnNoteCreated/</span><span class="tn">reacts to Notes</span></summary><ul><li><span class="file f">NoteCreatedHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Tests/</span><span class="tn">Spike.SliceLayout.Tests</span></summary><ul><li><span class="file asmdef">Spike.SliceLayout.Tests.asmdef</span></li><li><span class="file f">SliceLayoutTests.cs</span></li></ul></details></li></ul></details></li></ul></div>
+  <h3>Assembly references: no cycle between modules</h3>
+<pre class="mermaid">
+flowchart LR
+  NS["Notes.Slices"] --> ND["Notes.Domain"]
+  NS --> NR["Notes.Contracts.Requests"]
+  NS --> NE["Notes.Contracts.Events"]
+  NS --> BE["Billing.Contracts.Events"]
+  BS["Billing.Slices"] --> BE
+  BS --> NE
+</pre>
+  <p class="meta">All names have the prefix <code>Spike.</code>. The contract and Domain assemblies reference only <code>Scaffold.Records</code>, for the records shim.</p>
+  <h3>Layout B (flat): Unity compiles all files into Assembly-CSharp</h3>
+<div class="tree"><ul><li><details open><summary><span class="dir">Assets/Spikes/SliceLayoutFlat/</span></summary><ul><li><span class="file f">Directory.Build.props</span><span class="tn">LangVersion 9, no implicit usings, output to bin~ and obj~</span></li><li><details open><summary><span class="dir">Notes/</span><span class="tn">module</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Requests/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Notes.Contracts.Requests.csproj</span><span class="tn">Unity ignores it</span></li><li><span class="file f">NoteDto.cs</span><span class="tn">shared contract</span></li></ul></details></li><li><details open><summary><span class="dir">Events/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Notes.Contracts.Events.csproj</span><span class="tn">Unity ignores it</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Domain/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Notes.Domain.csproj</span><span class="tn">Unity ignores it</span></li><li><span class="file f">Note.cs</span></li><li><span class="file f">NoteId.cs</span></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Notes.Slices.csproj</span><span class="tn">Unity ignores it</span></li><li><details open><summary><span class="dir">CreateNote/</span><span class="tn">one slice</span></summary><ul><li><span class="file f">CreateNoteHandler.cs</span></li><li><span class="file f">CreateNoteValidator.cs</span><span class="tn">internal</span></li><li><details open><summary><span class="dir">Request/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file f">CreateNoteRequest.cs</span></li><li><span class="file f">CreateNoteResponse.cs</span></li><li><span class="file f">LeakDomainRequest.cs</span><span class="tn">N2: compiles</span></li><li><span class="file f">LeakHandlerRequest.cs</span><span class="tn">N2: compiles</span></li><li><span class="file f">LeakInternalRequest.cs</span><span class="tn">N2: compiles</span></li></ul></details></li><li><details open><summary><span class="dir">Event/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file f">NoteCreatedEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">ArchiveNoteOnInvoicePaid/</span><span class="tn">reacts to Billing</span></summary><ul><li><span class="file f">InvoicePaidHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Billing/</span><span class="tn">module, same pattern</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Events/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Billing.Contracts.Events.csproj</span><span class="tn">Unity ignores it</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file csproj">SpikeFlat.Billing.Slices.csproj</span><span class="tn">Unity ignores it</span></li><li><details open><summary><span class="dir">PayInvoice/</span></summary><ul><li><span class="file f">PayInvoiceHandler.cs</span></li><li><details open><summary><span class="dir">Event/</span><span class="tn">Assembly-CSharp</span></summary><ul><li><span class="file f">InvoicePaidEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">OpenInvoiceOnNoteCreated/</span><span class="tn">reacts to Notes</span></summary><ul><li><span class="file f">NoteCreatedHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Tests/</span><span class="tn">SpikeFlat.Tests</span></summary><ul><li><span class="file asmdef">SpikeFlat.Tests.asmdef</span></li><li><span class="file f">FlatLayoutTests.cs</span><span class="tn">finds types by name</span></li></ul></details></li></ul></details></li></ul></div>
+  <h3>Layout C (both): Unity reads the asmdef and asmref files, dotnet reads the csproj files</h3>
+<div class="tree"><ul><li><details open><summary><span class="dir">Assets/Spikes/SliceLayoutBoth/</span></summary><ul><li><span class="file f">Directory.Build.props</span><span class="tn">LangVersion 9, output to bin~ and obj~</span></li><li><details open><summary><span class="dir">Notes/</span><span class="tn">module</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Requests/</span><span class="tn">SpikeBoth.Notes.Contracts.Requests</span></summary><ul><li><span class="file csproj">SpikeBoth.Notes.Contracts.Requests.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Notes.Contracts.Requests.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li><li><span class="file f">NoteDto.cs</span><span class="tn">shared contract</span></li></ul></details></li><li><details open><summary><span class="dir">Events/</span><span class="tn">SpikeBoth.Notes.Contracts.Events</span></summary><ul><li><span class="file csproj">SpikeBoth.Notes.Contracts.Events.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Notes.Contracts.Events.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Domain/</span><span class="tn">SpikeBoth.Notes.Domain</span></summary><ul><li><span class="file csproj">SpikeBoth.Notes.Domain.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Notes.Domain.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li><li><span class="file f">Note.cs</span></li><li><span class="file f">NoteId.cs</span></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">SpikeBoth.Notes.Slices</span></summary><ul><li><span class="file csproj">SpikeBoth.Notes.Slices.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Notes.Slices.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li><li><details open><summary><span class="dir">CreateNote/</span><span class="tn">one slice</span></summary><ul><li><span class="file f">CreateNoteHandler.cs</span></li><li><span class="file f">CreateNoteValidator.cs</span><span class="tn">internal</span></li><li><details open><summary><span class="dir">Request/</span><span class="tn">SpikeBoth.Notes.Contracts.Requests</span></summary><ul><li><span class="file asmref">Request.asmref</span><span class="tn">→ SpikeBoth.Notes.Contracts.Requests</span></li><li><span class="file f">CreateNoteRequest.cs</span></li><li><span class="file f">CreateNoteResponse.cs</span></li></ul></details></li><li><details open><summary><span class="dir">Event/</span><span class="tn">SpikeBoth.Notes.Contracts.Events</span></summary><ul><li><span class="file asmref">Event.asmref</span><span class="tn">→ SpikeBoth.Notes.Contracts.Events</span></li><li><span class="file f">NoteCreatedEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">ArchiveNoteOnInvoicePaid/</span><span class="tn">reacts to Billing</span></summary><ul><li><span class="file f">InvoicePaidHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Billing/</span><span class="tn">module, same pattern</span></summary><ul><li><details open><summary><span class="dir">Contracts/</span></summary><ul><li><details open><summary><span class="dir">Events/</span><span class="tn">SpikeBoth.Billing.Contracts.Events</span></summary><ul><li><span class="file csproj">SpikeBoth.Billing.Contracts.Events.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Billing.Contracts.Events.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li></ul></details></li></ul></details></li><li><details open><summary><span class="dir">Slices/</span><span class="tn">SpikeBoth.Billing.Slices</span></summary><ul><li><span class="file csproj">SpikeBoth.Billing.Slices.csproj</span><span class="tn">dotnet</span></li><li><span class="file asmdef">SpikeBoth.Billing.Slices.asmdef</span><span class="tn">Unity</span></li><li><span class="file ignored">bin~/</span><span class="tn">Unity does not import it</span></li><li><span class="file ignored">obj~/</span><span class="tn">Unity does not import it</span></li><li><details open><summary><span class="dir">PayInvoice/</span></summary><ul><li><span class="file f">PayInvoiceHandler.cs</span></li><li><details open><summary><span class="dir">Event/</span><span class="tn">SpikeBoth.Billing.Contracts.Events</span></summary><ul><li><span class="file asmref">Event.asmref</span><span class="tn">→ SpikeBoth.Billing.Contracts.Events</span></li><li><span class="file f">InvoicePaidEvent.cs</span></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">OpenInvoiceOnNoteCreated/</span><span class="tn">reacts to Notes</span></summary><ul><li><span class="file f">NoteCreatedHandler.cs</span></li></ul></details></li></ul></details></li></ul></details></li><li><details><summary><span class="dir">Tests/</span><span class="tn">SpikeBoth.Tests</span></summary><ul><li><span class="file asmdef">SpikeBoth.Tests.asmdef</span></li><li><span class="file f">SliceLayoutTests.cs</span></li></ul></details></li></ul></details></li></ul></div>
+</section>
+
+<section>
+  <h2>2 · Tests</h2>
+  <h3>Layout A: asmref subfolders</h3>
+  <div class="scroll"><table>
+    <tr><th>ID</th><th>Condition</th><th>Expected</th><th>Result</th></tr>
+    <tr><td>T1</td><td>9 slice types, 5 assemblies</td><td>Each type in the asmref target</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>T2</td><td>Slice helper is <code>internal</code></td><td>Not public outside Notes.Slices</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>T3</td><td>Contract assembly references</td><td>No <code>Spike.*</code> reference</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>T4</td><td>Notes ↔ Billing events</td><td>Compiles, note archived</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>T5</td><td>Contract uses <code>NoteId</code> (Domain)</td><td>Compile error</td><td><span class="chip pass">PASS · CS0246</span></td></tr>
+    <tr><td>T6</td><td>Contract uses <code>CreateNoteHandler</code></td><td>Compile error</td><td><span class="chip pass">PASS · CS0246</span></td></tr>
+    <tr><td>T7</td><td>Contract calls internal validator</td><td>Compile error</td><td><span class="chip pass">PASS · CS0103</span></td></tr>
+    <tr><td>T8</td><td>Unity writes IDE <code>.csproj</code> files</td><td>asmref files in target project</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>T9</td><td>Full repo gate with the spike</td><td>No rule or test breaks</td><td><span class="chip pass">PASS</span></td></tr>
+  </table></div>
+  <h3>Layout B: no asmdef or asmref</h3>
+  <div class="scroll"><table>
+    <tr><th>ID</th><th>Condition</th><th>Expected</th><th>Result</th></tr>
+    <tr><td>N1</td><td>Spike code, csproj files kept, no asmdef</td><td>Compiles into Assembly-CSharp</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>N2</td><td>The T5–T7 violations, same folders</td><td>Compile (no boundary in Unity)</td><td><span class="chip pass">PASS · compiles</span></td></tr>
+    <tr><td>N3</td><td>Real vsa-template Notes module, as it is</td><td>Compiles</td><td><span class="chip fail">FAIL · 118 errors</span></td></tr>
+    <tr><td>N4</td><td>vsa-template language features, alone</td><td>Compile in Unity C# 9</td><td><span class="chip fail">FAIL · 3 of 4</span></td></tr>
+    <tr><td>N5</td><td><code>dotnet build</code> output in <code>obj/</code>, <code>bin/</code></td><td>No effect on Unity</td><td><span class="chip fail">FAIL · 14 errors</span></td></tr>
+    <tr><td>N6</td><td>Output in <code>obj~/</code>, <code>bin~/</code></td><td>No effect on Unity</td><td><span class="chip pass">PASS · 0 warnings</span></td></tr>
+  </table></div>
+  <h3>Layout C: csproj + asmdef or asmref</h3>
+  <div class="scroll"><table>
+    <tr><th>ID</th><th>Condition</th><th>Expected</th><th>Result</th></tr>
+    <tr><td>C1</td><td>Layout A + a csproj per asmdef</td><td>Unity ignores the csproj files</td><td><span class="chip pass">PASS · 13/13</span></td></tr>
+    <tr><td>C2</td><td><code>dotnet build</code>, same folders</td><td>Same files per assembly</td><td><span class="chip pass">PASS</span></td></tr>
+    <tr><td>C3</td><td>Unity, with <code>obj/</code> and <code>bin/</code> present</td><td>No effect</td><td><span class="chip fail">FAIL · plugin conflicts</span></td></tr>
+    <tr><td>C4</td><td>Output to <code>obj~/</code> and <code>bin~/</code></td><td>No conflicts</td><td><span class="chip pass">PASS · 0 warnings</span></td></tr>
+    <tr><td>C5</td><td>Domain type in a contract, dotnet</td><td>Same errors as Unity</td><td><span class="chip pass">PASS · CS0234</span></td></tr>
+  </table></div>
+  <p class="meta">T1–T4, N1–N2 and C1: NUnit EditMode tests. T5–T7, N3 and N4: temporary files, deleted after the run. Each record assembly references <code>Scaffold.Records</code>, a known requirement.</p>
+</section>
+
+<section>
+  <h2>3 · Results and proof</h2>
+  <div class="tools"><button type="button" id="open-all">Open all</button><button type="button" id="close-all">Close all</button></div>
+
+  <details><summary><span class="chip pass">PASS</span> T1 · Placement · run 153125</summary><div>
+<pre>[TestCase(typeof(CreateNoteRequest),  "Spike.Notes.Contracts.Requests")]
+[TestCase(typeof(NoteCreatedEvent),   "Spike.Notes.Contracts.Events")]
+[TestCase(typeof(CreateNoteHandler),  "Spike.Notes.Slices")]
+[TestCase(typeof(InvoicePaidEvent),   "Spike.Billing.Contracts.Events")]
+// + 5 more cases
+public void Type_compiles_into_the_assembly_of_its_folder(Type type, string expected)
+    =&gt; Assert.That(type.Assembly.GetName().Name, Is.EqualTo(expected));</pre>
+<pre><span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...CreateNoteRequest,"Spike.Notes.Contracts.Requests")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...CreateNoteResponse,"Spike.Notes.Contracts.Requests")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...NoteDto,"Spike.Notes.Contracts.Requests")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...NoteCreatedEvent,"Spike.Notes.Contracts.Events")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...CreateNoteHandler,"Spike.Notes.Slices")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...InvoicePaidHandler,"Spike.Notes.Slices")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...InvoicePaidEvent,"Spike.Billing.Contracts.Events")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...PayInvoiceHandler,"Spike.Billing.Slices")
+<span class="ok">Passed</span> Type_compiles_into_the_assembly_of_its_folder(...NoteCreatedHandler,"Spike.Billing.Slices")</pre>
+  <p>The asmref file has one line of content:</p>
+<pre>// Notes/Slices/CreateNote/Request/Request.asmref
+{ "reference": "Spike.Notes.Contracts.Requests" }</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T2 · Internal helper · run 153125</summary><div>
+<pre>var validator = typeof(CreateNoteHandler).Assembly
+    .GetType("Spike.Notes.Slices.CreateNote.CreateNoteValidator");
+Assert.That(validator, Is.Not.Null);
+Assert.That(validator.IsPublic, Is.False);</pre>
+<pre><span class="ok">Passed</span> Slice_private_helper_stays_internal_to_the_slice_assembly</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T3 · Contract references · run 153125</summary><div>
+<pre>var references = contract.Assembly.GetReferencedAssemblies().Select(a =&gt; a.Name);
+Assert.That(references, Has.None.StartsWith("Spike."));</pre>
+<pre><span class="ok">Passed</span> Contract_assembly_references_no_other_module_assembly(...CreateNoteRequest)
+<span class="ok">Passed</span> Contract_assembly_references_no_other_module_assembly(...NoteCreatedEvent)</pre>
+  <p>This test shows only the references that the compiled code uses. T5 to T7 give the stronger proof.</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T4 · Cross-module events · run 153125</summary><div>
+<pre class="mermaid">
+sequenceDiagram
+  participant T as Test
+  participant N as Notes.Slices
+  participant B as Billing.Slices
+  T->>N: CreateNoteHandler.Handle
+  N-->>T: NoteCreatedEvent
+  T->>B: NoteCreatedHandler.Handle
+  T->>B: PayInvoiceHandler.Handle
+  B-->>T: InvoicePaidEvent
+  T->>N: InvoicePaidHandler.Handle
+  N-->>T: note.Archived = true
+</pre>
+<pre><span class="ok">Passed</span> Two_modules_react_to_each_others_events</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T5 · Domain type in a contract · run 153209</summary><div>
+<pre>// Notes/Slices/CreateNote/Request/LeakDomainRequest.cs (temporary)
+using Spike.Notes.Domain;
+public sealed record LeakDomainRequest(NoteId Id);</pre>
+<pre><span class="err">LeakDomainRequest.cs(1,19): error CS0234: The type or namespace name 'Domain' does not exist in the namespace 'Spike.Notes'</span>
+<span class="err">LeakDomainRequest.cs(5,44): error CS0246: The type or namespace name 'NoteId' could not be found</span></pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T6 · Handler type in a contract · run 153209</summary><div>
+<pre>// Notes/Slices/CreateNote/Request/LeakHandlerRequest.cs (temporary)
+public sealed record LeakHandlerRequest(CreateNoteHandler Handler);</pre>
+<pre><span class="err">LeakHandlerRequest.cs(3,45): error CS0246: The type or namespace name 'CreateNoteHandler' could not be found</span></pre>
+  <p>The handler is in the same folder tree and the same namespace. The compiler still rejects it, because the asmref puts the file in a different assembly.</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T7 · Internal call from a contract · run 153235</summary><div>
+<pre>// Notes/Slices/CreateNote/Request/LeakInternalRequest.cs (temporary)
+public static bool Check(CreateNoteRequest r) =&gt; CreateNoteValidator.IsValid(r);</pre>
+<pre><span class="err">COMPILE .../Request/LeakInternalRequest.cs:5 CS0103 The name 'CreateNoteValidator' does not exist in the current context</span></pre>
+  <p>Run 153209 also had this file, but showed no error for it. If a file has declaration errors, the compiler does not examine method bodies. Run 153235 tested the file alone.</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T8 · IDE project files · SyncVS.SyncSolution</summary><div>
+<pre>&lt;!-- Spike.Notes.Contracts.Requests.csproj (generated by Unity) --&gt;
+&lt;Compile Include="Assets\Spikes\SliceLayout\Notes\Contracts\Requests\NoteDto.cs" /&gt;
+&lt;Compile Include="Assets\Spikes\SliceLayout\Notes\Slices\CreateNote\Request\CreateNoteRequest.cs" /&gt;
+&lt;Compile Include="Assets\Spikes\SliceLayout\Notes\Slices\CreateNote\Request\CreateNoteResponse.cs" /&gt;
+&lt;None Include="Assets\Spikes\SliceLayout\Notes\Slices\CreateNote\Request\Request.asmref" /&gt;
+
+&lt;!-- Spike.Notes.Slices.csproj --&gt;
+&lt;Compile Include="...\Notes\Slices\CreateNote\CreateNoteHandler.cs" /&gt;
+&lt;Compile Include="...\Notes\Slices\CreateNote\CreateNoteValidator.cs" /&gt;
+&lt;ProjectReference Include="Spike.Notes.Contracts.Requests.csproj" /&gt;</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> T9 · Full repo gate · run 153342</summary><div>
+<pre>Stage          Result      Tests
+compile        PASS            -
+rules          PASS        33/33
+editmode       PASS      336/336
+GATE           PASS          25s</pre>
+  <p>Rule ARCH-01 (<code>asmdef.noCycles</code> on <code>Assets</code>) includes the spike asmdefs. It passes.</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> N1 · Flat layout compiles · run 154300</summary><div>
+<pre>// No asmdef can reference Assembly-CSharp, so the test finds each type by name.
+static Type Find(string fullName) =&gt; AppDomain.CurrentDomain.GetAssemblies()
+    .Select(a =&gt; a.GetType(fullName)).FirstOrDefault(t =&gt; t != null);
+
+Assert.That(Find(fullName).Assembly.GetName().Name, Is.EqualTo("Assembly-CSharp"));</pre>
+<pre><span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.CreateNoteRequest")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.NoteCreatedEvent")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.CreateNoteHandler")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Contracts.Requests.NoteDto")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Domain.NoteId")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Billing.Slices.PayInvoice.InvoicePaidEvent")</pre>
+  <p>Unity imports each <code>.csproj</code> as a plain asset and does not read it:</p>
+<pre>Importing '... Path: Assets/Spikes/SliceLayoutFlat/Notes/Domain/SpikeFlat.Notes.Domain.csproj' with importer (DefaultImporter)
+Importing '... Path: Assets/Spikes/SliceLayoutFlat/Notes/Slices/SpikeFlat.Notes.Slices.csproj' with importer (DefaultImporter)</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> N2 · Violations compile · run 154300</summary><div>
+  <p>The T5–T7 files are in the same folders. Layout A rejects them. Layout B compiles them:</p>
+<pre><span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.LeakDomainRequest")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.LeakHandlerRequest")
+<span class="ok">Passed</span> Type_compiles_into_Assembly_CSharp("SpikeFlat.Notes.Slices.CreateNote.LeakInternalRequest")</pre>
+  <p>In Unity, <code>internal</code> is visible to all module code. Only the .NET build enforces the boundaries.</p>
+  </div></details>
+
+  <details><summary><span class="chip fail">FAIL</span> N3 · Real Notes module as it is · run 154351</summary><div>
+  <p>Source: <code>vsa-template/samples/Notes/Modules/Notes</code> at <code>798bf4c</code>, 25 files, csproj files included.</p>
+  <div class="scroll"><table>
+    <tr><th>Code</th><th>Count</th><th>Cause</th></tr>
+    <tr><td>CS0246</td><td>77</td><td>No <code>VSA.*</code> assemblies in Unity</td></tr>
+    <tr><td>CS8773</td><td>29</td><td>File-scoped namespace needs C# 10</td></tr>
+    <tr><td>CS0234</td><td>12</td><td>No EF Core in Unity</td></tr>
+  </table></div>
+<pre><span class="err">Notes/Contracts/Requests/CreateNote/CreateNoteRequest.cs:1 CS0246 The type or namespace name 'VSA' could not be found</span>
+<span class="err">Notes/Contracts/Requests/CreateNote/CreateNoteRequest.cs:3 CS8773 Feature 'file-scoped namespace' is not available in C# 9.0.</span>
+<span class="err">Notes/Infrastructure/Mappings/NoteMapping.cs:1 CS0234 The type or namespace name 'EntityFrameworkCore' does not exist in the namespace 'Microsoft'</span></pre>
+  <p>These errors stop the compiler before it examines method bodies. N4 shows the errors that come after them.</p>
+  </div></details>
+
+  <details><summary><span class="chip fail">FAIL</span> N4 · Language features · run 154426</summary><div>
+<pre>namespace LangProbe   // no using directives
+{
+    public sealed class PrimaryCtor(string name) { public string Name =&gt; name; }      // C# 12
+    public sealed class ImplicitUsing { public Guid Id = Guid.NewGuid(); }           // ImplicitUsings
+    public sealed class NullableRef { public string? Title; }                          // Nullable enable
+    public sealed class RequiredMember { public required string Title { get; init; } } // C# 11
+}</pre>
+<pre><span class="err">LangProbe.cs:4 CS8773 Feature 'primary constructors' is not available in C# 9.0.</span>
+<span class="err">LangProbe.cs:5 CS0246 The type or namespace name 'Guid' could not be found</span>
+<span class="err">LangProbe.cs:7 CS8773 Feature 'required members' is not available in C# 9.0.</span>
+LangProbe.cs(6,52): warning CS8632: The annotation for nullable reference types should only be used in code within a '#nullable' annotations context.</pre>
+  </div></details>
+
+  <details><summary><span class="chip fail">FAIL</span> N5 · Build output in Assets, layout B · run 162116</summary><div>
+  <p>Two projects built with dotnet. In layout B, all generated files go into the same assembly, so the result is worse than in C3: errors, not only warnings.</p>
+<pre><span class="err">7 x CS0579  Notes/Domain/obj/Debug/net10.0/SpikeFlat.Notes.Domain.AssemblyInfo.cs:13  Duplicate 'System.Reflection.AssemblyCompanyAttribute' attribute</span>
+<span class="err">7 x CS8773  Notes/Domain/obj/Debug/net10.0/SpikeFlat.Notes.Domain.GlobalUsings.g.cs:2  Feature 'global using directive' is not available in C# 9.0.</span>
+36 x warning CS0436  (types also imported from the bin/ DLLs)</pre>
+  <p>Dotnet writes <code>GlobalUsings.g.cs</code> when <code>ImplicitUsings</code> is on. With <code>LangVersion</code> 9, dotnet also rejects that file:</p>
+<pre><span class="err">obj~/Debug/net10.0/SpikeFlat.Notes.Domain.GlobalUsings.g.cs(2,1): error CS8773: Feature 'global using directive' is not available in C# 9.0.</span></pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> N6 · Output in tilde folders, layout B · run 162311</summary><div>
+<pre>&lt;!-- SliceLayoutFlat/Directory.Build.props --&gt;
+&lt;LangVersion&gt;9.0&lt;/LangVersion&gt;
+&lt;ImplicitUsings&gt;disable&lt;/ImplicitUsings&gt;
+&lt;BaseIntermediateOutputPath&gt;obj~\&lt;/BaseIntermediateOutputPath&gt;
+&lt;BaseOutputPath&gt;bin~\&lt;/BaseOutputPath&gt;</pre>
+<pre>dotnet build   Build succeeded (Notes.Domain, Notes.Contracts.Requests)
+CS0436:          <span class="ok">0</span>
+CS0579:          <span class="ok">0</span>
+tilde imported:  <span class="ok">0</span>
+others           PASS  77/77</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> C1 · csproj next to asmdef · run 155212</summary><div>
+<pre>Notes/Contracts/Requests/
+├── SpikeBoth.Notes.Contracts.Requests.asmdef     ← Unity
+└── SpikeBoth.Notes.Contracts.Requests.csproj     ← dotnet
+Notes/Slices/CreateNote/Request/
+└── Request.asmref                                ← Unity only; dotnet uses the glob</pre>
+<pre>&lt;!-- SpikeBoth.Notes.Contracts.Requests.csproj --&gt;
+&lt;Compile Include="../../Slices/*/Request/**/*.cs" /&gt;
+
+&lt;!-- SpikeBoth.Notes.Slices.csproj --&gt;
+&lt;Compile Remove="*/Request/**" /&gt;
+&lt;Compile Remove="*/Event/**" /&gt;</pre>
+  <p>Result: the same 13 tests as layout A pass (T1–T4, renamed <code>SpikeBoth.*</code>).</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> C2 · dotnet build · net10.0, LangVersion 9</summary><div>
+<pre>dotnet build Notes/Slices/SpikeBoth.Notes.Slices.csproj
+Build succeeded.    0 Warning(s)    0 Error(s)</pre>
+<pre>Type definitions found in each DLL (bin/Debug/net10.0):
+SpikeBoth.Notes.Contracts.Requests.dll  CreateNoteRequest, CreateNoteResponse, NoteDto
+SpikeBoth.Notes.Contracts.Events.dll    NoteCreatedEvent</pre>
+  </div></details>
+
+  <details><summary><span class="chip fail">FAIL</span> C3 · obj and bin inside Assets · runs 155320, 155448</summary><div>
+  <p>The gate passes (77/77), but the log shows three problems:</p>
+<pre class="mermaid">
+flowchart LR
+  B["dotnet build"] --> OB["obj/ and bin/<br/>in Assets"]
+  OB -- "*.AssemblyInfo.cs" --> SRC["compiled into<br/>the asmdef assembly"]
+  OB -- "*.dll" --> PL["imported as<br/>plugins"]
+  PL --> W1["CS0436: type<br/>defined twice"]
+  PL --> W2["same filename<br/>as asmdef"]
+</pre>
+<pre>// SpikeBoth.Notes.Slices.rsp (Unity compiler input)
+-r:"Assets/.../Notes/Slices/bin/Debug/net10.0/SpikeBoth.Notes.Domain.dll"
+-r:"Assets/.../Notes/Slices/bin/Debug/net10.0/SpikeBoth.Notes.Slices.dll"
+"Assets/.../Notes/Slices/obj/Debug/net10.0/SpikeBoth.Notes.Slices.AssemblyInfo.cs"</pre>
+<pre><span class="err">Note.cs(11,16): warning CS0436: The type 'NoteId' in '.../Notes/Domain/NoteId.cs' conflicts with the imported type 'NoteId' in 'SpikeBoth.Notes.Domain, Version=1.0.0.0'</span>
+<span class="err">Plugin '.../Notes/Slices/bin/Debug/net10.0/SpikeBoth.Notes.Slices.dll' has the same filename as Assembly Definition File '.../SpikeBoth.Notes.Slices.asmdef'. Rename the assemblies to avoid hard to diagnose issues and crashes.</span>
+<span class="err">Unloading broken assembly .../Billing/Slices/bin/Debug/net10.0/SpikeBoth.Notes.Contracts.Events.dll, this assembly can cause crashes in the runtime</span></pre>
+  <p>Unity ignores <code>.NETCoreApp,Version=v10.0.AssemblyAttributes.cs</code>, because its name starts with a dot.</p>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> C4 · Output in tilde folders · run 155540</summary><div>
+<pre>&lt;!-- Directory.Build.props --&gt;
+&lt;LangVersion&gt;9.0&lt;/LangVersion&gt;
+&lt;ImplicitUsings&gt;disable&lt;/ImplicitUsings&gt;
+&lt;!-- Unity does not import folders whose names end in "~". --&gt;
+&lt;BaseIntermediateOutputPath&gt;obj~\&lt;/BaseIntermediateOutputPath&gt;
+&lt;BaseOutputPath&gt;bin~\&lt;/BaseOutputPath&gt;</pre>
+<pre>CS0436:          <span class="ok">0</span>
+same filename:   <span class="ok">0</span>
+broken assembly: <span class="ok">0</span>
+tilde imported:  <span class="ok">0</span>
+others           PASS  77/77</pre>
+<pre>// SpikeBoth.Notes.Slices.rsp: only source files
+"Assets/.../Notes/Slices/ArchiveNoteOnInvoicePaid/InvoicePaidHandler.cs"
+"Assets/.../Notes/Slices/CreateNote/CreateNoteHandler.cs"
+"Assets/.../Notes/Slices/CreateNote/CreateNoteValidator.cs"</pre>
+  </div></details>
+
+  <details><summary><span class="chip pass">PASS</span> C5 · dotnet rejects the violation · net10.0</summary><div>
+<pre>// Notes/Slices/CreateNote/Request/LeakDomainRequest.cs (temporary)
+public sealed record LeakDomainRequest(NoteId Id);</pre>
+<pre><span class="err">Request\LeakDomainRequest.cs(1,23): error CS0234: The type or namespace name 'Domain' does not exist in the namespace 'SpikeBoth.Notes'</span>
+<span class="err">Request\LeakDomainRequest.cs(5,44): error CS0246: The type or namespace name 'NoteId' could not be found</span></pre>
+  <p>These are the same errors as T5 in Unity.</p>
+  </div></details>
+</section>
+
+<section>
+  <h2>4 · Run log</h2>
+  <div class="scroll"><table>
+    <tr><th>Run</th><th>Content</th><th>Gate</th><th>Proves</th></tr>
+    <tr><td><code>153125</code></td><td>Layout A</td><td><span class="chip pass">PASS</span></td><td>T1–T4</td></tr>
+    <tr><td><code>153209</code></td><td>Layout A + 3 violation files</td><td><span class="chip fail">FAIL</span> (expected)</td><td>T5, T6</td></tr>
+    <tr><td><code>153235</code></td><td>Layout A + internal-call violation</td><td><span class="chip fail">FAIL</span> (expected)</td><td>T7</td></tr>
+    <tr><td><code>153342</code></td><td>Layout A, full gate</td><td><span class="chip pass">PASS</span></td><td>T9</td></tr>
+    <tr><td><code>154300</code></td><td>Layout B + violation files</td><td><span class="chip pass">PASS</span></td><td>N1, N2</td></tr>
+    <tr><td><code>154351</code></td><td>+ real Notes module</td><td><span class="chip fail">FAIL</span></td><td>N3</td></tr>
+    <tr><td><code>154426</code></td><td>+ language probe only</td><td><span class="chip fail">FAIL</span></td><td>N4</td></tr>
+    <tr><td><code>154449</code></td><td>A + B, full gate</td><td><span class="chip pass">PASS</span></td><td>T9 with B</td></tr>
+    <tr><td><code>155212</code></td><td>Layout C, no dotnet output</td><td><span class="chip pass">PASS</span></td><td>C1</td></tr>
+    <tr><td><code>155320</code></td><td>C + <code>obj/</code>, <code>bin/</code></td><td><span class="chip pass">PASS</span> (warnings)</td><td>C3</td></tr>
+    <tr><td><code>155448</code></td><td>C + <code>obj/</code>, <code>bin/</code>, tests</td><td><span class="chip pass">PASS</span> (warnings)</td><td>C3</td></tr>
+    <tr><td><code>155540</code></td><td>C + <code>obj~/</code>, <code>bin~/</code></td><td><span class="chip pass">PASS</span></td><td>C4</td></tr>
+    <tr><td><code>155702</code></td><td>A + B + C, full gate</td><td><span class="chip pass">PASS</span></td><td>T9 with C</td></tr>
+    <tr><td><code>162116</code></td><td>B + <code>obj/</code>, <code>bin/</code></td><td><span class="chip fail">FAIL</span></td><td>N5</td></tr>
+    <tr><td><code>162311</code></td><td>B + <code>obj~/</code>, <code>bin~/</code></td><td><span class="chip pass">PASS</span></td><td>N6</td></tr>
+  </table></div>
+  <p class="meta">Run folder: <code>Logs/gate/history/20261103-&lt;run&gt;/</code>. T8 used <code>unity run . -- -executeMethod UnityEditor.SyncVS.SyncSolution</code>.</p>
+</section>
+
+<section>
+  <h2>5 · Opinion</h2>
+  <p><span class="chip pass">GO</span> Use layout B. The .NET build and the architecture tests enforce the dependencies. Unity only compiles the code.</p>
+  <div class="scroll"><table>
+    <tr><th>Topic</th><th>A · asmref</th><th>B · flat</th><th>C · both</th></tr>
+    <tr><td>Boundaries in .NET</td><td>Not built</td><td>Enforced</td><td>Enforced</td></tr>
+    <tr><td>Boundaries in Unity</td><td>Enforced</td><td>None</td><td>Enforced</td></tr>
+    <tr><td>Files for Unity</td><td>asmdef, asmref</td><td>None</td><td>asmdef, asmref</td></tr>
+    <tr><td>Reference lists to keep equal</td><td>One</td><td>One</td><td>Two</td></tr>
+    <tr><td>Asmdef code sees module code</td><td>Yes</td><td>No</td><td>Yes</td></tr>
+    <tr><td>Build output setting</td><td>Not needed</td><td>Needed (N6)</td><td>Needed (C4)</td></tr>
+  </table></div>
+  <p>Layout B has three conditions:</p>
+  <ul>
+    <li>Dotnet writes to <code>obj~/</code> and <code>bin~/</code>. Without this, Unity does not compile (N5).</li>
+    <li>Module code uses C# 9 and no implicit usings, and the VSA packages are available to Unity (N3, N4).</li>
+    <li>No asmdef code calls module code. Framework assemblies, test asmdefs and packages cannot reference <code>Assembly-CSharp</code>.</li>
+  </ul>
+  <p>If asmdef code must call module code, use layout C. Its asmdefs then exist only for that reference, and the .NET build stays the authority.</p>
+</section>
+
+<section>
+  <h2>Open questions</h2>
+  <ul>
+    <li>Must all module code compile in Unity, or only the contracts?</li>
+    <li>How do the <code>VSA.*</code> packages reach Unity: UPM source, or DLLs?</li>
+    <li>Does VSA.Sdk write the asmdef and asmref files, or does a check compare them with the csproj files?</li>
+    <li>Does the Roslyn analyzer (VSA1002, VSA2001) run in Unity with the <code>RoslynAnalyzer</code> label? This spike did not test it.</li>
+  </ul>
+</section>
+</main>
+
+<script>
+document.getElementById('open-all').addEventListener('click', () => document.querySelectorAll('section > details').forEach(d => d.open = true));
+document.getElementById('close-all').addEventListener('click', () => document.querySelectorAll('section > details').forEach(d => d.open = false));
+</script>

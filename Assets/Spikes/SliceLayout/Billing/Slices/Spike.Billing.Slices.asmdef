@@ -1,0 +1,14 @@
+{
+    "name": "Spike.Billing.Slices",
+    "rootNamespace": "",
+    "references": ["Spike.Billing.Contracts.Events", "Spike.Notes.Contracts.Events"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

@@ -1,0 +1,14 @@
+{
+    "name": "SpikeBoth.Notes.Contracts.Requests",
+    "rootNamespace": "",
+    "references": ["Scaffold.Records"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

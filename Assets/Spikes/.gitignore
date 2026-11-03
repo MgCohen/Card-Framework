@@ -1,0 +1,3 @@
+# dotnet build output of the spike projects. Unity does not import "~" folders.
+bin~/
+obj~/

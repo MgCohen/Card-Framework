@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>9.0</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <!-- Unity does not import folders whose names end in "~". -->
+    <BaseIntermediateOutputPath>obj~\</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin~\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

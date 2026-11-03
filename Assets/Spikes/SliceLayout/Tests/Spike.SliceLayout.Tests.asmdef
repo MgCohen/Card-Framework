@@ -1,0 +1,27 @@
+{
+    "name": "Spike.SliceLayout.Tests",
+    "rootNamespace": "",
+    "references": [
+        "Spike.Notes.Contracts.Requests",
+        "Spike.Notes.Contracts.Events",
+        "Spike.Notes.Domain",
+        "Spike.Notes.Slices",
+        "Spike.Billing.Contracts.Events",
+        "Spike.Billing.Slices"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,27 @@
+{
+    "name": "SpikeBoth.Tests",
+    "rootNamespace": "",
+    "references": [
+        "SpikeBoth.Notes.Contracts.Requests",
+        "SpikeBoth.Notes.Contracts.Events",
+        "SpikeBoth.Notes.Domain",
+        "SpikeBoth.Notes.Slices",
+        "SpikeBoth.Billing.Contracts.Events",
+        "SpikeBoth.Billing.Slices"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

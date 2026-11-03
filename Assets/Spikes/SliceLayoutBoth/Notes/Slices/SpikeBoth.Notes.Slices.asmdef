@@ -1,0 +1,14 @@
+{
+    "name": "SpikeBoth.Notes.Slices",
+    "rootNamespace": "",
+    "references": ["SpikeBoth.Notes.Domain", "SpikeBoth.Notes.Contracts.Requests", "SpikeBoth.Notes.Contracts.Events", "SpikeBoth.Billing.Contracts.Events"],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
