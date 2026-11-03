@@ -18,6 +18,7 @@ Each feature lives in `Assets/<Feature>/` as assembly `Framework.<Feature>`.
 | [Commands](commands.md) | Validate, then handle, inside a command block. Server only. |
 | [Engine](engine.md) | Server handle to the services and read-only store views. |
 | [Bootstrap](bootstrap.md) | VContainer composition root and the per-feature installers. |
+| [TypeRouting](type-routing.md) | Frozen lookup from a message type to its scanned members. |
 | [Multiplayer](multiplayer.md) | Lobby, peers and ready-up over Netcode for GameObjects. |
 | [Testing](testing.md) | The global acceptance and integration test tiers. |
 
