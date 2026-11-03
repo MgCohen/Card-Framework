@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Remove="*/Request/**" />
+    <Compile Remove="*/Event/**" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Domain/SpikeBoth.Notes.Domain.csproj" />
+    <ProjectReference Include="../Contracts/Requests/SpikeBoth.Notes.Contracts.Requests.csproj" />
+    <ProjectReference Include="../Contracts/Events/SpikeBoth.Notes.Contracts.Events.csproj" />
+    <ProjectReference Include="../../Billing/Contracts/Events/SpikeBoth.Billing.Contracts.Events.csproj" />
+  </ItemGroup>
+</Project>
