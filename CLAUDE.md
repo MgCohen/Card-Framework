@@ -59,6 +59,16 @@ It compiles, runs the rulebook tests and the Framework EditMode tests in one Uni
 
 **Searching for an API.** If a type or method isn't in `Assets/`, grep `Library/PackageCache/` before assuming it doesn't exist — that's where UPM-imported packages live.
 
+### Tooling
+
+**Worktrees.** To make a worktree of this Unity project, use the Unity CLI. It seeds the new worktree's `Library`. Do not use `git worktree add` and then copy `Library` (about 2.5 GB):
+
+```bash
+unity vcs git worktree add <branch> <repo-root> --into <repo>.wt/<name> --seed cache --no-register -y --non-interactive
+```
+
+**Background sessions.** If the app's session tool refuses to start a separate session (for example, over Remote Control), use the `core:spawn` skill. It starts a background session with `claude --bg --remote-control`.
+
 ### Conversation
 
 **On user concerns.** When the user says they have concerns, issues, or worries, walk through each one conversationally — current behavior, tradeoff, options — before changing anything. Wait for confirmation.
