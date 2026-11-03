@@ -30,7 +30,7 @@ namespace Framework.Wire
         }
 
         // Preserve: TryRegister can be the only caller, through reflection.
-        [Preserve]
+        [Framework.Stripping.Preserve]
         public NetworkChannel<T> Register<T, TPacked>()
             where T : WireEvent, IPackable<TPacked>, IUnpackable<TPacked>, new()
             where TPacked : unmanaged, IPackedStruct
