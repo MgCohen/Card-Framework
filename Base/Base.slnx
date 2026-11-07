@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
+  </Folder>
+</Solution>
