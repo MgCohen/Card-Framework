@@ -3,6 +3,11 @@
     <Project Path="App/Host/App.Host.csproj" />
   </Folder>
   <Folder Name="/Shared/" />
+  <Folder Name="/Shared/Ecs/">
+    <Project Path="Shared/Ecs/Ecs.csproj" />
+    <Project Path="Shared/Ecs/Projects/Ecs.Domain.Shared.csproj" />
+    <Project Path="Shared/Ecs/Projects/Ecs.Domain.csproj" />
+  </Folder>
   <Folder Name="/Shared/TypeKeys/">
     <Project Path="Shared/TypeKeys/TypeKeys.csproj" />
     <Project Path="Shared/TypeKeys/Projects/TypeKeys.Domain.Shared.csproj" />
@@ -10,6 +15,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/App.Tests/App.Tests.csproj" />
+    <Project Path="Tests/Ecs.Tests/Ecs.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
     <Project Path="Tests/TypeKeys.Fixtures/TypeKeys.Fixtures.csproj" />
     <Project Path="Tests/TypeKeys.Tests/TypeKeys.Tests.csproj" />
