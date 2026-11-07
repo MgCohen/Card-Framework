@@ -46,7 +46,7 @@ gate.ps1 (runs from Base/, so dotnet reads Base/global.json)
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
-| Microsoft.Extensions.DependencyInjection | `10.0.14` | nuget.org (`Host.csproj` only) |
+| Microsoft.AspNetCore.Mvc.Testing | `10.0.14` | nuget.org (`App.Tests.csproj` only) |
 
 - `nuget.config` maps `VSA.*` to GitHub Packages and all other packages to nuget.org.
 - Do not add a package source in a project file.
@@ -78,10 +78,13 @@ On Windows, the branch `base` and the folder `Base/` have the same name. Write `
 
 ```text
 Base/
-├─ Shared/<Name>/     Shared modules: the base systems (Host, Ids, Ecs, Pipeline, Wire, Network, Testing)
+├─ App/Host/          the composition root: Program.cs finds each module and builds the app
+├─ Shared/<Name>/     Shared modules: the base systems (Ids, Ecs, Pipeline, Wire, Network, Testing)
 ├─ Modules/<Name>/    modules: the Cards sample
-└─ Tests/             dotnet test projects
+└─ Tests/             dotnet test projects; App.Tests references the host
 ```
+
+The host is not a module. A module registers only its own services, in its VSA `Module` class. All composition is in `App/Host/Program.cs`, as in the VSA Notes sample.
 
 A Shared module and a module have the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/main/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`.
 
