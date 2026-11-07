@@ -1,5 +1,9 @@
 <Solution>
+  <Folder Name="/App/">
+    <Project Path="App/Host/App.Host.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
+    <Project Path="Tests/App.Tests/App.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
   </Folder>
 </Solution>
