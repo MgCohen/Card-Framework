@@ -12,9 +12,9 @@ public readonly struct Entity : IEquatable<Entity>
         Inner = inner;
     }
 
-    public EntityId Id => throw new NotImplementedException();
+    public EntityId Id => new EntityId(Inner.Id);
 
-    public bool IsNull => throw new NotImplementedException();
+    public bool IsNull => Inner.IsNull;
 
     public static bool operator ==(Entity left, Entity right) => left.Equals(right);
 
@@ -22,7 +22,7 @@ public readonly struct Entity : IEquatable<Entity>
 
     public bool Equals(Entity other)
     {
-        throw new NotImplementedException();
+        return Inner.Id == other.Inner.Id && ReferenceEquals(Inner.Store, other.Inner.Store);
     }
 
     public override bool Equals(object? obj)
@@ -32,6 +32,6 @@ public readonly struct Entity : IEquatable<Entity>
 
     public override int GetHashCode()
     {
-        throw new NotImplementedException();
+        return Inner.Id;
     }
 }

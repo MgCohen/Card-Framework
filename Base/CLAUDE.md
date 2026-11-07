@@ -118,7 +118,8 @@ A Shared module and a module have the layout of [slice-layout.md](https://github
 ## Friflo boundary
 
 - Only `Shared/Ecs` references Friflo.Engine.ECS.
-- Other code reads through the `Entity` wrapper and `IWorldReader`.
+- Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
+- `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Shared/Ecs` uses a Friflo type other than the two markers.
 - Only a mutation handler holds `IWorldWriter`.
 
 ## C# 11

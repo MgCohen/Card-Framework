@@ -1,0 +1,49 @@
+using Ecs.Domain.Shared;
+
+namespace Ecs.Domain;
+
+internal sealed class WorldReader : IWorldReader
+{
+    private readonly World world;
+
+    internal WorldReader(World world)
+    {
+        this.world = world;
+    }
+
+    public int Count => world.Count;
+
+    public Entity ById(EntityId id)
+    {
+        return world.ById(id);
+    }
+
+    public bool TryById(EntityId id, out Entity entity)
+    {
+        return world.TryById(id, out entity);
+    }
+
+    public T Get<T>(Entity entity)
+        where T : unmanaged, IComponent
+    {
+        return world.Get<T>(entity);
+    }
+
+    public bool TryGet<T>(Entity entity, out T value)
+        where T : unmanaged, IComponent
+    {
+        return world.TryGet(entity, out value);
+    }
+
+    public bool Has<T>(Entity entity)
+        where T : unmanaged, IComponent
+    {
+        return world.Has<T>(entity);
+    }
+
+    public bool HasTag<T>(Entity entity)
+        where T : struct, ITag
+    {
+        return world.HasTag<T>(entity);
+    }
+}
