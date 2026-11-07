@@ -4,9 +4,15 @@ namespace Testing.Domain;
 
 public sealed class RecordingTransport : ITransport
 {
-    private readonly List<byte[]> sent = new List<byte[]>();
+    private readonly List<byte[]> sent;
 
-    public IReadOnlyList<byte[]> Sent => sent;
+    public RecordingTransport()
+    {
+        sent = new List<byte[]>();
+        Sent = sent.AsReadOnly();
+    }
+
+    public IReadOnlyList<byte[]> Sent { get; }
 
     public event TransportReceive? OnReceived;
 

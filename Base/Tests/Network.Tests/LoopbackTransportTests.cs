@@ -4,73 +4,73 @@ namespace Network.Tests;
 
 public sealed class LoopbackTransportTests
 {
-    [Test]
-    public void Send_OnServerSide_RaisesOnReceived_OnClientSide_InTheCall()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Send_RaisesOnReceived_OnTheOtherSide_InTheCall(bool serverSends)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
-        List<byte[]> received = Record(client);
+        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        List<byte[]> received = Record(receiver);
 
-        server.Send(new byte[] { 1, 2, 3 });
+        sender.Send(new byte[] { 1, 2, 3 });
 
         Assert.That(received, Is.EqualTo(new[] { new byte[] { 1, 2, 3 } }));
     }
 
-    [Test]
-    public void Send_OnClientSide_RaisesOnReceived_OnServerSide_InTheCall()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Send_DoesNotRaiseOnReceived_OnTheSendingSide(bool serverSends)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
-        List<byte[]> received = Record(server);
+        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        List<byte[]> senderReceived = Record(sender);
+        List<byte[]> receiverReceived = Record(receiver);
 
-        client.Send(new byte[] { 4, 5 });
+        sender.Send(new byte[] { 1 });
 
-        Assert.That(received, Is.EqualTo(new[] { new byte[] { 4, 5 } }));
+        Assert.That(senderReceived, Is.Empty);
+        Assert.That(receiverReceived, Has.Count.EqualTo(1));
     }
 
-    [Test]
-    public void Send_DoesNotRaiseOnReceived_OnTheSendingSide()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Send_WithNoListener_DoesNotThrow(bool serverSends)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
-        List<byte[]> serverReceived = Record(server);
-        List<byte[]> clientReceived = Record(client);
+        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport _);
 
-        server.Send(new byte[] { 1 });
-
-        Assert.That(serverReceived, Is.Empty);
-        Assert.That(clientReceived, Has.Count.EqualTo(1));
-    }
-
-    [Test]
-    public void Send_WithNoListener_DoesNotThrow()
-    {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport _);
-
-        Action send = () => server.Send(new byte[] { 1 });
+        Action send = () => sender.Send(new byte[] { 1 });
 
         Assert.That(send, Throws.Nothing);
     }
 
-    [Test]
-    public void Frames_ArriveInSendOrder()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Frames_ArriveInSendOrder(bool serverSends)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
-        List<byte[]> received = Record(client);
+        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        List<byte[]> received = Record(receiver);
 
-        server.Send(new byte[] { 1 });
-        server.Send(new byte[] { 2 });
-        server.Send(new byte[] { 3 });
+        sender.Send(new byte[] { 1 });
+        sender.Send(new byte[] { 2 });
+        sender.Send(new byte[] { 3 });
 
         Assert.That(received, Is.EqualTo(new[] { new byte[] { 1 }, new byte[] { 2 }, new byte[] { 3 } }));
     }
 
-    [Test]
-    public void Send_FromAHandler_IsDeliveredInANestedCall()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void Send_FromAHandler_IsDeliveredInANestedCall(bool serverAnswers)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
-        server.OnReceived += bytes => server.Send(new byte[] { (byte)(bytes[0] + 1) });
-        List<byte[]> received = Record(client);
+        Ends(serverAnswers, out LoopbackTransport answerer, out LoopbackTransport asker);
+        List<byte[]> received = Record(asker);
+        int receivedInHandler = -1;
+        answerer.OnReceived += bytes =>
+        {
+            answerer.Send(new byte[] { (byte)(bytes[0] + 1) });
+            receivedInHandler = received.Count;
+        };
 
-        client.Send(new byte[] { 7 });
+        asker.Send(new byte[] { 7 });
 
+        Assert.That(receivedInHandler, Is.EqualTo(1));
         Assert.That(received, Is.EqualTo(new[] { new byte[] { 8 } }));
     }
 
@@ -97,6 +97,13 @@ public sealed class LoopbackTransportTests
         LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport _);
 
         Assert.That(server, Is.InstanceOf<ITransport>());
+    }
+
+    private static void Ends(bool serverSends, out LoopbackTransport sender, out LoopbackTransport receiver)
+    {
+        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
+        sender = serverSends ? server : client;
+        receiver = serverSends ? client : server;
     }
 
     private static List<byte[]> Record(ITransport transport)
