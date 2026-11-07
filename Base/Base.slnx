@@ -1,5 +1,12 @@
 <Solution>
+  <Folder Name="/Shared/" />
+  <Folder Name="/Shared/Host/">
+    <Project Path="Shared/Host/Host.csproj" />
+    <Project Path="Shared/Host/Projects/Host.Domain.Shared.csproj" />
+    <Project Path="Shared/Host/Projects/Host.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
+    <Project Path="Tests/Host.Tests/Host.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
   </Folder>
 </Solution>
