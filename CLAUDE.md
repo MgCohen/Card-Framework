@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Unity card-game framework. Unity version: `6000.6.6f1`.
 
+For work under `Base/` (the .NET base stack), read [Base/CLAUDE.md](Base/CLAUDE.md). Its rules replace the Unity gate and the Unity docs for that folder.
+
 ```
 Card Framework/
 ├── CLAUDE.md                  # This file — router + hard rules
