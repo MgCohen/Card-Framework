@@ -46,6 +46,7 @@ gate.ps1 (runs from Base/, so dotnet reads Base/global.json)
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
+| Microsoft.Extensions.DependencyInjection | `10.0.14` | nuget.org (`Host.csproj` only) |
 
 - `nuget.config` maps `VSA.*` to GitHub Packages and all other packages to nuget.org.
 - Do not add a package source in a project file.
