@@ -6,6 +6,6 @@
   <ItemGroup>
     <!-- Not private: a test project that references the host gets each module layer. -->
     <ProjectReference Include="../../Shared/*/*.csproj;../../Modules/*/*.csproj" />
-    <PackageReference Include="VSA.Host" Version="0.1.0-preview.6" />
+    <PackageReference Include="VSA.Host" Version="0.1.0-preview.7" />
   </ItemGroup>
 </Project>

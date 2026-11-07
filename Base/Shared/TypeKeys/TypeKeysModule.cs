@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using TypeKeys.Domain;
 using VSA.Module;
 
@@ -10,7 +9,7 @@ public sealed class TypeKeysModule : Module
     {
         foreach (TypeKeyRegistration registration in TypeKeyRegistries.Build(includeTests: false))
         {
-            module.Services.AddSingleton(registration.Service, registration.Registry);
+            module.Services.AddInstance(registration.Service, registration.Registry);
         }
     }
 }
