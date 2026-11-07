@@ -15,6 +15,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Base phase PRs are stacked: they target base or the previous phase branch, not main.
+    base_branches:
+      - ".*"
 
   # Unity-generated and third-party files. Do not review them.
   path_filters:
