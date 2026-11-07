@@ -2,19 +2,22 @@ namespace Pipeline.Slices.Run;
 
 public sealed class PipelineServices
 {
+    private readonly Func<Type, object?> resolve;
+
     public PipelineServices(Func<Type, object?> resolve)
     {
-        throw new NotImplementedException();
+        this.resolve = resolve ?? throw new ArgumentNullException(nameof(resolve));
     }
 
     public object? Resolve(Type service)
     {
-        throw new NotImplementedException();
+        return resolve(service);
     }
 
     public T Require<T>()
         where T : class
     {
-        throw new NotImplementedException();
+        return resolve(typeof(T)) as T
+            ?? throw new InvalidOperationException($"{typeof(T).FullName} is not registered.");
     }
 }

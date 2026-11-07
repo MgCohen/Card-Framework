@@ -2,18 +2,26 @@ namespace Pipeline.Slices.Run;
 
 public sealed class PipelineValidators
 {
+    private readonly TypeRouter<Validator> router;
+
     public PipelineValidators(IEnumerable<Validator> validators)
     {
-        throw new NotImplementedException();
+        router = new TypeRouter<Validator>(validators.ToArray(), RouteMode.Single);
     }
 
     internal static IReadOnlyList<Type> Find(bool includeTests)
     {
-        throw new NotImplementedException();
+        return TypeScan.ConcreteTypesOf(typeof(Validator), includeTests);
     }
 
     internal bool Validate(object command, out string? reason)
     {
-        throw new NotImplementedException();
+        if (!router.TryGet(command.GetType(), out Validator? validator))
+        {
+            reason = null;
+            return true;
+        }
+
+        return validator!.Dispatch(command, out reason);
     }
 }

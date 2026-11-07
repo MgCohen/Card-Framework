@@ -4,22 +4,28 @@ namespace Pipeline.Slices.Run;
 
 public abstract class PipelineScope
 {
-    public MessageId Id => throw new NotImplementedException();
+    private Envelope? envelope;
 
-    public bool IsClosed => throw new NotImplementedException();
+    public MessageId Id => envelope?.Id ?? throw new InvalidOperationException($"{GetType().Name} is not open.");
 
-    internal void Open(Envelope envelope)
+    public bool IsClosed { get; private set; }
+
+    internal void Open(Envelope run)
     {
-        throw new NotImplementedException();
+        envelope = run;
     }
 
     internal void Close()
     {
-        throw new NotImplementedException();
+        IsClosed = true;
     }
 
     protected void ThrowIfClosed()
     {
-        throw new NotImplementedException();
+        if (IsClosed)
+        {
+            throw new InvalidOperationException(
+                $"{GetType().Name} is closed. A scope member works only during its run.");
+        }
     }
 }

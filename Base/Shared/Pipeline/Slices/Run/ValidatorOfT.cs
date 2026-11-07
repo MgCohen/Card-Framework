@@ -9,7 +9,7 @@ public abstract class Validator<TCommand> : Validator
 
     internal sealed override bool Dispatch(object command, out string? reason)
     {
-        throw new NotImplementedException();
+        return Validate((TCommand)command, out reason);
     }
 
     protected internal abstract bool Validate(TCommand command, out string? reason);
