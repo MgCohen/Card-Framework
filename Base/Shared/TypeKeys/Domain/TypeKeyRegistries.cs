@@ -15,7 +15,7 @@ public static class TypeKeyRegistries
             IReadOnlyList<string> issues = TypeKeyValidator.Validate(includeTests, root);
             if (issues.Count > 0)
             {
-                throw new InvalidOperationException($"{root.Name}: {string.Join(" ", issues)}");
+                throw new InvalidOperationException($"{root.Name}: {string.Join("; ", issues)}");
             }
 
             Type baseRegistry = typeof(TypeKeyRegistry<>).MakeGenericType(root);

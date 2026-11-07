@@ -1,10 +1,12 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 
 namespace TypeKeys.Domain;
 
-public static class TypeScan
+internal static class TypeScan
 {
-    private static readonly Dictionary<(Type, bool), Type[]> cache = new Dictionary<(Type, bool), Type[]>();
+    private static readonly ConcurrentDictionary<(Type, bool), Type[]> cache =
+        new ConcurrentDictionary<(Type, bool), Type[]>();
 
     public static IReadOnlyList<Type> ConcreteTypesOf(Type baseType, bool includeTests = false)
     {

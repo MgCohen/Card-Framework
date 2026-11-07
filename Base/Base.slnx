@@ -11,6 +11,7 @@
   <Folder Name="/Tests/">
     <Project Path="Tests/App.Tests/App.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
+    <Project Path="Tests/TypeKeys.Fixtures/TypeKeys.Fixtures.csproj" />
     <Project Path="Tests/TypeKeys.Tests/TypeKeys.Tests.csproj" />
   </Folder>
 </Solution>
