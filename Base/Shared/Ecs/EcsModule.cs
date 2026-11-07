@@ -9,6 +9,7 @@ public sealed class EcsModule : Module
     public override void Configure(ModuleBuilder module)
     {
         module.Services.AddSingleton<IWorldWriter>(_ => new World());
-        module.Services.AddSingleton(provider => ((World)provider.GetRequiredService<IWorldWriter>()).Reader);
+        module.Services.AddSingleton<IWorldReader>(
+            provider => ((World)provider.GetRequiredService<IWorldWriter>()).Reader);
     }
 }

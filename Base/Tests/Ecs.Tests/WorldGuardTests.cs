@@ -39,6 +39,18 @@ public sealed class WorldGuardTests
     }
 
     [Test]
+    public void ReadAndWrite_DeletedEntity_Throws()
+    {
+        World world = new World();
+        Entity entity = world.Create();
+        world.Delete(entity);
+
+        Assert.Throws<InvalidOperationException>(new Action(() => world.Reader.TryGet(entity, out Health _)));
+        Assert.Throws<InvalidOperationException>(new Action(() => world.Remove<Health>(entity)));
+        Assert.Throws<InvalidOperationException>(new Action(() => world.RemoveTag<CardTag>(entity)));
+    }
+
+    [Test]
     public void Reader_IsNotAWriter()
     {
         World world = new World();

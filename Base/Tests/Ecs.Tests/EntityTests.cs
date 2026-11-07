@@ -59,4 +59,14 @@ public sealed class EntityTests
 
         Assert.That(first != second, Is.True);
     }
+
+    [Test]
+    public void Entity_SameIdInTwoWorlds_IsNotEqual()
+    {
+        Entity first = new World().Create();
+        Entity second = new World().Create();
+
+        Assert.That(first.Id, Is.EqualTo(second.Id));
+        Assert.That(first == second, Is.False);
+    }
 }

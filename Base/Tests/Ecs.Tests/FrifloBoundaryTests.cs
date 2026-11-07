@@ -6,13 +6,13 @@ using Ecs.Domain;
 
 namespace Ecs.Tests;
 
-// Only Shared/Ecs uses Friflo.Engine.ECS. A key implements a Friflo marker through the Ecs markers, so other
-// assemblies can name the two markers and nothing else.
+// Only Shared/Ecs uses Friflo packages. Friflo.Engine.ECS brings Friflo.Json.Fliox, so each check matches the prefix.
+// A key implements a Friflo marker through the Ecs markers, so other assemblies can name the two markers and nothing else.
 public sealed class FrifloBoundaryTests
 {
-    private const string Friflo = "Friflo.Engine.ECS";
+    private const string Friflo = "Friflo.";
 
-    private static readonly string[] Markers = { Friflo + ".IComponent", Friflo + ".ITag" };
+    private static readonly string[] Markers = { "Friflo.Engine.ECS.IComponent", "Friflo.Engine.ECS.ITag" };
 
     private static readonly string[] AppFolders = { "App/", "Shared/", "Modules/" };
 
@@ -73,6 +73,8 @@ public sealed class FrifloBoundaryTests
             }
         }
 
+        Assert.That(PublicSurface(typeof(Ecs.Domain.Shared.IComponent)).Select(t => t.FullName), Does.Contain(Markers[0]));
+        Assert.That(PublicSurface(typeof(FrifloSurfaceProbe)).Where(IsForbiddenFrifloType), Is.Not.Empty);
         Assert.That(offenders, Is.Empty);
     }
 
@@ -98,7 +100,7 @@ public sealed class FrifloBoundaryTests
     private static bool ReferencesFriflo(string project)
     {
         return XDocument.Load(project).Descendants("PackageReference")
-            .Any(r => string.Equals((string?)r.Attribute("Include"), Friflo, StringComparison.OrdinalIgnoreCase));
+            .Any(r => ((string?)r.Attribute("Include") ?? string.Empty).StartsWith(Friflo, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<string> AppAssemblies()
@@ -124,7 +126,7 @@ public sealed class FrifloBoundaryTests
         foreach (TypeReferenceHandle handle in reader.TypeReferences)
         {
             TypeReference type = reader.GetTypeReference(handle);
-            if (OuterScopeName(reader, type) != Friflo)
+            if (!(OuterScopeName(reader, type) ?? string.Empty).StartsWith(Friflo, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -157,7 +159,8 @@ public sealed class FrifloBoundaryTests
 
     private static IEnumerable<Type> PublicSurface(Type type)
     {
-        const BindingFlags Members = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        const BindingFlags Members = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.Static | BindingFlags.DeclaredOnly;
         List<Type> used = new List<Type>();
 
         if (type.BaseType != null)
@@ -166,19 +169,31 @@ public sealed class FrifloBoundaryTests
         }
 
         used.AddRange(type.GetInterfaces());
-        used.AddRange(type.GetFields(Members).Select(f => f.FieldType));
-        used.AddRange(type.GetProperties(Members).Select(p => p.PropertyType));
-        used.AddRange(type.GetEvents(Members).Select(e => e.EventHandlerType!));
-        foreach (MethodBase method in type.GetMethods(Members).Cast<MethodBase>().Concat(type.GetConstructors()))
+        used.AddRange(Constraints(type.IsGenericTypeDefinition ? type.GetGenericArguments() : Type.EmptyTypes));
+        used.AddRange(type.GetFields(Members).Where(f => f.IsPublic || f.IsFamily || f.IsFamilyOrAssembly).Select(f => f.FieldType));
+        used.AddRange(type.GetEvents(Members).Where(e => Visible(e.AddMethod)).Select(e => e.EventHandlerType!));
+        used.AddRange(type.GetProperties(Members).Where(p => Visible(p.GetMethod) || Visible(p.SetMethod)).Select(p => p.PropertyType));
+        foreach (MethodBase method in type.GetMethods(Members).Cast<MethodBase>().Concat(type.GetConstructors(Members)).Where(Visible))
         {
             used.AddRange(method.GetParameters().Select(p => p.ParameterType));
             if (method is MethodInfo info)
             {
                 used.Add(info.ReturnType);
+                used.AddRange(Constraints(info.IsGenericMethodDefinition ? info.GetGenericArguments() : Type.EmptyTypes));
             }
         }
 
         return used.SelectMany(Unwrap);
+    }
+
+    private static bool Visible(MethodBase? method)
+    {
+        return method != null && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly);
+    }
+
+    private static IEnumerable<Type> Constraints(Type[] parameters)
+    {
+        return parameters.SelectMany(p => p.GetGenericParameterConstraints());
     }
 
     private static IEnumerable<Type> Unwrap(Type type)
@@ -198,6 +213,15 @@ public sealed class FrifloBoundaryTests
 
     private static bool IsForbiddenFrifloType(Type type)
     {
-        return type.Assembly.GetName().Name == Friflo && !Markers.Contains(type.FullName);
+        return (type.Assembly.GetName().Name ?? string.Empty).StartsWith(Friflo, StringComparison.Ordinal)
+            && !Markers.Contains(type.FullName);
+    }
+}
+
+public class FrifloSurfaceProbe
+{
+    protected void Leak<T>()
+        where T : struct, Friflo.Engine.ECS.ILinkComponent
+    {
     }
 }

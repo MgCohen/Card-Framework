@@ -144,7 +144,7 @@ public sealed class World : IWorldWriter
 
     private FrifloEntity Live(Entity entity)
     {
-        if (entity.Inner.Store == null || entity.IsNull)
+        if (entity.IsNull)
         {
             throw new InvalidOperationException($"The entity {entity.Id.Value} is null or deleted.");
         }
