@@ -4,15 +4,7 @@ namespace Pipeline.Slices.Run;
 
 public abstract class PipelineLayer
 {
-    private static readonly AsyncLocal<Envelope?> current = new AsyncLocal<Envelope?>();
-
     public abstract Type MessageType { get; }
-
-    internal static Envelope? CurrentRun
-    {
-        get => current.Value;
-        set => current.Value = value;
-    }
 
     public static PipelineLayer<TMessage, TScope> Of<TMessage, TScope>(Action<PipelineBuilder<TMessage, TScope>> build)
         where TMessage : class, IMessage

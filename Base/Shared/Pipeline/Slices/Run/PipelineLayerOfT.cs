@@ -11,6 +11,7 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
 {
     private readonly PipelineBuilder<TMessage, TScope> builder;
     private readonly List<Envelope> items = new List<Envelope>();
+    private readonly object gate = new object();
     private long lastId;
 
     internal PipelineLayer(PipelineBuilder<TMessage, TScope> builder)
@@ -20,45 +21,69 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
 
     public override Type MessageType => typeof(TMessage);
 
-    public IReadOnlyList<Envelope> Items => items;
+    public IReadOnlyList<Envelope> Items
+    {
+        get
+        {
+            lock (gate)
+            {
+                return items.ToArray();
+            }
+        }
+    }
 
     public Envelope Add(TMessage message)
     {
-        Envelope e = new Envelope(NextId(), message, null);
-        items.Add(e);
-        return e;
+        Envelope envelope = new Envelope(NextId(), message, null);
+        lock (gate)
+        {
+            items.Add(envelope);
+        }
+
+        return envelope;
     }
 
     public bool Remove(MessageId id)
     {
-        return items.RemoveAll(e => e.Id == id) > 0;
+        lock (gate)
+        {
+            return items.RemoveAll(envelope => envelope.Id == id) > 0;
+        }
     }
 
     public bool TryPeek(out Envelope? envelope)
     {
-        envelope = Next();
-        return envelope != null;
+        lock (gate)
+        {
+            envelope = Next();
+            return envelope != null;
+        }
     }
 
     public bool TryTake(out Envelope? envelope)
     {
-        envelope = Next();
-        return envelope != null && items.Remove(envelope);
+        lock (gate)
+        {
+            envelope = Next();
+            return envelope != null && items.Remove(envelope);
+        }
     }
 
     public async Task<Envelope?> RunNextAsync(PipelineServices services, CancellationToken ct)
     {
-        if (!TryTake(out Envelope? e))
+        if (!TryTake(out Envelope? envelope))
         {
             return null;
         }
 
-        return await ExecuteAsync(e!, services, ct);
+        return await ExecuteAsync(envelope!, services, ct);
     }
 
     public Task<Envelope> RunAsync(TMessage message, PipelineServices services, CancellationToken ct)
     {
-        return ExecuteAsync(new Envelope(NextId(), message, CurrentRun), services, ct);
+        ArgumentNullException.ThrowIfNull(services);
+        Envelope? parent = services.Require<PipelineRuns>().Current;
+        return ExecuteAsync(new Envelope(NextId(), message, parent), services, ct);
     }
 
     internal override Task<Envelope> RunMessageAsync(IMessage message, PipelineServices services, CancellationToken ct)
@@ -66,11 +91,11 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
         return RunAsync((TMessage)message, services, ct);
     }
 
-    private static bool Validate(Envelope e, PipelineServices services, out string? reason)
+    private static bool Validate(Envelope envelope, PipelineServices services, out string? reason)
     {
         if (services.Resolve(typeof(PipelineValidators)) is PipelineValidators validators)
         {
-            return validators.Validate(e.Message, out reason);
+            return validators.Validate(envelope.Message, out reason);
         }
 
         reason = null;
@@ -79,29 +104,31 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
 
     private static Type ResultTypeOf(Type command)
     {
-        foreach (Type i in command.GetInterfaces())
+        Type[] results = command.GetInterfaces()
+            .Where(face => face.IsGenericType && face.GetGenericTypeDefinition() == typeof(ICommand<>))
+            .Select(face => face.GetGenericArguments()[0])
+            .ToArray();
+        if (results.Length != 1)
         {
-            if (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>))
-            {
-                return i.GetGenericArguments()[0];
-            }
+            throw new InvalidOperationException(
+                $"{command.Name} has {results.Length} ICommand<T> interfaces. A layer runs a command with one.");
         }
 
-        throw new InvalidOperationException($"{command.Name} is not an ICommand<T>. A layer runs only commands.");
+        return results[0];
     }
 
     private static Task StepAsync(
         Func<Envelope, TScope, CancellationToken, Task>? step,
-        Envelope e,
+        Envelope envelope,
         TScope scope,
         CancellationToken ct)
     {
-        return step == null ? Task.CompletedTask : step(e, scope, ct);
+        return step == null ? Task.CompletedTask : step(envelope, scope, ct);
     }
 
-    private static IPipelineHandler HandlerOf(Envelope e, PipelineServices services)
+    private static IPipelineHandler HandlerOf(Envelope envelope, PipelineServices services)
     {
-        Type command = e.Message.GetType();
+        Type command = envelope.Message.GetType();
         Type result = ResultTypeOf(command);
         string wanted = $"Handler<{command.Name}, {result.Name}, {typeof(TScope).Name}>";
         object handler = services.Resolve(typeof(CommandHandler<,>).MakeGenericType(command, result))
@@ -112,7 +139,7 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
                 $"{handler.GetType().Name} is a plain CommandHandler. A message of a layer needs a {wanted}.");
         }
 
-        if (!pipelineHandler.ScopeType.IsAssignableFrom(typeof(TScope)))
+        if (pipelineHandler.ScopeType != typeof(TScope))
         {
             throw new InvalidOperationException(
                 $"{handler.GetType().Name} takes {pipelineHandler.ScopeType.Name}, "
@@ -134,34 +161,48 @@ public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
             return null;
         }
 
-        return builder.SelectNext == null ? items[0] : builder.SelectNext(items);
+        if (builder.SelectNext == null)
+        {
+            return items[0];
+        }
+
+        Envelope next = builder.SelectNext(items.ToArray());
+        if (next == null || !items.Contains(next))
+        {
+            throw new InvalidOperationException(
+                $"Select of the layer of {typeof(TMessage).Name} must return an envelope of its list.");
+        }
+
+        return next;
     }
 
-    private async Task<Envelope> ExecuteAsync(Envelope e, PipelineServices services, CancellationToken ct)
+    private async Task<Envelope> ExecuteAsync(Envelope envelope, PipelineServices services, CancellationToken ct)
     {
         TScope? scope = null;
-        e.Start();
-        CurrentRun = e;
+        envelope.Start();
+        services.Require<PipelineRuns>().Current = envelope;
         try
         {
-            if (!Validate(e, services, out string? reason))
+            if (!Validate(envelope, services, out string? reason))
             {
-                e.Reject(reason);
-                return e;
+                envelope.Reject(reason);
+                return envelope;
             }
 
-            scope = builder.CreateScope!(e, services)
-                ?? throw new InvalidOperationException($"Scope of the layer of {typeof(TMessage).Name} returned null.");
-            scope.Open(e);
-            await StepAsync(builder.BeforeStep, e, scope, ct);
-            object? result = await HandlerOf(e, services).RunAsync(e.Message, scope, ct);
-            await StepAsync(builder.AfterStep, e, scope, ct);
-            e.Accept(result);
-            return e;
+            IPipelineHandler handler = HandlerOf(envelope, services);
+            scope = builder.CreateScope!(envelope, services)
+                ?? throw new InvalidOperationException(
+                    $"Scope of the layer of {typeof(TMessage).Name} returned null.");
+            scope.Open(envelope);
+            await StepAsync(builder.BeforeStep, envelope, scope, ct);
+            object? result = await handler.RunAsync(envelope.Message, scope, ct);
+            await StepAsync(builder.AfterStep, envelope, scope, ct);
+            envelope.Accept(result);
+            return envelope;
         }
         catch
         {
-            e.Fault();
+            envelope.Fault();
             throw;
         }
         finally

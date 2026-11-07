@@ -84,6 +84,23 @@ public sealed class NestHandler : Handler<Nest, string, TestScope>
     }
 }
 
+public sealed class NestTwiceHandler : Handler<NestTwice, string, TestScope>
+{
+    private readonly ICommandSender commands;
+
+    public NestTwiceHandler(ICommandSender commands)
+    {
+        this.commands = commands;
+    }
+
+    protected override async Task<string> HandleAsync(NestTwice command, TestScope scope, CancellationToken ct)
+    {
+        string first = await commands.SendAsync(new Ping(), ct);
+        string second = await commands.SendAsync(new Ping(), ct);
+        return first + second;
+    }
+}
+
 public sealed class CrossHandler : Handler<Cross, int, TestScope>
 {
     private readonly ICommandSender commands;

@@ -21,6 +21,7 @@ public sealed class Harness : IDisposable
         services.AddSingleton<Validator>(r => new DeniedValidator(Log, Mana));
         services.AddSingleton<Validator>(r => new CrashValidator(Log));
         services.AddSingleton<PipelineValidators>();
+        services.AddSingleton<PipelineRuns>();
         services.AddScoped(r => new PipelineServices(r.GetService));
         foreach (PipelineLayer layer in layers)
         {
@@ -75,6 +76,7 @@ public sealed class Harness : IDisposable
         services.AddScoped<CommandHandler<Write, bool>, WriteHandler>();
         services.AddSingleton<CommandHandler<Keep, int>>(Keep);
         services.AddScoped<CommandHandler<Nest, string>, NestHandler>();
+        services.AddScoped<CommandHandler<NestTwice, string>, NestTwiceHandler>();
         services.AddScoped<CommandHandler<Cross, int>, CrossHandler>();
         services.AddScoped<CommandHandler<Count, int>, CountHandler>();
         services.AddScoped<CommandHandler<Both, int>, BothHandler>();

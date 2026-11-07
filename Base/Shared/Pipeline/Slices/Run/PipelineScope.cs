@@ -12,6 +12,12 @@ public abstract class PipelineScope
 
     internal void Open(Envelope run)
     {
+        if (envelope != null)
+        {
+            throw new InvalidOperationException(
+                $"{GetType().Name} was opened before. Scope must return a new scope for each run.");
+        }
+
         envelope = run;
     }
 

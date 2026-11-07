@@ -8,6 +8,7 @@ public sealed class PipelineModule : Module
 {
     public override void Configure(ModuleBuilder module)
     {
+        module.Services.AddSingleton<PipelineRuns>();
         module.Services.AddScoped(resolver => new PipelineServices(resolver.Resolve));
         foreach (Type validator in PipelineValidators.Find(includeTests: false))
         {

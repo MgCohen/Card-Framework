@@ -72,6 +72,46 @@ public sealed class SenderTests
     }
 
     [Test]
+    public async Task Send_TwoChildren_BothHaveTheParent()
+    {
+        using Harness harness = new Harness(Layers.Test());
+
+        await harness.Sender.SendAsync(new NestTwice(), CancellationToken.None);
+        await harness.Sender.SendAsync(new Ping(), CancellationToken.None);
+
+        Envelope parent = harness.Log.Done.Single(e => e.Message is NestTwice);
+        Envelope[] pings = harness.Log.Done.Where(e => e.Message is Ping).ToArray();
+        Assert.That(pings, Has.Length.EqualTo(3));
+        Assert.That(pings[0].Parent, Is.SameAs(parent));
+        Assert.That(pings[1].Parent, Is.SameAs(parent));
+        Assert.That(pings[2].Parent, Is.Null);
+    }
+
+    [Test]
+    public async Task Send_ToAnotherContainer_HasNoParent()
+    {
+        using Harness client = new Harness(Layers.Test());
+        using Harness server = new Harness(Layers.Test(more => more.Before(async (envelope, scope, ct) =>
+        {
+            await client.Sender.SendAsync(new Ping(), ct);
+        })));
+
+        await server.Sender.SendAsync(new Ping(), CancellationToken.None);
+
+        Assert.That(client.Log.Done.Single().Parent, Is.Null);
+    }
+
+    [Test]
+    public async Task Send_PipelineHandlerWithNoLayer_Throws()
+    {
+        using Harness harness = new Harness();
+
+        Exception? error = await Harness.Catch(() => harness.Sender.SendAsync(new Ping(), CancellationToken.None));
+
+        Assert.That(error, Is.InstanceOf<InvalidOperationException>().With.Message.Contains("no layer"));
+    }
+
+    [Test]
     public async Task Send_FromOneLayer_RunsInTheOtherLayer()
     {
         using Harness harness = new Harness(Layers.Test(), Layers.Other());

@@ -33,13 +33,13 @@ public sealed class PipelineCommandSender : ICommandSender
 
     private async Task<TResult> RunAsync<TResult>(PipelineLayer layer, ICommand<TResult> command, CancellationToken ct)
     {
-        Envelope e = await layer.RunMessageAsync(command, services, ct);
-        if (e.State == EnvelopeState.Rejected)
+        Envelope envelope = await layer.RunMessageAsync(command, services, ct);
+        if (envelope.State == EnvelopeState.Rejected)
         {
-            throw new CommandRejectedException(e);
+            throw new CommandRejectedException(envelope);
         }
 
-        return Result.From<TResult>(e).Value!;
+        return Result.From<TResult>(envelope).Value!;
     }
 
     private Task<TResult> SendPlainAsync<TResult>(ICommand<TResult> command, CancellationToken ct)
@@ -49,6 +49,12 @@ public sealed class PipelineCommandSender : ICommandSender
         object handler = services.Resolve(service)
             ?? throw new InvalidOperationException(
                 $"Command {type.FullName} has no handler. Add a CommandHandler<{type.Name}, {typeof(TResult).Name}>.");
+        if (handler is IPipelineHandler)
+        {
+            throw new InvalidOperationException(
+                $"{handler.GetType().Name} is a pipeline handler, but no layer runs {type.Name}. Register its layer.");
+        }
+
         MethodInfo handle = service.GetMethod("HandleAsync", new[] { type, typeof(CancellationToken) })!;
         object[] arguments = { command, ct };
         return (Task<TResult>)handle.Invoke(handler, BindingFlags.DoNotWrapExceptions, null, arguments, null)!;
@@ -56,7 +62,7 @@ public sealed class PipelineCommandSender : ICommandSender
 
     private PipelineLayer? LayerOf(Type message)
     {
-        PipelineLayer[] matches = layers.Where(l => l.MessageType.IsAssignableFrom(message)).ToArray();
+        PipelineLayer[] matches = layers.Where(layer => layer.MessageType.IsAssignableFrom(message)).ToArray();
         if (matches.Length > 1)
         {
             throw new InvalidOperationException(

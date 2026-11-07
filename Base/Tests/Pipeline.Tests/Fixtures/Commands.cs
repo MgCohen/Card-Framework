@@ -20,6 +20,10 @@ public sealed record Keep : TestMessage, ICommand<int>;
 
 public sealed record Nest : TestMessage, ICommand<string>;
 
+public sealed record NestTwice : TestMessage, ICommand<string>;
+
+public sealed record Twice : TestMessage, ICommand<int>, ICommand<string>;
+
 public sealed record Cross(int Value) : TestMessage, ICommand<int>;
 
 public sealed record Loose : TestMessage, ICommand<int>;

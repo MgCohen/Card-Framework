@@ -283,6 +283,77 @@ public sealed class PipelineLayerTests
     }
 
     [Test]
+    public async Task Before_Throws_FaultsAndClosesTheScope()
+    {
+        TestScope? opened = null;
+        PipelineLayer<TestMessage, TestScope> layer = PipelineLayer.Of<TestMessage, TestScope>(builder => builder
+            .Scope((envelope, services) => new TestScope(services.Require<Log>(), services.Require<RecordingWriter>()))
+            .Before((envelope, scope, ct) =>
+            {
+                opened = scope;
+                throw new InvalidOperationException("before");
+            }));
+        using Harness harness = new Harness(layer);
+        Envelope e = layer.Add(new Ping());
+
+        Exception? error = await Harness.Catch(() => layer.RunNextAsync(harness.Services, CancellationToken.None));
+
+        Assert.That(error, Is.InstanceOf<InvalidOperationException>().With.Message.EqualTo("before"));
+        Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+        Assert.That(opened!.IsClosed, Is.True);
+        Assert.That(harness.Log.Steps, Has.No.Member("handle"));
+    }
+
+    [Test]
+    public async Task Scope_ReturnsAUsedScope_Faults()
+    {
+        TestScope? shared = null;
+        PipelineLayer<TestMessage, TestScope> layer = PipelineLayer.Of<TestMessage, TestScope>(builder => builder
+            .Scope((envelope, services) =>
+            {
+                shared ??= new TestScope(services.Require<Log>(), services.Require<RecordingWriter>());
+                return shared;
+            }));
+        using Harness harness = new Harness(layer);
+        await layer.RunAsync(new Ping(), harness.Services, CancellationToken.None);
+
+        Exception? error = await Harness.Catch(
+            () => layer.RunAsync(new Ping(), harness.Services, CancellationToken.None));
+
+        Assert.That(error, Is.InstanceOf<InvalidOperationException>().With.Message.Contains("new scope"));
+    }
+
+    [Test]
+    public void Select_ReturnsAnEnvelopeOfNoList_Throws()
+    {
+        PipelineLayer<TestMessage, TestScope> other = Layers.Test();
+        Envelope foreign = other.Add(new Ping());
+        PipelineLayer<TestMessage, TestScope> layer = Layers.Test(more => more.Select(items => foreign));
+        layer.Add(new Ping());
+
+        Assert.Throws<InvalidOperationException>(new Action(() => layer.TryPeek(out _)));
+    }
+
+    [Test]
+    public void Items_IsASnapshot()
+    {
+        PipelineLayer<TestMessage, TestScope> layer = Layers.Test();
+        layer.Add(new Ping());
+        IReadOnlyList<Envelope> before = layer.Items;
+
+        layer.Add(new Ping());
+
+        Assert.That(before, Has.Count.EqualTo(1));
+        Assert.That(layer.Items, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async Task CommandWithTwoResultTypes_Faults()
+    {
+        await AssertFaults(new Twice(), "ICommand<T>");
+    }
+
+    [Test]
     public async Task NoHandler_Faults()
     {
         await AssertFaults(new Orphan(), "no handler");
@@ -310,5 +381,6 @@ public sealed class PipelineLayerTests
 
         Assert.That(error, Is.InstanceOf<InvalidOperationException>().With.Message.Contains(text));
         Assert.That(e.State, Is.EqualTo(EnvelopeState.Faulted));
+        Assert.That(harness.Log.Steps, Has.No.Member("before"));
     }
 }
