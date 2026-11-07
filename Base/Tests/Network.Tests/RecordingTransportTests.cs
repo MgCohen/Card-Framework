@@ -1,5 +1,5 @@
 using Network.Domain;
-using Testing.Domain;
+using Testing;
 
 namespace Network.Tests;
 

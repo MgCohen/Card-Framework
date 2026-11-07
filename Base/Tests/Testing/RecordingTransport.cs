@@ -1,6 +1,6 @@
 using Network.Domain;
 
-namespace Testing.Domain;
+namespace Testing;
 
 public sealed class RecordingTransport : ITransport
 {
