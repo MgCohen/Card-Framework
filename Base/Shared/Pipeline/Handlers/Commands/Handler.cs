@@ -1,7 +1,7 @@
 using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public abstract class Handler<TCommand, TResult, TScope> : CommandHandler<TCommand, TResult>, IPipelineHandler
     where TCommand : ICommand<TResult>

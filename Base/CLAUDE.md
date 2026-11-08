@@ -42,7 +42,7 @@ gate.ps1 (runs from Base/, so dotnet reads Base/global.json)
 
 | Package | Version | Feed |
 |---|---|---|
-| VSA.Sdk and `VSA.*` | `0.1.0-preview.7` | GitHub Packages, owner `MgCohen` |
+| VSA.Sdk and `VSA.*` | `0.1.0-preview.8` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
@@ -108,12 +108,12 @@ public override void Configure(ModuleBuilder module)
 - A factory gets an `IVsaResolver`: `Resolve`, `Require`, `ResolveAll`, `Create`.
 - A test with no web host calls `new VsaComposer(new MicrosoftServices(services), configuration, modules).Install()`. It gets no `IBus`.
 - A module layer project does not see `VSA.Module`, so handler code cannot take `IVsaResolver`.
-- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.7/docs/composition.md).
+- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.8/docs/composition.md).
 - `App.Tests` sets `VsaArchitectureTests` to false and has its own `ArchitectureTests` class. Reason: the generated class has no body (`;`), and that needs C# 12.
 - A test project that references `VSA.Testing.Architecture` sets the same property.
 - When the package generates a `{ }` body, delete the property and the local class.
 
-A Shared module and a module have the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/main/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`.
+A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/main/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A Shared module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
 
 ## Friflo boundary
 

@@ -3,7 +3,7 @@ using VSA.Contracts;
 using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public sealed class PipelineLayer<TMessage, TScope> : PipelineLayer
     where TMessage : class, IMessage

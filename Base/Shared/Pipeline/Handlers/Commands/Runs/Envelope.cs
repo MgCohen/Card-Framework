@@ -1,7 +1,7 @@
 using Pipeline.Domain.Shared;
 using VSA.Contracts;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public sealed class Envelope
 {

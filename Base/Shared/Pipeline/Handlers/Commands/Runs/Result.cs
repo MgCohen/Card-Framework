@@ -1,4 +1,4 @@
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public class Result
 {

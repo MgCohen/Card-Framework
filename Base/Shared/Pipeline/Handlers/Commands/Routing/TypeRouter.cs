@@ -1,4 +1,4 @@
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 internal sealed class TypeRouter<T>
     where T : class, IRouted

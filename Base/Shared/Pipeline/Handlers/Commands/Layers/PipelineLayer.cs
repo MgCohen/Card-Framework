@@ -1,6 +1,6 @@
 using VSA.Contracts;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public abstract class PipelineLayer
 {

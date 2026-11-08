@@ -1,4 +1,4 @@
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 internal interface IRouted
 {

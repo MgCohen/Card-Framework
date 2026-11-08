@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Pipeline.Slices.Run;
+using Pipeline.Handlers.Commands;
 using VSA.Composition;
 using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;

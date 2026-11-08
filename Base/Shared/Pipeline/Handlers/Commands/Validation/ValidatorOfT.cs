@@ -1,6 +1,6 @@
 using VSA.Contracts;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public abstract class Validator<TCommand> : Validator
     where TCommand : class, IMessage

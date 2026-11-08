@@ -2,7 +2,7 @@ using System.Reflection;
 using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public sealed class PipelineCommandSender : ICommandSender
 {

@@ -1,4 +1,4 @@
-using Pipeline.Slices.Run;
+using Pipeline.Handlers.Commands;
 using VSA.Contracts.Commands;
 using VSA.Module;
 

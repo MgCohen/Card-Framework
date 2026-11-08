@@ -1,6 +1,6 @@
 using Pipeline.Domain.Shared;
 
-namespace Pipeline.Slices.Run;
+namespace Pipeline.Handlers.Commands;
 
 public abstract class PipelineScope
 {
