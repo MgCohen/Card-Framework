@@ -10,7 +10,7 @@ public sealed class AllocationTests
     [Test]
     public void Set_EqualValue_AllocatesNothing()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Position { X = 1, Y = 2 });
 
@@ -28,7 +28,7 @@ public sealed class AllocationTests
     [Test]
     public void Set_ChangedValue_AllocatesNothing()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set<Health>(entity, 0);
 
@@ -46,7 +46,7 @@ public sealed class AllocationTests
     [Test]
     public void GetAndHas_AllocateNothing()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set<Health>(entity, 3);
         IWorldReader reader = world.Reader;

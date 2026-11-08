@@ -9,7 +9,7 @@ public sealed class WorldReaderTests
     [Test]
     public void Reader_SeesTheWritesOfItsWorld()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Health { Value = 27 });
         world.AddTag<CardTag>(entity);
@@ -25,7 +25,7 @@ public sealed class WorldReaderTests
     [Test]
     public void ById_LiveEntity_ReturnsIt()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Reader.ById(entity.Id), Is.EqualTo(entity));
@@ -36,7 +36,7 @@ public sealed class WorldReaderTests
     [Test]
     public void ById_UnknownId_ThrowsKeyNotFound()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         Assert.Throws<KeyNotFoundException>(new Action(() => world.Reader.ById(new EntityId(999))));
         Assert.Throws<KeyNotFoundException>(new Action(() => world.Reader.ById(default)));
@@ -47,7 +47,7 @@ public sealed class WorldReaderTests
     [Test]
     public void ById_DeletedId_ThrowsKeyNotFound()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Delete(entity);
 
@@ -58,7 +58,7 @@ public sealed class WorldReaderTests
     [Test]
     public void Get_ReturnsACopy()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Position { X = 1, Y = 2 });
 
@@ -72,7 +72,7 @@ public sealed class WorldReaderTests
     [Test]
     public void Get_MissingComponent_ThrowsKeyNotFoundAndNamesIt()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         KeyNotFoundException e = Assert.Throws<KeyNotFoundException>(new Action(() => world.Reader.Get<Health>(entity)))!;
@@ -83,7 +83,7 @@ public sealed class WorldReaderTests
     [Test]
     public void TryGet_ReturnsTheValueOrFalse()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Reader.TryGet(entity, out Health missing), Is.False);
@@ -98,7 +98,7 @@ public sealed class WorldReaderTests
     [Test]
     public void HasAndHasTag_NewEntity_AreFalse()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Reader.Has<Health>(entity), Is.False);
@@ -108,7 +108,7 @@ public sealed class WorldReaderTests
     [Test]
     public void Component_CarriesAnEntityId()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity player = world.Create();
         Entity card = world.Create();
 

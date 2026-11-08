@@ -11,9 +11,9 @@ public sealed class World : IWorldWriter
 {
     private readonly EntityStore store;
 
-    public World()
+    internal World(EntityStore store)
     {
-        store = new EntityStore { RecycleIds = false };
+        this.store = store;
         Reader = new WorldReader(this);
     }
 

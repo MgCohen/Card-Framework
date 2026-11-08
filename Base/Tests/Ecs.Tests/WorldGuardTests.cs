@@ -8,8 +8,8 @@ public sealed class WorldGuardTests
     [Test]
     public void Writer_EntityOfAnotherWorld_Throws()
     {
-        World first = new World();
-        World second = new World();
+        World first = new WorldFactory().Create();
+        World second = new WorldFactory().Create();
         Entity entity = first.Create();
 
         Assert.Throws<InvalidOperationException>(new Action(() => second.Set<Health>(entity, 1)));
@@ -20,8 +20,8 @@ public sealed class WorldGuardTests
     [Test]
     public void Reader_EntityOfAnotherWorld_Throws()
     {
-        World first = new World();
-        World second = new World();
+        World first = new WorldFactory().Create();
+        World second = new WorldFactory().Create();
         Entity entity = first.Create();
 
         Assert.Throws<InvalidOperationException>(new Action(() => second.Reader.Has<Health>(entity)));
@@ -31,7 +31,7 @@ public sealed class WorldGuardTests
     [Test]
     public void ReadAndWrite_NullEntity_Throws()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = default;
 
         Assert.Throws<InvalidOperationException>(new Action(() => world.Set<Health>(entity, 1)));
@@ -41,7 +41,7 @@ public sealed class WorldGuardTests
     [Test]
     public void ReadAndWrite_DeletedEntity_Throws()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Delete(entity);
 
@@ -53,7 +53,7 @@ public sealed class WorldGuardTests
     [Test]
     public void Reader_IsNotAWriter()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         Assert.That(world.Reader, Is.Not.InstanceOf<IWorldWriter>());
         Assert.That(world.Reader, Is.Not.InstanceOf<World>());

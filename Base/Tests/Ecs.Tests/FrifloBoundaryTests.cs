@@ -18,6 +18,8 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] EcsAssemblies = { "Ecs", "Ecs.Domain", "Ecs.Domain.Shared" };
 
+    private static readonly string[] WorldOwners = Array.Empty<string>();
+
     [Test]
     public void B1_NoProjectOutsideEcsReferencesFriflo()
     {
@@ -81,9 +83,40 @@ public sealed class FrifloBoundaryTests
     [Test]
     public void B4_TheReaderOfAWorldIsNotAWriter()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         Assert.That(world.Reader is IWorldWriter, Is.False);
+    }
+
+    // The owner of a match gives a World, a reader or a writer to a handler for one call. A field outside Ecs keeps
+    // it after the call. WorldOwners lists the types that may keep one, by full name; it is empty until P4 adds them.
+    [Test]
+    public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
+    {
+        List<string> offenders = new List<string>();
+
+        foreach (string name in AppAssemblies().Where(a => !EcsAssemblies.Contains(a)))
+        {
+            foreach (Type type in Assembly.Load(name).GetTypes().Where(t => !WorldOwners.Contains(t.FullName)))
+            {
+                offenders.AddRange(WorldFields(type).Select(f => type.FullName + "." + f));
+            }
+        }
+
+        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(3));
+        Assert.That(offenders, Is.Empty);
+    }
+
+    private static List<string> WorldFields(Type type)
+    {
+        const BindingFlags Fields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader) };
+
+        return type.GetFields(Fields)
+            .Where(f => Unwrap(f.FieldType).Any(t => world.Contains(t)))
+            .Select(f => f.Name)
+            .ToList();
     }
 
     private static string BaseRoot()
@@ -224,4 +257,22 @@ public class FrifloSurfaceProbe
         where T : struct, Friflo.Engine.ECS.ILinkComponent
     {
     }
+}
+
+public class WorldFieldProbe
+{
+    private static World? shared;
+
+    private readonly IWorldWriter writer;
+
+    private readonly List<IWorldReader> readers;
+
+    public WorldFieldProbe(World world)
+    {
+        shared = world;
+        writer = world;
+        readers = new List<IWorldReader> { world.Reader };
+    }
+
+    public bool IsEmpty => shared == null && writer == null && readers.Count == 0;
 }

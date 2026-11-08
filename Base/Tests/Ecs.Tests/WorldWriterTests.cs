@@ -8,7 +8,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Create_AddsALiveEntity()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         world.Create();
         world.Create();
@@ -19,7 +19,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Delete_RemovesTheEntity()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Delete(entity), Is.True);
@@ -29,7 +29,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Delete_DeletedEntity_Throws()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Delete(entity);
 
@@ -39,7 +39,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Create_AfterDelete_NeverReusesAnId()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity first = world.Create();
         world.Delete(first);
 
@@ -51,7 +51,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Set_NewComponent_WritesAndReturnsTrue()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Set(entity, new Position { X = 1, Y = 2 }), Is.True);
@@ -61,7 +61,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Set_EqualValue_SkipsAndReturnsFalse()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Position { X = 1, Y = 2 });
 
@@ -71,7 +71,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Set_ChangedValue_WritesAndReturnsTrue()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Position { X = 1, Y = 2 });
 
@@ -82,7 +82,7 @@ public sealed class WorldWriterTests
     [Test]
     public void SetInt_WritesTheValueOfTheKey()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.Set<Health>(entity, 27), Is.True);
@@ -95,7 +95,7 @@ public sealed class WorldWriterTests
     [Test]
     public void Remove_ReturnsTrueOnlyIfPresent()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set<Health>(entity, 1);
 
@@ -107,7 +107,7 @@ public sealed class WorldWriterTests
     [Test]
     public void AddTag_ReturnsTrueOnlyIfAbsent()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Assert.That(world.AddTag<CardTag>(entity), Is.True);
@@ -118,7 +118,7 @@ public sealed class WorldWriterTests
     [Test]
     public void RemoveTag_ReturnsTrueOnlyIfPresent()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.AddTag<CardTag>(entity);
 

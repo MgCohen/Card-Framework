@@ -17,7 +17,7 @@ public sealed class EntityTests
     [Test]
     public void Entity_Created_IsNotNullAndHasAnId()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         Entity entity = world.Create();
 
@@ -28,7 +28,7 @@ public sealed class EntityTests
     [Test]
     public void Entity_Deleted_IsNull()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         world.Delete(entity);
@@ -39,7 +39,7 @@ public sealed class EntityTests
     [Test]
     public void Entity_SameEntity_IsEqual()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
         Entity entity = world.Create();
 
         Entity found = world.ById(entity.Id);
@@ -52,7 +52,7 @@ public sealed class EntityTests
     [Test]
     public void Entity_OtherEntity_IsNotEqual()
     {
-        World world = new World();
+        World world = new WorldFactory().Create();
 
         Entity first = world.Create();
         Entity second = world.Create();
@@ -63,8 +63,8 @@ public sealed class EntityTests
     [Test]
     public void Entity_SameIdInTwoWorlds_IsNotEqual()
     {
-        Entity first = new World().Create();
-        Entity second = new World().Create();
+        Entity first = new WorldFactory().Create().Create();
+        Entity second = new WorldFactory().Create().Create();
 
         Assert.That(first.Id, Is.EqualTo(second.Id));
         Assert.That(first == second, Is.False);
