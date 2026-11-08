@@ -3,6 +3,11 @@
     <Project Path="App/Host/App.Host.csproj" />
   </Folder>
   <Folder Name="/Shared/" />
+  <Folder Name="/Shared/Ecs/">
+    <Project Path="Shared/Ecs/Ecs.csproj" />
+    <Project Path="Shared/Ecs/Projects/Ecs.Domain.Shared.csproj" />
+    <Project Path="Shared/Ecs/Projects/Ecs.Domain.csproj" />
+  </Folder>
   <Folder Name="/Shared/Pipeline/">
     <Project Path="Shared/Pipeline/Pipeline.csproj" />
     <Project Path="Shared/Pipeline/Projects/Pipeline.Domain.Shared.csproj" />
@@ -15,6 +20,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/App.Tests/App.Tests.csproj" />
+    <Project Path="Tests/Ecs.Tests/Ecs.Tests.csproj" />
     <Project Path="Tests/Pipeline.Tests/Pipeline.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
     <Project Path="Tests/TypeKeys.Fixtures/TypeKeys.Fixtures.csproj" />
