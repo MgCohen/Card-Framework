@@ -10,9 +10,9 @@ public sealed class ChangeComponentHandler<T> : PrimitiveHandler<ChangeComponent
 {
     private readonly IWorldWriter writer;
 
-    public ChangeComponentHandler(IWorldWriter writer)
+    public ChangeComponentHandler(MatchWorld match)
     {
-        this.writer = writer;
+        writer = match.Writer;
     }
 
     public override Task<Result<T>> HandleAsync(Envelope<ChangeComponent<T>> envelope)

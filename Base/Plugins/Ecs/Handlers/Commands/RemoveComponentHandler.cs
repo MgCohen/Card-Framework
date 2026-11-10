@@ -10,9 +10,9 @@ public sealed class RemoveComponentHandler<T> : PrimitiveHandler<RemoveComponent
 {
     private readonly IWorldWriter writer;
 
-    public RemoveComponentHandler(IWorldWriter writer)
+    public RemoveComponentHandler(MatchWorld match)
     {
-        this.writer = writer;
+        writer = match.Writer;
     }
 
     public override Task<Result<Unit>> HandleAsync(Envelope<RemoveComponent<T>> envelope)

@@ -9,9 +9,9 @@ public sealed class CreateEntityHandler : PrimitiveHandler<CreateEntity, EntityI
 {
     private readonly IWorldWriter world;
 
-    public CreateEntityHandler(IWorldWriter world)
+    public CreateEntityHandler(MatchWorld match)
     {
-        this.world = world;
+        world = match.Writer;
     }
 
     public override Task<Result<EntityId>> HandleAsync(Envelope<CreateEntity> envelope)

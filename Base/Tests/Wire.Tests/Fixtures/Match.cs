@@ -22,6 +22,8 @@ internal sealed class Match : IDisposable
 
     public World World => match.World;
 
+    public IServiceProvider Services => match.Services;
+
     public WireLog Log => Get<WireLog>();
 
     public GroupService Groups => Get<GroupService>();

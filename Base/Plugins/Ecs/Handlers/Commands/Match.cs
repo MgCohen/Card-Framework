@@ -1,25 +1,31 @@
 using Ecs.Domain;
+using Microsoft.Extensions.DependencyInjection;
 using VSA.Contracts.Commands;
 
 namespace Ecs.Handlers.Commands;
 
 public sealed class Match : IDisposable
 {
+    private readonly IServiceScope scope;
+    private readonly MatchWorld world;
+
     public Match(IServiceProvider app)
     {
-        throw new NotImplementedException();
+        scope = app.CreateScope();
+        world = scope.ServiceProvider.GetRequiredService<MatchWorld>();
+        world.Bind(scope.ServiceProvider.GetRequiredService<IWorldFactory>().Create());
     }
 
-    public IServiceProvider Services => throw new NotImplementedException();
+    public IServiceProvider Services => scope.ServiceProvider;
 
-    public ICommandSender Commands => throw new NotImplementedException();
+    public ICommandSender Commands => Services.GetRequiredService<ICommandSender>();
 
-    public IWorldReader Reader => throw new NotImplementedException();
+    public IWorldReader Reader => world.Reader;
 
-    internal World World => throw new NotImplementedException();
+    internal World World => world.World;
 
     public void Dispose()
     {
-        throw new NotImplementedException();
+        scope.Dispose();
     }
 }

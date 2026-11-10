@@ -10,9 +10,9 @@ public sealed class AddTagHandler<T> : PrimitiveHandler<AddTag<T>, Unit>
 {
     private readonly IWorldWriter writer;
 
-    public AddTagHandler(IWorldWriter writer)
+    public AddTagHandler(MatchWorld match)
     {
-        this.writer = writer;
+        writer = match.Writer;
     }
 
     public override Task<Result<Unit>> HandleAsync(Envelope<AddTag<T>> envelope)

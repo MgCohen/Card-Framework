@@ -1,3 +1,5 @@
+using Cards.Domain.Shared;
+using Ecs.Contracts.Commands;
 using Ecs.Domain.Shared;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
@@ -14,8 +16,24 @@ public sealed class CreateCardHandler : CommandHandler<CreateCardCommand, Entity
         this.commands = commands;
     }
 
-    public override Task<Result<EntityId>> HandleAsync(Envelope<CreateCardCommand> envelope)
+    public override async Task<Result<EntityId>> HandleAsync(Envelope<CreateCardCommand> envelope)
     {
-        throw new NotImplementedException();
+        CancellationToken ct = envelope.Cancellation;
+        Result<EntityId> created = await commands.SendAsync(new CreateEntity(default), ct);
+        if (!created.IsSuccess)
+        {
+            return created.Error!;
+        }
+
+        EntityId card = created.Value;
+        Result<Unit> tagged = await commands.SendAsync(new AddTag<Card>(card), ct);
+        if (!tagged.IsSuccess)
+        {
+            return tagged.Error!;
+        }
+
+        CardZone zone = new CardZone { Value = envelope.Message.Zone };
+        Result<CardZone> placed = await commands.SendAsync(new ChangeComponent<CardZone>(card, zone), ct);
+        return placed.IsSuccess ? card : placed.Error!;
     }
 }
