@@ -131,7 +131,7 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 ```
 
 - A handler takes `Envelope<T>` and returns `Result<T>`. A send returns `Result<T>`. A rejected message gives `Result<T>.Error`, not an exception.
-- `envelope.Services` is the scope of the sender. A match scope gives the World of that match.
+- `envelope.Services` is the scope of the sender. Handlers, validators and steps resolve from that scope.
 - A custom pipeline: `module.Services.AddPipeline(new PipelineBuilder<TMessage>()...)` in `Configure`.
 - The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies, and only closed types.
 
@@ -140,8 +140,8 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Only `Plugins/Ecs` references Friflo.Engine.ECS.
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
-- Only a mutation handler gets `IWorldWriter`, as a call argument.
-- The container gives only `IWorldFactory`. It never gives a `World`, an `IWorldReader` or an `IWorldWriter`. The owner of a match makes the World and gives access by hand.
+- Only code in `Plugins/Ecs` writes the World. P6 adds the primitive handlers there.
+- The container gives only `IWorldFactory`. It never gives a `World`, an `IWorldReader` or an `IWorldWriter`. The owner of a match makes the World and gives access to its scope (P7).
 - No type outside `Plugins/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
 
 ## C# 11

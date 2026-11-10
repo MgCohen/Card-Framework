@@ -88,8 +88,8 @@ public sealed class FrifloBoundaryTests
         Assert.That(world.Reader is IWorldWriter, Is.False);
     }
 
-    // The owner of a match gives a World, a reader or a writer to a handler for one call. A field outside Ecs keeps
-    // it after the call. WorldOwners lists the types that may keep one, by full name; it is empty until P4 adds them.
+    // The owner of a match gives a World, a reader or a writer to its scope. A field outside Ecs keeps it after the
+    // scope. WorldOwners lists the types that may keep one, by full name; it is empty until P7 adds the match owner.
     [Test]
     public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
     {
