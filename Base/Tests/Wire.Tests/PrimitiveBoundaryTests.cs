@@ -7,12 +7,18 @@ using Wire.Tests.Fixtures;
 namespace Wire.Tests;
 
 // B6: only Ecs and Wire hook a primitive. A validator, a Before or After event, a step or a handler on a
-// primitive in another module could change or stop a World write, or react to it.
+// primitive in another module could change or stop a World write, or react to it. A hook on a supertype,
+// for example After<IMessage>, also runs on each primitive, so the check also uses probe primitives.
 public sealed class PrimitiveBoundaryTests
 {
     private static readonly string[] AppFolders = { "App/", "Plugins/", "Modules/" };
 
     private static readonly string[] Owners = { "Ecs", "Wire" };
+
+    private static readonly Type[] Probes =
+    {
+        typeof(CreateEntity), typeof(DeleteEntity), typeof(ChangeComponent<Health>), typeof(AddTag<Marked>),
+    };
 
     private static readonly Type[] HookBases =
     {
@@ -23,8 +29,10 @@ public sealed class PrimitiveBoundaryTests
     public void B6_NoAssemblyOutsideEcsAndWireHooksAPrimitive()
     {
         List<string> found = new List<string>();
+        string[] others = AppAssemblies().Where(a => !Owners.Any(o => a == o || a.StartsWith(o + ".", StringComparison.Ordinal))).ToArray();
 
-        foreach (string name in AppAssemblies().Where(a => !Owners.Any(o => a == o || a.StartsWith(o + ".", StringComparison.Ordinal))))
+        Assert.That(others, Does.Contain("App.Host"));
+        foreach (string name in others)
         {
             found.AddRange(Assembly.Load(name).GetTypes().Where(HooksAPrimitive).Select(t => $"{name}: {t.FullName}"));
         }
@@ -36,6 +44,7 @@ public sealed class PrimitiveBoundaryTests
     public void B6_TheCheckFindsAHook()
     {
         Assert.That(HooksAPrimitive(typeof(HealthSpy)), Is.True);
+        Assert.That(HooksAPrimitive(typeof(MessageSpy)), Is.True);
         Assert.That(HooksAPrimitive(typeof(PrimitiveTests)), Is.False);
     }
 
@@ -46,7 +55,9 @@ public sealed class PrimitiveBoundaryTests
             .Concat(type.GetInterfaces().Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IHandler<>)))
             .Select(b => b.GetGenericArguments()[0]);
 
-        return messages.Any(m => typeof(IPrimitive).IsAssignableFrom(m) || (m.IsGenericType && typeof(IPrimitive).IsAssignableFrom(m.GetGenericTypeDefinition())));
+        return messages.Any(m => typeof(IPrimitive).IsAssignableFrom(m)
+            || (m.IsGenericType && typeof(IPrimitive).IsAssignableFrom(m.GetGenericTypeDefinition()))
+            || Probes.Any(m.IsAssignableFrom));
     }
 
     private static IEnumerable<Type> Bases(Type type)

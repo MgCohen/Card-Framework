@@ -83,6 +83,30 @@ public sealed class PrimitiveTests
     }
 
     [Test]
+    public async Task RemoveComponent_MissingEntity_ReturnsEntityMissing()
+    {
+        Result<Unit> result = await match.Send(new RemoveComponent<Health>(new EntityId(99)));
+
+        Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.EntityMissing));
+    }
+
+    [Test]
+    public async Task AddTag_MissingEntity_ReturnsEntityMissing()
+    {
+        Result<Unit> result = await match.Send(new AddTag<Marked>(new EntityId(99)));
+
+        Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.EntityMissing));
+    }
+
+    [Test]
+    public async Task RemoveTag_MissingEntity_ReturnsEntityMissing()
+    {
+        Result<Unit> result = await match.Send(new RemoveTag<Marked>(new EntityId(99)));
+
+        Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.EntityMissing));
+    }
+
+    [Test]
     public async Task AddTag_Absent_Adds()
     {
         Entity entity = match.World.Create();
@@ -153,6 +177,15 @@ public sealed class PrimitiveTests
         Result<EntityId> result = await match.Send(new CreateEntity(new EntityId(5)));
 
         Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.EntityExists));
+    }
+
+    [Test]
+    public async Task CreateEntity_NegativeId_ReturnsInvalidId()
+    {
+        Result<EntityId> result = await match.Send(new CreateEntity(new EntityId(-1)));
+
+        Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.InvalidId));
+        Assert.That(match.World.Count, Is.Zero);
     }
 
     [Test]

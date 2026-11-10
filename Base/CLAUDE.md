@@ -165,7 +165,7 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
 - Primitive handlers derive from `PrimitiveHandler<,>`, not `CommandHandler<,>`. The command scan builds an open `CommandHandler` pair, and that stops the host.
 - A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
-- The match scope gives `World`, `IWorldWriter`, `IWorldReader` and `WireLog` (P7).
-- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.SendAsync` sends a received primitive to a bus. Wire does not reference Network (P8 joins them).
+- The match scope gives `IWorldWriter`, `IWorldReader` and `WireLog` (P7). The primitive handlers need only the writer.
+- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
 - `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.

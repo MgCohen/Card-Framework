@@ -7,9 +7,9 @@ namespace Ecs.Handlers.Commands;
 
 public sealed class CreateEntityHandler : PrimitiveHandler<CreateEntity, EntityId>
 {
-    private readonly World world;
+    private readonly IWorldWriter world;
 
-    public CreateEntityHandler(World world)
+    public CreateEntityHandler(IWorldWriter world)
     {
         this.world = world;
     }
@@ -17,6 +17,11 @@ public sealed class CreateEntityHandler : PrimitiveHandler<CreateEntity, EntityI
     public override Task<Result<EntityId>> HandleAsync(Envelope<CreateEntity> envelope)
     {
         EntityId id = envelope.Message.Entity;
+        if (id.Value <= 0)
+        {
+            return Task.FromResult<Result<EntityId>>(PrimitiveErrors.InvalidId);
+        }
+
         if (world.TryById(id, out _))
         {
             return Task.FromResult<Result<EntityId>>(PrimitiveErrors.EntityExists);

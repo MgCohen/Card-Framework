@@ -24,7 +24,7 @@ public sealed class CatalogTests
     }
 
     [Test]
-    public void Catalog_KeyTypes_SortedByFullName()
+    public void Catalog_KeyTypes_SortedByKeyWithNoAssembly()
     {
         WireCatalog catalog = new WireCatalog(new[] { Match.Keys() });
         Type[] keys =
@@ -37,7 +37,7 @@ public sealed class CatalogTests
         Type[] byId = keys.OrderBy(catalog.IdOf).ToArray();
 
         Assert.That(catalog.Count, Is.EqualTo(10));
-        Assert.That(byId, Is.EqualTo(keys.OrderBy(t => t.FullName, StringComparer.Ordinal).ToArray()));
+        Assert.That(byId, Is.EqualTo(keys.OrderBy(WireCatalog.KeyOf, StringComparer.Ordinal).ToArray()));
         Assert.That(keys.Select(catalog.IdOf), Is.All.GreaterThanOrEqualTo(4));
     }
 
@@ -53,6 +53,22 @@ public sealed class CatalogTests
         Assert.That(second.Count, Is.EqualTo(first.Count));
         Assert.That(second.IdOf(typeof(ChangeComponent<Health>)), Is.EqualTo(first.IdOf(typeof(ChangeComponent<Health>))));
         Assert.That(second.IdOf(typeof(AddTag<Marked>)), Is.EqualTo(first.IdOf(typeof(AddTag<Marked>))));
+    }
+
+    [Test]
+    public void KeyOf_GenericType_HasNoAssemblyName()
+    {
+        string key = WireCatalog.KeyOf(typeof(ChangeComponent<Health>));
+
+        Assert.That(key, Is.EqualTo("Ecs.Contracts.Commands.ChangeComponent`1[Wire.Tests.Fixtures.Health]"));
+    }
+
+    [Test]
+    public void Catalog_Exactly256Types_DoesNotThrow()
+    {
+        WireCatalog catalog = new WireCatalog(new[] { ManyKeys.Exactly256() });
+
+        Assert.That(catalog.Count, Is.EqualTo(256));
     }
 
     [Test]

@@ -7,9 +7,9 @@ namespace Ecs.Handlers.Commands;
 
 public sealed class CreateEntityId : BeforeStep<CreateEntity>
 {
-    private readonly World world;
+    private readonly IWorldWriter world;
 
-    public CreateEntityId(World world)
+    public CreateEntityId(IWorldWriter world)
     {
         this.world = world;
     }

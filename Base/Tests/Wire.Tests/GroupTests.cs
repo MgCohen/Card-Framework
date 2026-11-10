@@ -86,6 +86,25 @@ public sealed class GroupTests
     }
 
     [Test]
+    public async Task Group_CreateAsync_ReturnsResultAndCloses()
+    {
+        int result = await match.Groups.CreateAsync(() => Task.FromResult(5));
+
+        Assert.That(result, Is.EqualTo(5));
+        Assert.That(match.Log.Entries[^1], Is.EqualTo(new GroupEnd(new BlockId(1), GroupOutcome.Completed)));
+    }
+
+    [Test]
+    public void Group_NestedCreateThrows_BothClosedErrored()
+    {
+        Assert.Throws<InvalidOperationException>(new Action(() => match.Groups.Create(
+            () => match.Groups.Create(() => throw new InvalidOperationException("fail")))));
+
+        Assert.That(match.Log.Entries[^2], Is.EqualTo(new GroupEnd(new BlockId(2), GroupOutcome.Errored)));
+        Assert.That(match.Log.Entries[^1], Is.EqualTo(new GroupEnd(new BlockId(1), GroupOutcome.Errored)));
+    }
+
+    [Test]
     public void Group_CreateThrows_ClosedErrored()
     {
         Assert.Throws<InvalidOperationException>(new Action(() => match.Groups.Create(() => throw new InvalidOperationException("fail"))));

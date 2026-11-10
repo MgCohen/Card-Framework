@@ -23,13 +23,19 @@ internal sealed class WireType
     public static WireType Of<TPrimitive, TResult, THandler>()
         where TPrimitive : class, IPrimitive<TResult>
     {
-        MemoryPackSerializer.Serialize<TPrimitive>(null);
+        LoadFormatter<TPrimitive>();
         return new WireType(typeof(TPrimitive), typeof(THandler), SendAsync<TPrimitive, TResult>);
     }
 
     public Task<Error?> SendAsync(IPrimitive primitive, ICommandSender bus, CancellationToken ct)
     {
         return send(primitive, bus, ct);
+    }
+
+    private static void LoadFormatter<T>()
+        where T : class
+    {
+        MemoryPackSerializer.Serialize<T>(null);
     }
 
     private static async Task<Error?> SendAsync<TPrimitive, TResult>(IPrimitive primitive, ICommandSender bus, CancellationToken ct)

@@ -23,7 +23,7 @@ public sealed class WireCatalog
         }
 
         List<Type> ordered = new List<Type> { typeof(CreateEntity), typeof(DeleteEntity), typeof(GroupStart), typeof(GroupEnd) };
-        ordered.AddRange(primitives.Keys.Except(ordered).OrderBy(t => t.FullName, StringComparer.Ordinal));
+        ordered.AddRange(primitives.Keys.Except(ordered).OrderBy(KeyOf, StringComparer.Ordinal));
         if (ordered.Count > MaxTypes)
         {
             throw new InvalidOperationException(
@@ -38,6 +38,17 @@ public sealed class WireCatalog
     }
 
     public int Count => byId.Length;
+
+    public static string KeyOf(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return type.FullName ?? type.Name;
+        }
+
+        Type definition = type.GetGenericTypeDefinition();
+        return (definition.FullName ?? definition.Name) + "[" + string.Join(",", type.GetGenericArguments().Select(KeyOf)) + "]";
+    }
 
     public byte IdOf(Type type)
     {
@@ -73,6 +84,17 @@ public sealed class WireCatalog
         Type type = byId[frame[0]];
         return MemoryPackSerializer.Deserialize(type, frame.Slice(1)) as IMessage
             ?? throw new InvalidOperationException($"The frame of {type.FullName} has no value.");
+    }
+
+    public Task<Error?> ApplyAsync(IMessage entry, ICommandSender bus, WireLog log, CancellationToken ct)
+    {
+        if (entry is IPrimitive primitive)
+        {
+            return SendAsync(primitive, bus, ct);
+        }
+
+        log.Append(entry);
+        return Task.FromResult<Error?>(null);
     }
 
     public Task<Error?> SendAsync(IPrimitive primitive, ICommandSender bus, CancellationToken ct)

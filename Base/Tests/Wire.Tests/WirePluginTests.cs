@@ -1,4 +1,6 @@
 using Ecs.Contracts.Commands;
+using Ecs.Domain.Shared;
+using VSA.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VSA.Composition;
@@ -53,5 +55,20 @@ public sealed class WirePluginTests
         using IHost host = Match.Host();
 
         Assert.That(host.Services.GetService<IPipeline<IPrimitive>>(), Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Builder_BuildTwiceForAScope_RecordsOnce()
+    {
+        using IHost host = Match.Host();
+        using IServiceScope scope = host.Services.CreateScope();
+        PrimitivePipelineBuilder builder = new PrimitivePipelineBuilder();
+        builder.Build(scope.ServiceProvider);
+
+        IPipeline<IPrimitive> pipeline = builder.Build(scope.ServiceProvider);
+        Result<EntityId> result = await pipeline.SendAsync<EntityId>(new CreateEntity(default));
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(scope.ServiceProvider.GetRequiredService<WireLog>().Entries, Has.Count.EqualTo(1));
     }
 }

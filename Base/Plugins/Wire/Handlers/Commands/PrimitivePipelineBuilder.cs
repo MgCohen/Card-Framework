@@ -7,38 +7,40 @@ namespace Wire.Handlers.Commands;
 
 public sealed class PrimitivePipelineBuilder : IPipelineBuilder<IPrimitive>
 {
+    private readonly List<Action<IPipelineBuilder<IPrimitive>>> settings = new List<Action<IPipelineBuilder<IPrimitive>>>();
+
     public IPipelineBuilder<IPrimitive> Handlers<THandlerBase>()
         where THandlerBase : class
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.Handlers<THandlerBase>());
     }
 
     public IPipelineBuilder<IPrimitive> HandlersOf(Type handlerBase)
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.HandlersOf(handlerBase));
     }
 
     public IPipelineBuilder<IPrimitive> Handlers(params Type[] handlers)
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.Handlers(handlers));
     }
 
     public IPipelineBuilder<IPrimitive> Runner<TRunner>()
         where TRunner : IRunner
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.Runner<TRunner>());
     }
 
     public IPipelineBuilder<IPrimitive> BeforeStep<TStep>()
         where TStep : class
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.BeforeStep<TStep>());
     }
 
     public IPipelineBuilder<IPrimitive> AfterStep<TStep>()
         where TStep : class
     {
-        throw new NotSupportedException();
+        return Add(builder => builder.AfterStep<TStep>());
     }
 
     public IPipeline<IPrimitive> Build(IServiceProvider services)
@@ -49,10 +51,20 @@ public sealed class PrimitivePipelineBuilder : IPipelineBuilder<IPrimitive>
             .Distinct()
             .ToArray();
 
-        return new PipelineBuilder<IPrimitive>()
+        IPipelineBuilder<IPrimitive> builder = new PipelineBuilder<IPrimitive>()
             .Handlers(handlers)
-            .BeforeStep<CreateEntityId>()
-            .AfterStep<RecordStep>()
-            .Build(services);
+            .BeforeStep<CreateEntityId>();
+        foreach (Action<IPipelineBuilder<IPrimitive>> setting in settings)
+        {
+            setting(builder);
+        }
+
+        return builder.AfterStep<RecordStep>().Build(services);
+    }
+
+    private PrimitivePipelineBuilder Add(Action<IPipelineBuilder<IPrimitive>> setting)
+    {
+        settings.Add(setting);
+        return this;
     }
 }

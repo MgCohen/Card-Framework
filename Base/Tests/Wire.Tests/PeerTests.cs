@@ -4,6 +4,7 @@ using Ecs.Domain;
 using Ecs.Domain.Shared;
 using Microsoft.Extensions.Hosting;
 using VSA.Contracts;
+using Wire.Contracts.Commands;
 using Wire.Tests.Fixtures;
 
 namespace Wire.Tests;
@@ -20,6 +21,7 @@ public sealed class PeerTests
         using Match server = new Match(serverHost);
         using Match client = new Match(clientHost);
 
+        BlockId group = server.Groups.Open();
         EntityId card = (await server.Send(new CreateEntity(default))).Value;
         EntityId other = (await server.Send(new CreateEntity(default))).Value;
         await server.Send(new ChangeComponent<Health>(card, new Health { Value = 27 }));
@@ -28,13 +30,14 @@ public sealed class PeerTests
         await server.Send(new ChangeComponent<Health>(card, new Health { Value = 20 }));
         await server.Send(new RemoveComponent<Armor>(card));
         await server.Send(new DeleteEntity(other));
+        server.Groups.Close(group);
 
         foreach (IMessage entry in server.Log.Entries)
         {
             ArrayBufferWriter<byte> frame = new ArrayBufferWriter<byte>();
             server.Catalog.Write(entry, frame);
-            IPrimitive received = (IPrimitive)client.Catalog.Read(frame.WrittenSpan);
-            Error? error = await client.Catalog.SendAsync(received, client.Bus, CancellationToken.None);
+            IMessage received = client.Catalog.Read(frame.WrittenSpan);
+            Error? error = await client.Catalog.ApplyAsync(received, client.Bus, client.Log, CancellationToken.None);
             Assert.That(error, Is.Null, entry.ToString());
         }
 

@@ -6,6 +6,10 @@ public interface IWorldWriter : IWorldReader
 {
     Entity Create();
 
+    Entity Create(EntityId id);
+
+    EntityId NextId();
+
     bool Delete(Entity entity);
 
     bool Set<T>(Entity entity, T value)

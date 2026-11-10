@@ -38,7 +38,7 @@ public sealed class RecordTests
     }
 
     [Test]
-    public async Task Record_Rejected_AppendsNothing()
+    public async Task Record_HandlerError_AppendsNothing()
     {
         EntityId id = (await match.Send(new CreateEntity(default))).Value;
         await match.Send(new ChangeComponent<Health>(id, new Health { Value = 27 }));
