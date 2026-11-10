@@ -9,6 +9,6 @@ public sealed class CardsModule : Module
 {
     public override void Configure(ModuleBuilder module)
     {
-        module.Services.AddSingleton(WireTypes.Of(t => t.Component<CardZone>().Tag<Card>()));
+        module.Services.AddSingleton(WireTypes.Of(t => t.Component<CardZone>().Component<Cost>().Tag<Card>()));
     }
 }

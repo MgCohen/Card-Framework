@@ -9,6 +9,6 @@ public sealed class ResourcesModule : Module
 {
     public override void Configure(ModuleBuilder module)
     {
-        module.Services.AddSingleton(WireTypes.Of(t => t.Component<Health>()));
+        module.Services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Component<Mana>()));
     }
 }

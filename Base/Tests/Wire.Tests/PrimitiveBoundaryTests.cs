@@ -6,14 +6,15 @@ using Wire.Tests.Fixtures;
 
 namespace Wire.Tests;
 
-// B6: only Ecs and Wire hook a primitive. A validator, a Before or After event, a step or a handler on a
+// B6: only Ecs, Wire and Trace hook a primitive. A validator, a Before or After event, a step or a handler on a
 // primitive in another module could change or stop a World write, or react to it. A hook on a supertype,
 // for example After<IMessage>, also runs on each primitive, so the check also uses probe primitives.
 public sealed class PrimitiveBoundaryTests
 {
     private static readonly string[] AppFolders = { "App/", "Plugins/", "Modules/" };
 
-    private static readonly string[] Owners = { "Ecs", "Wire" };
+    // Trace hooks each message to record it. Trace.Tests (TraceHookTests) checks that each Trace hook only reads.
+    private static readonly string[] Owners = { "Ecs", "Wire", "Trace" };
 
     private static readonly Type[] Probes =
     {

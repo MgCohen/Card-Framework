@@ -60,6 +60,22 @@ public sealed class ChangeResourceTests
     }
 
     [Test]
+    public async Task ManaKind_ChangesManaOnly()
+    {
+        EntityId target = (await match.Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
+        WireLog log = match.Services.GetRequiredService<WireLog>();
+
+        ChangeResourceCommand change = new ChangeResourceCommand(target, 6, Resource.Mana);
+
+        Result<int> result = await match.Commands.SendAsync(change, CancellationToken.None);
+
+        Assert.That(result.Value, Is.EqualTo(6));
+        Assert.That(match.Reader.Get<Mana>(match.Reader.ById(target)).Value, Is.EqualTo(6));
+        Assert.That(match.Reader.Has<Health>(match.Reader.ById(target)), Is.False);
+        Assert.That(log.Entries[^1], Is.EqualTo(new ChangeComponent<Mana>(target, new Mana { Value = 6 })));
+    }
+
+    [Test]
     public async Task UnknownTarget_GivesEntityMissing()
     {
         WireLog log = match.Services.GetRequiredService<WireLog>();
