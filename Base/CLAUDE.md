@@ -70,7 +70,9 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 | Phase | Cut from | PR into |
 |---|---|---|
 | P0 | `base` | `base` |
-| P1 and later | The previous phase branch | The previous phase branch |
+| P1 to P6 | The previous phase branch | The previous phase branch |
+| U1 | `p6-wire` | `p6-wire` |
+| P7 and later | `u1-unify`, then the previous phase branch | The branch it was cut from |
 
 If a review changes a parent branch, rebase the child branch on it.
 
