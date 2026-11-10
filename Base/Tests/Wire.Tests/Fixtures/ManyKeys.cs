@@ -3,8 +3,9 @@ using Wire.Handlers.Commands;
 
 namespace Wire.Tests.Fixtures;
 
-// All: 64 components and 64 tags give 256 primitive types; with the 4 built-in types, the catalog has 260.
-// Exactly256: 63 components and 63 tags give 252; with the built-in types, the catalog has 256.
+// All: 64 components and 64 tags give 256 primitive types; with the 5 built-in types, the catalog has 261.
+// Max255: 62 components and 63 tags give 250; with the built-in types, the catalog has 255. The count of built-in types is odd,
+// so the catalog cannot have exactly 256 types.
 public struct C00 : IComponent
 {
     public int Value { get; init; }
@@ -583,7 +584,7 @@ public struct T63 : ITag
 
 public static class ManyKeys
 {
-    public static WireTypes Exactly256()
+    public static WireTypes Max255()
     {
         return WireTypes.Of(t => t
             .Component<C00>()
@@ -648,7 +649,6 @@ public static class ManyKeys
             .Component<C59>()
             .Component<C60>()
             .Component<C61>()
-            .Component<C62>()
             .Tag<T00>()
             .Tag<T01>()
             .Tag<T02>()

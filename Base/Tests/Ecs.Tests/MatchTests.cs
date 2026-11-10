@@ -104,4 +104,15 @@ public sealed class MatchTests
 
         Assert.Throws<ObjectDisposedException>(new Action(() => _ = match.Commands));
     }
+
+    [Test]
+    public void Dispose_ReaderAndServicesThrow()
+    {
+        Match match = new Match(host.Services);
+
+        match.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(new Action(() => _ = match.Reader));
+        Assert.Throws<ObjectDisposedException>(new Action(() => _ = match.Services));
+    }
 }

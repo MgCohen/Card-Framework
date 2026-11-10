@@ -39,6 +39,8 @@ public sealed class WireCatalog
 
     public int Count => byId.Length;
 
+    public ulong Hash => throw new NotImplementedException();
+
     public static string KeyOf(Type type)
     {
         if (!type.IsGenericType)
