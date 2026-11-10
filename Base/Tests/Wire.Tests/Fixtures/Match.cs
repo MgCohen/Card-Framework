@@ -6,21 +6,21 @@ using VSA.Composition;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
+using EcsMatch = Ecs.Handlers.Commands.Match;
 
 namespace Wire.Tests.Fixtures;
 
-// One match: a scope of the host that gives one World, its reader and writer, and one log.
-// P7 owns the real match scope; this fixture registers the same three services for the tests.
+// One match on the real match owner. The tests also set a state on its World before they send primitives.
 internal sealed class Match : IDisposable
 {
-    private readonly IServiceScope scope;
+    private readonly EcsMatch match;
 
     public Match(IHost host)
     {
-        scope = host.Services.CreateScope();
+        match = new EcsMatch(host.Services);
     }
 
-    public World World => Get<World>();
+    public World World => match.World;
 
     public WireLog Log => Get<WireLog>();
 
@@ -28,11 +28,11 @@ internal sealed class Match : IDisposable
 
     public WireCatalog Catalog => Get<WireCatalog>();
 
-    public ICommandSender Bus => Get<ICommandSender>();
+    public ICommandSender Bus => match.Commands;
 
     public static IHost Host()
     {
-        return VsaBuilder.Create().UseGenericHost().Services(Register).Build();
+        return VsaBuilder.Create().UseGenericHost().Services(services => services.AddSingleton(Keys())).Build();
     }
 
     public static WireTypes Keys()
@@ -47,20 +47,12 @@ internal sealed class Match : IDisposable
 
     public void Dispose()
     {
-        scope.Dispose();
-    }
-
-    private static void Register(IServiceCollection services)
-    {
-        services.AddSingleton(Keys());
-        services.AddScoped(provider => provider.GetRequiredService<IWorldFactory>().Create());
-        services.AddScoped<IWorldWriter>(provider => provider.GetRequiredService<World>());
-        services.AddScoped(provider => provider.GetRequiredService<World>().Reader);
+        match.Dispose();
     }
 
     private T Get<T>()
         where T : notnull
     {
-        return scope.ServiceProvider.GetRequiredService<T>();
+        return match.Services.GetRequiredService<T>();
     }
 }
