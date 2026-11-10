@@ -17,6 +17,11 @@ public sealed class RemoveTagHandler<T> : PrimitiveHandler<RemoveTag<T>, Unit>
 
     public override Task<Result<Unit>> HandleAsync(Envelope<RemoveTag<T>> envelope)
     {
-        throw new NotImplementedException();
+        if (!writer.TryById(envelope.Message.Entity, out Entity entity))
+        {
+            return Task.FromResult<Result<Unit>>(PrimitiveErrors.EntityMissing);
+        }
+
+        return Task.FromResult(writer.RemoveTag<T>(entity) ? (Result<Unit>)Unit.Value : PrimitiveErrors.Unchanged);
     }
 }

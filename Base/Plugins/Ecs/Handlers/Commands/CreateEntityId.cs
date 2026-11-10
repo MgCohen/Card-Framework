@@ -16,6 +16,7 @@ public sealed class CreateEntityId : BeforeStep<CreateEntity>
 
     public override Task<CreateEntity> BeforeAsync(IEnvelope<CreateEntity> envelope)
     {
-        throw new NotImplementedException();
+        CreateEntity create = envelope.Message;
+        return Task.FromResult(create.Entity == default ? create with { Entity = world.NextId() } : create);
     }
 }

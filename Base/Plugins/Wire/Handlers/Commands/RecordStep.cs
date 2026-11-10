@@ -15,6 +15,11 @@ public sealed class RecordStep : AfterStep<IPrimitive>
 
     public override Task AfterAsync(IEnvelope<IPrimitive> envelope)
     {
-        throw new NotImplementedException();
+        if (envelope.State == EnvelopeState.Accepted && envelope.Error is null)
+        {
+            log.Append(envelope.Message);
+        }
+
+        return Task.CompletedTask;
     }
 }

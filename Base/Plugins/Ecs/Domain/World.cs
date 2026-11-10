@@ -10,6 +10,7 @@ namespace Ecs.Domain;
 public sealed class World : IWorldWriter
 {
     private readonly EntityStore store;
+    private int lastId;
 
     internal World(EntityStore store)
     {
@@ -23,17 +24,23 @@ public sealed class World : IWorldWriter
 
     public Entity Create()
     {
-        return new Entity(store.CreateEntity());
+        return Create(NextId());
     }
 
     public Entity Create(EntityId id)
     {
-        throw new NotImplementedException();
+        if (id.Value <= 0 || TryById(id, out _))
+        {
+            throw new ArgumentException($"The id {id.Value} is 0, negative or live.", nameof(id));
+        }
+
+        lastId = Math.Max(lastId, id.Value);
+        return new Entity(store.CreateEntity(id.Value));
     }
 
     public EntityId NextId()
     {
-        throw new NotImplementedException();
+        return new EntityId(lastId + 1);
     }
 
     public bool Delete(Entity entity)
@@ -147,7 +154,7 @@ public sealed class World : IWorldWriter
     public bool Is<T>(Entity entity, T value)
         where T : unmanaged, IComponent
     {
-        throw new NotImplementedException();
+        return Live(entity).TryGetComponent(out T current) && SameBytes(ref current, ref value);
     }
 
     private static bool SameBytes<T>(ref T left, ref T right)

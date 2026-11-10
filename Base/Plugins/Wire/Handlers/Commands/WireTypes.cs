@@ -1,19 +1,29 @@
+using Ecs.Contracts.Commands;
+using Ecs.Domain.Shared;
+using Ecs.Handlers.Commands;
+using VSA.Contracts;
+
 namespace Wire.Handlers.Commands;
 
 public sealed class WireTypes
 {
-    private WireTypes(IReadOnlyList<Type> messages, IReadOnlyList<Type> handlers)
+    internal static readonly WireTypes BuiltIn = new WireTypes(new[]
     {
-        Messages = messages;
-        Handlers = handlers;
+        WireType.Of<CreateEntity, EntityId, CreateEntityHandler>(),
+        WireType.Of<DeleteEntity, Unit, DeleteEntityHandler>(),
+    });
+
+    private WireTypes(IReadOnlyList<WireType> types)
+    {
+        Types = types;
     }
 
-    public IReadOnlyList<Type> Messages { get; }
-
-    public IReadOnlyList<Type> Handlers { get; }
+    internal IReadOnlyList<WireType> Types { get; }
 
     public static WireTypes Of(Action<WireTypesBuilder> build)
     {
-        throw new NotImplementedException();
+        WireTypesBuilder builder = new WireTypesBuilder();
+        build(builder);
+        return new WireTypes(builder.Types.ToArray());
     }
 }

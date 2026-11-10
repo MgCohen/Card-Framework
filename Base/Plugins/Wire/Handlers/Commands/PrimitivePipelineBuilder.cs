@@ -1,4 +1,6 @@
 using Ecs.Contracts.Commands;
+using Ecs.Handlers.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using VSA.Handlers;
 
 namespace Wire.Handlers.Commands;
@@ -41,6 +43,16 @@ public sealed class PrimitivePipelineBuilder : IPipelineBuilder<IPrimitive>
 
     public IPipeline<IPrimitive> Build(IServiceProvider services)
     {
-        throw new NotImplementedException();
+        Type[] handlers = WireTypes.BuiltIn.Types
+            .Concat(services.GetServices<WireTypes>().SelectMany(t => t.Types))
+            .Select(t => t.Handler)
+            .Distinct()
+            .ToArray();
+
+        return new PipelineBuilder<IPrimitive>()
+            .Handlers(handlers)
+            .BeforeStep<CreateEntityId>()
+            .AfterStep<RecordStep>()
+            .Build(services);
     }
 }

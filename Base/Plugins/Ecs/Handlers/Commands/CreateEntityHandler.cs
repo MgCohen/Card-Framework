@@ -16,6 +16,12 @@ public sealed class CreateEntityHandler : PrimitiveHandler<CreateEntity, EntityI
 
     public override Task<Result<EntityId>> HandleAsync(Envelope<CreateEntity> envelope)
     {
-        throw new NotImplementedException();
+        EntityId id = envelope.Message.Entity;
+        if (world.TryById(id, out _))
+        {
+            return Task.FromResult<Result<EntityId>>(PrimitiveErrors.EntityExists);
+        }
+
+        return Task.FromResult<Result<EntityId>>(world.Create(id).Id);
     }
 }

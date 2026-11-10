@@ -17,6 +17,11 @@ public sealed class AddTagHandler<T> : PrimitiveHandler<AddTag<T>, Unit>
 
     public override Task<Result<Unit>> HandleAsync(Envelope<AddTag<T>> envelope)
     {
-        throw new NotImplementedException();
+        if (!writer.TryById(envelope.Message.Entity, out Entity entity))
+        {
+            return Task.FromResult<Result<Unit>>(PrimitiveErrors.EntityMissing);
+        }
+
+        return Task.FromResult(writer.AddTag<T>(entity) ? (Result<Unit>)Unit.Value : PrimitiveErrors.Unchanged);
     }
 }

@@ -96,7 +96,7 @@ public sealed class GroupTests
     [Test]
     public void Group_CreateAsyncCancelled_ClosedCancelled()
     {
-        Assert.ThrowsAsync<OperationCanceledException>(
+        Assert.CatchAsync<OperationCanceledException>(
             new Func<Task>(() => match.Groups.CreateAsync(() => Task.FromCanceled(new CancellationToken(true)))));
 
         Assert.That(match.Log.Entries[^1], Is.EqualTo(new GroupEnd(new BlockId(1), GroupOutcome.Cancelled)));

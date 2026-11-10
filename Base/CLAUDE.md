@@ -81,7 +81,7 @@ On Windows, the branch `base` and the folder `Base/` have the same name. Write `
 ```text
 Base/
 ├─ App/Host/          the composition root: Program.cs, one VsaBuilder call
-├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network; later Wire)
+├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire)
 ├─ Modules/<Name>/    modules: the Cards sample
 └─ Tests/             dotnet test projects; App.Tests references the host
 ```
@@ -140,7 +140,7 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Only `Plugins/Ecs` references Friflo.Engine.ECS.
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
-- Only code in `Plugins/Ecs` writes the World. P6 adds the primitive handlers there.
+- Only the primitive handlers in `Plugins/Ecs` write the World (next section).
 - The container gives only `IWorldFactory`. It never gives a `World`, an `IWorldReader` or an `IWorldWriter`. The owner of a match makes the World and gives access to its scope (P7).
 - No type outside `Plugins/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
 
@@ -149,3 +149,23 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - `Directory.Build.targets` sets `LangVersion` 11, because Unity compiles C# 11. It is in the targets file because VSA.Sdk sets `LangVersion` after the props file.
 - C# 11 syntax is permitted.
 - Features that need runtime support are forbidden in the layers that Unity uses. An example is `static abstract` interface members.
+
+## Primitives and Wire
+
+Each World change is a primitive command. Send it on `ICommandSender` from the match scope.
+
+```text
+bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
+ └ pipeline of IPrimitive (Wire)
+    ├ CreateEntityId    BeforeStep: a default id gets World.NextId()
+    ├ handler (Ecs)     writes the World; no change gives PrimitiveErrors.Unchanged
+    └ RecordStep        AfterStep: an accepted primitive with no error goes to WireLog
+```
+
+- Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
+- Primitive handlers derive from `PrimitiveHandler<,>`, not `CommandHandler<,>`. The command scan builds an open `CommandHandler` pair, and that stops the host.
+- A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
+- The match scope gives `World`, `IWorldWriter`, `IWorldReader` and `WireLog` (P7).
+- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.SendAsync` sends a received primitive to a bus. Wire does not reference Network (P8 joins them).
+- `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
+- `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.

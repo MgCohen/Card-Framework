@@ -17,6 +17,11 @@ public sealed class RemoveComponentHandler<T> : PrimitiveHandler<RemoveComponent
 
     public override Task<Result<Unit>> HandleAsync(Envelope<RemoveComponent<T>> envelope)
     {
-        throw new NotImplementedException();
+        if (!writer.TryById(envelope.Message.Entity, out Entity entity))
+        {
+            return Task.FromResult<Result<Unit>>(PrimitiveErrors.EntityMissing);
+        }
+
+        return Task.FromResult(writer.Remove<T>(entity) ? (Result<Unit>)Unit.Value : PrimitiveErrors.Unchanged);
     }
 }

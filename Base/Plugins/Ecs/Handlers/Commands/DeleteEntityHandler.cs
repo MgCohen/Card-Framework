@@ -15,6 +15,12 @@ public sealed class DeleteEntityHandler : PrimitiveHandler<DeleteEntity, Unit>
 
     public override Task<Result<Unit>> HandleAsync(Envelope<DeleteEntity> envelope)
     {
-        throw new NotImplementedException();
+        if (!writer.TryById(envelope.Message.Entity, out Entity entity))
+        {
+            return Task.FromResult<Result<Unit>>(PrimitiveErrors.EntityMissing);
+        }
+
+        writer.Delete(entity);
+        return Task.FromResult<Result<Unit>>(Unit.Value);
     }
 }

@@ -17,6 +17,12 @@ public sealed class ChangeComponentHandler<T> : PrimitiveHandler<ChangeComponent
 
     public override Task<Result<T>> HandleAsync(Envelope<ChangeComponent<T>> envelope)
     {
-        throw new NotImplementedException();
+        ChangeComponent<T> change = envelope.Message;
+        if (!writer.TryById(change.Entity, out Entity entity))
+        {
+            return Task.FromResult<Result<T>>(PrimitiveErrors.EntityMissing);
+        }
+
+        return Task.FromResult(writer.Set(entity, change.Value) ? (Result<T>)change.Value : PrimitiveErrors.Unchanged);
     }
 }
