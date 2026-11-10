@@ -4,27 +4,37 @@ namespace Trace.Handlers.Commands;
 
 public sealed class TraceLog
 {
-    public IReadOnlyList<TraceEvent> Events => throw new NotImplementedException();
+    private readonly List<TraceEvent> events = new List<TraceEvent>();
 
-    public bool Recording => throw new NotImplementedException();
+    public IReadOnlyList<TraceEvent> Events => events;
+
+    public bool Recording { get; private set; }
 
     public void Start()
     {
-        throw new NotImplementedException();
+        Recording = true;
     }
 
     public void Add(TraceEvent entry)
     {
-        throw new NotImplementedException();
+        if (Recording)
+        {
+            events.Add(entry);
+        }
     }
 
     public void Wire(int entry, IMessage message)
     {
-        throw new NotImplementedException();
+        TraceEvent? result = events.LastOrDefault(
+            e => e.Kind == TraceKind.Result && ReferenceEquals(e.Message, message));
+        string outcome = $"entry {entry}";
+        Add(result is null
+            ? new TraceEvent(TraceKind.Wire, 0, null, 0, message, outcome)
+            : new TraceEvent(TraceKind.Wire, result.Id, result.Parent, result.Depth, message, outcome));
     }
 
     public void Clear()
     {
-        throw new NotImplementedException();
+        events.Clear();
     }
 }

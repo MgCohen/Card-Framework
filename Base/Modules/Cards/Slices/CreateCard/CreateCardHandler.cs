@@ -34,6 +34,13 @@ public sealed class CreateCardHandler : CommandHandler<CreateCardCommand, Entity
 
         CardZone zone = new CardZone { Value = envelope.Message.Zone };
         Result<CardZone> placed = await commands.SendAsync(new ChangeComponent<CardZone>(card, zone), ct);
-        return placed.IsSuccess ? card : placed.Error!;
+        if (!placed.IsSuccess || envelope.Message.Cost == 0)
+        {
+            return placed.IsSuccess ? card : placed.Error!;
+        }
+
+        Cost cost = new Cost { Value = envelope.Message.Cost };
+        Result<Cost> priced = await commands.SendAsync(new ChangeComponent<Cost>(card, cost), ct);
+        return priced.IsSuccess ? card : priced.Error!;
     }
 }

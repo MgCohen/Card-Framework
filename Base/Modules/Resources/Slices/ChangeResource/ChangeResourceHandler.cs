@@ -1,5 +1,6 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Domain.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Resources.Domain.Shared;
 using VSA.Contracts;
@@ -17,7 +18,13 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
         this.commands = commands;
     }
 
-    public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand> envelope)
+    public override Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand> envelope)
+    {
+        return envelope.Message.Resource == Resource.Mana ? ChangeAsync<Mana>(envelope) : ChangeAsync<Health>(envelope);
+    }
+
+    private async Task<Result<int>> ChangeAsync<T>(Envelope<ChangeResourceCommand> envelope)
+        where T : unmanaged, IValue<int>
     {
         IWorldReader world = envelope.Services.GetRequiredService<IWorldReader>();
         ChangeResourceCommand change = envelope.Message;
@@ -31,10 +38,10 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
             return PrimitiveErrors.Unchanged;
         }
 
-        int current = world.TryGet(target, out Health health) ? health.Value : 0;
-        Health next = new Health { Value = current + change.Delta };
-        ChangeComponent<Health> write = new ChangeComponent<Health>(change.Target, next);
-        Result<Health> written = await commands.SendAsync(write, envelope.Cancellation);
+        int current = world.TryGet(target, out T value) ? value.Value : 0;
+        T next = new T { Value = current + change.Delta };
+        ChangeComponent<T> write = new ChangeComponent<T>(change.Target, next);
+        Result<T> written = await commands.SendAsync(write, envelope.Cancellation);
         return written.IsSuccess ? next.Value : written.Error!;
     }
 }

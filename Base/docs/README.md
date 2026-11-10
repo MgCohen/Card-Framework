@@ -16,5 +16,6 @@ flowchart LR
 | [layout.md](layout.md) | Folders, projects, plugins and modules |
 | [write-path.md](write-path.md) | Match, reader, primitives, log, bypass routes |
 | [peers.md](peers.md) | Server and client peers, frames |
+| [trace.md](trace.md) | The play command and the message trace |
 
 The rules for sessions that change the base are in [../CLAUDE.md](../CLAUDE.md).

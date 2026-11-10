@@ -67,7 +67,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 | `MatchWorld.Writer` outside Ecs | Does not compile | Compiler |
 | Cast of the reader to `IWorldWriter` | `InvalidCastException` | Separate reader object (B4) |
 | Reader, writer, World or `MatchWorld` in a field outside Ecs | Gate fails | B5 |
-| Hook on a primitive outside Ecs and Wire | Gate fails | B6 |
+| Hook on a primitive outside Ecs, Wire and Trace | Gate fails | B6 |
 | `AddPipeline` for a primitive type in a module | Takes the primitives from Wire | Review |
 | `IWorldFactory.Create()` or `new Match(...)` in a handler | A separate World | Not a risk to the match |
 | Primitive or reader in a scope with no match | `InvalidOperationException` | `MatchWorld` |

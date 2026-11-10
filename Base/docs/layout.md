@@ -2,19 +2,21 @@
 
 [Back to the index](README.md)
 
-`App/Host` is the only composition root. Plugins hold the base systems, and modules hold gameplay slices. Each plugin and module registers only its own services, in its root class.
+`App/Host` and `App/Cli` are the composition roots. Plugins hold the base systems, and modules hold gameplay slices. Each plugin and module registers only its own services, in its root class.
 
 ```text
 Base/
 ├─ App/Host/            Program.cs: VsaBuilder.Create(args).UseWebHost().Build().RunAsync()
+├─ App/Cli/             Program.cs, PlayRun: the play command with its trace (trace.md)
 ├─ Plugins/             base systems, one folder for each plugin
 │  ├─ TypeKeys/         TypeKey, one frozen registry for each key root
 │  ├─ Ecs/              World, reader, writer, Match, six primitives · the only Friflo user
 │  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep · MemoryPack
-│  └─ Network/          ITransport, loopback transport
+│  ├─ Network/          ITransport, loopback transport
+│  └─ Trace/            TraceBefore, TraceAfter, TraceLog, TraceText
 ├─ Modules/             gameplay, one folder for each module
-│  ├─ Cards/            CreateCard, MoveCard · keys Card, CardZone, Zone
-│  └─ Resources/        ChangeResource · key Health
+│  ├─ Cards/            CreateCard, MoveCard, PlayCard · keys Card, CardZone, Cost, Zone
+│  └─ Resources/        ChangeResource · keys Health, Mana, Resource
 ├─ Tests/               one dotnet test project for each area
 └─ docs/                these pages
 ```
@@ -28,12 +30,13 @@ Base/
 
 ```text
 Modules/Cards/
-├─ Cards.csproj, CardsModule.cs        root: registers WireTypes.Of(t => t.Component<CardZone>().Tag<Card>())
+├─ Cards.csproj, CardsModule.cs        root: registers WireTypes.Of(t => t.Component<CardZone>().Component<Cost>().Tag<Card>())
 ├─ Projects/                           Domain.Shared, Domain, Contracts.Commands, Handlers.Commands
-├─ Domain/Shared/                      Card, CardZone, Zone: keys that other modules can read
+├─ Domain/Shared/                      Card, CardZone, Cost, Zone: keys that other modules can read
 └─ Slices/
    ├─ CreateCard/                      CreateCardCommand, CreateCardHandler
-   └─ MoveCard/                        MoveCardCommand, MoveCardHandler, MoveCardValidator, CardErrors
+   ├─ MoveCard/                        MoveCardCommand, MoveCardHandler, MoveCardValidator, CardErrors
+   └─ PlayCard/                        PlayCardCommand, PlayCardHandler, PlayCardValidator, PlayCardErrors
 ```
 
 - A key is an unmanaged struct in `Domain/Shared/`: `IValue<T>`, `IComponent` or `ITag`.
@@ -44,7 +47,8 @@ Modules/Cards/
 
 | Project | Area |
 |---|---|
-| `Cards.Tests` | Acceptance test, slices, the first module validator |
+| `Cards.Tests` | Acceptance test, slices, the module validators |
+| `Trace.Tests` | Trace hooks, trace text, the play command |
 | `Ecs.Tests` | World, Match, Friflo boundary (B1 to B5) |
 | `Wire.Tests` | Primitives, log, catalog, groups, peers, B6 |
 | `Schema.Tests` | Key assemblies load in `Build()`; own process |
