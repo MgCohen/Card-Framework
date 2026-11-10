@@ -9,7 +9,7 @@ Base/
 ├─ App/Host/            Program.cs: VsaBuilder.Create(args).UseWebHost().Build().RunAsync()
 ├─ Plugins/             base systems, one folder for each plugin
 │  ├─ TypeKeys/         TypeKey, one frozen registry for each key root
-│  ├─ Ecs/              World, reader, writer, Match, six primitives · the only Friflo user
+│  ├─ Ecs/              World, reader, writer, MatchFactory, six primitives · the only Friflo user
 │  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep · MemoryPack
 │  └─ Network/          ITransport, loopback transport
 ├─ Modules/             gameplay, one folder for each module
@@ -45,7 +45,7 @@ Modules/Cards/
 | Project | Area |
 |---|---|
 | `Cards.Tests` | Acceptance test, slices, the first module validator |
-| `Ecs.Tests` | World, Match, Friflo boundary (B1 to B5) |
+| `Ecs.Tests` | World, match scope, Friflo boundary (B1 to B5) |
 | `Wire.Tests` | Primitives, log, catalog, groups, peers, B6 |
 | `Schema.Tests` | Key assemblies load in `Build()`; own process |
 | `App.Tests`, `TypeKeys.Tests`, `Network.Tests`, `Smoke.Tests` | Host, keys, transport, packages |

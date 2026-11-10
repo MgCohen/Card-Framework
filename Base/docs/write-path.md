@@ -8,27 +8,30 @@ A gameplay handler reads the World through its call and writes it only with prim
 
 ```csharp
 using IHost host = VsaBuilder.Create().UseGenericHost().Build();
-using Match match = new Match(host.Services);            // one scope, one World
+using IServiceScope match = host.Services.GetRequiredService<MatchFactory>().Create();   // one scope, one World
+ICommandSender commands = match.ServiceProvider.GetRequiredService<ICommandSender>();
+IWorldReader reader = match.ServiceProvider.GetRequiredService<IWorldReader>();
 
-EntityId card = (await match.Commands.SendAsync(new CreateCardCommand(Zone.Hand), ct)).Value;
-await match.Commands.SendAsync(new MoveCardCommand(card, Zone.Board), ct);
-await match.Commands.SendAsync(new ChangeResourceCommand(card, 5), ct);
+EntityId card = (await commands.SendAsync(new CreateCardCommand(Zone.Hand), ct)).Value;
+await commands.SendAsync(new MoveCardCommand(card, Zone.Board), ct);
+await commands.SendAsync(new ChangeResourceCommand(card, 5), ct);
 
-int health = match.Reader.Get<Health>(match.Reader.ById(card)).Value;   // 5
-WireLog log = match.Services.GetRequiredService<WireLog>();             // 5 entries
+int health = reader.Get<Health>(reader.ById(card)).Value;                        // 5
+WireLog log = match.ServiceProvider.GetRequiredService<WireLog>();               // 5 entries
 ```
 
-| Member | Gives |
+| Type | Gives |
 |---|---|
-| `match.Commands` | `ICommandSender` of the match scope |
-| `match.Reader` | Read access to the match World |
-| `match.Services` | The match scope: `IWorldReader`, `WireLog`, `GroupService` |
+| `MatchFactory.Create()` | A new scope with a new World bound to it |
+| `ICommandSender` of the scope | Sends into the match: `envelope.Services` is the match scope |
+| `IWorldReader` of the scope | Read access to the match World |
+| `WireLog`, `GroupService` of the scope | The log and the groups of the match |
 | `match.Dispose()` | Ends the scope |
 
 ## One command
 
 ```text
-match.Commands.SendAsync(MoveCardCommand)                       envelope.Services = match scope
+commands.SendAsync(MoveCardCommand)                             envelope.Services = match scope
  └ default command pipeline
     ├ MoveCardValidator      reads IWorldReader from envelope.Services; an error rejects the move
     └ MoveCardHandler        ICommandSender of the match scope
@@ -52,7 +55,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 
 | Code | Gets | Access |
 |---|---|---|
-| Game driver | `Match` | Reads `match.Reader`; sends commands |
+| Game driver | The match scope | Reads `IWorldReader`; sends commands |
 | Gameplay handler, validator | `envelope.Services` | Reads `IWorldReader`; sends primitives |
 | Ecs and Wire tests | Internal `MatchWorld.World` | Set a state before a test sends primitives |
 | Primitive handler (Ecs) | `MatchWorld` | Writes through the internal `Writer` |
@@ -69,13 +72,13 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 | Reader, writer, World or `MatchWorld` in a field outside Ecs | Gate fails | B5 |
 | Hook on a primitive outside Ecs and Wire | Gate fails | B6 |
 | `AddPipeline` for a primitive type in a module | Takes the primitives from Wire | Review |
-| `IWorldFactory.Create()` or `new Match(...)` in a handler | A separate World | Not a risk to the match |
+| `IWorldFactory.Create()` or `MatchFactory.Create()` in a handler | A separate World | Not a risk to the match |
 | Primitive or reader in a scope with no match | `InvalidOperationException` | `MatchWorld` |
 | `WireLog.Append` from a module | A false log entry; no World write | Review |
 
 ## Schema load
 
-Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. `Build()` loads each key assembly through the module scan and `WireTypes.Of` in `Configure`, before a `Match` exists. `Schema.Tests` checks this in its own process.
+Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. `Build()` loads each key assembly through the module scan and `WireTypes.Of` in `Configure`, before a match exists. `Schema.Tests` checks this in its own process.
 
 ## Non-goals
 

@@ -93,7 +93,7 @@ public sealed class FrifloBoundaryTests
     }
 
     // The owner of a match gives a reader to its scope. A field outside Ecs keeps it after the scope. WorldOwners
-    // lists the types outside Ecs that may keep one, by full name. The match owner (Match, MatchWorld) is in Ecs.
+    // lists the types outside Ecs that may keep one, by full name. The match owner (MatchFactory, MatchWorld) is in Ecs.
     [Test]
     public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
     {

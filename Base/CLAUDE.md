@@ -144,8 +144,8 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
-- No service gives a `World` or an `IWorldWriter`. `new Match(host.Services)` makes a scope and its World. The scope gives `IWorldReader`; a scope with no match throws.
-- The primitive handlers get the writer through the scoped `MatchWorld`. Its writer member is internal to Ecs.
+- No service gives a `World` or an `IWorldWriter`. `MatchFactory.Create()` makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
+- The primitive handlers get the writer through the scoped `MatchWorld` (`Ecs.Domain`). Its writer member is internal to Ecs.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
 - A module that reads the World in a handler has a `Domain` project, also with no files. Without it, the handler cannot see `IWorldReader`.
 - Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan and `WireTypes.Of` in `Configure`. Make no World before `Build()`.
@@ -172,7 +172,7 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
 - Primitive handlers derive from `PrimitiveHandler<,>`, not `CommandHandler<,>`. The command scan builds an open `CommandHandler` pair, and that stops the host.
 - A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
-- The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender` (`match.Commands`).
+- The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
 - `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.

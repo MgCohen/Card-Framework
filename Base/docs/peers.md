@@ -2,11 +2,11 @@
 
 [Back to the index](README.md)
 
-Each peer has its own host, its own `Match` and its own World. The server sends its `WireLog` entries as frames, and a client applies them on its own bus, so the same Ecs handlers write each World.
+Each peer has its own host, its own match scope and its own World. The server sends its `WireLog` entries as frames, and a client applies them on its own bus, so the same Ecs handlers write each World.
 
 ```mermaid
 flowchart LR
-    S[Server Match] -->|appends| L[Server WireLog]
+    S[Server match] -->|appends| L[Server WireLog]
     L -->|WireCatalog.Write| F[Frame]
     F -->|ITransport| C[Client WireCatalog.Read]
     C -->|ApplyAsync| B[Client bus]
@@ -30,7 +30,7 @@ flowchart LR
 | Part | Phase | State |
 |---|---|---|
 | Log, catalog, client apply | P6 | Done; `Wire.Tests/PeerTests` |
-| `Match`, gameplay modules | P7 | Done |
+| Match scope (`MatchFactory`), gameplay modules | P7 | Done |
 | Server and client roles, frames on `ITransport` | P8 | Planned |
 | Test host: one server, N clients, loopback | P8 | Planned |
 | Catalog hash in the handshake | P8 | Planned |

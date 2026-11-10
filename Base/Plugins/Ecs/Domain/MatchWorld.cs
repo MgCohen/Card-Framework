@@ -1,6 +1,4 @@
-using Ecs.Domain;
-
-namespace Ecs.Handlers.Commands;
+namespace Ecs.Domain;
 
 public sealed class MatchWorld
 {
