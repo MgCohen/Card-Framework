@@ -148,8 +148,8 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - The primitive handlers get the writer through the scoped `MatchWorld`. Its writer member is internal to Ecs.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
 - A module that reads the World in a handler has a `Domain` project, also with no files. Without it, the handler cannot see `IWorldReader`.
-- Friflo reads the loaded assemblies when it makes the first World. A module registers its keys with `WireTypes.Of` in `Configure`, so `Build()` loads each key assembly first. Make no World before `Build()`.
-- No type outside `Plugins/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
+- Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan and `WireTypes.Of` in `Configure`. Make no World before `Build()`.
+- No type outside `Plugins/Ecs` keeps a `World`, a reader, a writer or a `MatchWorld` in a field (`FrifloBoundaryTests` B5).
 
 ## C# 11
 

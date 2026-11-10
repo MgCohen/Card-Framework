@@ -42,7 +42,8 @@ public sealed class LateKeyAssemblyTests
     private static async Task<string> Write(IHost host)
     {
         using Match match = new Match(host.Services);
-        EntityId card = (await match.Commands.SendAsync(new CreateCardCommand(Zone.Board), CancellationToken.None)).Value;
+        CreateCardCommand create = new CreateCardCommand(Zone.Board);
+        EntityId card = (await match.Commands.SendAsync(create, CancellationToken.None)).Value;
         await match.Commands.SendAsync(new ChangeResourceCommand(card, 7), CancellationToken.None);
 
         IWorldReader world = match.Reader;

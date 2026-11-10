@@ -26,8 +26,13 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
             return PrimitiveErrors.EntityMissing;
         }
 
-        world.TryGet(target, out Health current);
-        Health next = new Health { Value = current.Value + change.Delta };
+        if (change.Delta == 0)
+        {
+            return PrimitiveErrors.Unchanged;
+        }
+
+        int current = world.TryGet(target, out Health health) ? health.Value : 0;
+        Health next = new Health { Value = current + change.Delta };
         ChangeComponent<Health> write = new ChangeComponent<Health>(change.Target, next);
         Result<Health> written = await commands.SendAsync(write, envelope.Cancellation);
         return written.IsSuccess ? next.Value : written.Error!;

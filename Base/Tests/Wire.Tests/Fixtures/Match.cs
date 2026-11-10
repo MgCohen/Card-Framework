@@ -6,6 +6,7 @@ using VSA.Composition;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
+using Ecs.Handlers.Commands;
 using EcsMatch = Ecs.Handlers.Commands.Match;
 
 namespace Wire.Tests.Fixtures;
@@ -20,7 +21,7 @@ internal sealed class Match : IDisposable
         match = new EcsMatch(host.Services);
     }
 
-    public World World => match.World;
+    public World World => Get<MatchWorld>().World;
 
     public IServiceProvider Services => match.Services;
 

@@ -48,7 +48,8 @@ public sealed class CardsAcceptanceTests
         Assert.That(world.Get<CardZone>(world.ById(card)).Value, Is.EqualTo(Zone.Board));
         Assert.That(world.Has<Health>(world.ById(card)), Is.False);
         Assert.That(log.Entries, Has.Count.EqualTo(4));
-        Assert.That(log.Entries[3], Is.EqualTo(new ChangeComponent<CardZone>(card, new CardZone { Value = Zone.Board })));
+        CardZone board = new CardZone { Value = Zone.Board };
+        Assert.That(log.Entries[3], Is.EqualTo(new ChangeComponent<CardZone>(card, board)));
 
         Result<int> raised = await Send(match, new ChangeResourceCommand(card, 5));
         Report("ChangeResource +5", world, card, log);

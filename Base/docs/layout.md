@@ -7,12 +7,12 @@
 ```text
 Base/
 ├─ App/Host/            Program.cs: VsaBuilder.Create(args).UseWebHost().Build().RunAsync()
-├─ Plugins/             base systems, one folder for each layer
+├─ Plugins/             base systems, one folder for each plugin
 │  ├─ TypeKeys/         TypeKey, one frozen registry for each key root
 │  ├─ Ecs/              World, reader, writer, Match, six primitives · the only Friflo user
 │  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep · MemoryPack
 │  └─ Network/          ITransport, loopback transport
-├─ Modules/             gameplay, one folder for each slice
+├─ Modules/             gameplay, one folder for each module
 │  ├─ Cards/            CreateCard, MoveCard · keys Card, CardZone, Zone
 │  └─ Resources/        ChangeResource · key Health
 ├─ Tests/               one dotnet test project for each area

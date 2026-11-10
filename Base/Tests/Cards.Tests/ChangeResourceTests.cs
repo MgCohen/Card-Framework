@@ -36,10 +36,27 @@ public sealed class ChangeResourceTests
     {
         EntityId target = (await match.Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
 
-        Result<int> result = await match.Commands.SendAsync(new ChangeResourceCommand(target, -4), CancellationToken.None);
+        ChangeResourceCommand change = new ChangeResourceCommand(target, -4);
+
+        Result<int> result = await match.Commands.SendAsync(change, CancellationToken.None);
 
         Assert.That(result.Value, Is.EqualTo(-4));
         Assert.That(match.Reader.Get<Health>(match.Reader.ById(target)).Value, Is.EqualTo(-4));
+    }
+
+    [Test]
+    public async Task ZeroDelta_GivesUnchanged_AndAddsNoHealth()
+    {
+        EntityId target = (await match.Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
+        WireLog log = match.Services.GetRequiredService<WireLog>();
+
+        ChangeResourceCommand change = new ChangeResourceCommand(target, 0);
+
+        Result<int> result = await match.Commands.SendAsync(change, CancellationToken.None);
+
+        Assert.That(result.Error, Is.EqualTo(PrimitiveErrors.Unchanged));
+        Assert.That(match.Reader.Has<Health>(match.Reader.ById(target)), Is.False);
+        Assert.That(log.Entries, Has.Count.EqualTo(1));
     }
 
     [Test]

@@ -54,6 +54,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 |---|---|---|
 | Game driver | `Match` | Reads `match.Reader`; sends commands |
 | Gameplay handler, validator | `envelope.Services` | Reads `IWorldReader`; sends primitives |
+| Ecs and Wire tests | Internal `MatchWorld.World` | Set a state before a test sends primitives |
 | Primitive handler (Ecs) | `MatchWorld` | Writes through the internal `Writer` |
 | Code with no match scope | The app services | None: reader and primitives throw |
 
@@ -65,14 +66,16 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 | `GetService<IWorldWriter>()` in a match scope | `null` | Container |
 | `MatchWorld.Writer` outside Ecs | Does not compile | Compiler |
 | Cast of the reader to `IWorldWriter` | `InvalidCastException` | Separate reader object (B4) |
-| Reader, writer or World in a field outside Ecs | Gate fails | B5 |
+| Reader, writer, World or `MatchWorld` in a field outside Ecs | Gate fails | B5 |
 | Hook on a primitive outside Ecs and Wire | Gate fails | B6 |
 | `AddPipeline` for a primitive type in a module | Takes the primitives from Wire | Review |
-| `IWorldFactory.Create()` in a handler | A separate World | Not a risk to the match |
+| `IWorldFactory.Create()` or `new Match(...)` in a handler | A separate World | Not a risk to the match |
+| Primitive or reader in a scope with no match | `InvalidOperationException` | `MatchWorld` |
+| `WireLog.Append` from a module | A false log entry; no World write | Review |
 
 ## Schema load
 
-Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. Each module registers its keys with `WireTypes.Of` in `Configure`, so `Build()` loads each key assembly before a `Match` exists. `Schema.Tests` checks this in its own process.
+Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. `Build()` loads each key assembly through the module scan and `WireTypes.Of` in `Configure`, before a `Match` exists. `Schema.Tests` checks this in its own process.
 
 ## Non-goals
 

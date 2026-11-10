@@ -68,8 +68,9 @@ public sealed class MatchTests
     public void ScopeWithNoMatch_ReaderThrows()
     {
         using IServiceScope scope = host.Services.CreateScope();
+        IServiceProvider services = scope.ServiceProvider;
 
-        Assert.Throws<InvalidOperationException>(new Action(() => scope.ServiceProvider.GetRequiredService<IWorldReader>()));
+        Assert.Throws<InvalidOperationException>(new Action(() => services.GetRequiredService<IWorldReader>()));
         Assert.Throws<InvalidOperationException>(new Action(() => host.Services.GetRequiredService<IWorldReader>()));
     }
 
@@ -89,7 +90,9 @@ public sealed class MatchTests
         using Match match = new Match(host.Services);
         MatchWorld world = match.Services.GetRequiredService<MatchWorld>();
 
-        Assert.Throws<InvalidOperationException>(new Action(() => world.Bind(match.World)));
+        World other = host.Services.GetRequiredService<IWorldFactory>().Create();
+
+        Assert.Throws<InvalidOperationException>(new Action(() => world.Bind(other)));
     }
 
     [Test]

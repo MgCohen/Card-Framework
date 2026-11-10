@@ -50,7 +50,8 @@ public sealed class MoveCardValidatorTests
     [Test]
     public async Task MoveToTheSameZone_IsRejected()
     {
-        EntityId card = (await match.Commands.SendAsync(new CreateCardCommand(Zone.Hand), CancellationToken.None)).Value;
+        CreateCardCommand create = new CreateCardCommand(Zone.Hand);
+        EntityId card = (await match.Commands.SendAsync(create, CancellationToken.None)).Value;
 
         await AssertRejected(new MoveCardCommand(card, Zone.Hand), CardErrors.AlreadyThere);
     }

@@ -12,8 +12,16 @@ public sealed class Match : IDisposable
     public Match(IServiceProvider app)
     {
         scope = app.CreateScope();
-        world = scope.ServiceProvider.GetRequiredService<MatchWorld>();
-        world.Bind(scope.ServiceProvider.GetRequiredService<IWorldFactory>().Create());
+        try
+        {
+            world = scope.ServiceProvider.GetRequiredService<MatchWorld>();
+            world.Bind(scope.ServiceProvider.GetRequiredService<IWorldFactory>().Create());
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
     }
 
     public IServiceProvider Services => scope.ServiceProvider;
@@ -21,8 +29,6 @@ public sealed class Match : IDisposable
     public ICommandSender Commands => Services.GetRequiredService<ICommandSender>();
 
     public IWorldReader Reader => world.Reader;
-
-    internal World World => world.World;
 
     public void Dispose()
     {

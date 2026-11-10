@@ -4,7 +4,7 @@ namespace Ecs.Handlers.Commands;
 
 public sealed class MatchWorld
 {
-    private World? world;
+    private World? bound;
 
     public IWorldReader Reader => Bound().Reader;
 
@@ -12,19 +12,19 @@ public sealed class MatchWorld
 
     internal World World => Bound();
 
-    internal void Bind(World match)
+    internal void Bind(World world)
     {
-        if (world != null)
+        if (bound != null)
         {
             throw new InvalidOperationException("This scope already has the World of a match.");
         }
 
-        world = match;
+        bound = world;
     }
 
     private World Bound()
     {
-        return world ?? throw new InvalidOperationException(
+        return bound ?? throw new InvalidOperationException(
             "No match owns this scope. Make a Match, then send and read through its scope.");
     }
 }

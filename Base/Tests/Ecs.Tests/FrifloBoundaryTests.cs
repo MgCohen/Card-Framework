@@ -3,6 +3,7 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Ecs.Domain;
+using Ecs.Handlers.Commands;
 
 namespace Ecs.Tests;
 
@@ -106,7 +107,7 @@ public sealed class FrifloBoundaryTests
             }
         }
 
-        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(3));
+        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(4));
         Assert.That(offenders, Is.Empty);
     }
 
@@ -114,7 +115,7 @@ public sealed class FrifloBoundaryTests
     {
         const BindingFlags Fields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
             | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader) };
+        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader), typeof(MatchWorld) };
 
         return type.GetFields(Fields)
             .Where(f => Unwrap(f.FieldType).Any(t => world.Contains(t)))
@@ -270,12 +271,15 @@ public class WorldFieldProbe
 
     private readonly List<IWorldReader> readers;
 
-    public WorldFieldProbe(World world)
+    private readonly MatchWorld match;
+
+    public WorldFieldProbe(World world, MatchWorld match)
     {
         shared = world;
         writer = world;
         readers = new List<IWorldReader> { world.Reader };
+        this.match = match;
     }
 
-    public bool IsEmpty => shared == null && writer == null && readers.Count == 0;
+    public bool IsEmpty => shared == null && writer == null && readers.Count == 0 && match == null;
 }
