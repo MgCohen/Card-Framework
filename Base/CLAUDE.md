@@ -174,6 +174,26 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
 - The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender` (`match.Commands`).
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
-- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
+- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network: `Plugins/Peers` joins them.
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
 - `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.
+
+## Peers
+
+Each peer is its own app host with one `Match`. A role flag at the composition root selects the role service, as `EngineInstaller(isServer)` does in the Unity Framework.
+
+```csharp
+VsaBuilder.Create().UseGenericHost().Services(s =>
+{
+    foreach (ITransport transport in transports) s.AddSingleton(transport);   // server: one for each client
+    if (role == PeerRole.Server) s.AddScoped<WireSender>();
+    else s.AddScoped<WireReceiver>();
+}).Build();
+```
+
+- The code that makes the `Match` resolves the role service one time from `match.Services`. The service subscribes in its constructor.
+- `WireSender` sends `WireHello(catalog.Hash)`, then one frame for each `WireLog.Appended` entry, to each client transport.
+- `WireReceiver` applies frames in order. A different hash, an entry before the hello, or an entry with an `Error` faults `Idle`.
+- A client registers no `WireSender`, so it does not forward its log.
+- Friflo is not thread-safe. Use one thread for each peer host.
+- `Tests/Testing/PeerHost.Start(clients)` makes one server and N clients over `InProcessTransport`. The details are in [docs/peers.md](docs/peers.md).

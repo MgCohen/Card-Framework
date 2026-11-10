@@ -8,6 +8,7 @@ public sealed class Match : IDisposable
 {
     private readonly IServiceScope scope;
     private readonly MatchWorld world;
+    private bool disposed;
 
     public Match(IServiceProvider app)
     {
@@ -24,14 +25,28 @@ public sealed class Match : IDisposable
         }
     }
 
-    public IServiceProvider Services => scope.ServiceProvider;
+    public IServiceProvider Services => Live().ServiceProvider;
 
     public ICommandSender Commands => Services.GetRequiredService<ICommandSender>();
 
-    public IWorldReader Reader => world.Reader;
+    public IWorldReader Reader
+    {
+        get
+        {
+            Live();
+            return world.Reader;
+        }
+    }
 
     public void Dispose()
     {
+        disposed = true;
         scope.Dispose();
+    }
+
+    private IServiceScope Live()
+    {
+        ObjectDisposedException.ThrowIf(disposed, this);
+        return scope;
     }
 }

@@ -1,5 +1,7 @@
 using Network.Domain;
+using VSA.Contracts;
 using VSA.Contracts.Commands;
+using Wire.Contracts.Commands;
 using Wire.Handlers.Commands;
 
 namespace Peers.Handlers.Commands;
@@ -10,6 +12,9 @@ public sealed class WireReceiver : IDisposable
     private readonly ICommandSender bus;
     private readonly WireLog log;
     private readonly ITransport server;
+    private readonly object gate = new object();
+    private Task idle = Task.CompletedTask;
+    private bool connected;
 
     public WireReceiver(WireCatalog catalog, ICommandSender bus, WireLog log, ITransport server)
     {
@@ -17,11 +22,59 @@ public sealed class WireReceiver : IDisposable
         this.bus = bus;
         this.log = log;
         this.server = server;
+        server.OnReceived += Receive;
     }
 
-    public Task Idle => throw new NotImplementedException((catalog, bus, log, server).ToString());
+    public Task Idle
+    {
+        get
+        {
+            lock (gate)
+            {
+                return idle;
+            }
+        }
+    }
 
     public void Dispose()
     {
+        server.OnReceived -= Receive;
+    }
+
+    private void Receive(ReadOnlySpan<byte> borrowedBytes)
+    {
+        byte[] frame = borrowedBytes.ToArray();
+        lock (gate)
+        {
+            idle = ApplyAfterAsync(idle, frame);
+        }
+    }
+
+    private async Task ApplyAfterAsync(Task previous, byte[] frame)
+    {
+        await previous;
+        IMessage entry = catalog.Read(frame);
+        if (entry is WireHello hello)
+        {
+            if (hello.Hash != catalog.Hash)
+            {
+                throw new InvalidOperationException(
+                    "The server has other wire keys. Register the same WireTypes on the server and the client.");
+            }
+
+            connected = true;
+            return;
+        }
+
+        if (!connected)
+        {
+            throw new InvalidOperationException($"{entry} came before the hello of the server.");
+        }
+
+        Error? error = await catalog.ApplyAsync(entry, bus, log, CancellationToken.None);
+        if (error != null)
+        {
+            throw new InvalidOperationException($"The client did not apply {entry}: {error}.");
+        }
     }
 }

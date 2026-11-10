@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text;
 using Ecs.Contracts.Commands;
 using MemoryPack;
 using VSA.Contracts;
@@ -10,6 +11,8 @@ namespace Wire.Handlers.Commands;
 public sealed class WireCatalog
 {
     private const int MaxTypes = 256;
+    private const ulong HashBasis = 14695981039346656037UL;
+    private const ulong HashPrime = 1099511628211UL;
 
     private readonly Type[] byId;
     private readonly Dictionary<Type, byte> ids = new Dictionary<Type, byte>();
@@ -22,7 +25,10 @@ public sealed class WireCatalog
             primitives.TryAdd(type.Message, type);
         }
 
-        List<Type> ordered = new List<Type> { typeof(CreateEntity), typeof(DeleteEntity), typeof(GroupStart), typeof(GroupEnd) };
+        List<Type> ordered = new List<Type>
+        {
+            typeof(CreateEntity), typeof(DeleteEntity), typeof(GroupStart), typeof(GroupEnd), typeof(WireHello),
+        };
         ordered.AddRange(primitives.Keys.Except(ordered).OrderBy(KeyOf, StringComparer.Ordinal));
         if (ordered.Count > MaxTypes)
         {
@@ -35,11 +41,13 @@ public sealed class WireCatalog
         {
             ids.Add(byId[id], (byte)id);
         }
+
+        Hash = HashOf(byId);
     }
 
     public int Count => byId.Length;
 
-    public ulong Hash => throw new NotImplementedException();
+    public ulong Hash { get; }
 
     public static string KeyOf(Type type)
     {
@@ -49,14 +57,16 @@ public sealed class WireCatalog
         }
 
         Type definition = type.GetGenericTypeDefinition();
-        return (definition.FullName ?? definition.Name) + "[" + string.Join(",", type.GetGenericArguments().Select(KeyOf)) + "]";
+        string arguments = string.Join(",", type.GetGenericArguments().Select(KeyOf));
+        return (definition.FullName ?? definition.Name) + "[" + arguments + "]";
     }
 
     public byte IdOf(Type type)
     {
         if (!ids.TryGetValue(type, out byte id))
         {
-            throw new InvalidOperationException($"{type.FullName} is not in the wire catalog. Add its key with WireTypes.Of.");
+            throw new InvalidOperationException(
+                $"{type.FullName} is not in the wire catalog. Add its key with WireTypes.Of.");
         }
 
         return id;
@@ -107,5 +117,16 @@ public sealed class WireCatalog
         }
 
         return type.SendAsync(primitive, bus, ct);
+    }
+
+    private static ulong HashOf(IEnumerable<Type> types)
+    {
+        ulong hash = HashBasis;
+        foreach (byte value in Encoding.UTF8.GetBytes(string.Join('\n', types.Select(KeyOf))))
+        {
+            hash = (hash ^ value) * HashPrime;
+        }
+
+        return hash;
     }
 }

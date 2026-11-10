@@ -31,6 +31,7 @@
   </Folder>
   <Folder Name="/Plugins/Peers/">
     <Project Path="Plugins/Peers/Peers.csproj" />
+    <Project Path="Plugins/Peers/Projects/Peers.Contracts.Commands.csproj" />
     <Project Path="Plugins/Peers/Projects/Peers.Domain.csproj" />
     <Project Path="Plugins/Peers/Projects/Peers.Handlers.Commands.csproj" />
   </Folder>
