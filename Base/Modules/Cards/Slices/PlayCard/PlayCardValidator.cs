@@ -24,9 +24,13 @@ public sealed class PlayCardValidator : Validator<PlayCardCommand>
             return PlayCardErrors.NotInHand;
         }
 
+        if (!world.TryById(play.Player, out Entity player))
+        {
+            return PlayCardErrors.NoPlayer;
+        }
+
         int cost = world.TryGet(card, out Cost value) ? value.Value : 0;
-        bool hasMana = world.TryById(play.Player, out Entity player) && world.TryGet(player, out Mana pool);
-        int mana = hasMana ? pool.Value : 0;
+        int mana = world.TryGet(player, out Mana pool) ? pool.Value : 0;
         return mana < cost ? PlayCardErrors.NotEnoughMana : null;
     }
 }

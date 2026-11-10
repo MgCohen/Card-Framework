@@ -7,6 +7,8 @@ public static class TraceText
 {
     private const int TagWidth = 10;
 
+    private const int MaxDepth = 3;
+
     public static IReadOnlyList<string> Legend { get; } = new[]
     {
         "LEGEND",
@@ -41,28 +43,60 @@ public static class TraceText
 
     public static string Payload(object message)
     {
-        IEnumerable<string> fields = Properties(message.GetType())
-            .Select(p => $"{p.Name}: {Value(p.GetValue(message))}");
-        return $"{{ {string.Join(", ", fields)} }}";
+        return Payload(message, 0);
     }
 
     public static string Value(object? value)
     {
-        if (value is null)
+        return Value(value, 0);
+    }
+
+    private static string Payload(object message, int depth)
+    {
+        IEnumerable<string> fields = Properties(message.GetType())
+            .Select(p => $"{p.Name}: {Value(Read(p, message), depth + 1)}");
+        return $"{{ {string.Join(", ", fields)} }}";
+    }
+
+    private static string Value(object? value, int depth)
+    {
+        switch (value)
         {
-            return "null";
+            case null:
+                return "null";
+            case string text:
+                return text;
+            case Enum or IFormattable:
+                return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            case System.Collections.IEnumerable:
+                return $"[{value.GetType().Name}]";
         }
 
-        Type type = value.GetType();
-        if (type.IsPrimitive || type.IsEnum || value is string or decimal)
+        if (depth >= MaxDepth)
         {
-            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            return "{ ... }";
         }
 
-        PropertyInfo[] properties = Properties(type);
+        PropertyInfo[] properties = Properties(value.GetType());
         return properties.Length == 1 && properties[0].Name == "Value"
-            ? Value(properties[0].GetValue(value))
-            : Payload(value);
+            ? Value(Read(properties[0], value), depth + 1)
+            : Payload(value, depth);
+    }
+
+    private static object? Read(PropertyInfo property, object owner)
+    {
+        try
+        {
+            return property.GetValue(owner);
+        }
+        catch (TargetInvocationException e)
+        {
+            return $"<{e.InnerException?.GetType().Name ?? "error"}>";
+        }
+        catch (NotSupportedException e)
+        {
+            return $"<{e.GetType().Name}>";
+        }
     }
 
     private static PropertyInfo[] Properties(Type type)

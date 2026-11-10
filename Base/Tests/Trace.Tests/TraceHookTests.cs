@@ -11,7 +11,8 @@ using VSA.Handlers;
 namespace Trace.Tests;
 
 // B6 lets the Trace plugin hook each primitive, because each Trace hook only reads: it gives back the same
-// message instance and never rejects. This test runs each hook type of the Trace assemblies on probe messages.
+// message instance and never rejects. This test runs each hook type of the Trace assemblies on probe messages,
+// and a real run checks the accepted and the rejected paths. TraceTextTests checks values that could throw.
 public sealed class TraceHookTests
 {
     private static readonly IMessage[] Probes =
@@ -68,6 +69,27 @@ public sealed class TraceHookTests
                 Assert.That(envelope.Message, Is.SameAs(probe));
             }
         }
+    }
+
+    [Test]
+    public async Task ARealRun_KeepsEachMessageInstance_AndOnlyTheValidatorRejects()
+    {
+        using Play play = new Play();
+        EntityId card = await play.CardAsync(3);
+        EntityId player = await play.PlayerAsync(10);
+        CreateEntity create = new CreateEntity(new EntityId(50));
+        PlayCardCommand accepted = new PlayCardCommand(card, player);
+        PlayCardCommand rejected = new PlayCardCommand(card, player);
+
+        Result<EntityId> made = await play.Match.Commands.SendAsync(create, CancellationToken.None);
+        Result<Unit> played = await play.Match.Commands.SendAsync(accepted, CancellationToken.None);
+        Result<Unit> again = await play.Match.Commands.SendAsync(rejected, CancellationToken.None);
+
+        Assert.That(made.Envelope!.Message, Is.SameAs(create));
+        Assert.That(played.Envelope!.Message, Is.SameAs(accepted));
+        Assert.That(played.Envelope.State, Is.EqualTo(EnvelopeState.Accepted));
+        Assert.That(again.Envelope!.State, Is.EqualTo(EnvelopeState.Rejected));
+        Assert.That(again.Error, Is.EqualTo(PlayCardErrors.NotInHand));
     }
 
     private static Type[] Hooks(Type hookBase)

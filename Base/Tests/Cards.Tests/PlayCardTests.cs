@@ -101,6 +101,24 @@ public sealed class PlayCardTests
     }
 
     [Test]
+    public async Task AFreeCardWithNoPlayer_IsRejected()
+    {
+        EntityId card = await Card(Zone.Hand, 0);
+
+        await AssertRejected(new PlayCardCommand(card, new EntityId(999)), PlayCardErrors.NoPlayer);
+    }
+
+    [Test]
+    public async Task ANegativeCost_IsRejected()
+    {
+        CreateCardCommand create = new CreateCardCommand(Zone.Hand, -5);
+
+        Result<EntityId> result = await match.Commands.SendAsync(create, CancellationToken.None);
+
+        Assert.That(result.Error, Is.EqualTo(CreateCardErrors.NegativeCost));
+    }
+
+    [Test]
     public async Task NotACard_IsRejected()
     {
         EntityId player = await Player(10);

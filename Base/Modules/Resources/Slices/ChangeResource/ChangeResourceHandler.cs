@@ -20,7 +20,12 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
 
     public override Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand> envelope)
     {
-        return envelope.Message.Resource == Resource.Mana ? ChangeAsync<Mana>(envelope) : ChangeAsync<Health>(envelope);
+        return envelope.Message.Resource switch
+        {
+            Resource.Health => ChangeAsync<Health>(envelope),
+            Resource.Mana => ChangeAsync<Mana>(envelope),
+            _ => Task.FromResult<Result<int>>(ResourceErrors.UnknownResource),
+        };
     }
 
     private async Task<Result<int>> ChangeAsync<T>(Envelope<ChangeResourceCommand> envelope)

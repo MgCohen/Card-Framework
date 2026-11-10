@@ -16,7 +16,8 @@ public sealed class TraceAfter : After<IMessage>
 
     public override Task AfterAsync(IEnvelope<IMessage> envelope)
     {
-        if (envelope.State is EnvelopeState.Accepted or EnvelopeState.Rejected or EnvelopeState.Faulted)
+        bool done = envelope.State is EnvelopeState.Accepted or EnvelopeState.Rejected or EnvelopeState.Faulted;
+        if (log.Recording && done)
         {
             TraceKind kind = KindOf(envelope.State);
             log.Add(new TraceEvent(

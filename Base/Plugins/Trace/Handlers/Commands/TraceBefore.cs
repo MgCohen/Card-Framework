@@ -16,8 +16,12 @@ public sealed class TraceBefore : Before<IMessage>
 
     public override Task<IMessage> BeforeAsync(IEnvelope<IMessage> envelope)
     {
-        log.Add(new TraceEvent(
-            TraceKind.Send, envelope.Id, envelope.Parent?.Id, envelope.Depth, envelope.Message, string.Empty));
+        if (log.Recording)
+        {
+            log.Add(new TraceEvent(
+                TraceKind.Send, envelope.Id, envelope.Parent?.Id, envelope.Depth, envelope.Message, string.Empty));
+        }
+
         return Task.FromResult(envelope.Message);
     }
 }

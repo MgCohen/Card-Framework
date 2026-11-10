@@ -27,7 +27,7 @@ public sealed class PrimitiveBoundaryTests
     };
 
     [Test]
-    public void B6_NoAssemblyOutsideEcsAndWireHooksAPrimitive()
+    public void B6_NoAssemblyOutsideEcsWireAndTraceHooksAPrimitive()
     {
         List<string> found = new List<string>();
         string[] others = AppAssemblies().Where(a => !Owners.Any(o => a == o || a.StartsWith(o + ".", StringComparison.Ordinal))).ToArray();

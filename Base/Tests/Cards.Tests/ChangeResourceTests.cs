@@ -76,6 +76,19 @@ public sealed class ChangeResourceTests
     }
 
     [Test]
+    public async Task AnUndefinedKind_GivesUnknownResource()
+    {
+        EntityId target = (await match.Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
+
+        ChangeResourceCommand change = new ChangeResourceCommand(target, 1, (Resource)7);
+
+        Result<int> result = await match.Commands.SendAsync(change, CancellationToken.None);
+
+        Assert.That(result.Error, Is.EqualTo(ResourceErrors.UnknownResource));
+        Assert.That(match.Reader.Has<Health>(match.Reader.ById(target)), Is.False);
+    }
+
+    [Test]
     public async Task UnknownTarget_GivesEntityMissing()
     {
         WireLog log = match.Services.GetRequiredService<WireLog>();

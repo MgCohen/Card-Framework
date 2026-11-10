@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cards.Domain.Shared;
 using Cards.Slices.PlayCard;
 using Ecs.Contracts.Commands;
@@ -22,12 +23,25 @@ public sealed class TraceTextTests
     public void Payload_WritesEachProperty_AndTheValueOfAnIdOrAValueStruct()
     {
         PlayCardCommand play = new PlayCardCommand(new EntityId(1), new EntityId(3));
-        ChangeComponent<CardZone> move = new ChangeComponent<CardZone>(new EntityId(1), new CardZone { Value = Zone.Board });
+        CardZone board = new CardZone { Value = Zone.Board };
+        ChangeComponent<CardZone> move = new ChangeComponent<CardZone>(new EntityId(1), board);
         ChangeResourceCommand pay = new ChangeResourceCommand(new EntityId(3), -3, Resource.Mana);
 
         Assert.That(TraceText.Payload(play), Is.EqualTo("{ Card: 1, Player: 3 }"));
         Assert.That(TraceText.Payload(move), Is.EqualTo("{ Entity: 1, Value: Board }"));
         Assert.That(TraceText.Payload(pay), Is.EqualTo("{ Target: 3, Delta: -3, Resource: Mana }"));
+    }
+
+    [Test]
+    public void Value_OfAValueThatCouldRecurseOrThrow_GivesShortText()
+    {
+        DateTime time = new DateTime(2026, 11, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        Assert.That(TraceText.Value(new[] { 1, 2 }), Is.EqualTo("[Int32[]]"));
+        Assert.That(TraceText.Value(time), Is.EqualTo(time.ToString(CultureInfo.InvariantCulture)));
+        Assert.That(TraceText.Value(new Throws()), Is.EqualTo("{ Bad: <InvalidOperationException> }"));
+        Assert.That(TraceText.Value(new Loop()), Does.Contain("{ ... }"));
+        Assert.That(TraceText.Value(typeof(string)), Is.Not.Empty);
     }
 
     [Test]
@@ -68,5 +82,17 @@ public sealed class TraceTextTests
         Assert.That(lines[4], Does.StartWith("[RESULT]").And.EndWith("Ok"));
         Assert.That(lines[5], Does.StartWith("[REJECT]").And.Contain("payload=").And.EndWith("Error(Cards.NotInHand)"));
         Assert.That(lines[6], Does.StartWith("[FAULT]").And.EndWith("InvalidOperationException"));
+    }
+
+    private sealed class Throws
+    {
+        public int Bad => throw new InvalidOperationException();
+    }
+
+    private sealed class Loop
+    {
+        public Loop Next => this;
+
+        public int Size => 1;
     }
 }

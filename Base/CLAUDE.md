@@ -82,14 +82,15 @@ On Windows, the branch `base` and the folder `Base/` have the same name. Write `
 
 ```text
 Base/
-├─ App/Host/          the composition root: Program.cs, one VsaBuilder call
-├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire)
+├─ App/Host/          the web composition root: Program.cs, one VsaBuilder call
+├─ App/Cli/           the console composition root: the play command with its trace
+├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire, Trace)
 ├─ Modules/<Name>/    modules: the Cards and Resources sample
 ├─ docs/              base docs: layout, write path, peers
 └─ Tests/             dotnet test projects; App.Tests references the host
 ```
 
-The host is not a module. A module registers only its own services, in its root class. All composition is in `App/Host/Program.cs`, as in the VSA Notes sample.
+The host is not a module. A module registers only its own services, in its root class. All composition is in `App/Host/Program.cs` and `App/Cli/Program.cs`, as in the VSA Notes sample.
 
 ```csharp
 await VsaBuilder.Create(args).UseWebHost().Build().RunAsync();
@@ -176,4 +177,11 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
 - `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
-- `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.
+- `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs, Wire and Trace hooks a primitive.
+- Trace is an exception that the user accepted for the `t1-trace` branch only. `TraceHookTests` checks that each Trace hook only reads.
+
+## Trace
+
+- `Plugins/Trace` hooks each message with `Before<IMessage>` and `After<IMessage>`. See [docs/trace.md](docs/trace.md).
+- VSA.Sdk gives each module root each plugin root, so each host has the Trace plugin. A `TraceLog` records nothing until a caller calls `Start()`.
+- Run the trace: `dotnet run --project App/Cli -- play` from `Base/`.

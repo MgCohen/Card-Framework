@@ -11,6 +11,7 @@ using Resources.Slices.ChangeResource;
 using Trace.Handlers.Commands;
 using VSA.Composition;
 using VSA.Contracts;
+using VSA.Contracts.Commands;
 
 namespace Trace.Tests;
 
@@ -145,6 +146,41 @@ public sealed class TraceLogTests
         Assert.That(play.Trace.Events[0].Kind, Is.EqualTo(TraceKind.Wire));
         Assert.That(play.Trace.Events[0].Id, Is.EqualTo(0));
         Assert.That(play.Trace.Events[0].Depth, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AHandlerThatThrows_GivesSendThenFault()
+    {
+        using IHost host = VsaBuilder.Create().UseGenericHost().Build();
+        using IServiceScope scope = host.Services.CreateScope();
+        TraceLog trace = scope.ServiceProvider.GetRequiredService<TraceLog>();
+        trace.Start();
+        ICommandSender commands = scope.ServiceProvider.GetRequiredService<ICommandSender>();
+        ChangeComponent<Mana> write = new ChangeComponent<Mana>(new EntityId(1), new Mana { Value = 1 });
+
+        Func<Task> send = async () => await commands.SendAsync(write, CancellationToken.None);
+
+        Assert.CatchAsync(send);
+
+        Assert.That(trace.Events.Select(e => e.Kind), Is.EqualTo(new[] { TraceKind.Send, TraceKind.Fault }));
+        Assert.That(trace.Events[1].Outcome, Is.EqualTo("InvalidOperationException"));
+    }
+
+    [Test]
+    public void AStepThatThrowsBeforeTheHandler_GivesOnlyFault()
+    {
+        using IHost host = VsaBuilder.Create().UseGenericHost().Build();
+        using IServiceScope scope = host.Services.CreateScope();
+        TraceLog trace = scope.ServiceProvider.GetRequiredService<TraceLog>();
+        trace.Start();
+        ICommandSender commands = scope.ServiceProvider.GetRequiredService<ICommandSender>();
+        CreateEntity create = new CreateEntity(default);
+
+        Func<Task> send = async () => await commands.SendAsync(create, CancellationToken.None);
+
+        Assert.CatchAsync(send);
+
+        Assert.That(trace.Events.Select(e => e.Kind), Is.EqualTo(new[] { TraceKind.Fault }));
     }
 
     [Test]

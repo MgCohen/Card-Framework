@@ -67,7 +67,10 @@ SendAsync ─▶ Validate ─▶ before steps ─▶ Before events ─▶ Handle
 
 ## TraceLog
 
-`TraceLog` is scoped: one for each `Match`. Each host has the Trace plugin, because VSA.Sdk gives each module root each plugin root. A `TraceLog` records nothing until a caller calls `Start()`. Only `PlayRun` calls it.
+`TraceLog` is scoped: one for each `Match`. Each host has the Trace plugin, because VSA.Sdk gives each module root each plugin root. A `TraceLog` records nothing until a caller calls `Start()`, and the hooks do no work before it. Only `PlayRun` calls it.
+
+- After `Start()`, the log has no size limit and keeps each message. Use it for short runs only.
+- `TraceText.Value` follows properties to depth 3. It writes a collection as its type name, and a getter that throws as `<ExceptionName>`.
 
 ```csharp
 TraceLog trace = match.Services.GetRequiredService<TraceLog>();
@@ -85,5 +88,9 @@ IEnumerable<string> lines = TraceText.Lines(trace.Events);
 | `GroupService` appends `GroupStart` or `GroupEnd` | `[WIRE]` with `msg=-` |
 | A direct handler call, not on the bus | Nothing |
 | A Before event with `Order = int.MaxValue` and a later type name rejects | `[SEND]`, then `[REJECT]` |
+| The same kind of Before event replaces the message | The `[SEND]` payload is the message before the change |
+| A before step throws, for example `CreateEntityId` with no match | `[FAULT]` with no `[SEND]` |
+| An After event or an after step throws after `TraceAfter` | `[RESULT]`, but the caller gets the exception |
+| An After event sends the same message instance again | `[WIRE]` can take the msg id of the second send |
 | `MoveCardCommand` or `ChangeResourceCommand` sent alone | Traced. The `PlayCard` checks do not run |
 | A `TraceLog` with no `Start()` call | Nothing |
