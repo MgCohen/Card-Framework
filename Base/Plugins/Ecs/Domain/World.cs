@@ -26,6 +26,16 @@ public sealed class World : IWorldWriter
         return new Entity(store.CreateEntity());
     }
 
+    public Entity Create(EntityId id)
+    {
+        throw new NotImplementedException();
+    }
+
+    public EntityId NextId()
+    {
+        throw new NotImplementedException();
+    }
+
     public bool Delete(Entity entity)
     {
         Live(entity).DeleteEntity();
@@ -132,6 +142,12 @@ public sealed class World : IWorldWriter
         where T : struct, ITag
     {
         return Live(entity).Tags.Has<T>();
+    }
+
+    public bool Is<T>(Entity entity, T value)
+        where T : unmanaged, IComponent
+    {
+        throw new NotImplementedException();
     }
 
     private static bool SameBytes<T>(ref T left, ref T right)

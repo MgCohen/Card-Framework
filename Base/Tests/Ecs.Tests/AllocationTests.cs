@@ -63,6 +63,25 @@ public sealed class AllocationTests
         Assert.That(bytes, Is.Zero);
     }
 
+    [Test]
+    public void Is_AllocatesNothing()
+    {
+        World world = new WorldFactory().Create();
+        Entity entity = world.Create();
+        world.Set(entity, new Position { X = 1, Y = 2 });
+        IWorldReader reader = world.Reader;
+
+        long bytes = Measure(() =>
+        {
+            for (int i = 0; i < Calls; i++)
+            {
+                _ = reader.Is(entity, new Position { X = 1, Y = 2 });
+            }
+        });
+
+        Assert.That(bytes, Is.Zero);
+    }
+
     // The first run warms up the JIT and the Friflo type caches; only the second run counts.
     private static long Measure(Action run)
     {

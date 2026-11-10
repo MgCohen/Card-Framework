@@ -46,4 +46,10 @@ internal sealed class WorldReader : IWorldReader
     {
         return world.HasTag<T>(entity);
     }
+
+    public bool Is<T>(Entity entity, T value)
+        where T : unmanaged, IComponent
+    {
+        return world.Is(entity, value);
+    }
 }

@@ -16,7 +16,10 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] AppFolders = { "App/", "Plugins/", "Modules/" };
 
-    private static readonly string[] EcsAssemblies = { "Ecs", "Ecs.Domain", "Ecs.Domain.Shared" };
+    private static readonly string[] EcsAssemblies =
+    {
+        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
+    };
 
     private static readonly string[] WorldOwners = Array.Empty<string>();
 

@@ -21,4 +21,7 @@ public interface IWorldReader
 
     bool HasTag<T>(Entity entity)
         where T : struct, ITag;
+
+    bool Is<T>(Entity entity, T value)
+        where T : unmanaged, IComponent;
 }
