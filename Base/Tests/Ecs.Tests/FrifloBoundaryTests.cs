@@ -6,7 +6,7 @@ using Ecs.Domain;
 
 namespace Ecs.Tests;
 
-// Only Shared/Ecs uses Friflo packages. Friflo.Engine.ECS brings Friflo.Json.Fliox, so each check matches the prefix.
+// Only Plugins/Ecs uses Friflo packages. Friflo.Engine.ECS brings Friflo.Json.Fliox, so each check matches the prefix.
 // A key implements a Friflo marker through the Ecs markers, so other assemblies can name the two markers and nothing else.
 public sealed class FrifloBoundaryTests
 {
@@ -14,7 +14,7 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] Markers = { "Friflo.Engine.ECS.IComponent", "Friflo.Engine.ECS.ITag" };
 
-    private static readonly string[] AppFolders = { "App/", "Shared/", "Modules/" };
+    private static readonly string[] AppFolders = { "App/", "Plugins/", "Modules/" };
 
     private static readonly string[] EcsAssemblies = { "Ecs", "Ecs.Domain", "Ecs.Domain.Shared" };
 
@@ -37,14 +37,14 @@ public sealed class FrifloBoundaryTests
             foreach (string project in Directory.EnumerateFiles(path, "*.csproj", SearchOption.AllDirectories))
             {
                 string relative = Path.GetRelativePath(root, project).Replace('\\', '/');
-                if (!relative.StartsWith("Shared/Ecs/", StringComparison.Ordinal) && ReferencesFriflo(project))
+                if (!relative.StartsWith("Plugins/Ecs/", StringComparison.Ordinal) && ReferencesFriflo(project))
                 {
                     offenders.Add(relative);
                 }
             }
         }
 
-        Assert.That(ReferencesFriflo(Path.Combine(root, "Shared/Ecs/Projects/Ecs.Domain.Shared.csproj")), Is.True);
+        Assert.That(ReferencesFriflo(Path.Combine(root, "Plugins/Ecs/Projects/Ecs.Domain.Shared.csproj")), Is.True);
         Assert.That(offenders, Is.Empty);
     }
 

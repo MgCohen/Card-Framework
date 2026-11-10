@@ -36,13 +36,15 @@ gate.ps1 (runs from Base/, so dotnet reads Base/global.json)
 
 ## Tools
 
-`dotnet-tools.json` pins `vsa.cli`. Run `dotnet tool restore` one time, then `dotnet vsa add module <Name>`.
+`dotnet-tools.json` pins `vsa.cli`. Run `dotnet tool restore` one time, then `dotnet vsa add module <Name>` or `dotnet vsa add plugin <Name>`.
+
+To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --prerelease`, then `dotnet vsa update`. Then delete each `bin`, `obj`, `bin~` and `obj~` folder.
 
 ## Packages
 
 | Package | Version | Feed |
 |---|---|---|
-| VSA.Sdk and `VSA.*` | `0.1.0-preview.8` | GitHub Packages, owner `MgCohen` |
+| VSA.Sdk and `VSA.*` | `0.1.0-preview.11` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
@@ -78,51 +80,69 @@ On Windows, the branch `base` and the folder `Base/` have the same name. Write `
 
 ```text
 Base/
-├─ App/Host/          the composition root: Program.cs finds each module and builds the app
-├─ Shared/<Name>/     Shared modules: the base systems (Ids, Ecs, Pipeline, Wire, Network, Testing)
+├─ App/Host/          the composition root: Program.cs, one VsaBuilder call
+├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network; later Wire)
 ├─ Modules/<Name>/    modules: the Cards sample
 └─ Tests/             dotnet test projects; App.Tests references the host
 ```
 
-The host is not a module. A module registers only its own services, in its VSA `Module` class. All composition is in `App/Host/Program.cs`, as in the VSA Notes sample.
-
-```text
-builder.AddVsa()                     App/Host/Program.cs, VSA.Host
-  ├─ composer.InstallLayers()        VsaComposer: event and command handlers, presenters
-  ├─ AddLoopbackBus(services)        web host only: IBus = HttpBus
-  ├─ RequestEndpointInstaller        web host only: FastEndpoints
-  └─ composer.ConfigureModules()     VsaComposer: Module.Configure of each module, Shared modules first
-```
-
-`Module.Configure` registers on `ModuleBuilder.Services`, type `IVsaServices`. It does not use `IServiceCollection`.
+The host is not a module. A module registers only its own services, in its root class. All composition is in `App/Host/Program.cs`, as in the VSA Notes sample.
 
 ```csharp
-public override void Configure(ModuleBuilder module)
+await VsaBuilder.Create(args).UseWebHost().Build().RunAsync();
+```
+
+```text
+VsaBuilder.Build()                   VSA.Composition
+  ├─ AppScan.Modules()               plugins first, then modules by name
+  ├─ InstallLayers                   pipelines, event, command and request handlers, IBus, presenters
+  ├─ WebVsaHost.Install              web host only: one HTTP route for each request
+  └─ Module.Configure                each plugin, then each module
+```
+
+`Module.Configure` registers on `ModuleBuilder.Services`, type `IServiceCollection`. A factory gets `IServiceProvider`.
+
+```csharp
+public sealed class EcsPlugin : Plugin
 {
-    module.Services.AddSingleton<IWorldWriter>(_ => new World());
-    module.Services.AddInstance(typeof(SuitRegistry), suits);
-    module.Replace<ICommandSender, PipelineCommandSender>();
+    public override void Configure(ModuleBuilder module)
+    {
+        module.Services.AddSingleton<IWorldFactory, WorldFactory>();
+    }
 }
 ```
 
-- A factory gets an `IVsaResolver`: `Resolve`, `Require`, `ResolveAll`, `Create`.
-- A test with no web host calls `new VsaComposer(new MicrosoftServices(services), configuration, modules).Install()`. It gets no `IBus`.
-- A module layer project does not see `VSA.Module`, so handler code cannot take `IVsaResolver`.
-- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.8/docs/composition.md).
+- The root class of a plugin module inherits `Plugin` (`VSA1014`). The root class of a module inherits `Module`.
+- The module root holds only that class. Do not add `AddX` helpers to it.
+- A test with no web host calls `VsaBuilder.Create().UseGenericHost().Modules(new TypeKeysPlugin()).Build()`, then reads `host.Services`.
+- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/composition.md).
 - `App.Tests` sets `VsaArchitectureTests` to false and has its own `ArchitectureTests` class. Reason: the generated class has no body (`;`), and that needs C# 12.
 - A test project that references `VSA.Testing.Architecture` sets the same property.
 - When the package generates a `{ }` body, delete the property and the local class.
 
-A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/main/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A Shared module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
+A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
+
+## Handler pipeline
+
+Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/handler-pipeline.md)). Base has no pipeline code of its own.
+
+```text
+ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> ─▶ handler ─▶ After<T> ─▶ AfterStep ─▶ Result<T>
+```
+
+- A handler takes `Envelope<T>` and returns `Result<T>`. A send returns `Result<T>`. A rejected message gives `Result<T>.Error`, not an exception.
+- `envelope.Services` is the scope of the sender. A match scope gives the World of that match.
+- A custom pipeline: `module.Services.AddPipeline(new PipelineBuilder<TMessage>()...)` in `Configure`.
+- The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies, and only closed types.
 
 ## Friflo boundary
 
-- Only `Shared/Ecs` references Friflo.Engine.ECS.
+- Only `Plugins/Ecs` references Friflo.Engine.ECS.
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
-- `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Shared/Ecs` uses a Friflo type other than the two markers.
+- `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only a mutation handler gets `IWorldWriter`, as a call argument.
 - The container gives only `IWorldFactory`. It never gives a `World`, an `IWorldReader` or an `IWorldWriter`. The owner of a match makes the World and gives access by hand.
-- No type outside `Shared/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
+- No type outside `Plugins/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
 
 ## C# 11
 

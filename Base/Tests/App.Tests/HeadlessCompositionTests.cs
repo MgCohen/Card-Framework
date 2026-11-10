@@ -1,28 +1,22 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using TypeKeys;
 using TypeKeys.Domain;
 using TypeKeys.Fixtures;
 using VSA.Composition;
-using VSA.Module;
 
 namespace App.Tests;
 
-// The VSA composer registers the modules with no web host, as a headless app or a peer does.
+// The generic host registers the modules with no web host, as a headless app or a peer does.
 public sealed class HeadlessCompositionTests
 {
     [Test]
-    public void The_composer_registers_the_TypeKeys_registries_with_no_web_host()
+    public void The_generic_host_registers_the_TypeKeys_registries_with_no_web_host()
     {
-        ServiceCollection services = new ServiceCollection();
-        IConfiguration configuration = new ConfigurationBuilder().Build();
-        VsaComposer composer = new VsaComposer(new MicrosoftServices(services), configuration, new TypeKeysModule());
+        using IHost host = VsaBuilder.Create().UseGenericHost().Modules(new TypeKeysPlugin()).Build();
 
-        composer.Install();
-
-        using ServiceProvider provider = services.BuildServiceProvider();
-        SuitRegistry suits = provider.GetRequiredService<SuitRegistry>();
-        Assert.That(provider.GetRequiredService<TypeKeyRegistry<Suit>>(), Is.SameAs(suits));
+        SuitRegistry suits = host.Services.GetRequiredService<SuitRegistry>();
+        Assert.That(host.Services.GetRequiredService<TypeKeyRegistry<Suit>>(), Is.SameAs(suits));
         Assert.That(suits.Members, Is.EqualTo(new Suit[] { new Hearts(), new Spades() }));
     }
 }
