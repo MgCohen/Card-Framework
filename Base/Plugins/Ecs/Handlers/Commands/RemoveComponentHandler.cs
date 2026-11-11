@@ -6,7 +6,7 @@ using VSA.Contracts;
 namespace Ecs.Handlers.Commands;
 
 public sealed class RemoveComponentHandler<T> : PrimitiveHandler<RemoveComponent<T>, Unit>
-    where T : unmanaged, IComponent
+    where T : struct, IComponent
 {
     private readonly IWorldWriter writer;
 

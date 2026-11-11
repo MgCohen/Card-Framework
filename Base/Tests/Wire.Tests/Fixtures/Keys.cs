@@ -1,4 +1,5 @@
 using Ecs.Domain.Shared;
+using MemoryPack;
 
 namespace Wire.Tests.Fixtures;
 
@@ -14,4 +15,10 @@ public struct Armor : IComponent
 
 public struct Marked : ITag
 {
+}
+
+[MemoryPackable]
+public partial struct CardName : IComponent
+{
+    public string Value { get; init; }
 }

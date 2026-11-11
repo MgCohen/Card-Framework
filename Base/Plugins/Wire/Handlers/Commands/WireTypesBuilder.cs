@@ -14,7 +14,7 @@ public sealed class WireTypesBuilder
     internal List<WireType> Types { get; } = new List<WireType>();
 
     public WireTypesBuilder Component<T>()
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         Types.Add(WireType.Of<ChangeComponent<T>, T, ChangeComponentHandler<T>>());
         Types.Add(WireType.Of<RemoveComponent<T>, Unit, RemoveComponentHandler<T>>());

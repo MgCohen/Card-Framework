@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Ecs.Domain.Shared;
 using Friflo.Engine.ECS;
@@ -50,7 +51,7 @@ public sealed class World : IWorldWriter
     }
 
     public bool Set<T>(Entity entity, T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         FrifloEntity live = Live(entity);
         if (live.TryGetComponent(out T current) && SameBytes(ref current, ref value))
@@ -63,13 +64,13 @@ public sealed class World : IWorldWriter
     }
 
     public bool Set<T>(Entity entity, int value)
-        where T : unmanaged, IValue<int>
+        where T : struct, IValue<int>
     {
         return Set(entity, new T { Value = value });
     }
 
     public bool Remove<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return Live(entity).RemoveComponent<T>();
     }
@@ -123,7 +124,7 @@ public sealed class World : IWorldWriter
     }
 
     public T Get<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         if (!TryGet(entity, out T value))
         {
@@ -134,13 +135,13 @@ public sealed class World : IWorldWriter
     }
 
     public bool TryGet<T>(Entity entity, out T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return Live(entity).TryGetComponent(out value);
     }
 
     public bool Has<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return Live(entity).HasComponent<T>();
     }
@@ -152,14 +153,19 @@ public sealed class World : IWorldWriter
     }
 
     public bool Is<T>(Entity entity, T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return Live(entity).TryGetComponent(out T current) && SameBytes(ref current, ref value);
     }
 
     private static bool SameBytes<T>(ref T left, ref T right)
-        where T : unmanaged
+        where T : struct
     {
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            return EqualityComparer<T>.Default.Equals(left, right);
+        }
+
         ReadOnlySpan<byte> leftBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref left, 1));
         ReadOnlySpan<byte> rightBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref right, 1));
         return leftBytes.SequenceEqual(rightBytes);
