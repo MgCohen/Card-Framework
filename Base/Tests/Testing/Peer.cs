@@ -8,8 +8,8 @@ using VSA.Contracts.Commands;
 
 namespace Testing;
 
-// One peer: its own app host and its own match scope. The role selects the services, as EngineInstaller(isServer) does in
-// the Unity Framework: a server sends its log to each client transport, and a client applies the frames it receives.
+// One peer: its own app host and its own match scope. The role selects the services, as EngineInstaller(isServer) does
+// in the Unity Framework: a server sends its log to each client transport, and a client applies the frames it receives.
 public sealed class Peer : IDisposable
 {
     private readonly IHost host;

@@ -68,7 +68,7 @@ public sealed class WireReceiver : IDisposable
             {
                 throw new InvalidOperationException(
                     $"The server catalog hash is {hello.Hash:X16}, and the client catalog hash is {catalog.Hash:X16}. "
-                    + "Register the same WireTypes on the server and the client.");
+                    + "Use the same module assemblies and the same extra WireTypes on the server and the client.");
             }
 
             connected = true;

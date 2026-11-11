@@ -1,5 +1,7 @@
 # P8 spec: peers
 
+> Record of the P8 decisions. U2 replaced `Match` with the match scope from `MatchFactory.Create()`. For the current API, read [peers.md](peers.md).
+
 P8 copies the role wiring of the Unity Framework into Base, with better names and one change: a server sends to many clients. Each peer is its own host. A role flag at the composition root selects the services that the host registers. The server registers a sender on its `WireLog`, and a client registers a receiver on its transport.
 
 Branch `p8-peers`, cut from `p7-cards`. PR into `p7-cards`.

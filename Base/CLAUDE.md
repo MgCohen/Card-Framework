@@ -183,7 +183,7 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
 - Primitive handlers derive from `PrimitiveHandler<,>`, so the default command pipeline does not get them. `WirePlugin` reads the closed primitive handlers from `ModuleTypes.Implementations(typeof(PrimitiveHandler<,>))`. This gives the primitive pipeline, the MemoryPack types and the catalog ids.
-- Each component and tag of a module adds two catalog types, also if no peer sends it. The 1-byte catalog id gives 256 types maximum, so about 126 keys.
+- Each component and tag of a module adds two catalog types, also if no peer sends it. The 1-byte catalog id gives 256 types maximum. Five types are built in, so 125 keys maximum.
 - A module registers no keys. A key outside the module assemblies, for example a test key, needs `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`.
 - The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
