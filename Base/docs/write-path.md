@@ -12,7 +12,7 @@ using Match match = new Match(host.Services);            // one scope, one World
 
 EntityId card = (await match.Commands.SendAsync(new CreateCardCommand(Zone.Hand), ct)).Value;
 await match.Commands.SendAsync(new MoveCardCommand(card, Zone.Board), ct);
-await match.Commands.SendAsync(new ChangeResourceCommand(card, 5), ct);
+await match.Commands.SendAsync(new ChangeResourceCommand<Health>(card, 5), ct);
 
 int health = match.Reader.Get<Health>(match.Reader.ById(card)).Value;   // 5
 WireLog log = match.Services.GetRequiredService<WireLog>();             // 5 entries
@@ -40,11 +40,12 @@ match.Commands.SendAsync(MoveCardCommand)                       envelope.Service
 ```
 
 ```csharp
-public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand> envelope)
+public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand<T>> envelope)
 {
     IWorldReader world = envelope.Services.GetRequiredService<IWorldReader>();   // a local, not a field
     ...
-    Result<Health> written = await commands.SendAsync(new ChangeComponent<Health>(target, next), ct);
+    T next = new T { Value = current + change.Delta };                         // T: Health, Mana, ...
+    Result<T> written = await commands.SendAsync(new ChangeComponent<T>(target, next), ct);
 }
 ```
 
@@ -75,7 +76,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 
 ## Schema load
 
-Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. `Build()` loads each key assembly through the module scan and `WireTypes.Of` in `Configure`, before a `Match` exists. `Schema.Tests` checks this in its own process.
+Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails with `TypeInitializationException`. `Build()` loads each key assembly through the module scan, before a `Match` exists. `Schema.Tests` checks this in its own process.
 
 ## Non-goals
 

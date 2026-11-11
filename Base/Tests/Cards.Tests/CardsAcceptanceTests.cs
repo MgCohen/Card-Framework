@@ -51,21 +51,21 @@ public sealed class CardsAcceptanceTests
         CardZone board = new CardZone { Value = Zone.Board };
         Assert.That(log.Entries[3], Is.EqualTo(new ChangeComponent<CardZone>(card, board)));
 
-        Result<int> raised = await Send(match, new ChangeResourceCommand(card, 5));
+        Result<int> raised = await Send(match, new ChangeResourceCommand<Health>(card, 5));
         Report("ChangeResource +5", world, card, log);
         Assert.That(raised.Value, Is.EqualTo(5));
         Assert.That(world.Get<Health>(world.ById(card)).Value, Is.EqualTo(5));
         Assert.That(log.Entries, Has.Count.EqualTo(5));
         Assert.That(log.Entries[4], Is.EqualTo(new ChangeComponent<Health>(card, new Health { Value = 5 })));
 
-        Result<int> lowered = await Send(match, new ChangeResourceCommand(card, -2));
+        Result<int> lowered = await Send(match, new ChangeResourceCommand<Health>(card, -2));
         Report("ChangeResource -2", world, card, log);
         Assert.That(lowered.Value, Is.EqualTo(3));
         Assert.That(world.Get<Health>(world.ById(card)).Value, Is.EqualTo(3));
         Assert.That(log.Entries, Has.Count.EqualTo(6));
         Assert.That(log.Entries[5], Is.EqualTo(new ChangeComponent<Health>(card, new Health { Value = 3 })));
 
-        Result<int> same = await Send(match, new ChangeResourceCommand(card, 0));
+        Result<int> same = await Send(match, new ChangeResourceCommand<Health>(card, 0));
         Report("ChangeResource 0", world, card, log);
         Assert.That(same.Error, Is.EqualTo(PrimitiveErrors.Unchanged));
         Assert.That(world.Get<Health>(world.ById(card)).Value, Is.EqualTo(3));

@@ -12,8 +12,8 @@ using VSA.Composition;
 namespace Schema.Tests;
 
 // Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails
-// with TypeInitializationException. A module registers its keys with WireTypes.Of in Configure, so Build() loads each
-// key assembly before a Match can make a World. The test method itself names no key type: the JIT loads the types
+// with TypeInitializationException. The module scan in Build() loads each layer assembly, so it loads each key
+// assembly before a Match can make a World. The test method itself names no key type: the JIT loads the types
 // of a method before the method runs, so the key code is in Write, which the JIT compiles only when it is called.
 public sealed class LateKeyAssemblyTests
 {
@@ -44,7 +44,7 @@ public sealed class LateKeyAssemblyTests
         using Match match = new Match(host.Services);
         CreateCardCommand create = new CreateCardCommand(Zone.Board);
         EntityId card = (await match.Commands.SendAsync(create, CancellationToken.None)).Value;
-        await match.Commands.SendAsync(new ChangeResourceCommand(card, 7), CancellationToken.None);
+        await match.Commands.SendAsync(new ChangeResourceCommand<Health>(card, 7), CancellationToken.None);
 
         IWorldReader world = match.Reader;
         Entity entity = world.ById(card);

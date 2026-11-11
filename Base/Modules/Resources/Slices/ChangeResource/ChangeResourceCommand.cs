@@ -3,4 +3,5 @@ using VSA.Contracts.Commands;
 
 namespace Resources.Slices.ChangeResource;
 
-public sealed record ChangeResourceCommand(EntityId Target, int Delta) : ICommand<int>;
+public sealed record ChangeResourceCommand<T>(EntityId Target, int Delta) : ICommand<int>
+    where T : unmanaged, IValue<int>;
