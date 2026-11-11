@@ -38,7 +38,7 @@ commands.SendAsync(MoveCardCommand)                             envelope.Service
        └ SendAsync(ChangeComponent<CardZone>)
           └ IPrimitive pipeline (Wire)
              ├ CreateEntityId                    CreateEntity only: a default id gets the next id
-             ├ ChangeComponentHandler<CardZone>  MatchWorld.Writer → World.Set; no change gives Unchanged
+             ├ ChangeComponentHandler<CardZone>  match.Writer() → World.Set; no change gives Unchanged
              └ RecordStep                        accepted, no error → WireLog.Append
 ```
 
@@ -58,7 +58,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 | Game driver | The match scope | Reads `IWorldReader`; sends commands |
 | Gameplay handler, validator | `envelope.Services` | Reads `IWorldReader`; sends primitives |
 | Ecs and Wire tests | Internal `MatchWorld.World` | Set a state before a test sends primitives |
-| Primitive handler (Ecs) | `MatchWorld` | Writes through the internal `Writer` |
+| Primitive handler (Ecs) | `MatchWorld` | Writes through the internal `match.Writer()` |
 | Code with no match scope | The app services | None: reader and primitives throw |
 
 ## Bypass routes
@@ -67,7 +67,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 |---|---|---|
 | A constructor asks for `World` or `IWorldWriter` | Resolve fails | Container |
 | `GetService<IWorldWriter>()` in a match scope | `null` | Container |
-| `MatchWorld.Writer` outside Ecs | Does not compile | Compiler |
+| `match.Writer()` or `new WorldWriter(...)` outside Ecs | Does not compile | Compiler |
 | Cast of the reader to `IWorldWriter` | `InvalidCastException` | Separate reader object (B4) |
 | Reader, writer, World or `MatchWorld` in a field outside Ecs | Gate fails | B5 |
 | Hook on a primitive outside Ecs and Wire | Gate fails | B6 |

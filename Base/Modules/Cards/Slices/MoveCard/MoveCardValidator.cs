@@ -1,5 +1,6 @@
 using Cards.Domain.Shared;
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using VSA.Contracts;
 using VSA.Handlers;

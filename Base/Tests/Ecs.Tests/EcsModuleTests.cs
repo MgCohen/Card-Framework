@@ -1,4 +1,5 @@
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VSA.Composition;

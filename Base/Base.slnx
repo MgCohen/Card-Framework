@@ -8,6 +8,7 @@
     <Project Path="Modules/Cards/Projects/Cards.Contracts.Commands.csproj" />
     <Project Path="Modules/Cards/Projects/Cards.Domain.Shared.csproj" />
     <Project Path="Modules/Cards/Projects/Cards.Domain.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Infrastructure.csproj" />
     <Project Path="Modules/Cards/Projects/Cards.Handlers.Commands.csproj" />
   </Folder>
   <Folder Name="/Modules/Resources/">
@@ -15,6 +16,7 @@
     <Project Path="Modules/Resources/Projects/Resources.Contracts.Commands.csproj" />
     <Project Path="Modules/Resources/Projects/Resources.Domain.Shared.csproj" />
     <Project Path="Modules/Resources/Projects/Resources.Domain.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Infrastructure.csproj" />
     <Project Path="Modules/Resources/Projects/Resources.Handlers.Commands.csproj" />
   </Folder>
   <Folder Name="/Plugins/" />

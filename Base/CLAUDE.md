@@ -146,9 +146,11 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
 - No service gives a `World` or an `IWorldWriter`. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
-- The primitive handlers get the writer through the scoped `MatchWorld` (`Ecs.Domain`). Its writer member is internal to Ecs.
+- `Ecs.Domain` holds `World`, `MatchWorld` and `Entity`. The members of `World` are internal to Ecs.
+- `Ecs.Infrastructure` holds `IWorldReader`, `IWorldWriter`, their adapters, `IWorldFactory`, `WorldFactory` and `MatchFactory`.
+- `IWorldWriter` is public, but only Ecs code can make a writer instance. The primitive handlers get it with the internal `match.Writer()`.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
-- A module that reads the World in a handler has a `Domain` project, also with no files. Without it, the handler cannot see `IWorldReader`.
+- A module that reads the World in a handler has a `Domain` project and an `Infrastructure` project, both with no files. Without them, the handler cannot see `Entity` and `IWorldReader`. Delete them when VSA.Sdk gives module handlers the plugin `Domain` and `Infrastructure` (vsa-template PR).
 - Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan and `WireTypes.Of` in `Configure`. Make no World before `Build()`.
 - No type outside `Plugins/Ecs` keeps a `World`, a reader, a writer or a `MatchWorld` in a field (`FrifloBoundaryTests` B5).
 

@@ -1,5 +1,4 @@
 using Ecs.Domain;
-using Ecs.Handlers.Commands;
 using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using VSA.Module;
@@ -13,6 +12,6 @@ public sealed class EcsPlugin : Plugin
         module.Services.AddSingleton<IWorldFactory, WorldFactory>();
         module.Services.AddSingleton<MatchFactory>();
         module.Services.AddScoped<MatchWorld>();
-        module.Services.AddScoped(provider => provider.GetRequiredService<MatchWorld>().Reader);
+        module.Services.AddScoped(provider => provider.GetRequiredService<MatchWorld>().Reader());
     }
 }

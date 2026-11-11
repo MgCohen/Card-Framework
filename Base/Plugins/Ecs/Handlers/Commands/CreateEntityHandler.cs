@@ -1,6 +1,7 @@
 using Ecs.Contracts.Commands;
-using Ecs.Domain;
 using Ecs.Domain.Shared;
+using Ecs.Domain;
+using Ecs.Infrastructure;
 using VSA.Contracts;
 
 namespace Ecs.Handlers.Commands;
@@ -11,7 +12,7 @@ public sealed class CreateEntityHandler : PrimitiveHandler<CreateEntity, EntityI
 
     public CreateEntityHandler(MatchWorld match)
     {
-        world = match.Writer;
+        world = match.Writer();
     }
 
     public override Task<Result<EntityId>> HandleAsync(Envelope<CreateEntity> envelope)

@@ -1,5 +1,6 @@
-using Ecs.Domain;
 using Ecs.Domain.Shared;
+using Ecs.Domain;
+using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 
 namespace Ecs.Tests;
@@ -82,7 +83,7 @@ public sealed class WorldIdTests
         world.Set(entity, new Position { X = 1, Y = 2 });
 
         Assert.That(world.Is(entity, new Position { X = 1, Y = 2 }), Is.True);
-        Assert.That(world.Reader.Is(entity, new Position { X = 1, Y = 2 }), Is.True);
+        Assert.That(world.Reader().Is(entity, new Position { X = 1, Y = 2 }), Is.True);
     }
 
     [Test]
