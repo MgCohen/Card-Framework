@@ -184,7 +184,7 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - A module registers no keys. A key outside the module assemblies, for example a test key, needs `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`.
 - The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender` (`match.Commands`).
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
-- A key is a `struct`, not `unmanaged`. A key with a reference field, for example a `string`, is `[MemoryPackable] partial`. Without it, `WireCatalog.Write` throws on the first send. `World.Set` compares the bytes of a key with no reference field, and calls `EqualityComparer<T>` for a key with a reference field.
+- A key is a `struct`, not `unmanaged`. A key with a reference field, for example a `string`, is `[MemoryPackable] partial`. Without it, `WireCatalog.Write` throws on the first send. `World.Set` compares the MemoryPack bytes of the old and the new value. The same bytes give `PrimitiveErrors.Unchanged`.
 - `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
 - `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.

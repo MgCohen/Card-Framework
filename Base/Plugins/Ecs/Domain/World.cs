@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
+using System.Buffers;
 using Ecs.Domain.Shared;
 using Friflo.Engine.ECS;
+using MemoryPack;
 using FrifloEntity = Friflo.Engine.ECS.Entity;
 using IComponent = Ecs.Domain.Shared.IComponent;
 using ITag = Ecs.Domain.Shared.ITag;
@@ -11,6 +11,8 @@ namespace Ecs.Domain;
 public sealed class World : IWorldWriter
 {
     private readonly EntityStore store;
+    private readonly ArrayBufferWriter<byte> leftBytes = new ArrayBufferWriter<byte>();
+    private readonly ArrayBufferWriter<byte> rightBytes = new ArrayBufferWriter<byte>();
     private int lastId;
 
     internal World(EntityStore store)
@@ -54,7 +56,7 @@ public sealed class World : IWorldWriter
         where T : struct, IComponent
     {
         FrifloEntity live = Live(entity);
-        if (live.TryGetComponent(out T current) && SameBytes(ref current, ref value))
+        if (live.TryGetComponent(out T current) && SameBytes(current, value))
         {
             return false;
         }
@@ -155,20 +157,17 @@ public sealed class World : IWorldWriter
     public bool Is<T>(Entity entity, T value)
         where T : struct, IComponent
     {
-        return Live(entity).TryGetComponent(out T current) && SameBytes(ref current, ref value);
+        return Live(entity).TryGetComponent(out T current) && SameBytes(current, value);
     }
 
-    private static bool SameBytes<T>(ref T left, ref T right)
+    private bool SameBytes<T>(in T left, in T right)
         where T : struct
     {
-        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            return EqualityComparer<T>.Default.Equals(left, right);
-        }
-
-        ReadOnlySpan<byte> leftBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref left, 1));
-        ReadOnlySpan<byte> rightBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref right, 1));
-        return leftBytes.SequenceEqual(rightBytes);
+        leftBytes.ResetWrittenCount();
+        rightBytes.ResetWrittenCount();
+        MemoryPackSerializer.Serialize(leftBytes, left);
+        MemoryPackSerializer.Serialize(rightBytes, right);
+        return leftBytes.WrittenSpan.SequenceEqual(rightBytes.WrittenSpan);
     }
 
     private FrifloEntity Live(Entity entity)
