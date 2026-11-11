@@ -24,6 +24,7 @@
     <Project Path="Plugins/Ecs/Projects/Ecs.Domain.Shared.csproj" />
     <Project Path="Plugins/Ecs/Projects/Ecs.Domain.csproj" />
     <Project Path="Plugins/Ecs/Projects/Ecs.Handlers.Commands.csproj" />
+    <Project Path="Plugins/Ecs/Projects/Ecs.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Plugins/Network/">
     <Project Path="Plugins/Network/Network.csproj" />

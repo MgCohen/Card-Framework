@@ -1,9 +1,8 @@
 using Ecs.Domain;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Ecs.Handlers.Commands;
+namespace Ecs.Infrastructure;
 
-// Makes one match: a new service scope with a new World bound to it. The caller owns the scope and disposes it.
 public sealed class MatchFactory
 {
     private readonly IServiceScopeFactory scopes;

@@ -23,7 +23,7 @@ Base/
 
 | Part | Root class | Layer folders | Example |
 |---|---|---|---|
-| Plugin | `Plugin` | `Domain/`, `Contracts/Commands/`, `Handlers/Commands/` | `Plugins/Ecs` |
+| Plugin | `Plugin` | `Domain/`, `Infrastructure/`, `Contracts/Commands/`, `Handlers/Commands/` | `Plugins/Ecs` |
 | Module | `Module` | `Domain/Shared/`, `Slices/<Feature>/` | `Modules/Cards` |
 
 ```text

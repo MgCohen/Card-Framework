@@ -6,7 +6,7 @@ using VSA.Composition;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
-using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 
 namespace Wire.Tests.Fixtures;
 

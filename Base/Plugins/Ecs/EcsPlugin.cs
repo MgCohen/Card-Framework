@@ -1,5 +1,6 @@
 using Ecs.Domain;
 using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using VSA.Module;
 

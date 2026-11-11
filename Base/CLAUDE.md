@@ -47,6 +47,7 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 | VSA.Sdk and `VSA.*` | `0.1.0-preview.11` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
+| Microsoft.Extensions.DependencyInjection.Abstractions | `10.0.14` | nuget.org (`Ecs.Infrastructure` only) |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
 | Microsoft.AspNetCore.Mvc.Testing | `10.0.14` | nuget.org (`App.Tests.csproj` only) |
 
@@ -144,7 +145,7 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
-- No service gives a `World` or an `IWorldWriter`. `MatchFactory.Create()` makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
+- No service gives a `World` or an `IWorldWriter`. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
 - The primitive handlers get the writer through the scoped `MatchWorld` (`Ecs.Domain`). Its writer member is internal to Ecs.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
 - A module that reads the World in a handler has a `Domain` project, also with no files. Without it, the handler cannot see `IWorldReader`.
