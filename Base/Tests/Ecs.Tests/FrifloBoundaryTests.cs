@@ -1,6 +1,6 @@
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
-using System.Reflection;
 using System.Xml.Linq;
 using Ecs.Domain;
 using Ecs.Handlers.Commands;

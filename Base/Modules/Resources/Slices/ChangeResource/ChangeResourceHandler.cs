@@ -3,8 +3,8 @@ using Ecs.Domain;
 using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Resources.Domain.Shared;
-using VSA.Contracts.Commands;
 using VSA.Contracts;
+using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;
 
 namespace Resources.Slices.ChangeResource;

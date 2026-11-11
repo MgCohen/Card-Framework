@@ -104,6 +104,25 @@ public sealed class MatchTests
         Assert.Throws<ObjectDisposedException>(new Action(() => Bus(match)));
     }
 
+    [Test]
+    public void Create_WorldFactoryThrows_DisposesTheScope()
+    {
+        DisposeLog log = new DisposeLog();
+        ServiceCollection services = new ServiceCollection();
+        services.AddSingleton(log);
+        services.AddScoped<ScopeProbe>();
+        services.AddScoped(provider =>
+        {
+            provider.GetRequiredService<ScopeProbe>();
+            return new MatchWorld();
+        });
+        using ServiceProvider provider = services.BuildServiceProvider();
+        MatchFactory factory = new MatchFactory(provider.GetRequiredService<IServiceScopeFactory>(), new FailingWorldFactory());
+
+        Assert.Throws<InvalidOperationException>(new Action(() => factory.Create()));
+        Assert.That(log.Count, Is.EqualTo(1));
+    }
+
     private static ICommandSender Bus(IServiceScope match)
     {
         return match.ServiceProvider.GetRequiredService<ICommandSender>();
@@ -117,5 +136,33 @@ public sealed class MatchTests
     private IServiceScope NewMatch()
     {
         return host.Services.GetRequiredService<MatchFactory>().Create();
+    }
+}
+
+public sealed class DisposeLog
+{
+    public int Count { get; set; }
+}
+
+public sealed class ScopeProbe : IDisposable
+{
+    private readonly DisposeLog log;
+
+    public ScopeProbe(DisposeLog log)
+    {
+        this.log = log;
+    }
+
+    public void Dispose()
+    {
+        log.Count++;
+    }
+}
+
+public sealed class FailingWorldFactory : IWorldFactory
+{
+    public World Create()
+    {
+        throw new InvalidOperationException("The test factory makes no World.");
     }
 }

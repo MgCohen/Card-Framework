@@ -1,5 +1,5 @@
-using Ecs.Domain.Shared;
 using Ecs.Domain;
+using Ecs.Domain.Shared;
 using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 

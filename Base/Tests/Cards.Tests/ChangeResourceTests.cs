@@ -1,14 +1,14 @@
 using Ecs.Contracts.Commands;
-using Ecs.Domain.Shared;
 using Ecs.Domain;
+using Ecs.Domain.Shared;
 using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Resources.Domain.Shared;
 using Resources.Slices.ChangeResource;
 using VSA.Composition;
-using VSA.Contracts.Commands;
 using VSA.Contracts;
+using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
 
 namespace Cards.Tests;

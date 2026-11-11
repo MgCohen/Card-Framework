@@ -1,6 +1,6 @@
 using Ecs.Contracts.Commands;
-using Ecs.Domain.Shared;
 using Ecs.Domain;
+using Ecs.Domain.Shared;
 using Ecs.Infrastructure;
 using VSA.Contracts;
 

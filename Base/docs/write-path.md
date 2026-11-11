@@ -68,6 +68,7 @@ public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceComma
 | A constructor asks for `World` or `IWorldWriter` | Resolve fails | Container |
 | `GetService<IWorldWriter>()` in a match scope | `null` | Container |
 | `match.Writer()` or `new WorldWriter(...)` outside Ecs | Does not compile | Compiler |
+| `new ChangeComponentHandler<T>(match)` outside Ecs | A World write with no log entry | Review |
 | Cast of the reader to `IWorldWriter` | `InvalidCastException` | Separate reader object (B4) |
 | Reader, writer, World or `MatchWorld` in a field outside Ecs | Gate fails | B5 |
 | Hook on a primitive outside Ecs and Wire | Gate fails | B6 |

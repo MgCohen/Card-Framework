@@ -145,7 +145,7 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
-- No service gives a `World` or an `IWorldWriter`. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
+- No service gives an `IWorldWriter`. `IWorldFactory` gives a `World` with no public members. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
 - `Ecs.Domain` holds `World`, `MatchWorld` and `Entity`. The members of `World` are internal to Ecs.
 - `Ecs.Infrastructure` holds `IWorldReader`, `IWorldWriter`, their adapters, `IWorldFactory`, `WorldFactory` and `MatchFactory`.
 - `IWorldWriter` is public, but only Ecs code can make a writer instance. The primitive handlers get it with the internal `match.Writer()`.

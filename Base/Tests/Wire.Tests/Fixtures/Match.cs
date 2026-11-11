@@ -1,12 +1,12 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VSA.Composition;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
-using Ecs.Infrastructure;
 
 namespace Wire.Tests.Fixtures;
 
