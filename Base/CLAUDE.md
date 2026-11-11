@@ -44,7 +44,7 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 
 | Package | Version | Feed |
 |---|---|---|
-| VSA.Sdk and `VSA.*` | `0.1.0-preview.12` | GitHub Packages, owner `MgCohen` |
+| VSA.Sdk and `VSA.*` | `0.1.0-preview.14` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
@@ -118,16 +118,16 @@ public sealed class EcsPlugin : Plugin
 - The root class of a plugin module inherits `Plugin` (`VSA1014`). The root class of a module inherits `Module`.
 - The module root holds only that class. Do not add `AddX` helpers to it.
 - A test with no web host calls `VsaBuilder.Create().UseGenericHost().Modules(new TypeKeysPlugin()).Build()`, then reads `host.Services`.
-- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.12/docs/composition.md).
+- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/composition.md).
 - `App.Tests` sets `VsaArchitectureTests` to false and has its own `ArchitectureTests` class. Reason: the generated class has no body (`;`), and that needs C# 12.
 - A test project that references `VSA.Testing.Architecture` sets the same property.
 - When the package generates a `{ }` body, delete the property and the local class.
 
-A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.12/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
+A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
 
 ## Handler pipeline
 
-Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.12/docs/handler-pipeline.md)). Base has no pipeline code of its own.
+Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/handler-pipeline.md)). Base has no pipeline code of its own.
 
 ```text
 ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> ─▶ handler ─▶ After<T> ─▶ AfterStep ─▶ Result<T>
