@@ -1,29 +1,28 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VSA.Composition;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
-using Ecs.Handlers.Commands;
-using EcsMatch = Ecs.Handlers.Commands.Match;
 
 namespace Wire.Tests.Fixtures;
 
-// One match on the real match owner. The tests also set a state on its World before they send primitives.
+// One match from the real MatchFactory. The tests also set a state on its World before they send primitives.
 internal sealed class Match : IDisposable
 {
-    private readonly EcsMatch match;
+    private readonly IServiceScope scope;
 
     public Match(IHost host)
     {
-        match = new EcsMatch(host.Services);
+        scope = host.Services.GetRequiredService<MatchFactory>().Create();
     }
 
     public World World => Get<MatchWorld>().World;
 
-    public IServiceProvider Services => match.Services;
+    public IServiceProvider Services => scope.ServiceProvider;
 
     public WireLog Log => Get<WireLog>();
 
@@ -31,7 +30,7 @@ internal sealed class Match : IDisposable
 
     public WireCatalog Catalog => Get<WireCatalog>();
 
-    public ICommandSender Bus => match.Commands;
+    public ICommandSender Bus => Get<ICommandSender>();
 
     public static IHost Host()
     {
@@ -50,12 +49,12 @@ internal sealed class Match : IDisposable
 
     public void Dispose()
     {
-        match.Dispose();
+        scope.Dispose();
     }
 
     private T Get<T>()
         where T : notnull
     {
-        return match.Services.GetRequiredService<T>();
+        return scope.ServiceProvider.GetRequiredService<T>();
     }
 }

@@ -47,6 +47,7 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 | VSA.Sdk and `VSA.*` | `0.1.0-preview.11` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
+| Microsoft.Extensions.DependencyInjection.Abstractions | `10.0.14` | nuget.org (`Ecs.Infrastructure` only) |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
 | Microsoft.AspNetCore.Mvc.Testing | `10.0.14` | nuget.org (`App.Tests.csproj` only) |
 
@@ -144,10 +145,12 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
-- No service gives a `World` or an `IWorldWriter`. `new Match(host.Services)` makes a scope and its World. The scope gives `IWorldReader`; a scope with no match throws.
-- The primitive handlers get the writer through the scoped `MatchWorld`. Its writer member is internal to Ecs.
+- No service gives an `IWorldWriter`. `IWorldFactory` gives a `World` with no public members. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
+- `Ecs.Domain` holds `World`, `MatchWorld` and `Entity`. The members of `World` are internal to Ecs.
+- `Ecs.Infrastructure` holds `IWorldReader`, `IWorldWriter`, their adapters, `IWorldFactory`, `WorldFactory` and `MatchFactory`.
+- `IWorldWriter` is public, but only Ecs code can make a writer instance. The primitive handlers get it with the internal `match.Writer()`.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
-- A module that reads the World in a handler has a `Domain` project, also with no files. Without it, the handler cannot see `IWorldReader`.
+- A module that reads the World in a handler has a `Domain` project and an `Infrastructure` project, both with no files. Without them, the handler cannot see `Entity` and `IWorldReader`. Delete them when VSA.Sdk gives module handlers the plugin `Domain` and `Infrastructure` (vsa-template PR).
 - Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan and `WireTypes.Of` in `Configure`. Make no World before `Build()`.
 - No type outside `Plugins/Ecs` keeps a `World`, a reader, a writer or a `MatchWorld` in a field (`FrifloBoundaryTests` B5).
 
@@ -172,7 +175,7 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
 - Primitive handlers derive from `PrimitiveHandler<,>`, not `CommandHandler<,>`. The command scan builds an open `CommandHandler` pair, and that stops the host.
 - A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
-- The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender` (`match.Commands`).
+- The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
 - `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.

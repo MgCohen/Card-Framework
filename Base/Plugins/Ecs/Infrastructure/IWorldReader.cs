@@ -1,6 +1,7 @@
+using Ecs.Domain;
 using Ecs.Domain.Shared;
 
-namespace Ecs.Domain;
+namespace Ecs.Infrastructure;
 
 public interface IWorldReader
 {

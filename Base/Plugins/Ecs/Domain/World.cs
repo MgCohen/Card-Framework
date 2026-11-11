@@ -7,7 +7,7 @@ using ITag = Ecs.Domain.Shared.ITag;
 
 namespace Ecs.Domain;
 
-public sealed class World : IWorldWriter
+public sealed class World
 {
     private readonly EntityStore store;
     private int lastId;
@@ -15,19 +15,16 @@ public sealed class World : IWorldWriter
     internal World(EntityStore store)
     {
         this.store = store;
-        Reader = new WorldReader(this);
     }
 
-    public IWorldReader Reader { get; }
+    internal int Count => store.Count;
 
-    public int Count => store.Count;
-
-    public Entity Create()
+    internal Entity Create()
     {
         return Create(NextId());
     }
 
-    public Entity Create(EntityId id)
+    internal Entity Create(EntityId id)
     {
         if (id.Value <= 0 || TryById(id, out _))
         {
@@ -38,18 +35,18 @@ public sealed class World : IWorldWriter
         return new Entity(store.CreateEntity(id.Value));
     }
 
-    public EntityId NextId()
+    internal EntityId NextId()
     {
         return new EntityId(lastId + 1);
     }
 
-    public bool Delete(Entity entity)
+    internal bool Delete(Entity entity)
     {
         Live(entity).DeleteEntity();
         return true;
     }
 
-    public bool Set<T>(Entity entity, T value)
+    internal bool Set<T>(Entity entity, T value)
         where T : unmanaged, IComponent
     {
         FrifloEntity live = Live(entity);
@@ -62,19 +59,19 @@ public sealed class World : IWorldWriter
         return true;
     }
 
-    public bool Set<T>(Entity entity, int value)
+    internal bool Set<T>(Entity entity, int value)
         where T : unmanaged, IValue<int>
     {
         return Set(entity, new T { Value = value });
     }
 
-    public bool Remove<T>(Entity entity)
+    internal bool Remove<T>(Entity entity)
         where T : unmanaged, IComponent
     {
         return Live(entity).RemoveComponent<T>();
     }
 
-    public bool AddTag<T>(Entity entity)
+    internal bool AddTag<T>(Entity entity)
         where T : struct, ITag
     {
         FrifloEntity live = Live(entity);
@@ -87,7 +84,7 @@ public sealed class World : IWorldWriter
         return true;
     }
 
-    public bool RemoveTag<T>(Entity entity)
+    internal bool RemoveTag<T>(Entity entity)
         where T : struct, ITag
     {
         FrifloEntity live = Live(entity);
@@ -100,7 +97,7 @@ public sealed class World : IWorldWriter
         return true;
     }
 
-    public Entity ById(EntityId id)
+    internal Entity ById(EntityId id)
     {
         if (!TryById(id, out Entity entity))
         {
@@ -110,7 +107,7 @@ public sealed class World : IWorldWriter
         return entity;
     }
 
-    public bool TryById(EntityId id, out Entity entity)
+    internal bool TryById(EntityId id, out Entity entity)
     {
         if (id.Value > 0 && store.TryGetEntityById(id.Value, out FrifloEntity found) && !found.IsNull)
         {
@@ -122,7 +119,7 @@ public sealed class World : IWorldWriter
         return false;
     }
 
-    public T Get<T>(Entity entity)
+    internal T Get<T>(Entity entity)
         where T : unmanaged, IComponent
     {
         if (!TryGet(entity, out T value))
@@ -133,25 +130,25 @@ public sealed class World : IWorldWriter
         return value;
     }
 
-    public bool TryGet<T>(Entity entity, out T value)
+    internal bool TryGet<T>(Entity entity, out T value)
         where T : unmanaged, IComponent
     {
         return Live(entity).TryGetComponent(out value);
     }
 
-    public bool Has<T>(Entity entity)
+    internal bool Has<T>(Entity entity)
         where T : unmanaged, IComponent
     {
         return Live(entity).HasComponent<T>();
     }
 
-    public bool HasTag<T>(Entity entity)
+    internal bool HasTag<T>(Entity entity)
         where T : struct, ITag
     {
         return Live(entity).Tags.Has<T>();
     }
 
-    public bool Is<T>(Entity entity, T value)
+    internal bool Is<T>(Entity entity, T value)
         where T : unmanaged, IComponent
     {
         return Live(entity).TryGetComponent(out T current) && SameBytes(ref current, ref value);

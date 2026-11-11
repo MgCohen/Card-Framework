@@ -1,6 +1,7 @@
+using Ecs.Domain;
 using Ecs.Domain.Shared;
 
-namespace Ecs.Domain;
+namespace Ecs.Infrastructure;
 
 internal sealed class WorldReader : IWorldReader
 {

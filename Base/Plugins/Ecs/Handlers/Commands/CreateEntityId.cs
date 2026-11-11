@@ -1,5 +1,6 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using VSA.Contracts;
 using VSA.Handlers;
 
@@ -11,7 +12,7 @@ public sealed class CreateEntityId : BeforeStep<CreateEntity>
 
     public CreateEntityId(MatchWorld match)
     {
-        world = match.Writer;
+        world = match.Writer();
     }
 
     public override Task<CreateEntity> BeforeAsync(IEnvelope<CreateEntity> envelope)

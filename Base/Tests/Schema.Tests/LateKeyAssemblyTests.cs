@@ -3,17 +3,19 @@ using Cards.Domain.Shared;
 using Cards.Slices.CreateCard;
 using Ecs.Domain;
 using Ecs.Domain.Shared;
-using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Resources.Domain.Shared;
 using Resources.Slices.ChangeResource;
 using VSA.Composition;
+using VSA.Contracts.Commands;
 
 namespace Schema.Tests;
 
 // Friflo reads the loaded assemblies when it makes the first World. A key assembly that loads after that fails
 // with TypeInitializationException. A module registers its keys with WireTypes.Of in Configure, so Build() loads each
-// key assembly before a Match can make a World. The test method itself names no key type: the JIT loads the types
+// key assembly before MatchFactory can make a World. The test method itself names no key type: the JIT loads the types
 // of a method before the method runs, so the key code is in Write, which the JIT compiles only when it is called.
 public sealed class LateKeyAssemblyTests
 {
@@ -41,12 +43,13 @@ public sealed class LateKeyAssemblyTests
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static async Task<string> Write(IHost host)
     {
-        using Match match = new Match(host.Services);
+        using IServiceScope match = host.Services.GetRequiredService<MatchFactory>().Create();
+        ICommandSender commands = match.ServiceProvider.GetRequiredService<ICommandSender>();
         CreateCardCommand create = new CreateCardCommand(Zone.Board);
-        EntityId card = (await match.Commands.SendAsync(create, CancellationToken.None)).Value;
-        await match.Commands.SendAsync(new ChangeResourceCommand(card, 7), CancellationToken.None);
+        EntityId card = (await commands.SendAsync(create, CancellationToken.None)).Value;
+        await commands.SendAsync(new ChangeResourceCommand(card, 7), CancellationToken.None);
 
-        IWorldReader world = match.Reader;
+        IWorldReader world = match.ServiceProvider.GetRequiredService<IWorldReader>();
         Entity entity = world.ById(card);
         return $"{world.Get<CardZone>(entity).Value} {world.Get<Health>(entity).Value}";
     }

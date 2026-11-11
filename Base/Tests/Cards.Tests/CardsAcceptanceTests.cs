@@ -4,13 +4,14 @@ using Cards.Slices.MoveCard;
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
 using Ecs.Domain.Shared;
-using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Resources.Domain.Shared;
 using Resources.Slices.ChangeResource;
 using VSA.Composition;
 using VSA.Contracts;
+using VSA.Contracts.Commands;
 using Wire.Handlers.Commands;
 
 namespace Cards.Tests;
@@ -24,9 +25,9 @@ public sealed class CardsAcceptanceTests
     public async Task CreateMoveChange_HealthAndLogBeforeAndAfterEachCommand()
     {
         using IHost host = VsaBuilder.Create().UseGenericHost().Build();
-        using Match match = new Match(host.Services);
-        IWorldReader world = match.Reader;
-        WireLog log = match.Services.GetRequiredService<WireLog>();
+        using IServiceScope match = host.Services.GetRequiredService<MatchFactory>().Create();
+        IWorldReader world = match.ServiceProvider.GetRequiredService<IWorldReader>();
+        WireLog log = match.ServiceProvider.GetRequiredService<WireLog>();
 
         Result<EntityId> created = await Send(match, new CreateCardCommand(Zone.Hand));
         EntityId card = created.Value;
@@ -72,9 +73,10 @@ public sealed class CardsAcceptanceTests
         Assert.That(log.Entries, Has.Count.EqualTo(6));
     }
 
-    private static Task<Result<T>> Send<T>(Match match, VSA.Contracts.Commands.ICommand<T> command)
+    private static Task<Result<T>> Send<T>(IServiceScope match, ICommand<T> command)
     {
-        return match.Commands.SendAsync(command, CancellationToken.None);
+        ICommandSender commands = match.ServiceProvider.GetRequiredService<ICommandSender>();
+        return commands.SendAsync(command, CancellationToken.None);
     }
 
     private static void Report(string step, IWorldReader world, EntityId card, WireLog log)

@@ -1,5 +1,6 @@
 using Ecs.Domain;
 using Ecs.Domain.Shared;
+using Ecs.Infrastructure;
 
 namespace Ecs.Tests;
 
