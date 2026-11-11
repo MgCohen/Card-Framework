@@ -44,7 +44,7 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 
 | Package | Version | Feed |
 |---|---|---|
-| VSA.Sdk and `VSA.*` | `0.1.0-preview.11` | GitHub Packages, owner `MgCohen` |
+| VSA.Sdk and `VSA.*` | `0.1.0-preview.14` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
 | Microsoft.Extensions.DependencyInjection.Abstractions | `10.0.14` | nuget.org (`Ecs.Infrastructure` only) |
@@ -119,16 +119,16 @@ public sealed class EcsPlugin : Plugin
 - The root class of a plugin module inherits `Plugin` (`VSA1014`). The root class of a module inherits `Module`.
 - The module root holds only that class. Do not add `AddX` helpers to it.
 - A test with no web host calls `VsaBuilder.Create().UseGenericHost().Modules(new TypeKeysPlugin()).Build()`, then reads `host.Services`.
-- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/composition.md).
+- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/composition.md).
 - `App.Tests` sets `VsaArchitectureTests` to false and has its own `ArchitectureTests` class. Reason: the generated class has no body (`;`), and that needs C# 12.
 - A test project that references `VSA.Testing.Architecture` sets the same property.
 - When the package generates a `{ }` body, delete the property and the local class.
 
-A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
+A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
 
 ## Handler pipeline
 
-Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/handler-pipeline.md)). Base has no pipeline code of its own.
+Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/handler-pipeline.md)). Base has no pipeline code of its own.
 
 ```text
 ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> ─▶ handler ─▶ After<T> ─▶ AfterStep ─▶ Result<T>
@@ -137,7 +137,16 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - A handler takes `Envelope<T>` and returns `Result<T>`. A send returns `Result<T>`. A rejected message gives `Result<T>.Error`, not an exception.
 - `envelope.Services` is the scope of the sender. Handlers, validators and steps resolve from that scope.
 - A custom pipeline: `module.Services.AddPipeline(new PipelineBuilder<TMessage>()...)` in `Configure`.
-- The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies, and only closed types.
+- The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies.
+- VSA registers each class with `[AutoRegister]` (`VSA.Analyzers.Markers`) on the class, a base class or an interface. The handler, validator, `Before<T>`, `After<T>` and `PrimitiveHandler<,>` bases have it. An open class is closed one time for each key that meets the constraints of `T`.
+- A key is a type with `[TypeArgument]` on the type, a base class or an interface. `IComponent` and `ITag` have `[TypeArgument]`, so each component and tag is a key.
+
+```csharp
+public sealed class ChangeResourceHandler<T> : CommandHandler<ChangeResourceCommand<T>, int>
+    where T : unmanaged, IValue<int>          // closed for Health and Mana; no registration
+
+await commands.SendAsync(new ChangeResourceCommand<Health>(card, 5), ct);   // commands: ICommandSender of the match scope
+```
 
 ## Friflo boundary
 
@@ -151,7 +160,7 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - `IWorldWriter` is public, but only Ecs code can make a writer instance. The primitive handlers get it with the internal `match.Writer()`.
 - A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
 - A module that reads the World in a handler has a `Domain` project and an `Infrastructure` project, both with no files. Without them, the handler cannot see `Entity` and `IWorldReader`. Delete them when VSA.Sdk gives module handlers the plugin `Domain` and `Infrastructure` (vsa-template PR).
-- Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan and `WireTypes.Of` in `Configure`. Make no World before `Build()`.
+- Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan. Make no World before `Build()`.
 - No type outside `Plugins/Ecs` keeps a `World`, a reader, a writer or a `MatchWorld` in a field (`FrifloBoundaryTests` B5).
 
 ## C# 11
@@ -173,8 +182,9 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 ```
 
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
-- Primitive handlers derive from `PrimitiveHandler<,>`, not `CommandHandler<,>`. The command scan builds an open `CommandHandler` pair, and that stops the host.
-- A module adds its keys: `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`. This gives the closed handlers, the MemoryPack types and the catalog ids.
+- Primitive handlers derive from `PrimitiveHandler<,>`, so the default command pipeline does not get them. `WirePlugin` reads the closed primitive handlers from `ModuleTypes.Implementations(typeof(PrimitiveHandler<,>))`. This gives the primitive pipeline, the MemoryPack types and the catalog ids.
+- Each component and tag of a module adds two catalog types, also if no peer sends it. The 1-byte catalog id gives 256 types maximum, so about 126 keys.
+- A module registers no keys. A key outside the module assemblies, for example a test key, needs `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`.
 - The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
 - `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network (P8 joins them).

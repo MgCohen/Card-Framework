@@ -14,6 +14,7 @@ using Wire.Handlers.Commands;
 namespace Cards.Tests;
 
 // ChangeResource is in the Resources module, not in Cards. It works on each live entity, not only on cards.
+// ChangeResourceHandler<T> is open: the module scan closes it for each IValue<int> key, with no registration.
 public sealed class ChangeResourceTests
 {
     private IHost host = null!;
@@ -38,7 +39,7 @@ public sealed class ChangeResourceTests
     {
         EntityId target = (await Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
 
-        ChangeResourceCommand change = new ChangeResourceCommand(target, -4);
+        ChangeResourceCommand<Health> change = new ChangeResourceCommand<Health>(target, -4);
 
         Result<int> result = await Commands.SendAsync(change, CancellationToken.None);
 
@@ -52,7 +53,7 @@ public sealed class ChangeResourceTests
         EntityId target = (await Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
         WireLog log = match.ServiceProvider.GetRequiredService<WireLog>();
 
-        ChangeResourceCommand change = new ChangeResourceCommand(target, 0);
+        ChangeResourceCommand<Health> change = new ChangeResourceCommand<Health>(target, 0);
 
         Result<int> result = await Commands.SendAsync(change, CancellationToken.None);
 
@@ -62,10 +63,24 @@ public sealed class ChangeResourceTests
     }
 
     [Test]
+    public async Task SecondResource_HasItsOwnClosedHandler_AndLeavesHealth()
+    {
+        EntityId target = (await Commands.SendAsync(new CreateEntity(default), CancellationToken.None)).Value;
+
+        ChangeResourceCommand<Mana> change = new ChangeResourceCommand<Mana>(target, 3);
+
+        Result<int> result = await Commands.SendAsync(change, CancellationToken.None);
+
+        Assert.That(result.Value, Is.EqualTo(3));
+        Assert.That(Reader.Get<Mana>(Reader.ById(target)).Value, Is.EqualTo(3));
+        Assert.That(Reader.Has<Health>(Reader.ById(target)), Is.False);
+    }
+
+    [Test]
     public async Task UnknownTarget_GivesEntityMissing()
     {
         WireLog log = match.ServiceProvider.GetRequiredService<WireLog>();
-        ChangeResourceCommand change = new ChangeResourceCommand(new EntityId(99), 1);
+        ChangeResourceCommand<Health> change = new ChangeResourceCommand<Health>(new EntityId(99), 1);
 
         Result<int> result = await Commands.SendAsync(change, CancellationToken.None);
 

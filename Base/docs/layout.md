@@ -14,7 +14,7 @@ Base/
 │  └─ Network/          ITransport, loopback transport
 ├─ Modules/             gameplay, one folder for each module
 │  ├─ Cards/            CreateCard, MoveCard · keys Card, CardZone, Zone
-│  └─ Resources/        ChangeResource · key Health
+│  └─ Resources/        ChangeResource<T> · keys Health, Mana
 ├─ Tests/               one dotnet test project for each area
 └─ docs/                these pages
 ```
@@ -28,7 +28,7 @@ Base/
 
 ```text
 Modules/Cards/
-├─ Cards.csproj, CardsModule.cs        root: registers WireTypes.Of(t => t.Component<CardZone>().Tag<Card>())
+├─ Cards.csproj, CardsModule.cs        root: registers nothing; Card and CardZone are keys through [TypeArgument]
 ├─ Projects/                           Domain.Shared, Domain, Infrastructure, Contracts.Commands, Handlers.Commands
 ├─ Domain/Shared/                      Card, CardZone, Zone: keys that other modules can read
 └─ Slices/
@@ -36,9 +36,9 @@ Modules/Cards/
    └─ MoveCard/                        MoveCardCommand, MoveCardHandler, MoveCardValidator, CardErrors
 ```
 
-- A key is an unmanaged struct in `Domain/Shared/`: `IValue<T>`, `IComponent` or `ITag`.
+- A key is an unmanaged struct in `Domain/Shared/`: `IValue<T>`, `IComponent` or `ITag`. `IComponent` and `ITag` have `[TypeArgument]`, so the module scan finds each key. A module registers no keys.
 - A module that reads the World in a handler has a `Domain` project and an `Infrastructure` project, both with no files.
-- A command is not generic. An open `CommandHandler<,>` stops the host.
+- A command can be generic on one key: `ChangeResourceCommand<T>`. The module scan closes its open handler for each key that meets the constraints of `T`. An open handler with two or more generic parameters stops the host.
 
 ## Tests
 
