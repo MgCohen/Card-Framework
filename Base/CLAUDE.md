@@ -137,7 +137,8 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - `envelope.Services` is the scope of the sender. Handlers, validators and steps resolve from that scope.
 - A custom pipeline: `module.Services.AddPipeline(new PipelineBuilder<TMessage>()...)` in `Configure`.
 - The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies.
-- An open generic handler, validator, `Before<T>` or `After<T>` is closed one time for each key that meets the constraints of `T`. A key is a type with `[Key]` (`VSA.Analyzers.Markers`) on the type, a base class or an interface. `IComponent` and `ITag` have `[Key]`, so each component and tag is a key.
+- VSA registers each class with `[AutoRegister]` (`VSA.Analyzers.Markers`) on the class, a base class or an interface. The handler, validator, `Before<T>`, `After<T>` and `PrimitiveHandler<,>` bases have it. An open class is closed one time for each key that meets the constraints of `T`.
+- A key is a type with `[TypeArgument]` on the type, a base class or an interface. `IComponent` and `ITag` have `[TypeArgument]`, so each component and tag is a key.
 
 ```csharp
 public sealed class ChangeResourceHandler<T> : CommandHandler<ChangeResourceCommand<T>, int>

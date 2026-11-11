@@ -2,7 +2,7 @@ using VSA.Analyzers.Markers;
 
 namespace Ecs.Domain.Shared;
 
-[Key]
+[TypeArgument]
 public interface IComponent : Friflo.Engine.ECS.IComponent
 {
 }

@@ -28,7 +28,7 @@ Base/
 
 ```text
 Modules/Cards/
-├─ Cards.csproj, CardsModule.cs        root: registers nothing; Card and CardZone are keys through [Key]
+├─ Cards.csproj, CardsModule.cs        root: registers nothing; Card and CardZone are keys through [TypeArgument]
 ├─ Projects/                           Domain.Shared, Domain, Contracts.Commands, Handlers.Commands
 ├─ Domain/Shared/                      Card, CardZone, Zone: keys that other modules can read
 └─ Slices/
@@ -36,7 +36,7 @@ Modules/Cards/
    └─ MoveCard/                        MoveCardCommand, MoveCardHandler, MoveCardValidator, CardErrors
 ```
 
-- A key is an unmanaged struct in `Domain/Shared/`: `IValue<T>`, `IComponent` or `ITag`. `IComponent` and `ITag` have `[Key]`, so the module scan finds each key. A module registers no keys.
+- A key is an unmanaged struct in `Domain/Shared/`: `IValue<T>`, `IComponent` or `ITag`. `IComponent` and `ITag` have `[TypeArgument]`, so the module scan finds each key. A module registers no keys.
 - A module that reads the World in a handler has a `Domain` project, also with no files.
 - A command can be generic on one key: `ChangeResourceCommand<T>`. The module scan closes its open handler for each key that meets the constraints of `T`. An open handler with two or more generic parameters stops the host.
 

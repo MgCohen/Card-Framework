@@ -2,7 +2,7 @@ using VSA.Analyzers.Markers;
 
 namespace Ecs.Domain.Shared;
 
-[Key]
+[TypeArgument]
 public interface ITag : Friflo.Engine.ECS.ITag
 {
 }

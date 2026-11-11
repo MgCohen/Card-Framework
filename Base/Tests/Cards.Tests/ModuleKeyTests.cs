@@ -11,7 +11,7 @@ using Wire.Handlers.Commands;
 
 namespace Cards.Tests;
 
-// IComponent and ITag have [Key], so each component and tag of a module is a key. The module scan closes the
+// IComponent and ITag have [TypeArgument], so each component and tag of a module is a key. The module scan closes the
 // primitive handlers for each key, and Wire gives each closed primitive a catalog id. No module registers a key.
 public sealed class ModuleKeyTests
 {

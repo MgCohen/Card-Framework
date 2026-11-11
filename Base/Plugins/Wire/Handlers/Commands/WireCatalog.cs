@@ -54,7 +54,7 @@ public sealed class WireCatalog
     {
         if (!ids.TryGetValue(type, out byte id))
         {
-            throw new InvalidOperationException($"{type.FullName} is not in the wire catalog. Mark its key with [Key], or add it with WireTypes.Of.");
+            throw new InvalidOperationException($"{type.FullName} is not in the wire catalog. Mark its key with [TypeArgument], or add it with WireTypes.Of.");
         }
 
         return id;
