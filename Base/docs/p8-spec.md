@@ -59,17 +59,23 @@ public sealed class WireReceiver : IDisposable        // client, scoped
 }
 
 // Plugins/Wire
-public sealed record WireHello(ulong Hash);           // fixed catalog id 0; never in the log
+public sealed record WireHello(ulong Hash);           // fixed catalog id 4; WireLog.Append rejects it
 public ulong WireCatalog.Hash { get; }                // FNV-1a 64 of the catalog keys in id order
 
 // Plugins/Network: LoopbackTransport becomes InProcessTransport
 
 // Tests/Testing
+public sealed class Peer : IDisposable                // an app host and its Match
+{
+    public static Peer Start(PeerRole role, IEnumerable<ITransport> transports, Action<IServiceCollection>? services = null);
+    public Match Match { get; }
+}
+
 public sealed class PeerHost : IDisposable
 {
     public static PeerHost Start(int clients);
-    public Match Server { get; }
-    public IReadOnlyList<Match> Clients { get; }
+    public Peer Server { get; }
+    public IReadOnlyList<Peer> Clients { get; }
     public Task IdleAsync();                          // each client receiver is idle
 }
 ```
@@ -111,6 +117,8 @@ A fault faults `Idle`, and the receiver applies no more frames.
 | Entry before `WireHello`: `Idle` faults | Peers.Tests |
 | `Match` after `Dispose`: `Reader`, `Services` throw | Ecs.Tests |
 | `WireCatalog.Hash`: equal keys equal; other keys differ | Wire.Tests |
+| Catalog limit: 255 types pass; the 5 built-in types make the count odd | Wire.Tests |
+| `WireLog.Append` rejects `WireHello` | Wire.Tests |
 
 ## Non-goals
 

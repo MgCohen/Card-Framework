@@ -72,6 +72,8 @@ match.Services.GetRequiredService<WireSender>();     // or WireReceiver: subscri
 ## Rules
 
 - Friflo is not thread-safe. Use one thread for each peer host.
+- If a handler yields, the next frames continue on the thread pool, because a generic host has no `SynchronizationContext`. They still apply one at a time. A Unity client must apply on its main thread.
+- `WireReceiver` starts each apply in the execution context of its constructor. A client envelope never has a server envelope as its parent.
 - Start the clients before the server. `WireSender` sends the hello in its constructor.
 
 ## Non-goals

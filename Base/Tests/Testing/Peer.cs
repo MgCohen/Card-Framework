@@ -21,7 +21,10 @@ public sealed class Peer : IDisposable
 
     public Match Match { get; }
 
-    public static Peer Start(PeerRole role, IEnumerable<ITransport> transports, Action<IServiceCollection>? services = null)
+    public static Peer Start(
+        PeerRole role,
+        IEnumerable<ITransport> transports,
+        Action<IServiceCollection>? services = null)
     {
         IHost host = VsaBuilder.Create().UseGenericHost().Services(s =>
         {
@@ -42,17 +45,27 @@ public sealed class Peer : IDisposable
             services?.Invoke(s);
         }).Build();
 
-        Match match = new Match(host.Services);
-        if (role == PeerRole.Server)
+        Match? match = null;
+        try
         {
-            match.Services.GetRequiredService<WireSender>();
-        }
-        else
-        {
-            match.Services.GetRequiredService<WireReceiver>();
-        }
+            match = new Match(host.Services);
+            if (role == PeerRole.Server)
+            {
+                match.Services.GetRequiredService<WireSender>();
+            }
+            else
+            {
+                match.Services.GetRequiredService<WireReceiver>();
+            }
 
-        return new Peer(host, match);
+            return new Peer(host, match);
+        }
+        catch
+        {
+            match?.Dispose();
+            host.Dispose();
+            throw;
+        }
     }
 
     public void Dispose()

@@ -13,6 +13,7 @@ public sealed class WireReceiver : IDisposable
     private readonly WireLog log;
     private readonly ITransport server;
     private readonly object gate = new object();
+    private readonly ExecutionContext? clean;
     private Task idle = Task.CompletedTask;
     private bool connected;
 
@@ -22,6 +23,7 @@ public sealed class WireReceiver : IDisposable
         this.bus = bus;
         this.log = log;
         this.server = server;
+        clean = ExecutionContext.Capture();
         server.OnReceived += Receive;
     }
 
@@ -46,7 +48,13 @@ public sealed class WireReceiver : IDisposable
         byte[] frame = borrowedBytes.ToArray();
         lock (gate)
         {
-            idle = ApplyAfterAsync(idle, frame);
+            if (clean == null)
+            {
+                idle = ApplyAfterAsync(idle, frame);
+                return;
+            }
+
+            ExecutionContext.Run(clean.CreateCopy(), _ => idle = ApplyAfterAsync(idle, frame), null);
         }
     }
 
@@ -59,7 +67,8 @@ public sealed class WireReceiver : IDisposable
             if (hello.Hash != catalog.Hash)
             {
                 throw new InvalidOperationException(
-                    "The server has other wire keys. Register the same WireTypes on the server and the client.");
+                    $"The server catalog hash is {hello.Hash:X16}, and the client catalog hash is {catalog.Hash:X16}. "
+                    + "Register the same WireTypes on the server and the client.");
             }
 
             connected = true;

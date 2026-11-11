@@ -4,8 +4,8 @@ using Wire.Handlers.Commands;
 namespace Wire.Tests.Fixtures;
 
 // All: 64 components and 64 tags give 256 primitive types; with the 5 built-in types, the catalog has 261.
-// Max255: 62 components and 63 tags give 250; with the built-in types, the catalog has 255. The count of built-in types is odd,
-// so the catalog cannot have exactly 256 types.
+// Max255: 62 components and 63 tags give 250; with the built-in types, the catalog has 255.
+// The count of built-in types is odd, so the catalog cannot have exactly 256 types.
 public struct C00 : IComponent
 {
     public int Value { get; init; }

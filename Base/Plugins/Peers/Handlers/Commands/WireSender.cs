@@ -11,7 +11,6 @@ public sealed class WireSender : IDisposable
     private readonly WireLog log;
     private readonly WireCatalog catalog;
     private readonly ITransport[] clients;
-    private readonly ArrayBufferWriter<byte> frame = new ArrayBufferWriter<byte>();
 
     public WireSender(WireLog log, WireCatalog catalog, IEnumerable<ITransport> clients)
     {
@@ -29,7 +28,7 @@ public sealed class WireSender : IDisposable
 
     private void Send(IMessage entry)
     {
-        frame.ResetWrittenCount();
+        ArrayBufferWriter<byte> frame = new ArrayBufferWriter<byte>();
         catalog.Write(entry, frame);
         foreach (ITransport client in clients)
         {
