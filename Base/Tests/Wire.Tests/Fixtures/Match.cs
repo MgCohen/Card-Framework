@@ -40,7 +40,7 @@ internal sealed class Match : IDisposable
 
     public static WireTypes Keys()
     {
-        return WireTypes.Of(t => t.Component<Health>().Component<Armor>().Tag<Marked>());
+        return WireTypes.Of(t => t.Component<Health>().Component<Armor>().Component<CardName>().Tag<Marked>());
     }
 
     public Task<Result<T>> Send<T>(IPrimitive<T> primitive)

@@ -6,7 +6,7 @@ using VSA.Contracts;
 namespace Ecs.Handlers.Commands;
 
 public sealed class ChangeComponentHandler<T> : PrimitiveHandler<ChangeComponent<T>, T>
-    where T : unmanaged, IComponent
+    where T : struct, IComponent
 {
     private readonly IWorldWriter writer;
 
