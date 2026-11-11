@@ -74,7 +74,10 @@ internal sealed class WireType
         MemoryPackSerializer.Serialize<T>(null);
     }
 
-    private static async Task<Error?> SendAsync<TPrimitive, TResult>(IPrimitive primitive, ICommandSender bus, CancellationToken ct)
+    private static async Task<Error?> SendAsync<TPrimitive, TResult>(
+        IPrimitive primitive,
+        ICommandSender bus,
+        CancellationToken ct)
         where TPrimitive : class, IPrimitive<TResult>
     {
         Result<TResult> result = await bus.SendAsync((TPrimitive)primitive, ct);

@@ -10,8 +10,9 @@ Base/
 ├─ Plugins/             base systems, one folder for each plugin
 │  ├─ TypeKeys/         TypeKey, one frozen registry for each key root
 │  ├─ Ecs/              Domain: World, MatchWorld · Infrastructure: reader, writer, factories · six primitives · the only Friflo user
-│  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep · MemoryPack
-│  └─ Network/          ITransport, loopback transport
+│  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep, WireHello · MemoryPack
+│  ├─ Network/          ITransport, InProcessTransport
+│  └─ Peers/            PeerRole, WireSender (server), WireReceiver (client) · joins Wire and Network
 ├─ Modules/             gameplay, one folder for each module
 │  ├─ Cards/            CreateCard, MoveCard · keys Card, CardZone, Zone
 │  └─ Resources/        ChangeResource<T> · keys Health, Mana
@@ -46,6 +47,8 @@ Modules/Cards/
 |---|---|
 | `Cards.Tests` | Acceptance test, slices, the first module validator |
 | `Ecs.Tests` | World, match scope, Friflo boundary (B1 to B5) |
-| `Wire.Tests` | Primitives, log, catalog, groups, peers, B6 |
+| `Wire.Tests` | Primitives, log, catalog, groups, frames into a client bus, B6 |
+| `Peers.Tests` | Server and clients over `InProcessTransport`, hello, receiver faults |
 | `Schema.Tests` | Key assemblies load in `Build()`; own process |
 | `App.Tests`, `TypeKeys.Tests`, `Network.Tests`, `Smoke.Tests` | Host, keys, transport, packages |
+| `Testing` | Not tests: `RecordingTransport`, `Peer`, `PeerHost` |

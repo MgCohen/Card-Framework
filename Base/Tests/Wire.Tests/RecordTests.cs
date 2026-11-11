@@ -2,6 +2,7 @@ using Ecs.Contracts.Commands;
 using Ecs.Domain.Shared;
 using Microsoft.Extensions.Hosting;
 using VSA.Contracts;
+using Wire.Contracts.Commands;
 using Wire.Tests.Fixtures;
 
 namespace Wire.Tests;
@@ -48,6 +49,13 @@ public sealed class RecordTests
         await match.Send(new DeleteEntity(new EntityId(99)));
 
         Assert.That(match.Log.Entries.Count, Is.EqualTo(count));
+    }
+
+    [Test]
+    public void Append_WireHello_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(new Action(() => match.Log.Append(new WireHello(1))));
+        Assert.That(match.Log.Entries, Is.Empty);
     }
 
     [Test]

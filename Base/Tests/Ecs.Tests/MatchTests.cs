@@ -102,6 +102,7 @@ public sealed class MatchTests
         match.Dispose();
 
         Assert.Throws<ObjectDisposedException>(new Action(() => Bus(match)));
+        Assert.Throws<ObjectDisposedException>(new Action(() => Reader(match)));
     }
 
     [Test]
