@@ -12,17 +12,17 @@ public interface IWorldReader
     bool TryById(EntityId id, out Entity entity);
 
     T Get<T>(Entity entity)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 
     bool TryGet<T>(Entity entity, out T value)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 
     bool Has<T>(Entity entity)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 
     bool HasTag<T>(Entity entity)
         where T : struct, ITag;
 
     bool Is<T>(Entity entity, T value)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 }

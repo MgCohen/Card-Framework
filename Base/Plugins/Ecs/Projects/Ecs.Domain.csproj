@@ -1,1 +1,5 @@
-<Project Sdk="VSA.Sdk" />
+<Project Sdk="VSA.Sdk">
+  <ItemGroup>
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+  </ItemGroup>
+</Project>

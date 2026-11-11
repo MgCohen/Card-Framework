@@ -32,12 +32,13 @@ public sealed class CatalogTests
         {
             typeof(ChangeComponent<Health>), typeof(RemoveComponent<Health>),
             typeof(ChangeComponent<Armor>), typeof(RemoveComponent<Armor>),
+            typeof(ChangeComponent<CardName>), typeof(RemoveComponent<CardName>),
             typeof(AddTag<Marked>), typeof(RemoveTag<Marked>),
         };
 
         Type[] byId = keys.OrderBy(catalog.IdOf).ToArray();
 
-        Assert.That(catalog.Count, Is.EqualTo(11));
+        Assert.That(catalog.Count, Is.EqualTo(13));
         Assert.That(byId, Is.EqualTo(keys.OrderBy(WireCatalog.KeyOf, StringComparer.Ordinal).ToArray()));
         Assert.That(keys.Select(catalog.IdOf), Is.All.GreaterThanOrEqualTo(5));
     }

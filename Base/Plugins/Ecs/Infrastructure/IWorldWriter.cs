@@ -14,13 +14,13 @@ public interface IWorldWriter : IWorldReader
     bool Delete(Entity entity);
 
     bool Set<T>(Entity entity, T value)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 
     bool Set<T>(Entity entity, int value)
-        where T : unmanaged, IValue<int>;
+        where T : struct, IValue<int>;
 
     bool Remove<T>(Entity entity)
-        where T : unmanaged, IComponent;
+        where T : struct, IComponent;
 
     bool AddTag<T>(Entity entity)
         where T : struct, ITag;

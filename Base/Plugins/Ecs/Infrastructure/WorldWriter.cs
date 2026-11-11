@@ -35,19 +35,19 @@ internal sealed class WorldWriter : IWorldWriter
     }
 
     public bool Set<T>(Entity entity, T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Set(entity, value);
     }
 
     public bool Set<T>(Entity entity, int value)
-        where T : unmanaged, IValue<int>
+        where T : struct, IValue<int>
     {
         return world.Set<T>(entity, value);
     }
 
     public bool Remove<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Remove<T>(entity);
     }
@@ -75,19 +75,19 @@ internal sealed class WorldWriter : IWorldWriter
     }
 
     public T Get<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Get<T>(entity);
     }
 
     public bool TryGet<T>(Entity entity, out T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.TryGet(entity, out value);
     }
 
     public bool Has<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Has<T>(entity);
     }
@@ -99,7 +99,7 @@ internal sealed class WorldWriter : IWorldWriter
     }
 
     public bool Is<T>(Entity entity, T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Is(entity, value);
     }

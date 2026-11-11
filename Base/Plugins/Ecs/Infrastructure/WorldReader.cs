@@ -25,19 +25,19 @@ internal sealed class WorldReader : IWorldReader
     }
 
     public T Get<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Get<T>(entity);
     }
 
     public bool TryGet<T>(Entity entity, out T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.TryGet(entity, out value);
     }
 
     public bool Has<T>(Entity entity)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Has<T>(entity);
     }
@@ -49,7 +49,7 @@ internal sealed class WorldReader : IWorldReader
     }
 
     public bool Is<T>(Entity entity, T value)
-        where T : unmanaged, IComponent
+        where T : struct, IComponent
     {
         return world.Is(entity, value);
     }
