@@ -167,6 +167,20 @@ public sealed class CatalogTests
     }
 
     [Test]
+    public void Frame_WireReply_RoundTrip()
+    {
+        WireCatalog catalog = new WireCatalog(new[] { Match.Keys() });
+        ArrayBufferWriter<byte> frame = new ArrayBufferWriter<byte>();
+
+        catalog.Write(new WireReply("Cards.NotACard", "No card.", new byte[] { 1, 2 }), frame);
+        WireReply read = (WireReply)catalog.Read(frame.WrittenSpan);
+
+        Assert.That(read.ErrorCode, Is.EqualTo("Cards.NotACard"));
+        Assert.That(read.ErrorMessage, Is.EqualTo("No card."));
+        Assert.That(read.Value, Is.EqualTo(new byte[] { 1, 2 }));
+    }
+
+    [Test]
     public void Frame_Empty_Throws()
     {
         WireCatalog catalog = new WireCatalog(new[] { Match.Keys() });
@@ -211,6 +225,5 @@ public sealed class CatalogTests
         yield return new GroupStart(id, new BlockId(4));
         yield return new GroupEnd(new BlockId(4), GroupOutcome.Completed);
         yield return new WireHello(0x0123456789ABCDEFUL);
-        yield return new WireReply("Cards.NotACard", "No card.", new byte[] { 1, 2 });
     }
 }

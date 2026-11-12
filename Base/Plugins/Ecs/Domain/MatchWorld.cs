@@ -6,8 +6,10 @@ public sealed class MatchWorld : IDisposable
 
     internal World World => Bound();
 
+    // The scope disposes this service when the match ends. Each reader and writer of the World then throws.
     public void Dispose()
     {
+        bound?.End();
     }
 
     internal void Bind(World world)

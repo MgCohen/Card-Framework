@@ -14,6 +14,8 @@ public sealed class WireTypesBuilder
 
     internal List<WireType> Types { get; } = new List<WireType>();
 
+    internal List<WireMessage> Messages { get; } = new List<WireMessage>();
+
     public WireTypesBuilder Component<T>()
         where T : struct, IComponent
     {
@@ -25,6 +27,7 @@ public sealed class WireTypesBuilder
     public WireTypesBuilder ClientMessage<TMessage, TReply>()
         where TMessage : class, IClientMessage<TReply>
     {
+        Messages.Add(WireMessage.Of<TMessage, TReply>());
         return this;
     }
 

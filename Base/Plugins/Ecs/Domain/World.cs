@@ -14,13 +14,27 @@ public sealed class World
     private readonly ArrayBufferWriter<byte> leftBytes = new ArrayBufferWriter<byte>();
     private readonly ArrayBufferWriter<byte> rightBytes = new ArrayBufferWriter<byte>();
     private int lastId;
+    private bool ended;
 
     internal World(EntityStore store)
     {
         this.store = store;
     }
 
-    internal int Count => store.Count;
+    internal int Count
+    {
+        get
+        {
+            Open();
+            return store.Count;
+        }
+    }
+
+    // Ends this World when its match scope ends. Each later call throws, also from a reader that code got before.
+    internal void End()
+    {
+        ended = true;
+    }
 
     internal Entity Create()
     {
@@ -40,6 +54,7 @@ public sealed class World
 
     internal EntityId NextId()
     {
+        Open();
         return new EntityId(lastId + 1);
     }
 
@@ -112,6 +127,7 @@ public sealed class World
 
     internal bool TryById(EntityId id, out Entity entity)
     {
+        Open();
         if (id.Value > 0 && store.TryGetEntityById(id.Value, out FrifloEntity found) && !found.IsNull)
         {
             entity = new Entity(found);
@@ -167,8 +183,17 @@ public sealed class World
         return leftBytes.WrittenSpan.SequenceEqual(rightBytes.WrittenSpan);
     }
 
+    private void Open()
+    {
+        if (ended)
+        {
+            throw new ObjectDisposedException(nameof(World), "The match scope of this World ended.");
+        }
+    }
+
     private FrifloEntity Live(Entity entity)
     {
+        Open();
         if (entity.IsNull)
         {
             throw new InvalidOperationException($"The entity {entity.Id.Value} is null or deleted.");
