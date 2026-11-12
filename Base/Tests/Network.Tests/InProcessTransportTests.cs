@@ -2,13 +2,13 @@ using Network.Domain;
 
 namespace Network.Tests;
 
-public sealed class LoopbackTransportTests
+public sealed class InProcessTransportTests
 {
     [TestCase(true)]
     [TestCase(false)]
     public void Send_RaisesOnReceived_OnTheOtherSide_InTheCall(bool serverSends)
     {
-        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        Ends(serverSends, out InProcessTransport sender, out InProcessTransport receiver);
         List<byte[]> received = Record(receiver);
 
         sender.Send(new byte[] { 1, 2, 3 });
@@ -20,7 +20,7 @@ public sealed class LoopbackTransportTests
     [TestCase(false)]
     public void Send_DoesNotRaiseOnReceived_OnTheSendingSide(bool serverSends)
     {
-        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        Ends(serverSends, out InProcessTransport sender, out InProcessTransport receiver);
         List<byte[]> senderReceived = Record(sender);
         List<byte[]> receiverReceived = Record(receiver);
 
@@ -34,7 +34,7 @@ public sealed class LoopbackTransportTests
     [TestCase(false)]
     public void Send_WithNoListener_DoesNotThrow(bool serverSends)
     {
-        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport _);
+        Ends(serverSends, out InProcessTransport sender, out InProcessTransport _);
 
         Action send = () => sender.Send(new byte[] { 1 });
 
@@ -45,7 +45,7 @@ public sealed class LoopbackTransportTests
     [TestCase(false)]
     public void Frames_ArriveInSendOrder(bool serverSends)
     {
-        Ends(serverSends, out LoopbackTransport sender, out LoopbackTransport receiver);
+        Ends(serverSends, out InProcessTransport sender, out InProcessTransport receiver);
         List<byte[]> received = Record(receiver);
 
         sender.Send(new byte[] { 1 });
@@ -59,7 +59,7 @@ public sealed class LoopbackTransportTests
     [TestCase(false)]
     public void Send_FromAHandler_IsDeliveredInANestedCall(bool serverAnswers)
     {
-        Ends(serverAnswers, out LoopbackTransport answerer, out LoopbackTransport asker);
+        Ends(serverAnswers, out InProcessTransport answerer, out InProcessTransport asker);
         List<byte[]> received = Record(asker);
         int receivedInHandler = -1;
         answerer.OnReceived += bytes =>
@@ -77,8 +77,8 @@ public sealed class LoopbackTransportTests
     [Test]
     public void Pairs_AreIndependent()
     {
-        LoopbackTransport.Pair(out LoopbackTransport toA, out LoopbackTransport clientA);
-        LoopbackTransport.Pair(out LoopbackTransport toB, out LoopbackTransport clientB);
+        InProcessTransport.Pair(out InProcessTransport toA, out InProcessTransport clientA);
+        InProcessTransport.Pair(out InProcessTransport toB, out InProcessTransport clientB);
         List<byte[]> receivedA = Record(clientA);
         List<byte[]> receivedB = Record(clientB);
         List<byte[]> receivedToB = Record(toB);
@@ -92,16 +92,16 @@ public sealed class LoopbackTransportTests
     }
 
     [Test]
-    public void LoopbackTransport_IsAnITransport()
+    public void InProcessTransport_IsAnITransport()
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport _);
+        InProcessTransport.Pair(out InProcessTransport server, out InProcessTransport _);
 
         Assert.That(server, Is.InstanceOf<ITransport>());
     }
 
-    private static void Ends(bool serverSends, out LoopbackTransport sender, out LoopbackTransport receiver)
+    private static void Ends(bool serverSends, out InProcessTransport sender, out InProcessTransport receiver)
     {
-        LoopbackTransport.Pair(out LoopbackTransport server, out LoopbackTransport client);
+        InProcessTransport.Pair(out InProcessTransport server, out InProcessTransport client);
         sender = serverSends ? server : client;
         receiver = serverSends ? client : server;
     }

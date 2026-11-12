@@ -4,6 +4,7 @@ using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Ecs.Domain;
 using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 
 namespace Ecs.Tests;
 
@@ -19,7 +20,7 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] EcsAssemblies =
     {
-        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
+        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Infrastructure", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
     };
 
     private static readonly string[] WorldOwners = Array.Empty<string>();
@@ -89,11 +90,11 @@ public sealed class FrifloBoundaryTests
     {
         World world = new WorldFactory().Create();
 
-        Assert.That(world.Reader is IWorldWriter, Is.False);
+        Assert.That(world.Reader() is IWorldWriter, Is.False);
     }
 
     // The owner of a match gives a reader to its scope. A field outside Ecs keeps it after the scope. WorldOwners
-    // lists the types outside Ecs that may keep one, by full name. The match owner (Match, MatchWorld) is in Ecs.
+    // lists the types outside Ecs that may keep one, by full name. The match owner (MatchFactory, MatchWorld) is in Ecs.
     [Test]
     public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
     {
@@ -276,8 +277,8 @@ public class WorldFieldProbe
     public WorldFieldProbe(World world, MatchWorld match)
     {
         shared = world;
-        writer = world;
-        readers = new List<IWorldReader> { world.Reader };
+        writer = world.Writer();
+        readers = new List<IWorldReader> { world.Reader() };
         this.match = match;
     }
 

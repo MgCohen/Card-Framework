@@ -7,7 +7,8 @@ namespace Wire.Handlers.Commands;
 
 public sealed class PrimitivePipelineBuilder : IPipelineBuilder<IPrimitive>
 {
-    private readonly List<Action<IPipelineBuilder<IPrimitive>>> settings = new List<Action<IPipelineBuilder<IPrimitive>>>();
+    private readonly List<Action<IPipelineBuilder<IPrimitive>>> settings =
+        new List<Action<IPipelineBuilder<IPrimitive>>>();
 
     public IPipelineBuilder<IPrimitive> Handlers<THandlerBase>()
         where THandlerBase : class

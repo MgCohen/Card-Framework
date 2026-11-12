@@ -1,14 +1,16 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Domain.Shared;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Resources.Domain.Shared;
 using VSA.Contracts;
 using VSA.Contracts.Commands;
 using VSA.Handlers.Commands;
 
 namespace Resources.Slices.ChangeResource;
 
-public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand, int>
+public sealed class ChangeResourceHandler<T> : CommandHandler<ChangeResourceCommand<T>, int>
+    where T : struct, IValue<int>
 {
     private readonly ICommandSender commands;
 
@@ -17,10 +19,10 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
         this.commands = commands;
     }
 
-    public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand> envelope)
+    public override async Task<Result<int>> HandleAsync(Envelope<ChangeResourceCommand<T>> envelope)
     {
         IWorldReader world = envelope.Services.GetRequiredService<IWorldReader>();
-        ChangeResourceCommand change = envelope.Message;
+        ChangeResourceCommand<T> change = envelope.Message;
         if (!world.TryById(change.Target, out Entity target))
         {
             return PrimitiveErrors.EntityMissing;
@@ -31,10 +33,10 @@ public sealed class ChangeResourceHandler : CommandHandler<ChangeResourceCommand
             return PrimitiveErrors.Unchanged;
         }
 
-        int current = world.TryGet(target, out Health health) ? health.Value : 0;
-        Health next = new Health { Value = current + change.Delta };
-        ChangeComponent<Health> write = new ChangeComponent<Health>(change.Target, next);
-        Result<Health> written = await commands.SendAsync(write, envelope.Cancellation);
+        int current = world.TryGet(target, out T value) ? value.Value : 0;
+        T next = new T { Value = current + change.Delta };
+        ChangeComponent<T> write = new ChangeComponent<T>(change.Target, next);
+        Result<T> written = await commands.SendAsync(write, envelope.Cancellation);
         return written.IsSuccess ? next.Value : written.Error!;
     }
 }

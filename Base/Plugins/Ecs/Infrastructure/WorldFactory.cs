@@ -1,6 +1,7 @@
+using Ecs.Domain;
 using Friflo.Engine.ECS;
 
-namespace Ecs.Domain;
+namespace Ecs.Infrastructure;
 
 public sealed class WorldFactory : IWorldFactory
 {

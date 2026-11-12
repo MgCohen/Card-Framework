@@ -1,4 +1,5 @@
 using VSA.Contracts;
+using Wire.Contracts.Commands;
 
 namespace Wire.Handlers.Commands;
 
@@ -18,6 +19,11 @@ public sealed class WireLog
 
     public void Append(IMessage entry)
     {
+        if (entry is WireHello)
+        {
+            throw new InvalidOperationException("A WireHello opens a connection. It is not a log entry.");
+        }
+
         catalog.IdOf(entry.GetType());
         entries.Add(entry);
         Appended?.Invoke(entry);

@@ -1,6 +1,7 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
 using Ecs.Domain.Shared;
+using Ecs.Infrastructure;
 using VSA.Contracts;
 
 namespace Ecs.Handlers.Commands;
@@ -12,7 +13,7 @@ public sealed class RemoveTagHandler<T> : PrimitiveHandler<RemoveTag<T>, Unit>
 
     public RemoveTagHandler(MatchWorld match)
     {
-        writer = match.Writer;
+        writer = match.Writer();
     }
 
     public override Task<Result<Unit>> HandleAsync(Envelope<RemoveTag<T>> envelope)

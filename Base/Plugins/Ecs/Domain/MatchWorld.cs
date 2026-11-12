@@ -1,14 +1,8 @@
-using Ecs.Domain;
-
-namespace Ecs.Handlers.Commands;
+namespace Ecs.Domain;
 
 public sealed class MatchWorld
 {
     private World? bound;
-
-    public IWorldReader Reader => Bound().Reader;
-
-    internal IWorldWriter Writer => Bound();
 
     internal World World => Bound();
 
@@ -25,6 +19,6 @@ public sealed class MatchWorld
     private World Bound()
     {
         return bound ?? throw new InvalidOperationException(
-            "No match owns this scope. Make a Match, then send and read through its scope.");
+            "No match owns this scope. Make a match with MatchFactory, then send and read through its scope.");
     }
 }

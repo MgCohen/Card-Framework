@@ -20,6 +20,11 @@ public sealed class WireTypes
 
     internal IReadOnlyList<WireType> Types { get; }
 
+    public static WireTypes OfHandlers(IEnumerable<Type> handlers)
+    {
+        return new WireTypes(handlers.Select(WireType.OfHandler).ToArray());
+    }
+
     public static WireTypes Of(Action<WireTypesBuilder> build)
     {
         WireTypesBuilder builder = new WireTypesBuilder();
