@@ -3,10 +3,12 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Ecs.Domain;
+using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 
 namespace Ecs.Tests;
 
-// Only Shared/Ecs uses Friflo packages. Friflo.Engine.ECS brings Friflo.Json.Fliox, so each check matches the prefix.
+// Only Plugins/Ecs uses Friflo packages. Friflo.Engine.ECS brings Friflo.Json.Fliox, so each check matches the prefix.
 // A key implements a Friflo marker through the Ecs markers, so other assemblies can name the two markers and nothing else.
 public sealed class FrifloBoundaryTests
 {
@@ -14,9 +16,12 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] Markers = { "Friflo.Engine.ECS.IComponent", "Friflo.Engine.ECS.ITag" };
 
-    private static readonly string[] AppFolders = { "App/", "Shared/", "Modules/" };
+    private static readonly string[] AppFolders = { "App/", "Plugins/", "Modules/" };
 
-    private static readonly string[] EcsAssemblies = { "Ecs", "Ecs.Domain", "Ecs.Domain.Shared" };
+    private static readonly string[] EcsAssemblies =
+    {
+        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Infrastructure", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
+    };
 
     private static readonly string[] WorldOwners = Array.Empty<string>();
 
@@ -37,14 +42,14 @@ public sealed class FrifloBoundaryTests
             foreach (string project in Directory.EnumerateFiles(path, "*.csproj", SearchOption.AllDirectories))
             {
                 string relative = Path.GetRelativePath(root, project).Replace('\\', '/');
-                if (!relative.StartsWith("Shared/Ecs/", StringComparison.Ordinal) && ReferencesFriflo(project))
+                if (!relative.StartsWith("Plugins/Ecs/", StringComparison.Ordinal) && ReferencesFriflo(project))
                 {
                     offenders.Add(relative);
                 }
             }
         }
 
-        Assert.That(ReferencesFriflo(Path.Combine(root, "Shared/Ecs/Projects/Ecs.Domain.Shared.csproj")), Is.True);
+        Assert.That(ReferencesFriflo(Path.Combine(root, "Plugins/Ecs/Projects/Ecs.Domain.Shared.csproj")), Is.True);
         Assert.That(offenders, Is.Empty);
     }
 
@@ -85,11 +90,11 @@ public sealed class FrifloBoundaryTests
     {
         World world = new WorldFactory().Create();
 
-        Assert.That(world.Reader is IWorldWriter, Is.False);
+        Assert.That(world.Reader() is IWorldWriter, Is.False);
     }
 
-    // The owner of a match gives a World, a reader or a writer to a handler for one call. A field outside Ecs keeps
-    // it after the call. WorldOwners lists the types that may keep one, by full name; it is empty until P4 adds them.
+    // The owner of a match gives a reader to its scope. A field outside Ecs keeps it after the scope. WorldOwners
+    // lists the types outside Ecs that may keep one, by full name. The match owner (MatchFactory, MatchWorld) is in Ecs.
     [Test]
     public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
     {
@@ -103,7 +108,7 @@ public sealed class FrifloBoundaryTests
             }
         }
 
-        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(3));
+        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(4));
         Assert.That(offenders, Is.Empty);
     }
 
@@ -111,7 +116,7 @@ public sealed class FrifloBoundaryTests
     {
         const BindingFlags Fields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
             | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader) };
+        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader), typeof(MatchWorld) };
 
         return type.GetFields(Fields)
             .Where(f => Unwrap(f.FieldType).Any(t => world.Contains(t)))
@@ -267,12 +272,15 @@ public class WorldFieldProbe
 
     private readonly List<IWorldReader> readers;
 
-    public WorldFieldProbe(World world)
+    private readonly MatchWorld match;
+
+    public WorldFieldProbe(World world, MatchWorld match)
     {
         shared = world;
-        writer = world;
-        readers = new List<IWorldReader> { world.Reader };
+        writer = world.Writer();
+        readers = new List<IWorldReader> { world.Reader() };
+        this.match = match;
     }
 
-    public bool IsEmpty => shared == null && writer == null && readers.Count == 0;
+    public bool IsEmpty => shared == null && writer == null && readers.Count == 0 && match == null;
 }

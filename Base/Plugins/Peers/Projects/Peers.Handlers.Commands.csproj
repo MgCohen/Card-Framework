@@ -1,0 +1,5 @@
+<Project Sdk="VSA.Sdk">
+  <PropertyGroup>
+    <VsaPluginUses>Ecs;Wire</VsaPluginUses>
+  </PropertyGroup>
+</Project>

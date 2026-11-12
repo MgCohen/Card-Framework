@@ -1,4 +1,5 @@
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 
 namespace Ecs.Tests;

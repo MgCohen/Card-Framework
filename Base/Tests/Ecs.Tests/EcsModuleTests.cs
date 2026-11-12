@@ -1,18 +1,19 @@
 using Ecs.Domain;
-using Microsoft.AspNetCore.Builder;
+using Ecs.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using VSA.Host;
+using Microsoft.Extensions.Hosting;
+using VSA.Composition;
 
 namespace Ecs.Tests;
 
-// The module composes through AddVsa, as App/Host/Program.cs does. The container gives the factory only:
-// the owner of a match makes its World and gives access by hand.
+// The plugin composes through VsaBuilder, as App/Host/Program.cs does. No service gives a World or a writer. The
+// reader comes only from a match scope (MatchTests).
 public sealed class EcsModuleTests
 {
     [Test]
     public void Module_RegistersOneWorldFactory()
     {
-        using WebApplication app = BuildApp();
+        using IHost app = BuildApp();
 
         IWorldFactory factory = app.Services.GetRequiredService<IWorldFactory>();
 
@@ -20,19 +21,18 @@ public sealed class EcsModuleTests
     }
 
     [Test]
-    public void Module_RegistersNoWorldReaderOrWriter()
+    public void Module_RegistersNoWorldOrWriter()
     {
-        using WebApplication app = BuildApp();
+        using IHost app = BuildApp();
 
         Assert.That(app.Services.GetService<World>(), Is.Null);
         Assert.That(app.Services.GetService<IWorldWriter>(), Is.Null);
-        Assert.That(app.Services.GetService<IWorldReader>(), Is.Null);
     }
 
     [Test]
     public void Factory_MakesANewWorldEachTime()
     {
-        using WebApplication app = BuildApp();
+        using IHost app = BuildApp();
         IWorldFactory factory = app.Services.GetRequiredService<IWorldFactory>();
 
         World first = factory.Create();
@@ -43,10 +43,8 @@ public sealed class EcsModuleTests
         Assert.That(second.Count, Is.Zero);
     }
 
-    private static WebApplication BuildApp()
+    private static IHost BuildApp()
     {
-        WebApplicationBuilder builder = WebApplication.CreateBuilder();
-        builder.AddVsa();
-        return builder.Build();
+        return VsaBuilder.Create().UseGenericHost().Build();
     }
 }

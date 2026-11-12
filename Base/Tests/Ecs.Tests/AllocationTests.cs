@@ -1,4 +1,5 @@
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 
 namespace Ecs.Tests;
@@ -49,7 +50,7 @@ public sealed class AllocationTests
         World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set<Health>(entity, 3);
-        IWorldReader reader = world.Reader;
+        IWorldReader reader = world.Reader();
 
         long bytes = Measure(() =>
         {
@@ -57,6 +58,25 @@ public sealed class AllocationTests
             {
                 _ = reader.Get<Health>(entity);
                 _ = reader.Has<Health>(entity);
+            }
+        });
+
+        Assert.That(bytes, Is.Zero);
+    }
+
+    [Test]
+    public void Is_AllocatesNothing()
+    {
+        World world = new WorldFactory().Create();
+        Entity entity = world.Create();
+        world.Set(entity, new Position { X = 1, Y = 2 });
+        IWorldReader reader = world.Reader();
+
+        long bytes = Measure(() =>
+        {
+            for (int i = 0; i < Calls; i++)
+            {
+                _ = reader.Is(entity, new Position { X = 1, Y = 2 });
             }
         });
 
