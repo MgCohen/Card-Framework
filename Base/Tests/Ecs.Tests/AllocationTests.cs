@@ -1,4 +1,5 @@
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 
 namespace Ecs.Tests;
@@ -49,7 +50,7 @@ public sealed class AllocationTests
         World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set<Health>(entity, 3);
-        IWorldReader reader = world.Reader;
+        IWorldReader reader = world.Reader();
 
         long bytes = Measure(() =>
         {
@@ -69,7 +70,7 @@ public sealed class AllocationTests
         World world = new WorldFactory().Create();
         Entity entity = world.Create();
         world.Set(entity, new Position { X = 1, Y = 2 });
-        IWorldReader reader = world.Reader;
+        IWorldReader reader = world.Reader();
 
         long bytes = Measure(() =>
         {

@@ -1,5 +1,6 @@
 using Ecs.Contracts.Commands;
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using VSA.Contracts;
 
 namespace Ecs.Handlers.Commands;
@@ -8,9 +9,9 @@ public sealed class DeleteEntityHandler : PrimitiveHandler<DeleteEntity, Unit>
 {
     private readonly IWorldWriter writer;
 
-    public DeleteEntityHandler(IWorldWriter writer)
+    public DeleteEntityHandler(MatchWorld match)
     {
-        this.writer = writer;
+        writer = match.Writer();
     }
 
     public override Task<Result<Unit>> HandleAsync(Envelope<DeleteEntity> envelope)
