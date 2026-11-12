@@ -14,7 +14,7 @@ public sealed class World
     private readonly ArrayBufferWriter<byte> leftBytes = new ArrayBufferWriter<byte>();
     private readonly ArrayBufferWriter<byte> rightBytes = new ArrayBufferWriter<byte>();
     private int lastId;
-    private bool ended;
+    private volatile bool ended;
 
     internal World(EntityStore store)
     {
@@ -43,6 +43,7 @@ public sealed class World
 
     internal Entity Create(EntityId id)
     {
+        Open();
         if (id.Value <= 0 || TryById(id, out _))
         {
             throw new ArgumentException($"The id {id.Value} is 0, negative or live.", nameof(id));

@@ -74,6 +74,11 @@ public sealed class WireServer : IDisposable
         Link link = new Link(this, client);
         lock (gate)
         {
+            if (links.Exists(l => ReferenceEquals(l.Transport, client)))
+            {
+                return;
+            }
+
             links.Add(link);
         }
 
@@ -102,7 +107,20 @@ public sealed class WireServer : IDisposable
         byte[] frame = Frame(entry);
         foreach (Link link in Links())
         {
+            Send(link, frame);
+        }
+    }
+
+    // A transport that fails to send loses its client. The other clients still get the frame.
+    private void Send(Link link, byte[] frame)
+    {
+        try
+        {
             link.Transport.Send(frame);
+        }
+        catch (Exception)
+        {
+            Disconnect(link.Transport);
         }
     }
 
@@ -142,7 +160,7 @@ public sealed class WireServer : IDisposable
 
         if (IsConnected(link))
         {
-            link.Transport.Send(Frame(reply));
+            Send(link, Frame(reply));
         }
     }
 

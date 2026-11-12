@@ -43,7 +43,7 @@ public sealed class WireCatalog
             ids.Add(byId[id], id);
         }
 
-        Hash = HashOf(byId);
+        Hash = HashOf(byId.Select(HashKeyOf));
     }
 
     public int Count => byId.Length;
@@ -142,10 +142,18 @@ public sealed class WireCatalog
         return type.RunAsync(message, bus, ct);
     }
 
-    private static ulong HashOf(IEnumerable<Type> types)
+    // A client message adds its reply type, because the client reads the reply bytes as that type.
+    private string HashKeyOf(Type type)
+    {
+        return messages.TryGetValue(type, out WireMessage? message)
+            ? KeyOf(type) + "->" + KeyOf(message.Reply)
+            : KeyOf(type);
+    }
+
+    private static ulong HashOf(IEnumerable<string> keys)
     {
         ulong hash = HashBasis;
-        foreach (byte value in Encoding.UTF8.GetBytes(string.Join('\n', types.Select(KeyOf))))
+        foreach (byte value in Encoding.UTF8.GetBytes(string.Join('\n', keys)))
         {
             hash = (hash ^ value) * HashPrime;
         }

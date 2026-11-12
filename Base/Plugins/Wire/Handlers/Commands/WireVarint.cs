@@ -41,7 +41,7 @@ public static class WireVarint
             value |= (ulong)(part & 0x7F) << (7 * i);
             if ((part & 0x80) == 0)
             {
-                if (value > int.MaxValue)
+                if (value > int.MaxValue || (i > 0 && part == 0))
                 {
                     break;
                 }
@@ -52,6 +52,7 @@ public static class WireVarint
         }
 
         throw new InvalidOperationException(
-            $"The frame id is not a varint of {MaxBytes} bytes or less with a value of int.MaxValue or less.");
+            $"The frame id is not a varint of {MaxBytes} bytes or less, in its shortest form, "
+            + "with a value of int.MaxValue or less.");
     }
 }

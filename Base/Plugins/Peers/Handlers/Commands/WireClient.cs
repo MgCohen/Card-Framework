@@ -16,10 +16,11 @@ public sealed class WireClient : IDisposable
     private readonly WireLog log;
     private readonly ITransport server;
     private readonly MatchQueue queue = new MatchQueue();
+    private readonly object sendGate = new object();
     private readonly object gate = new object();
-    private readonly Queue<OpenSend> open = new Queue<OpenSend>();
+    private readonly LinkedList<OpenSend> open = new LinkedList<OpenSend>();
+    private Exception? stopped;
     private bool connected;
-    private bool disposed;
 
     public WireClient(WireCatalog catalog, ICommandSender bus, WireLog log, ITransport server)
     {
@@ -38,20 +39,49 @@ public sealed class WireClient : IDisposable
         ArrayBufferWriter<byte> frame = new ArrayBufferWriter<byte>();
         catalog.Write(message, frame);
         OpenSend<TReply> send = new OpenSend<TReply>(ct);
-        lock (gate)
+
+        // One lock over the enqueue and the send, so the order of the open sends is the order of the frames.
+        lock (sendGate)
         {
-            ObjectDisposedException.ThrowIf(disposed, this);
-            open.Enqueue(send);
+            LinkedListNode<OpenSend> node;
+            lock (gate)
+            {
+                if (stopped != null)
+                {
+                    throw stopped is ObjectDisposedException
+                        ? new ObjectDisposedException(nameof(WireClient))
+                        : new InvalidOperationException("The client stopped after a frame failed.", stopped);
+                }
+
+                node = open.AddLast(send);
+            }
+
+            try
+            {
+                server.Send(frame.WrittenSpan);
+            }
+            catch (Exception error)
+            {
+                lock (gate)
+                {
+                    if (node.List != null)
+                    {
+                        open.Remove(node);
+                    }
+                }
+
+                send.Fail(error);
+                throw;
+            }
         }
 
-        server.Send(frame.WrittenSpan);
         return send.Task;
     }
 
     public void Dispose()
     {
         server.OnReceived -= Receive;
-        Fail(new ObjectDisposedException(nameof(WireClient)), dispose: true);
+        Stop(new ObjectDisposedException(nameof(WireClient)));
     }
 
     private void Receive(ReadOnlySpan<byte> borrowedBytes)
@@ -68,7 +98,7 @@ public sealed class WireClient : IDisposable
         }
         catch (Exception error)
         {
-            Fail(error, dispose: false);
+            Stop(error);
             throw;
         }
     }
@@ -111,22 +141,25 @@ public sealed class WireClient : IDisposable
     {
         lock (gate)
         {
-            if (open.Count == 0)
+            if (open.First == null)
             {
                 throw new InvalidOperationException("The server sent a reply, and the client has no open send.");
             }
 
-            return open.Dequeue();
+            OpenSend next = open.First.Value;
+            open.RemoveFirst();
+            return next;
         }
     }
 
-    // A failed frame or a Dispose fails each open send, because no later reply comes.
-    private void Fail(Exception error, bool dispose)
+    // A failed frame or a Dispose stops the client. Each open send fails, because no later reply comes, and each
+    // later send throws.
+    private void Stop(Exception error)
     {
         OpenSend[] failed;
         lock (gate)
         {
-            disposed |= dispose;
+            stopped ??= error;
             failed = open.ToArray();
             open.Clear();
         }
@@ -149,24 +182,33 @@ public sealed class WireClient : IDisposable
         private readonly TaskCompletionSource<Result<TReply>> done =
             new TaskCompletionSource<Result<TReply>>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        private readonly CancellationTokenRegistration cancel;
+
         public OpenSend(CancellationToken ct)
         {
-            if (ct.CanBeCanceled)
-            {
-                ct.Register(() => done.TrySetCanceled(ct));
-            }
+            cancel = ct.Register(() => done.TrySetCanceled(ct));
         }
 
         public Task<Result<TReply>> Task => done.Task;
 
         public override void Complete(WireReply reply)
         {
-            done.TrySetResult(WireCatalog.ReplyOf<TReply>(reply));
+            try
+            {
+                done.TrySetResult(WireCatalog.ReplyOf<TReply>(reply));
+            }
+            catch (Exception error)
+            {
+                done.TrySetException(error);
+            }
+
+            cancel.Dispose();
         }
 
         public override void Fail(Exception error)
         {
             done.TrySetException(error);
+            cancel.Dispose();
         }
     }
 }

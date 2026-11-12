@@ -95,7 +95,8 @@ Result<Pong> pong = await client.SendAsync(new Ping(1), ct);                 // 
 
 - `WireServer.Disconnect(transport)` stops the sends to that client and its received frames. The match continues for the other clients.
 - The server disconnects a client that sends a frame that is not a client message: a primitive, an unknown id or a bad payload.
-- `WireClient.Dispose` fails each open send with `ObjectDisposedException`.
+- `WireClient.Dispose` fails each open send with `ObjectDisposedException`, and each later send throws.
+- A transport that throws on a send loses its client. The other clients still get the frame.
 - `ITransport` has no close event. A transport adapter calls `Disconnect` when its connection ends.
 
 ## Order
@@ -116,6 +117,7 @@ Result<Pong> pong = await client.SendAsync(new Ping(1), ct);                 // 
 ## Rules
 
 - Friflo is not thread-safe. Local driver code sends on the bus directly, not through the queue, so use one thread for each peer host.
+- With `InProcessTransport`, a server handler runs on the thread of the client that sends. Do not send on the server bus while clients send messages from other threads.
 - If a handler yields, the next frames continue on the thread pool, because a generic host has no `SynchronizationContext`. They still apply one at a time. A Unity client must apply on its main thread.
 - Each frame runs in the execution context of the role service constructor. A client envelope never has a server envelope as its parent.
 - Start the clients before the server. `WireServer` sends the hello in its constructor.

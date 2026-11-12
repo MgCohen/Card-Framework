@@ -130,6 +130,47 @@ public sealed class ClientMessageTests
         Assert.That(toClient.Sent, Has.Count.EqualTo(1));
     }
 
+    [TestCaseSource(nameof(BadFrames))]
+    public void Server_BadFrameFromAClient_DisconnectsIt(Func<WireCatalog, byte[]> bad)
+    {
+        RecordingTransport toClient = new RecordingTransport();
+        using Peer server = Peer.Start(PeerRole.Server, new ITransport[] { toClient });
+
+        toClient.Inject(bad(server.Services.GetRequiredService<WireCatalog>()));
+
+        Assert.That(server.WireServer.Count, Is.Zero);
+        Assert.That(toClient.Sent, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Server_FrameAfterDisconnect_DoesNotRun()
+    {
+        RecordingTransport toClient = new RecordingTransport();
+        using Peer server = Peer.Start(PeerRole.Server, new ITransport[] { toClient });
+        WireCatalog catalog = server.Services.GetRequiredService<WireCatalog>();
+
+        server.WireServer.Disconnect(toClient);
+        toClient.Inject(Frame(catalog, new Ping(1)));
+
+        Assert.That(toClient.Sent, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Server_MessagesFromTwoClientThreads_RunOneAtATime()
+    {
+        const int sends = 50;
+        using PeerHost peers = PeerHost.Start(clients: 2, TestCallHandler.Register);
+
+        Result<int>[][] results = await Task.WhenAll(peers.Clients.Select(client => Task.Run(() => Spawn(client, sends))));
+        await peers.IdleAsync();
+
+        int[] ids = results.SelectMany(r => r).Select(r => r.Value).ToArray();
+        Assert.That(results.SelectMany(r => r).All(r => r.IsSuccess), Is.True);
+        Assert.That(ids.Distinct().Count(), Is.EqualTo(2 * sends));
+        Assert.That(peers.Server.Reader.Count, Is.EqualTo(2 * sends));
+        Assert.That(peers.Clients.Select(c => c.Reader.Count), Is.All.EqualTo(2 * sends));
+    }
+
     [Test]
     public async Task Disconnect_TheOtherClientGetsTheNextEntries()
     {
@@ -166,6 +207,25 @@ public sealed class ClientMessageTests
         Assert.That(client.Reader.Get<CardZone>(client.Reader.ById(new EntityId(1))).Value, Is.EqualTo(Zone.Board));
         Assert.That(client.Reader.Get<CardZone>(client.Reader.ById(new EntityId(2))).Value, Is.EqualTo(Zone.Board));
         Assert.That(client.Services.GetRequiredService<WireLog>().Entries, Has.Count.EqualTo(2 + (2 * changes)));
+    }
+
+    private static IEnumerable<Func<WireCatalog, byte[]>> BadFrames()
+    {
+        yield return catalog => new byte[] { 0xFF, 0x7F };
+        yield return catalog => new byte[] { (byte)catalog.IdOf(typeof(Ping)) };
+        yield return catalog => Frame(catalog, new WireReply(null, null, Array.Empty<byte>()));
+        yield return catalog => Frame(catalog, new CreateEntity(new EntityId(1)));
+    }
+
+    private static async Task<Result<int>[]> Spawn(Peer client, int count)
+    {
+        List<Result<int>> results = new List<Result<int>>();
+        for (int i = 0; i < count; i++)
+        {
+            results.Add(await client.WireClient.SendAsync(new TestCall(CallMode.Spawn, 0), default));
+        }
+
+        return results.ToArray();
     }
 
     // Moves the card between Hand and Board. The last change puts it on the Board.

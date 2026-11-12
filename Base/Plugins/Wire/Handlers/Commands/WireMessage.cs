@@ -13,9 +13,13 @@ internal sealed class WireMessage
 {
     private readonly Func<IMessage, ICommandSender, CancellationToken, Task<WireReply>> run;
 
-    private WireMessage(Type message, Func<IMessage, ICommandSender, CancellationToken, Task<WireReply>> run)
+    private WireMessage(
+        Type message,
+        Type reply,
+        Func<IMessage, ICommandSender, CancellationToken, Task<WireReply>> run)
     {
         Message = message;
+        Reply = reply;
         this.run = run;
     }
 
@@ -24,11 +28,14 @@ internal sealed class WireMessage
 
     public Type Message { get; }
 
+    public Type Reply { get; }
+
     public static WireMessage Of<TMessage, TReply>()
         where TMessage : class, IClientMessage<TReply>
     {
         MemoryPackSerializer.Serialize<TMessage>(null);
-        return new WireMessage(typeof(TMessage), RunAsync<TMessage, TReply>);
+        MemoryPackSerializer.Serialize<TReply>(default);
+        return new WireMessage(typeof(TMessage), typeof(TReply), RunAsync<TMessage, TReply>);
     }
 
     // A closed command handler gives a client message type if its message implements IClientMessage of its result.

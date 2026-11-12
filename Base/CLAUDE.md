@@ -208,5 +208,5 @@ VsaBuilder.Create().UseGenericHost().Services(s =>
 - `WireClient` applies frames in order. A different hash, an entry before the hello, or an entry with an `Error` faults `Idle`. `WireClient.SendAsync(IClientMessage<TReply>)` gives the `Result<TReply>` of the server.
 - A client message is a command that implements `IClientMessage<TReply>`. It is not a log entry. Only primitives and group entries go in the `WireLog`, so the handler of the message type selects its path.
 - `WireServer.Disconnect(transport)` stops the sends to that client and its frames. A frame that is not a client message disconnects the client.
-- Friflo is not thread-safe. `WireServer` and `WireClient` run the frames of a match one at a time. Local driver code sends on the bus directly, so use one thread for each peer host.
+- Friflo is not thread-safe. `WireServer` and `WireClient` run the frames of a match one at a time. Local driver code sends on the bus directly, so use one thread for each peer host. With `InProcessTransport`, a server handler runs on the thread of the client that sends.
 - `Tests/Testing/PeerHost.Start(clients)` makes one server and N clients over `InProcessTransport`. The details are in [docs/peers.md](docs/peers.md).

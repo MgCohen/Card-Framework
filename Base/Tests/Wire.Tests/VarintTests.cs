@@ -53,6 +53,12 @@ public sealed class VarintTests
     }
 
     [Test]
+    public void Read_LongerThanTheShortestForm_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(new Action(() => WireVarint.Read(new byte[] { 0x80, 0x00 }, out _)));
+    }
+
+    [Test]
     public void Write_Negative_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(new Action(() => WireVarint.Write(-1, new ArrayBufferWriter<byte>())));
