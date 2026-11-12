@@ -9,7 +9,8 @@ using VSA.Contracts.Commands;
 namespace Testing;
 
 // One peer: its own app host and its own match scope. The role selects the services, as EngineInstaller(isServer) does
-// in the Unity Framework: a server sends its log to each client transport, and a client applies the frames it receives.
+// in the Unity Framework: a server sends its log to each client transport and runs the messages of its clients, and a
+// client applies the frames it receives and sends messages to the server.
 public sealed class Peer : IDisposable
 {
     private readonly IHost host;
@@ -28,6 +29,10 @@ public sealed class Peer : IDisposable
 
     public IWorldReader Reader => Services.GetRequiredService<IWorldReader>();
 
+    public WireServer WireServer => Services.GetRequiredService<WireServer>();
+
+    public WireClient WireClient => Services.GetRequiredService<WireClient>();
+
     public static Peer Start(
         PeerRole role,
         IEnumerable<ITransport> transports,
@@ -42,11 +47,11 @@ public sealed class Peer : IDisposable
 
             if (role == PeerRole.Server)
             {
-                s.AddScoped<WireSender>();
+                s.AddScoped<WireServer>();
             }
             else
             {
-                s.AddScoped<WireReceiver>();
+                s.AddScoped<WireClient>();
             }
 
             services?.Invoke(s);
@@ -58,11 +63,11 @@ public sealed class Peer : IDisposable
             match = host.Services.GetRequiredService<MatchFactory>().Create();
             if (role == PeerRole.Server)
             {
-                match.ServiceProvider.GetRequiredService<WireSender>();
+                match.ServiceProvider.GetRequiredService<WireServer>();
             }
             else
             {
-                match.ServiceProvider.GetRequiredService<WireReceiver>();
+                match.ServiceProvider.GetRequiredService<WireClient>();
             }
 
             return new Peer(host, match);

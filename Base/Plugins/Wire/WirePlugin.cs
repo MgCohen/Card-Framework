@@ -1,6 +1,7 @@
 using Ecs.Handlers.Commands;
 using Microsoft.Extensions.DependencyInjection;
 using VSA.Handlers;
+using VSA.Handlers.Commands;
 using VSA.Module;
 using Wire.Handlers.Commands;
 
@@ -12,6 +13,9 @@ public sealed class WirePlugin : Plugin
     {
         module.Services.AddSingleton(provider => WireTypes.OfHandlers(provider.GetRequiredService<ModuleTypes>()
             .Implementations(typeof(PrimitiveHandler<,>))
+            .Select(handler => handler.Implementation)));
+        module.Services.AddSingleton(provider => WireTypes.OfCommandHandlers(provider.GetRequiredService<ModuleTypes>()
+            .Implementations(typeof(CommandHandler<,>))
             .Select(handler => handler.Implementation)));
         module.Services.AddSingleton(provider => new WireCatalog(provider.GetServices<WireTypes>()));
         module.Services.AddScoped<WireLog>();

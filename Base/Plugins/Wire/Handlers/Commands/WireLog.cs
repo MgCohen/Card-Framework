@@ -24,6 +24,11 @@ public sealed class WireLog
             throw new InvalidOperationException("A WireHello opens a connection. It is not a log entry.");
         }
 
+        if (entry is WireReply)
+        {
+            throw new InvalidOperationException("A WireReply goes to one client only. It is not a log entry.");
+        }
+
         catalog.IdOf(entry.GetType());
         entries.Add(entry);
         Appended?.Invoke(entry);

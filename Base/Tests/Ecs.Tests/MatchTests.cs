@@ -106,6 +106,29 @@ public sealed class MatchTests
     }
 
     [Test]
+    public void Dispose_ReaderFromBefore_Throws()
+    {
+        IServiceScope match = NewMatch();
+        IWorldReader reader = Reader(match);
+
+        match.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(new Action(() => _ = reader.Count));
+        Assert.Throws<ObjectDisposedException>(new Action(() => reader.TryById(new EntityId(1), out _)));
+    }
+
+    [Test]
+    public void Dispose_WriterFromBefore_Throws()
+    {
+        IServiceScope match = NewMatch();
+        IWorldWriter writer = match.ServiceProvider.GetRequiredService<MatchWorld>().World.Writer();
+
+        match.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(new Action(() => writer.Create()));
+    }
+
+    [Test]
     public void Create_WorldFactoryThrows_DisposesTheScope()
     {
         DisposeLog log = new DisposeLog();

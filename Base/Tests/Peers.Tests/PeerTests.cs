@@ -128,9 +128,9 @@ public sealed class PeerTests
         Assert.That(client.Reader.Count, Is.EqualTo(1));
     }
 
-    private static WireReceiver Receiver(Peer client)
+    private static WireClient Receiver(Peer client)
     {
-        return client.Services.GetRequiredService<WireReceiver>();
+        return client.Services.GetRequiredService<WireClient>();
     }
 
     private static byte[] Frame(Peer peer, IMessage entry)

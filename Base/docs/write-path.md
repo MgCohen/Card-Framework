@@ -26,7 +26,7 @@ WireLog log = match.ServiceProvider.GetRequiredService<WireLog>();              
 | `ICommandSender` of the scope | Sends into the match: `envelope.Services` is the match scope |
 | `IWorldReader` of the scope | Read access to the match World |
 | `WireLog`, `GroupService` of the scope | The log and the groups of the match |
-| `match.Dispose()` | Ends the scope |
+| `match.Dispose()` | Ends the scope and its World: each reader and writer then throws `ObjectDisposedException` |
 
 ## One command
 

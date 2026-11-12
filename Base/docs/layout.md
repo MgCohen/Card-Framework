@@ -12,7 +12,7 @@ Base/
 │  ├─ Ecs/              Domain: World, MatchWorld · Infrastructure: reader, writer, factories · six primitives · the only Friflo user
 │  ├─ Wire/             WireLog, WireCatalog, GroupService, RecordStep, WireHello · MemoryPack
 │  ├─ Network/          ITransport, InProcessTransport
-│  └─ Peers/            PeerRole, WireSender (server), WireReceiver (client) · joins Wire and Network
+│  └─ Peers/            PeerRole, WireServer, WireClient, Ping · joins Wire and Network
 ├─ Modules/             gameplay, one folder for each module
 │  ├─ Cards/            CreateCard, MoveCard · keys Card, CardZone, Zone
 │  └─ Resources/        ChangeResource<T> · keys Health, Mana
@@ -48,7 +48,11 @@ Modules/Cards/
 | `Cards.Tests` | Acceptance test, slices, the first module validator |
 | `Ecs.Tests` | World, match scope, Friflo boundary (B1 to B5) |
 | `Wire.Tests` | Primitives, log, catalog, groups, frames into a client bus, B6 |
-| `Peers.Tests` | Server and clients over `InProcessTransport`, hello, receiver faults |
+| `Peers.Tests` | Server and clients over `InProcessTransport`, hello, client faults, client messages, disconnect |
 | `Schema.Tests` | Key assemblies load in `Build()`; own process |
 | `App.Tests`, `TypeKeys.Tests`, `Network.Tests`, `Smoke.Tests` | Host, keys, transport, packages |
 | `Testing` | Not tests: `RecordingTransport`, `Peer`, `PeerHost` |
+
+## Non-goals
+
+- No data keys from content. Keys are C# struct types. Reason: the compiler checks each key access, the catalog ids and the hash come from type names, and Friflo needs a struct type for each component. A key from content needs a dynamic store and its own delta.
