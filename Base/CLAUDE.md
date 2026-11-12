@@ -70,21 +70,17 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 
 | Phase | Cut from | PR into |
 |---|---|---|
-| P0 | `base` | `base` |
-| P1 to P6 | The previous phase branch | The previous phase branch |
-| U1 | `p6-wire` | `p6-wire` |
-| P7 and later | `u1-unify`, then the previous phase branch | The branch it was cut from |
+| A new phase | `main` | `main` |
+| A phase that needs an open phase | The branch of that phase | The branch it was cut from |
 
 If a review changes a parent branch, rebase the child branch on it.
-
-On Windows, the branch `base` and the folder `Base/` have the same name. Write `git diff base --`, not `git diff base`.
 
 ## VSA shape
 
 ```text
 Base/
 ├─ App/Host/          the composition root: Program.cs, one VsaBuilder call
-├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire)
+├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire, Peers)
 ├─ Modules/<Name>/    modules: the Cards and Resources sample
 ├─ docs/              base docs: layout, write path, peers
 └─ Tests/             dotnet test projects; App.Tests references the host
@@ -152,6 +148,8 @@ await commands.SendAsync(new ChangeResourceCommand<Health>(card, 5), ct);   // c
 
 - Only `Plugins/Ecs` references Friflo.Engine.ECS.
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
+- `EntityId` is the only entity handle on the wire and in components. Friflo relations and links stay inside `Plugins/Ecs`. Reason: a peer makes the same ids from the same entries, and Friflo links are not wire data.
+- When the match scope ends, `MatchWorld` ends its World. Each reader and writer of that World then throws `ObjectDisposedException`, also one that code got before `Dispose`.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
 - Only the primitive handlers in `Plugins/Ecs` write the World (next section).
 - No service gives an `IWorldWriter`. `IWorldFactory` gives a `World` with no public members. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
@@ -183,12 +181,12 @@ bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
 
 - Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
 - Primitive handlers derive from `PrimitiveHandler<,>`, so the default command pipeline does not get them. `WirePlugin` reads the closed primitive handlers from `ModuleTypes.Implementations(typeof(PrimitiveHandler<,>))`. This gives the primitive pipeline, the MemoryPack types and the catalog ids.
-- Each component and tag of a module adds two catalog types, also if no peer sends it. The 1-byte catalog id gives 256 types maximum. Five types are built in, so 125 keys maximum.
+- Each component and tag of a module adds two catalog types, also if no peer sends it. The frame id is a varint: 1 byte for ids 0 to 127, 2 bytes up to 16,383, and 5 bytes maximum. Six types are built in.
 - A module registers no keys. A key outside the module assemblies, for example a test key, needs `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`.
 - The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
 - Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
 - A key is a `struct`, not `unmanaged`. A key with a reference field, for example a `string`, is `[MemoryPackable] partial`. Without it, `WireCatalog.Write` throws on the first send. `World.Set` compares the MemoryPack bytes of the old and the new value. The same bytes give `PrimitiveErrors.Unchanged`.
-- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network: `Plugins/Peers` joins them.
+- `WireCatalog` writes a frame as `[varint id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network: `Plugins/Peers` joins them.
 - `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
 - `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.
 
@@ -200,14 +198,15 @@ Each peer is its own app host with one match scope from `MatchFactory.Create()`.
 VsaBuilder.Create().UseGenericHost().Services(s =>
 {
     foreach (ITransport transport in transports) s.AddSingleton(transport);   // server: one for each client
-    if (role == PeerRole.Server) s.AddScoped<WireSender>();
-    else s.AddScoped<WireReceiver>();
+    if (role == PeerRole.Server) s.AddScoped<WireServer>();
+    else s.AddScoped<WireClient>();
 }).Build();
 ```
 
 - The code that makes the match scope resolves the role service one time from `match.ServiceProvider`. The service subscribes in its constructor.
-- `WireSender` sends `WireHello(catalog.Hash)`, then one frame for each `WireLog.Appended` entry, to each client transport.
-- `WireReceiver` applies frames in order. A different hash, an entry before the hello, or an entry with an `Error` faults `Idle`.
-- A client registers no `WireSender`, so it does not forward its log.
-- Friflo is not thread-safe. Use one thread for each peer host.
+- `WireServer` sends `WireHello(catalog.Hash)`, then one frame for each `WireLog.Appended` entry, to each connected client. It runs each client message on the match bus and sends a `WireReply` to the sender only.
+- `WireClient` applies frames in order. A different hash, an entry before the hello, or an entry with an `Error` faults `Idle`. `WireClient.SendAsync(IClientMessage<TReply>)` gives the `Result<TReply>` of the server.
+- A client message is a command that implements `IClientMessage<TReply>`. It is not a log entry. Only primitives and group entries go in the `WireLog`, so the handler of the message type selects its path.
+- `WireServer.Disconnect(transport)` stops the sends to that client and its frames. A frame that is not a client message disconnects the client.
+- Friflo is not thread-safe. `WireServer` and `WireClient` run the frames of a match one at a time. Local driver code sends on the bus directly, so use one thread for each peer host.
 - `Tests/Testing/PeerHost.Start(clients)` makes one server and N clients over `InProcessTransport`. The details are in [docs/peers.md](docs/peers.md).
