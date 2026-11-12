@@ -6,7 +6,7 @@ using Wire.Handlers.Commands;
 
 namespace Peers.Handlers.Commands;
 
-public sealed class WireReceiver : IDisposable
+public sealed class WireClient : IDisposable
 {
     private readonly WireCatalog catalog;
     private readonly ICommandSender bus;
@@ -17,7 +17,7 @@ public sealed class WireReceiver : IDisposable
     private Task idle = Task.CompletedTask;
     private bool connected;
 
-    public WireReceiver(WireCatalog catalog, ICommandSender bus, WireLog log, ITransport server)
+    public WireClient(WireCatalog catalog, ICommandSender bus, WireLog log, ITransport server)
     {
         this.catalog = catalog;
         this.bus = bus;
@@ -36,6 +36,11 @@ public sealed class WireReceiver : IDisposable
                 return idle;
             }
         }
+    }
+
+    public Task<Result<TReply>> SendAsync<TReply>(IClientMessage<TReply> message, CancellationToken ct)
+    {
+        throw new NotImplementedException();
     }
 
     public void Dispose()

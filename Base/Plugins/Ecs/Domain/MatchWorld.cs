@@ -1,10 +1,14 @@
 namespace Ecs.Domain;
 
-public sealed class MatchWorld
+public sealed class MatchWorld : IDisposable
 {
     private World? bound;
 
     internal World World => Bound();
+
+    public void Dispose()
+    {
+    }
 
     internal void Bind(World world)
     {

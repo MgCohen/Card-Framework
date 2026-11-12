@@ -2,6 +2,7 @@ using Ecs.Contracts.Commands;
 using Ecs.Domain.Shared;
 using Ecs.Handlers.Commands;
 using VSA.Contracts;
+using Wire.Contracts.Commands;
 
 namespace Wire.Handlers.Commands;
 
@@ -18,6 +19,12 @@ public sealed class WireTypesBuilder
     {
         Types.Add(WireType.Of<ChangeComponent<T>, T, ChangeComponentHandler<T>>());
         Types.Add(WireType.Of<RemoveComponent<T>, Unit, RemoveComponentHandler<T>>());
+        return this;
+    }
+
+    public WireTypesBuilder ClientMessage<TMessage, TReply>()
+        where TMessage : class, IClientMessage<TReply>
+    {
         return this;
     }
 

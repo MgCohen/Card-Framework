@@ -59,6 +59,14 @@ public sealed class RecordTests
     }
 
     [Test]
+    public void Append_WireReply_Throws()
+    {
+        WireReply reply = new WireReply(null, null, Array.Empty<byte>());
+
+        Assert.Throws<InvalidOperationException>(new Action(() => match.Log.Append(reply)));
+    }
+
+    [Test]
     public async Task Record_Accepted_RaisesAppendedOnce()
     {
         List<IMessage> appended = new List<IMessage>();

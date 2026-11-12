@@ -9,18 +9,20 @@ namespace Testing;
 public sealed class PeerHost : IDisposable
 {
     private readonly List<Peer> clients;
+    private readonly List<ITransport> serverSides;
 
-    private PeerHost(Peer server, List<Peer> clients)
+    private PeerHost(Peer server, List<Peer> clients, List<ITransport> serverSides)
     {
         Server = server;
         this.clients = clients;
+        this.serverSides = serverSides;
     }
 
     public Peer Server { get; }
 
     public IReadOnlyList<Peer> Clients => clients;
 
-    public static PeerHost Start(int clients)
+    public static PeerHost Start(int clients, Action<IServiceCollection>? services = null)
     {
         List<ITransport> serverSides = new List<ITransport>();
         List<Peer> started = new List<Peer>();
@@ -28,15 +30,21 @@ public sealed class PeerHost : IDisposable
         {
             InProcessTransport.Pair(out InProcessTransport serverSide, out InProcessTransport clientSide);
             serverSides.Add(serverSide);
-            started.Add(Peer.Start(PeerRole.Client, new ITransport[] { clientSide }));
+            started.Add(Peer.Start(PeerRole.Client, new ITransport[] { clientSide }, services));
         }
 
-        return new PeerHost(Peer.Start(PeerRole.Server, serverSides), started);
+        return new PeerHost(Peer.Start(PeerRole.Server, serverSides, services), started, serverSides);
+    }
+
+    // The server stops its sends to this client and stops reading its frames.
+    public void Disconnect(Peer client)
+    {
+        Server.WireServer.Disconnect(serverSides[clients.IndexOf(client)]);
     }
 
     public Task IdleAsync()
     {
-        return Task.WhenAll(clients.Select(c => c.Services.GetRequiredService<WireReceiver>().Idle));
+        return Task.WhenAll(clients.Select(c => c.WireClient.Idle));
     }
 
     public void Dispose()

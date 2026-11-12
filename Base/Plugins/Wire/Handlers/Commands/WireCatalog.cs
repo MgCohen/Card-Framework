@@ -61,7 +61,7 @@ public sealed class WireCatalog
         return (definition.FullName ?? definition.Name) + "[" + arguments + "]";
     }
 
-    public byte IdOf(Type type)
+    public int IdOf(Type type)
     {
         if (!ids.TryGetValue(type, out byte id))
         {
@@ -76,7 +76,7 @@ public sealed class WireCatalog
     public void Write(IMessage entry, IBufferWriter<byte> output)
     {
         Type type = entry.GetType();
-        byte id = IdOf(type);
+        byte id = (byte)IdOf(type);
         output.GetSpan(1)[0] = id;
         output.Advance(1);
         MemoryPackSerializer.Serialize(type, output, entry);

@@ -29,10 +29,10 @@ public sealed class ModuleKeyTests
         using IHost host = VsaBuilder.Create().UseGenericHost().Build();
         WireCatalog catalog = host.Services.GetRequiredService<WireCatalog>();
 
-        byte[] ids = ModulePrimitives.Select(catalog.IdOf).ToArray();
+        int[] ids = ModulePrimitives.Select(catalog.IdOf).ToArray();
 
         Assert.That(ids.Distinct().Count(), Is.EqualTo(ModulePrimitives.Length));
-        Assert.That(ids, Is.All.GreaterThanOrEqualTo(4));
+        Assert.That(ids, Is.All.GreaterThanOrEqualTo(6));
     }
 
     [Test]
