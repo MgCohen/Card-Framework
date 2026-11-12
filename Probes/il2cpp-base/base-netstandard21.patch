@@ -1,0 +1,767 @@
+diff -ru -x bin -x obj -x bin~ -x obj~ orig/Base/Directory.Build.props src/Base/Directory.Build.props
+--- orig/Base/Directory.Build.props	2026-11-12 20:19:53.000000000 +0100
++++ src/Base/Directory.Build.props	2026-11-12 22:18:05.675612100 +0100
+@@ -2,7 +2,11 @@
+   <!-- This file does not import a parent Directory.Build.props, so MSBuild sees nothing outside Base/. -->
+   <PropertyGroup>
+     <Nullable>enable</Nullable>
++    <TargetFramework>netstandard2.1</TargetFramework>
+     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+   </PropertyGroup>
++  <ItemGroup>
++    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
++  </ItemGroup>
+ </Project>
+diff -ru -x bin -x obj -x bin~ -x obj~ orig/Base/Plugins/Ecs/Domain/World.cs src/Base/Plugins/Ecs/Domain/World.cs
+--- orig/Base/Plugins/Ecs/Domain/World.cs	2026-11-12 20:19:53.000000000 +0100
++++ src/Base/Plugins/Ecs/Domain/World.cs	2026-11-12 22:18:59.048889200 +0100
+@@ -1,210 +1,210 @@
+-using System.Buffers;
+-using Ecs.Domain.Shared;
+-using Friflo.Engine.ECS;
+-using MemoryPack;
+-using FrifloEntity = Friflo.Engine.ECS.Entity;
+-using IComponent = Ecs.Domain.Shared.IComponent;
+-using ITag = Ecs.Domain.Shared.ITag;
+-
+-namespace Ecs.Domain;
+-
+-public sealed class World
+-{
+-    private readonly EntityStore store;
+-    private readonly ArrayBufferWriter<byte> leftBytes = new ArrayBufferWriter<byte>();
+-    private readonly ArrayBufferWriter<byte> rightBytes = new ArrayBufferWriter<byte>();
+-    private int lastId;
+-    private volatile bool ended;
+-
+-    internal World(EntityStore store)
+-    {
+-        this.store = store;
+-    }
+-
+-    internal int Count
+-    {
+-        get
+-        {
+-            Open();
+-            return store.Count;
+-        }
+-    }
+-
+-    // Ends this World when its match scope ends. Each later call throws, also from a reader that code got before.
+-    internal void End()
+-    {
+-        ended = true;
+-    }
+-
+-    internal Entity Create()
+-    {
+-        return Create(NextId());
+-    }
+-
+-    internal Entity Create(EntityId id)
+-    {
+-        Open();
+-        if (id.Value <= 0 || TryById(id, out _))
+-        {
+-            throw new ArgumentException($"The id {id.Value} is 0, negative or live.", nameof(id));
+-        }
+-
+-        lastId = Math.Max(lastId, id.Value);
+-        return new Entity(store.CreateEntity(id.Value));
+-    }
+-
+-    internal EntityId NextId()
+-    {
+-        Open();
+-        return new EntityId(lastId + 1);
+-    }
+-
+-    internal bool Delete(Entity entity)
+-    {
+-        Live(entity).DeleteEntity();
+-        return true;
+-    }
+-
+-    internal bool Set<T>(Entity entity, T value)
+-        where T : struct, IComponent
+-    {
+-        FrifloEntity live = Live(entity);
+-        if (live.TryGetComponent(out T current) && SameBytes(current, value))
+-        {
+-            return false;
+-        }
+-
+-        live.AddComponent(value);
+-        return true;
+-    }
+-
+-    internal bool Set<T>(Entity entity, int value)
+-        where T : struct, IValue<int>
+-    {
+-        return Set(entity, new T { Value = value });
+-    }
+-
+-    internal bool Remove<T>(Entity entity)
+-        where T : struct, IComponent
+-    {
+-        return Live(entity).RemoveComponent<T>();
+-    }
+-
+-    internal bool AddTag<T>(Entity entity)
+-        where T : struct, ITag
+-    {
+-        FrifloEntity live = Live(entity);
+-        if (live.Tags.Has<T>())
+-        {
+-            return false;
+-        }
+-
+-        live.AddTag<T>();
+-        return true;
+-    }
+-
+-    internal bool RemoveTag<T>(Entity entity)
+-        where T : struct, ITag
+-    {
+-        FrifloEntity live = Live(entity);
+-        if (!live.Tags.Has<T>())
+-        {
+-            return false;
+-        }
+-
+-        live.RemoveTag<T>();
+-        return true;
+-    }
+-
+-    internal Entity ById(EntityId id)
+-    {
+-        if (!TryById(id, out Entity entity))
+-        {
+-            throw new KeyNotFoundException($"No live entity has the id {id.Value}.");
+-        }
+-
+-        return entity;
+-    }
+-
+-    internal bool TryById(EntityId id, out Entity entity)
+-    {
+-        Open();
+-        if (id.Value > 0 && store.TryGetEntityById(id.Value, out FrifloEntity found) && !found.IsNull)
+-        {
+-            entity = new Entity(found);
+-            return true;
+-        }
+-
+-        entity = default;
+-        return false;
+-    }
+-
+-    internal T Get<T>(Entity entity)
+-        where T : struct, IComponent
+-    {
+-        if (!TryGet(entity, out T value))
+-        {
+-            throw new KeyNotFoundException($"The entity {entity.Id.Value} has no {typeof(T).Name}.");
+-        }
+-
+-        return value;
+-    }
+-
+-    internal bool TryGet<T>(Entity entity, out T value)
+-        where T : struct, IComponent
+-    {
+-        return Live(entity).TryGetComponent(out value);
+-    }
+-
+-    internal bool Has<T>(Entity entity)
+-        where T : struct, IComponent
+-    {
+-        return Live(entity).HasComponent<T>();
+-    }
+-
+-    internal bool HasTag<T>(Entity entity)
+-        where T : struct, ITag
+-    {
+-        return Live(entity).Tags.Has<T>();
+-    }
+-
+-    internal bool Is<T>(Entity entity, T value)
+-        where T : struct, IComponent
+-    {
+-        return Live(entity).TryGetComponent(out T current) && SameBytes(current, value);
+-    }
+-
+-    private bool SameBytes<T>(in T left, in T right)
+-        where T : struct
+-    {
+-        leftBytes.ResetWrittenCount();
+-        rightBytes.ResetWrittenCount();
+-        MemoryPackSerializer.Serialize(leftBytes, left);
+-        MemoryPackSerializer.Serialize(rightBytes, right);
+-        return leftBytes.WrittenSpan.SequenceEqual(rightBytes.WrittenSpan);
+-    }
+-
+-    private void Open()
+-    {
+-        if (ended)
+-        {
+-            throw new ObjectDisposedException(nameof(World), "The match scope of this World ended.");
+-        }
+-    }
+-
+-    private FrifloEntity Live(Entity entity)
+-    {
+-        Open();
+-        if (entity.IsNull)
+-        {
+-            throw new InvalidOperationException($"The entity {entity.Id.Value} is null or deleted.");
+-        }
+-
+-        if (!ReferenceEquals(entity.Inner.Store, store))
+-        {
+-            throw new InvalidOperationException($"The entity {entity.Id.Value} is in another world.");
+-        }
+-
+-        return entity.Inner;
+-    }
+-}
++using System.Buffers;
++using Ecs.Domain.Shared;
++using Friflo.Engine.ECS;
++using MemoryPack;
++using FrifloEntity = Friflo.Engine.ECS.Entity;
++using IComponent = Ecs.Domain.Shared.IComponent;
++using ITag = Ecs.Domain.Shared.ITag;
++
++namespace Ecs.Domain;
++
++public sealed class World
++{
++    private readonly EntityStore store;
++    private readonly ArrayBufferWriter<byte> leftBytes = new ArrayBufferWriter<byte>();
++    private readonly ArrayBufferWriter<byte> rightBytes = new ArrayBufferWriter<byte>();
++    private int lastId;
++    private volatile bool ended;
++
++    internal World(EntityStore store)
++    {
++        this.store = store;
++    }
++
++    internal int Count
++    {
++        get
++        {
++            Open();
++            return store.Count;
++        }
++    }
++
++    // Ends this World when its match scope ends. Each later call throws, also from a reader that code got before.
++    internal void End()
++    {
++        ended = true;
++    }
++
++    internal Entity Create()
++    {
++        return Create(NextId());
++    }
++
++    internal Entity Create(EntityId id)
++    {
++        Open();
++        if (id.Value <= 0 || TryById(id, out _))
++        {
++            throw new ArgumentException($"The id {id.Value} is 0, negative or live.", nameof(id));
++        }
++
++        lastId = Math.Max(lastId, id.Value);
++        return new Entity(store.CreateEntity(id.Value));
++    }
++
++    internal EntityId NextId()
++    {
++        Open();
++        return new EntityId(lastId + 1);
++    }
++
++    internal bool Delete(Entity entity)
++    {
++        Live(entity).DeleteEntity();
++        return true;
++    }
++
++    internal bool Set<T>(Entity entity, T value)
++        where T : struct, IComponent
++    {
++        FrifloEntity live = Live(entity);
++        if (live.TryGetComponent(out T current) && SameBytes(current, value))
++        {
++            return false;
++        }
++
++        live.AddComponent(value);
++        return true;
++    }
++
++    internal bool Set<T>(Entity entity, int value)
++        where T : struct, IValue<int>
++    {
++        return Set(entity, new T { Value = value });
++    }
++
++    internal bool Remove<T>(Entity entity)
++        where T : struct, IComponent
++    {
++        return Live(entity).RemoveComponent<T>();
++    }
++
++    internal bool AddTag<T>(Entity entity)
++        where T : struct, ITag
++    {
++        FrifloEntity live = Live(entity);
++        if (live.Tags.Has<T>())
++        {
++            return false;
++        }
++
++        live.AddTag<T>();
++        return true;
++    }
++
++    internal bool RemoveTag<T>(Entity entity)
++        where T : struct, ITag
++    {
++        FrifloEntity live = Live(entity);
++        if (!live.Tags.Has<T>())
++        {
++            return false;
++        }
++
++        live.RemoveTag<T>();
++        return true;
++    }
++
++    internal Entity ById(EntityId id)
++    {
++        if (!TryById(id, out Entity entity))
++        {
++            throw new KeyNotFoundException($"No live entity has the id {id.Value}.");
++        }
++
++        return entity;
++    }
++
++    internal bool TryById(EntityId id, out Entity entity)
++    {
++        Open();
++        if (id.Value > 0 && store.TryGetEntityById(id.Value, out FrifloEntity found) && !found.IsNull)
++        {
++            entity = new Entity(found);
++            return true;
++        }
++
++        entity = default;
++        return false;
++    }
++
++    internal T Get<T>(Entity entity)
++        where T : struct, IComponent
++    {
++        if (!TryGet(entity, out T value))
++        {
++            throw new KeyNotFoundException($"The entity {entity.Id.Value} has no {typeof(T).Name}.");
++        }
++
++        return value;
++    }
++
++    internal bool TryGet<T>(Entity entity, out T value)
++        where T : struct, IComponent
++    {
++        return Live(entity).TryGetComponent(out value);
++    }
++
++    internal bool Has<T>(Entity entity)
++        where T : struct, IComponent
++    {
++        return Live(entity).HasComponent<T>();
++    }
++
++    internal bool HasTag<T>(Entity entity)
++        where T : struct, ITag
++    {
++        return Live(entity).Tags.Has<T>();
++    }
++
++    internal bool Is<T>(Entity entity, T value)
++        where T : struct, IComponent
++    {
++        return Live(entity).TryGetComponent(out T current) && SameBytes(current, value);
++    }
++
++    private bool SameBytes<T>(in T left, in T right)
++        where T : struct
++    {
++        leftBytes.Clear();
++        rightBytes.Clear();
++        MemoryPackSerializer.Serialize(leftBytes, left);
++        MemoryPackSerializer.Serialize(rightBytes, right);
++        return leftBytes.WrittenSpan.SequenceEqual(rightBytes.WrittenSpan);
++    }
++
++    private void Open()
++    {
++        if (ended)
++        {
++            throw new ObjectDisposedException(nameof(World), "The match scope of this World ended.");
++        }
++    }
++
++    private FrifloEntity Live(Entity entity)
++    {
++        Open();
++        if (entity.IsNull)
++        {
++            throw new InvalidOperationException($"The entity {entity.Id.Value} is null or deleted.");
++        }
++
++        if (!ReferenceEquals(entity.Inner.Store, store))
++        {
++            throw new InvalidOperationException($"The entity {entity.Id.Value} is in another world.");
++        }
++
++        return entity.Inner;
++    }
++}
+diff -ru -x bin -x obj -x bin~ -x obj~ orig/Base/Plugins/Peers/Handlers/Commands/MatchQueue.cs src/Base/Plugins/Peers/Handlers/Commands/MatchQueue.cs
+--- orig/Base/Plugins/Peers/Handlers/Commands/MatchQueue.cs	2026-11-12 20:19:53.000000000 +0100
++++ src/Base/Plugins/Peers/Handlers/Commands/MatchQueue.cs	2026-11-12 22:20:24.619103000 +0100
+@@ -1,56 +1,56 @@
+-namespace Peers.Handlers.Commands;
+-
+-// Runs the work of one match one item at a time, in the order of Run calls, from any thread. On an empty queue, the
+-// item starts inline on the caller thread, after Run releases its lock. An item that throws faults Idle, and no later
+-// item runs. Issue #248 moves this queue into a pipeline step that runs before validation.
+-internal sealed class MatchQueue
+-{
+-    private readonly object gate = new object();
+-    private readonly ExecutionContext? clean;
+-    private Task tail = Task.CompletedTask;
+-
+-    public MatchQueue()
+-    {
+-        clean = ExecutionContext.Capture();
+-    }
+-
+-    public Task Idle
+-    {
+-        get
+-        {
+-            lock (gate)
+-            {
+-                return tail;
+-            }
+-        }
+-    }
+-
+-    public void Run(Func<Task> work)
+-    {
+-        TaskCompletionSource start = new TaskCompletionSource();
+-        lock (gate)
+-        {
+-            Task previous = tail;
+-            if (clean == null)
+-            {
+-                tail = AfterAsync(previous, start.Task, work);
+-            }
+-            else
+-            {
+-                // Each item starts in the context of the constructor, so a client envelope never has the envelope of
+-                // another peer as its parent.
+-                ExecutionContext.Run(clean.CreateCopy(), _ => tail = AfterAsync(previous, start.Task, work), null);
+-            }
+-        }
+-
+-        // The item is the tail before it starts, so a Run call from inside the item goes after it.
+-        start.SetResult();
+-    }
+-
+-    private static async Task AfterAsync(Task previous, Task start, Func<Task> work)
+-    {
+-        await start;
+-        await previous;
+-        await work();
+-    }
+-}
++namespace Peers.Handlers.Commands;
++
++// Runs the work of one match one item at a time, in the order of Run calls, from any thread. On an empty queue, the
++// item starts inline on the caller thread, after Run releases its lock. An item that throws faults Idle, and no later
++// item runs. Issue #248 moves this queue into a pipeline step that runs before validation.
++internal sealed class MatchQueue
++{
++    private readonly object gate = new object();
++    private readonly ExecutionContext? clean;
++    private Task tail = Task.CompletedTask;
++
++    public MatchQueue()
++    {
++        clean = ExecutionContext.Capture();
++    }
++
++    public Task Idle
++    {
++        get
++        {
++            lock (gate)
++            {
++                return tail;
++            }
++        }
++    }
++
++    public void Run(Func<Task> work)
++    {
++        TaskCompletionSource<bool> start = new TaskCompletionSource<bool>();
++        lock (gate)
++        {
++            Task previous = tail;
++            if (clean == null)
++            {
++                tail = AfterAsync(previous, start.Task, work);
++            }
++            else
++            {
++                // Each item starts in the context of the constructor, so a client envelope never has the envelope of
++                // another peer as its parent.
++                ExecutionContext.Run(clean.CreateCopy(), _ => tail = AfterAsync(previous, start.Task, work), null);
++            }
++        }
++
++        // The item is the tail before it starts, so a Run call from inside the item goes after it.
++        start.SetResult(true);
++    }
++
++    private static async Task AfterAsync(Task previous, Task start, Func<Task> work)
++    {
++        await start;
++        await previous;
++        await work();
++    }
++}
+diff -ru -x bin -x obj -x bin~ -x obj~ orig/Base/Plugins/TypeKeys/Domain/TypeKeyRegistry.cs src/Base/Plugins/TypeKeys/Domain/TypeKeyRegistry.cs
+--- orig/Base/Plugins/TypeKeys/Domain/TypeKeyRegistry.cs	2026-11-12 20:19:53.000000000 +0100
++++ src/Base/Plugins/TypeKeys/Domain/TypeKeyRegistry.cs	2026-11-12 22:18:59.358030200 +0100
+@@ -1,104 +1,104 @@
+-using TypeKeys.Domain.Shared;
+-
+-namespace TypeKeys.Domain;
+-
+-public class TypeKeyRegistry<TKey> : ICodeMemberScan where TKey : TypeKey
+-{
+-    private readonly Dictionary<int, TKey> bySlot = new Dictionary<int, TKey>();
+-    private readonly Dictionary<Type, TKey> byType = new Dictionary<Type, TKey>();
+-    private IReadOnlyCollection<TKey>? members;
+-    private bool frozen;
+-
+-    public IReadOnlyCollection<TKey> Members =>
+-        members ??= bySlot.OrderBy(p => p.Key).Select(p => p.Value).ToList().AsReadOnly();
+-
+-    public void RegisterCodeMembers(bool includeTests)
+-    {
+-        foreach (Type type in TypeScan.ConcreteTypesOf(typeof(TKey), includeTests))
+-        {
+-            if (IsCodeMember(type))
+-            {
+-                Register((TKey)Activator.CreateInstance(type)!);
+-            }
+-        }
+-    }
+-
+-    public void Register<T>() where T : TKey, new()
+-    {
+-        Register(new T());
+-    }
+-
+-    public void Register(TKey member)
+-    {
+-        Add(member);
+-        if (IsCodeMember(member.GetType()))
+-        {
+-            byType.TryAdd(member.GetType(), member);
+-        }
+-    }
+-
+-    public T Define<T>(int slot, Func<int, T> make) where T : TKey
+-    {
+-        T member = make(slot);
+-        Add(member);
+-        return member;
+-    }
+-
+-    public void Freeze()
+-    {
+-        frozen = true;
+-    }
+-
+-    public int SlotOf(TKey key)
+-    {
+-        return key.Slot;
+-    }
+-
+-    public TKey BySlot(int slot)
+-    {
+-        return bySlot.TryGetValue(slot, out TKey? member)
+-            ? member
+-            : throw new KeyNotFoundException($"{GetType().Name}: no member has slot {slot}.");
+-    }
+-
+-    public bool TryBySlot(int slot, out TKey key)
+-    {
+-        return bySlot.TryGetValue(slot, out key!);
+-    }
+-
+-    public T Of<T>() where T : TKey
+-    {
+-        return byType.TryGetValue(typeof(T), out TKey? member)
+-            ? (T)member
+-            : throw new KeyNotFoundException($"{GetType().Name}: {typeof(T).Name} is not registered.");
+-    }
+-
+-    private static bool IsCodeMember(Type type)
+-    {
+-        return type.IsSealed && type.GetConstructor(Type.EmptyTypes) != null;
+-    }
+-
+-    private void Add(TKey member)
+-    {
+-        ArgumentNullException.ThrowIfNull(member);
+-        if (frozen)
+-        {
+-            throw new InvalidOperationException(
+-                $"{GetType().Name} is frozen. Register {member.GetType().Name} before Freeze.");
+-        }
+-
+-        if (bySlot.TryGetValue(member.Slot, out TKey? old))
+-        {
+-            if (old.Equals(member))
+-            {
+-                return;
+-            }
+-
+-            throw new InvalidOperationException(
+-                $"{GetType().Name}: slot {member.Slot} has {old.GetType().Name} and {member.GetType().Name}.");
+-        }
+-
+-        bySlot.Add(member.Slot, member);
+-        members = null;
+-    }
+-}
++using TypeKeys.Domain.Shared;
++
++namespace TypeKeys.Domain;
++
++public class TypeKeyRegistry<TKey> : ICodeMemberScan where TKey : TypeKey
++{
++    private readonly Dictionary<int, TKey> bySlot = new Dictionary<int, TKey>();
++    private readonly Dictionary<Type, TKey> byType = new Dictionary<Type, TKey>();
++    private IReadOnlyCollection<TKey>? members;
++    private bool frozen;
++
++    public IReadOnlyCollection<TKey> Members =>
++        members ??= bySlot.OrderBy(p => p.Key).Select(p => p.Value).ToList().AsReadOnly();
++
++    public void RegisterCodeMembers(bool includeTests)
++    {
++        foreach (Type type in TypeScan.ConcreteTypesOf(typeof(TKey), includeTests))
++        {
++            if (IsCodeMember(type))
++            {
++                Register((TKey)Activator.CreateInstance(type)!);
++            }
++        }
++    }
++
++    public void Register<T>() where T : TKey, new()
++    {
++        Register(new T());
++    }
++
++    public void Register(TKey member)
++    {
++        Add(member);
++        if (IsCodeMember(member.GetType()))
++        {
++            byType.TryAdd(member.GetType(), member);
++        }
++    }
++
++    public T Define<T>(int slot, Func<int, T> make) where T : TKey
++    {
++        T member = make(slot);
++        Add(member);
++        return member;
++    }
++
++    public void Freeze()
++    {
++        frozen = true;
++    }
++
++    public int SlotOf(TKey key)
++    {
++        return key.Slot;
++    }
++
++    public TKey BySlot(int slot)
++    {
++        return bySlot.TryGetValue(slot, out TKey? member)
++            ? member
++            : throw new KeyNotFoundException($"{GetType().Name}: no member has slot {slot}.");
++    }
++
++    public bool TryBySlot(int slot, out TKey key)
++    {
++        return bySlot.TryGetValue(slot, out key!);
++    }
++
++    public T Of<T>() where T : TKey
++    {
++        return byType.TryGetValue(typeof(T), out TKey? member)
++            ? (T)member
++            : throw new KeyNotFoundException($"{GetType().Name}: {typeof(T).Name} is not registered.");
++    }
++
++    private static bool IsCodeMember(Type type)
++    {
++        return type.IsSealed && type.GetConstructor(Type.EmptyTypes) != null;
++    }
++
++    private void Add(TKey member)
++    {
++        if (member is null) { throw new ArgumentNullException(nameof(member)); }
++        if (frozen)
++        {
++            throw new InvalidOperationException(
++                $"{GetType().Name} is frozen. Register {member.GetType().Name} before Freeze.");
++        }
++
++        if (bySlot.TryGetValue(member.Slot, out TKey? old))
++        {
++            if (old.Equals(member))
++            {
++                return;
++            }
++
++            throw new InvalidOperationException(
++                $"{GetType().Name}: slot {member.Slot} has {old.GetType().Name} and {member.GetType().Name}.");
++        }
++
++        bySlot.Add(member.Slot, member);
++        members = null;
++    }
++}

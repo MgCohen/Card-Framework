@@ -1,0 +1,47 @@
+<linker>
+  <!-- VSA finds modules and closes handlers by reflection, so the linker must keep these assemblies. -->
+  <assembly fullname="VSA.Analyzers.Markers" preserve="all" />
+  <assembly fullname="VSA.Composition" preserve="all" />
+  <assembly fullname="VSA.Contracts.Commands" preserve="all" />
+  <assembly fullname="VSA.Contracts.Events" preserve="all" />
+  <assembly fullname="VSA.Contracts.Requests" preserve="all" />
+  <assembly fullname="VSA.Contracts" preserve="all" />
+  <assembly fullname="VSA.Domain" preserve="all" />
+  <assembly fullname="VSA.Handlers.Commands" preserve="all" />
+  <assembly fullname="VSA.Handlers.Events" preserve="all" />
+  <assembly fullname="VSA.Handlers.Requests" preserve="all" />
+  <assembly fullname="VSA.Handlers" preserve="all" />
+  <assembly fullname="VSA.Infrastructure" preserve="all" />
+  <assembly fullname="VSA.Module" preserve="all" />
+  <assembly fullname="VSA.Presenters" preserve="all" />
+  <assembly fullname="Cards.Contracts.Commands" preserve="all" />
+  <assembly fullname="Cards.Domain.Shared" preserve="all" />
+  <assembly fullname="Cards.Domain" preserve="all" />
+  <assembly fullname="Cards.Handlers.Commands" preserve="all" />
+  <assembly fullname="Cards.Infrastructure" preserve="all" />
+  <assembly fullname="Cards" preserve="all" />
+  <assembly fullname="Ecs.Contracts.Commands" preserve="all" />
+  <assembly fullname="Ecs.Domain.Shared" preserve="all" />
+  <assembly fullname="Ecs.Domain" preserve="all" />
+  <assembly fullname="Ecs.Handlers.Commands" preserve="all" />
+  <assembly fullname="Ecs.Infrastructure" preserve="all" />
+  <assembly fullname="Ecs" preserve="all" />
+  <assembly fullname="Network.Domain" preserve="all" />
+  <assembly fullname="Network" preserve="all" />
+  <assembly fullname="Peers.Contracts.Commands" preserve="all" />
+  <assembly fullname="Peers.Domain" preserve="all" />
+  <assembly fullname="Peers.Handlers.Commands" preserve="all" />
+  <assembly fullname="Peers" preserve="all" />
+  <assembly fullname="Resources.Contracts.Commands" preserve="all" />
+  <assembly fullname="Resources.Domain.Shared" preserve="all" />
+  <assembly fullname="Resources.Domain" preserve="all" />
+  <assembly fullname="Resources.Handlers.Commands" preserve="all" />
+  <assembly fullname="Resources.Infrastructure" preserve="all" />
+  <assembly fullname="Resources" preserve="all" />
+  <assembly fullname="TypeKeys.Domain.Shared" preserve="all" />
+  <assembly fullname="TypeKeys.Domain" preserve="all" />
+  <assembly fullname="TypeKeys" preserve="all" />
+  <assembly fullname="Wire.Contracts.Commands" preserve="all" />
+  <assembly fullname="Wire.Handlers.Commands" preserve="all" />
+  <assembly fullname="Wire" preserve="all" />
+</linker>

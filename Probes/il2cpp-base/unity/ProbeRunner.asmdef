@@ -1,0 +1,8 @@
+{
+  "name": "ProbeRunner",
+  "references": [],
+  "overrideReferences": true,
+  "precompiledReferences": ["BaseProbe.dll"],
+  "autoReferenced": false,
+  "noEngineReferences": false
+}
