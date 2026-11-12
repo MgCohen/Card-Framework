@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Test doubles and the peer test host. Not in Plugins/, so the host does not take it. No NUnit reference. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The host gives each plugin and module: the peer host builds one app host for each peer. -->
+    <ProjectReference Include="../../App/Host/App.Host.csproj" />
+  </ItemGroup>
+</Project>
