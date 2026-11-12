@@ -4,7 +4,7 @@ using VSA.Module;
 
 namespace TypeKeys;
 
-public sealed class TypeKeysModule : Module
+public sealed class TypeKeysPlugin : Plugin
 {
     public override void Configure(ModuleBuilder module)
     {

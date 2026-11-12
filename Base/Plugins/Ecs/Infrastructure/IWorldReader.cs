@@ -1,0 +1,28 @@
+using Ecs.Domain;
+using Ecs.Domain.Shared;
+
+namespace Ecs.Infrastructure;
+
+public interface IWorldReader
+{
+    int Count { get; }
+
+    Entity ById(EntityId id);
+
+    bool TryById(EntityId id, out Entity entity);
+
+    T Get<T>(Entity entity)
+        where T : struct, IComponent;
+
+    bool TryGet<T>(Entity entity, out T value)
+        where T : struct, IComponent;
+
+    bool Has<T>(Entity entity)
+        where T : struct, IComponent;
+
+    bool HasTag<T>(Entity entity)
+        where T : struct, ITag;
+
+    bool Is<T>(Entity entity, T value)
+        where T : struct, IComponent;
+}
