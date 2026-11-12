@@ -44,9 +44,10 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 
 | Package | Version | Feed |
 |---|---|---|
-| VSA.Sdk and `VSA.*` | `0.1.0-preview.11` | GitHub Packages, owner `MgCohen` |
+| VSA.Sdk and `VSA.*` | `0.1.0-preview.14` | GitHub Packages, owner `MgCohen` |
 | Friflo.Engine.ECS | `3.6.0` | nuget.org |
 | MemoryPack | `1.21.4` | nuget.org |
+| Microsoft.Extensions.DependencyInjection.Abstractions | `10.0.14` | nuget.org (`Ecs.Infrastructure` only) |
 | NUnit, NUnit3TestAdapter | `4.6.1`, `6.3.1` | nuget.org |
 | Microsoft.AspNetCore.Mvc.Testing | `10.0.14` | nuget.org (`App.Tests.csproj` only) |
 
@@ -70,7 +71,9 @@ To move to the latest VSA preview, run `dotnet tool update vsa.cli --local --pre
 | Phase | Cut from | PR into |
 |---|---|---|
 | P0 | `base` | `base` |
-| P1 and later | The previous phase branch | The previous phase branch |
+| P1 to P6 | The previous phase branch | The previous phase branch |
+| U1 | `p6-wire` | `p6-wire` |
+| P7 and later | `u1-unify`, then the previous phase branch | The branch it was cut from |
 
 If a review changes a parent branch, rebase the child branch on it.
 
@@ -81,8 +84,9 @@ On Windows, the branch `base` and the folder `Base/` have the same name. Write `
 ```text
 Base/
 ├─ App/Host/          the composition root: Program.cs, one VsaBuilder call
-├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network; later Wire)
-├─ Modules/<Name>/    modules: the Cards sample
+├─ Plugins/<Name>/    plugin modules: the base systems (TypeKeys, Ecs, Network, Wire)
+├─ Modules/<Name>/    modules: the Cards and Resources sample
+├─ docs/              base docs: layout, write path, peers
 └─ Tests/             dotnet test projects; App.Tests references the host
 ```
 
@@ -115,16 +119,16 @@ public sealed class EcsPlugin : Plugin
 - The root class of a plugin module inherits `Plugin` (`VSA1014`). The root class of a module inherits `Module`.
 - The module root holds only that class. Do not add `AddX` helpers to it.
 - A test with no web host calls `VsaBuilder.Create().UseGenericHost().Modules(new TypeKeysPlugin()).Build()`, then reads `host.Services`.
-- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/composition.md).
+- The VSA reference is [composition.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/composition.md).
 - `App.Tests` sets `VsaArchitectureTests` to false and has its own `ArchitectureTests` class. Reason: the generated class has no body (`;`), and that needs C# 12.
 - A test project that references `VSA.Testing.Architecture` sets the same property.
 - When the package generates a `{ }` body, delete the property and the local class.
 
-A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
+A module has the layout of [slice-layout.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/slice-layout.md): a root project, `Projects/` with one project for each layer, and `Slices/<Feature>/`. A plugin module has the framework layout: one folder for each layer, for example `Handlers/Commands/**` for `<Module>.Handlers.Commands`, and no `Slices/` (VSA0006).
 
 ## Handler pipeline
 
-Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.11/docs/handler-pipeline.md)). Base has no pipeline code of its own.
+Base uses the VSA handler pipeline ([handler-pipeline.md](https://github.com/MgCohen/vsa-template/blob/v0.1.0-preview.14/docs/handler-pipeline.md)). Base has no pipeline code of its own.
 
 ```text
 ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> ─▶ handler ─▶ After<T> ─▶ AfterStep ─▶ Result<T>
@@ -133,19 +137,77 @@ ICommandSender.SendAsync ─▶ Validator<T> ─▶ BeforeStep ─▶ Before<T> 
 - A handler takes `Envelope<T>` and returns `Result<T>`. A send returns `Result<T>`. A rejected message gives `Result<T>.Error`, not an exception.
 - `envelope.Services` is the scope of the sender. Handlers, validators and steps resolve from that scope.
 - A custom pipeline: `module.Services.AddPipeline(new PipelineBuilder<TMessage>()...)` in `Configure`.
-- The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies, and only closed types.
+- The scan finds validators and `Before<T>` and `After<T>` only in module layer assemblies.
+- VSA registers each class with `[AutoRegister]` (`VSA.Analyzers.Markers`) on the class, a base class or an interface. The handler, validator, `Before<T>`, `After<T>` and `PrimitiveHandler<,>` bases have it. An open class is closed one time for each key that meets the constraints of `T`.
+- A key is a type with `[TypeArgument]` on the type, a base class or an interface. `IComponent` and `ITag` have `[TypeArgument]`, so each component and tag is a key.
+
+```csharp
+public sealed class ChangeResourceHandler<T> : CommandHandler<ChangeResourceCommand<T>, int>
+    where T : struct, IValue<int>             // closed for Health and Mana; no registration
+
+await commands.SendAsync(new ChangeResourceCommand<Health>(card, 5), ct);   // commands: ICommandSender of the match scope
+```
 
 ## Friflo boundary
 
 - Only `Plugins/Ecs` references Friflo.Engine.ECS.
 - Other code holds the `Entity` handle and `EntityId`, and reads through `IWorldReader`. `Entity` has no read or write members.
 - `Tests/Ecs.Tests` (`FrifloBoundaryTests`) fails the gate if code outside `Plugins/Ecs` uses a Friflo type other than the two markers.
-- Only code in `Plugins/Ecs` writes the World. P6 adds the primitive handlers there.
-- The container gives only `IWorldFactory`. It never gives a `World`, an `IWorldReader` or an `IWorldWriter`. The owner of a match makes the World and gives access to its scope (P7).
-- No type outside `Plugins/Ecs` keeps a `World`, a reader or a writer in a field (`FrifloBoundaryTests` B5).
+- Only the primitive handlers in `Plugins/Ecs` write the World (next section).
+- No service gives an `IWorldWriter`. `IWorldFactory` gives a `World` with no public members. `MatchFactory.Create()` (`Ecs.Infrastructure`) makes a scope and binds a new World to it. The caller owns the scope. The scope gives `IWorldReader`; a scope with no match throws.
+- `Ecs.Domain` holds `World`, `MatchWorld` and `Entity`. The members of `World` are internal to Ecs.
+- `Ecs.Infrastructure` holds `IWorldReader`, `IWorldWriter`, their adapters, `IWorldFactory`, `WorldFactory` and `MatchFactory`.
+- `IWorldWriter` is public, but only Ecs code can make a writer instance. The primitive handlers get it with the internal `match.Writer()`.
+- A gameplay handler or validator reads with `envelope.Services.GetRequiredService<IWorldReader>()` in the call. It keeps no reader in a field.
+- A module that reads the World in a handler has a `Domain` project and an `Infrastructure` project, both with no files. Without them, the handler cannot see `Entity` and `IWorldReader`. Delete them when VSA.Sdk gives module handlers the plugin `Domain` and `Infrastructure` (vsa-template PR).
+- Friflo reads the loaded assemblies when it makes the first World. `Build()` loads each key assembly first, through the module scan. Make no World before `Build()`.
+- No type outside `Plugins/Ecs` keeps a `World`, a reader, a writer or a `MatchWorld` in a field (`FrifloBoundaryTests` B5).
 
 ## C# 11
 
 - `Directory.Build.targets` sets `LangVersion` 11, because Unity compiles C# 11. It is in the targets file because VSA.Sdk sets `LangVersion` after the props file.
 - C# 11 syntax is permitted.
 - Features that need runtime support are forbidden in the layers that Unity uses. An example is `static abstract` interface members.
+
+## Primitives and Wire
+
+Each World change is a primitive command. Send it on `ICommandSender` from the match scope.
+
+```text
+bus.SendAsync(new ChangeComponent<Health>(id, value), ct)
+ └ pipeline of IPrimitive (Wire)
+    ├ CreateEntityId    BeforeStep: a default id gets World.NextId()
+    ├ handler (Ecs)     writes the World; no change gives PrimitiveErrors.Unchanged
+    └ RecordStep        AfterStep: an accepted primitive with no error goes to WireLog
+```
+
+- Primitives: `ChangeComponent<T>`, `RemoveComponent<T>`, `AddTag<T>`, `RemoveTag<T>`, `CreateEntity`, `DeleteEntity`. Each one implements `IPrimitive<TResult>`.
+- Primitive handlers derive from `PrimitiveHandler<,>`, so the default command pipeline does not get them. `WirePlugin` reads the closed primitive handlers from `ModuleTypes.Implementations(typeof(PrimitiveHandler<,>))`. This gives the primitive pipeline, the MemoryPack types and the catalog ids.
+- Each component and tag of a module adds two catalog types, also if no peer sends it. The 1-byte catalog id gives 256 types maximum. Five types are built in, so 125 keys maximum.
+- A module registers no keys. A key outside the module assemblies, for example a test key, needs `services.AddSingleton(WireTypes.Of(t => t.Component<Health>().Tag<Marked>()))`.
+- The match scope gives `IWorldReader`, `WireLog`, `GroupService` and `ICommandSender`.
+- Do not call `AddPipeline` for a primitive type in a module. That pipeline takes the primitives from Wire, and B6 does not find it.
+- A key is a `struct`, not `unmanaged`. A key with a reference field, for example a `string`, is `[MemoryPackable] partial`. Without it, `WireCatalog.Write` throws on the first send. `World.Set` compares the MemoryPack bytes of the old and the new value. The same bytes give `PrimitiveErrors.Unchanged`.
+- `WireCatalog` writes a frame as `[1-byte id][MemoryPack payload]` and reads it back. `WireCatalog.ApplyAsync` sends a received primitive to a bus, and appends a received group entry to the log. Wire does not reference Network: `Plugins/Peers` joins them.
+- `GroupService` puts `GroupStart` and `GroupEnd` around entries in the log.
+- `PrimitiveBoundaryTests` (B6) fails the gate if a type outside Ecs and Wire hooks a primitive.
+
+## Peers
+
+Each peer is its own app host with one match scope from `MatchFactory.Create()`. A role flag at the composition root selects the role service, as `EngineInstaller(isServer)` does in the Unity Framework.
+
+```csharp
+VsaBuilder.Create().UseGenericHost().Services(s =>
+{
+    foreach (ITransport transport in transports) s.AddSingleton(transport);   // server: one for each client
+    if (role == PeerRole.Server) s.AddScoped<WireSender>();
+    else s.AddScoped<WireReceiver>();
+}).Build();
+```
+
+- The code that makes the match scope resolves the role service one time from `match.ServiceProvider`. The service subscribes in its constructor.
+- `WireSender` sends `WireHello(catalog.Hash)`, then one frame for each `WireLog.Appended` entry, to each client transport.
+- `WireReceiver` applies frames in order. A different hash, an entry before the hello, or an entry with an `Error` faults `Idle`.
+- A client registers no `WireSender`, so it does not forward its log.
+- Friflo is not thread-safe. Use one thread for each peer host.
+- `Tests/Testing/PeerHost.Start(clients)` makes one server and N clients over `InProcessTransport`. The details are in [docs/peers.md](docs/peers.md).

@@ -1,4 +1,5 @@
 using Ecs.Domain;
+using Ecs.Infrastructure;
 using Ecs.Tests.Fixtures;
 
 namespace Ecs.Tests;
@@ -24,8 +25,8 @@ public sealed class WorldGuardTests
         World second = new WorldFactory().Create();
         Entity entity = first.Create();
 
-        Assert.Throws<InvalidOperationException>(new Action(() => second.Reader.Has<Health>(entity)));
-        Assert.Throws<InvalidOperationException>(new Action(() => second.Reader.Get<Health>(entity)));
+        Assert.Throws<InvalidOperationException>(new Action(() => second.Reader().Has<Health>(entity)));
+        Assert.Throws<InvalidOperationException>(new Action(() => second.Reader().Get<Health>(entity)));
     }
 
     [Test]
@@ -35,7 +36,7 @@ public sealed class WorldGuardTests
         Entity entity = default;
 
         Assert.Throws<InvalidOperationException>(new Action(() => world.Set<Health>(entity, 1)));
-        Assert.Throws<InvalidOperationException>(new Action(() => world.Reader.Has<Health>(entity)));
+        Assert.Throws<InvalidOperationException>(new Action(() => world.Reader().Has<Health>(entity)));
     }
 
     [Test]
@@ -45,7 +46,7 @@ public sealed class WorldGuardTests
         Entity entity = world.Create();
         world.Delete(entity);
 
-        Assert.Throws<InvalidOperationException>(new Action(() => world.Reader.TryGet(entity, out Health _)));
+        Assert.Throws<InvalidOperationException>(new Action(() => world.Reader().TryGet(entity, out Health _)));
         Assert.Throws<InvalidOperationException>(new Action(() => world.Remove<Health>(entity)));
         Assert.Throws<InvalidOperationException>(new Action(() => world.RemoveTag<CardTag>(entity)));
     }
@@ -55,7 +56,7 @@ public sealed class WorldGuardTests
     {
         World world = new WorldFactory().Create();
 
-        Assert.That(world.Reader, Is.Not.InstanceOf<IWorldWriter>());
-        Assert.That(world.Reader, Is.Not.InstanceOf<World>());
+        Assert.That(world.Reader(), Is.Not.InstanceOf<IWorldWriter>());
+        Assert.That(world.Reader(), Is.Not.InstanceOf<World>());
     }
 }
