@@ -6,4 +6,4 @@ namespace Ecs.Contracts.Commands;
 
 [MemoryPackable]
 public sealed partial record RemoveComponent<T>(EntityId Entity) : IPrimitive<Unit>
-    where T : unmanaged, IComponent;
+    where T : struct, IComponent;

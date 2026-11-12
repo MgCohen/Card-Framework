@@ -21,6 +21,7 @@ public sealed class CatalogTests
         Assert.That(catalog.IdOf(typeof(DeleteEntity)), Is.EqualTo(1));
         Assert.That(catalog.IdOf(typeof(GroupStart)), Is.EqualTo(2));
         Assert.That(catalog.IdOf(typeof(GroupEnd)), Is.EqualTo(3));
+        Assert.That(catalog.IdOf(typeof(WireHello)), Is.EqualTo(4));
     }
 
     [Test]
@@ -31,14 +32,15 @@ public sealed class CatalogTests
         {
             typeof(ChangeComponent<Health>), typeof(RemoveComponent<Health>),
             typeof(ChangeComponent<Armor>), typeof(RemoveComponent<Armor>),
+            typeof(ChangeComponent<CardName>), typeof(RemoveComponent<CardName>),
             typeof(AddTag<Marked>), typeof(RemoveTag<Marked>),
         };
 
         Type[] byId = keys.OrderBy(catalog.IdOf).ToArray();
 
-        Assert.That(catalog.Count, Is.EqualTo(10));
+        Assert.That(catalog.Count, Is.EqualTo(13));
         Assert.That(byId, Is.EqualTo(keys.OrderBy(WireCatalog.KeyOf, StringComparer.Ordinal).ToArray()));
-        Assert.That(keys.Select(catalog.IdOf), Is.All.GreaterThanOrEqualTo(4));
+        Assert.That(keys.Select(catalog.IdOf), Is.All.GreaterThanOrEqualTo(5));
     }
 
     [Test]
@@ -64,11 +66,35 @@ public sealed class CatalogTests
     }
 
     [Test]
-    public void Catalog_Exactly256Types_DoesNotThrow()
+    public void Catalog_255Types_DoesNotThrow()
     {
-        WireCatalog catalog = new WireCatalog(new[] { ManyKeys.Exactly256() });
+        WireCatalog catalog = new WireCatalog(new[] { ManyKeys.Max255() });
 
-        Assert.That(catalog.Count, Is.EqualTo(256));
+        Assert.That(catalog.Count, Is.EqualTo(255));
+    }
+
+    [Test]
+    public void Hash_SameKeysInOtherOrder_Equal()
+    {
+        WireTypes health = WireTypes.Of(t => t.Component<Health>());
+        WireTypes rest = WireTypes.Of(t => t.Component<Armor>().Tag<Marked>());
+
+        WireCatalog first = new WireCatalog(new[] { health, rest });
+        WireCatalog second = new WireCatalog(new[] { rest, health });
+
+        Assert.That(second.Hash, Is.EqualTo(first.Hash));
+    }
+
+    [Test]
+    public void Hash_OtherKeys_Differ()
+    {
+        WireCatalog all = new WireCatalog(new[] { Match.Keys() });
+        WireCatalog less = new WireCatalog(new[] { WireTypes.Of(t => t.Component<Health>().Component<Armor>()) });
+        WireCatalog none = new WireCatalog(Array.Empty<WireTypes>());
+
+        Assert.That(less.Hash, Is.Not.EqualTo(all.Hash));
+        Assert.That(none.Hash, Is.Not.EqualTo(all.Hash));
+        Assert.That(none.Hash, Is.Not.EqualTo(less.Hash));
     }
 
     [Test]
@@ -142,5 +168,6 @@ public sealed class CatalogTests
         yield return new RemoveTag<Marked>(id);
         yield return new GroupStart(id, new BlockId(4));
         yield return new GroupEnd(new BlockId(4), GroupOutcome.Completed);
+        yield return new WireHello(0x0123456789ABCDEFUL);
     }
 }

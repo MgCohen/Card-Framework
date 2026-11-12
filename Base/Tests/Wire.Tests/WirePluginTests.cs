@@ -24,6 +24,7 @@ public sealed class WirePluginTests
     [Test]
     public void Plugin_Catalog_HasTheTypesOfEachRegistration()
     {
+        using IHost modules = VsaBuilder.Create().UseGenericHost().Build();
         using IHost host = VsaBuilder.Create().UseGenericHost().Services(services =>
         {
             services.AddSingleton(WireTypes.Of(t => t.Component<Health>()));
@@ -32,7 +33,7 @@ public sealed class WirePluginTests
 
         WireCatalog catalog = host.Services.GetRequiredService<WireCatalog>();
 
-        Assert.That(catalog.Count, Is.EqualTo(8));
+        Assert.That(catalog.Count, Is.EqualTo(modules.Services.GetRequiredService<WireCatalog>().Count + 4));
         Assert.That(host.Services.GetRequiredService<WireCatalog>(), Is.SameAs(catalog));
     }
 
@@ -61,14 +62,14 @@ public sealed class WirePluginTests
     public async Task Builder_BuildTwiceForAScope_RecordsOnce()
     {
         using IHost host = Match.Host();
-        using IServiceScope scope = host.Services.CreateScope();
+        using Match match = new Match(host);
         PrimitivePipelineBuilder builder = new PrimitivePipelineBuilder();
-        builder.Build(scope.ServiceProvider);
+        builder.Build(match.Services);
 
-        IPipeline<IPrimitive> pipeline = builder.Build(scope.ServiceProvider);
+        IPipeline<IPrimitive> pipeline = builder.Build(match.Services);
         Result<EntityId> result = await pipeline.SendAsync<EntityId>(new CreateEntity(default));
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(scope.ServiceProvider.GetRequiredService<WireLog>().Entries, Has.Count.EqualTo(1));
+        Assert.That(match.Log.Entries, Has.Count.EqualTo(1));
     }
 }

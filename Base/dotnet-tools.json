@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "vsa.cli": {
-      "version": "0.1.0-preview.11",
+      "version": "0.1.0-preview.14",
       "commands": [
         "vsa"
       ],

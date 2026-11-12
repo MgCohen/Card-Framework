@@ -1,9 +1,11 @@
 using Ecs.Contracts.Commands;
+using VSA.Analyzers.Markers;
 using VSA.Contracts;
 using VSA.Handlers;
 
 namespace Ecs.Handlers.Commands;
 
+[AutoRegister]
 public abstract class PrimitiveHandler<TPrimitive, TResult> : IHandler<TPrimitive>
     where TPrimitive : class, IPrimitive<TResult>
 {

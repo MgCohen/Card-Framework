@@ -1,0 +1,5 @@
+<Project Sdk="VSA.Sdk">
+  <PropertyGroup>
+    <VsaPluginUses>Network</VsaPluginUses>
+  </PropertyGroup>
+</Project>

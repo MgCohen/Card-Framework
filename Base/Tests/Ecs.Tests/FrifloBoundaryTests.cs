@@ -3,6 +3,8 @@ using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Ecs.Domain;
+using Ecs.Handlers.Commands;
+using Ecs.Infrastructure;
 
 namespace Ecs.Tests;
 
@@ -18,7 +20,7 @@ public sealed class FrifloBoundaryTests
 
     private static readonly string[] EcsAssemblies =
     {
-        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
+        "Ecs", "Ecs.Domain", "Ecs.Domain.Shared", "Ecs.Infrastructure", "Ecs.Contracts.Commands", "Ecs.Handlers.Commands",
     };
 
     private static readonly string[] WorldOwners = Array.Empty<string>();
@@ -88,11 +90,11 @@ public sealed class FrifloBoundaryTests
     {
         World world = new WorldFactory().Create();
 
-        Assert.That(world.Reader is IWorldWriter, Is.False);
+        Assert.That(world.Reader() is IWorldWriter, Is.False);
     }
 
-    // The owner of a match gives a World, a reader or a writer to its scope. A field outside Ecs keeps it after the
-    // scope. WorldOwners lists the types that may keep one, by full name; it is empty until P7 adds the match owner.
+    // The owner of a match gives a reader to its scope. A field outside Ecs keeps it after the scope. WorldOwners
+    // lists the types outside Ecs that may keep one, by full name. The match owner (MatchFactory, MatchWorld) is in Ecs.
     [Test]
     public void B5_NoTypeOutsideEcsKeepsAWorldInAField()
     {
@@ -106,7 +108,7 @@ public sealed class FrifloBoundaryTests
             }
         }
 
-        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(3));
+        Assert.That(WorldFields(typeof(WorldFieldProbe)), Has.Count.EqualTo(4));
         Assert.That(offenders, Is.Empty);
     }
 
@@ -114,7 +116,7 @@ public sealed class FrifloBoundaryTests
     {
         const BindingFlags Fields = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
             | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader) };
+        Type[] world = { typeof(World), typeof(IWorldWriter), typeof(IWorldReader), typeof(MatchWorld) };
 
         return type.GetFields(Fields)
             .Where(f => Unwrap(f.FieldType).Any(t => world.Contains(t)))
@@ -270,12 +272,15 @@ public class WorldFieldProbe
 
     private readonly List<IWorldReader> readers;
 
-    public WorldFieldProbe(World world)
+    private readonly MatchWorld match;
+
+    public WorldFieldProbe(World world, MatchWorld match)
     {
         shared = world;
-        writer = world;
-        readers = new List<IWorldReader> { world.Reader };
+        writer = world.Writer();
+        readers = new List<IWorldReader> { world.Reader() };
+        this.match = match;
     }
 
-    public bool IsEmpty => shared == null && writer == null && readers.Count == 0;
+    public bool IsEmpty => shared == null && writer == null && readers.Count == 0 && match == null;
 }

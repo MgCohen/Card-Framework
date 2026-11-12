@@ -45,6 +45,7 @@ public sealed class PrimitiveBoundaryTests
     {
         Assert.That(HooksAPrimitive(typeof(HealthSpy)), Is.True);
         Assert.That(HooksAPrimitive(typeof(MessageSpy)), Is.True);
+        Assert.That(HooksAPrimitive(typeof(OpenHealthSpy<>)), Is.True);
         Assert.That(HooksAPrimitive(typeof(PrimitiveTests)), Is.False);
     }
 

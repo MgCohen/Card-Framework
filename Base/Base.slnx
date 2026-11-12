@@ -2,6 +2,23 @@
   <Folder Name="/App/">
     <Project Path="App/Host/App.Host.csproj" />
   </Folder>
+  <Folder Name="/Modules/" />
+  <Folder Name="/Modules/Cards/">
+    <Project Path="Modules/Cards/Cards.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Contracts.Commands.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Domain.Shared.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Domain.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Infrastructure.csproj" />
+    <Project Path="Modules/Cards/Projects/Cards.Handlers.Commands.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Resources/">
+    <Project Path="Modules/Resources/Resources.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Contracts.Commands.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Domain.Shared.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Domain.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Infrastructure.csproj" />
+    <Project Path="Modules/Resources/Projects/Resources.Handlers.Commands.csproj" />
+  </Folder>
   <Folder Name="/Plugins/" />
   <Folder Name="/Plugins/Ecs/">
     <Project Path="Plugins/Ecs/Ecs.csproj" />
@@ -9,10 +26,17 @@
     <Project Path="Plugins/Ecs/Projects/Ecs.Domain.Shared.csproj" />
     <Project Path="Plugins/Ecs/Projects/Ecs.Domain.csproj" />
     <Project Path="Plugins/Ecs/Projects/Ecs.Handlers.Commands.csproj" />
+    <Project Path="Plugins/Ecs/Projects/Ecs.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Plugins/Network/">
     <Project Path="Plugins/Network/Network.csproj" />
     <Project Path="Plugins/Network/Projects/Network.Domain.csproj" />
+  </Folder>
+  <Folder Name="/Plugins/Peers/">
+    <Project Path="Plugins/Peers/Peers.csproj" />
+    <Project Path="Plugins/Peers/Projects/Peers.Contracts.Commands.csproj" />
+    <Project Path="Plugins/Peers/Projects/Peers.Domain.csproj" />
+    <Project Path="Plugins/Peers/Projects/Peers.Handlers.Commands.csproj" />
   </Folder>
   <Folder Name="/Plugins/TypeKeys/">
     <Project Path="Plugins/TypeKeys/TypeKeys.csproj" />
@@ -26,8 +50,11 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Tests/App.Tests/App.Tests.csproj" />
+    <Project Path="Tests/Cards.Tests/Cards.Tests.csproj" />
     <Project Path="Tests/Ecs.Tests/Ecs.Tests.csproj" />
     <Project Path="Tests/Network.Tests/Network.Tests.csproj" />
+    <Project Path="Tests/Peers.Tests/Peers.Tests.csproj" />
+    <Project Path="Tests/Schema.Tests/Schema.Tests.csproj" />
     <Project Path="Tests/Smoke.Tests/Smoke.Tests.csproj" />
     <Project Path="Tests/Testing/Testing.csproj" />
     <Project Path="Tests/TypeKeys.Fixtures/TypeKeys.Fixtures.csproj" />
