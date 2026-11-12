@@ -1,0 +1,7 @@
+<Project>
+  <!-- This file does not import a parent Directory.Build.targets, so MSBuild sees nothing outside Base/. -->
+  <!-- LangVersion is here, not in the props file: VSA.Sdk sets LangVersion to latest after Directory.Build.props. -->
+  <PropertyGroup>
+    <LangVersion>11</LangVersion>
+  </PropertyGroup>
+</Project>
