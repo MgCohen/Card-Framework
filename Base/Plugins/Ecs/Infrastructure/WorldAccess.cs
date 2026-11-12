@@ -1,0 +1,29 @@
+using System.Runtime.CompilerServices;
+using Ecs.Domain;
+
+namespace Ecs.Infrastructure;
+
+internal static class WorldAccess
+{
+    private static readonly ConditionalWeakTable<World, WorldWriter> Writers = new ConditionalWeakTable<World, WorldWriter>();
+
+    internal static IWorldReader Reader(this World world)
+    {
+        return new WorldReader(world);
+    }
+
+    internal static IWorldWriter Writer(this World world)
+    {
+        return Writers.GetValue(world, static bound => new WorldWriter(bound));
+    }
+
+    internal static IWorldReader Reader(this MatchWorld match)
+    {
+        return match.World.Reader();
+    }
+
+    internal static IWorldWriter Writer(this MatchWorld match)
+    {
+        return match.World.Writer();
+    }
+}

@@ -2,6 +2,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: en-US
 tone_instructions: >-
+  If a PR changes files under Base/, it must not change Assets/, Packages/, ProjectSettings/, Tools/ or docs/. Flag it.
   Be short and direct. Give each finding with the file, the rule it breaks and one fix.
   Do not praise. Do not restate the diff.
 
@@ -14,6 +15,9 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Base phase PRs are stacked: they target base or the previous phase branch, not main.
+    base_branches:
+      - ".*"
 
   # Unity-generated and third-party files. Do not review them.
   path_filters:
@@ -33,6 +37,18 @@ reviews:
     - "!**/*.inputactions"
 
   path_instructions:
+    - path: "Base/**"
+      instructions: |
+        .NET base stack in the VSA shape. It runs with no Unity. Read Base/CLAUDE.md.
+        Examine these rules:
+        - Only Shared/Ecs references Friflo.Engine.ECS. Other code uses Entity, IWorldReader and IWorldWriter.
+        - Only a mutation handler holds IWorldWriter. No cast from a reader to a writer.
+        - LangVersion is 11. Flag static abstract interface members and other runtime-only features in layers that Unity uses.
+        - Flag a package source in a project file, NoWarn, or TreatWarningsAsErrors set to false.
+        - Slices and layer projects follow vsa-template/docs/slice-layout.md. A slice has one kind of handler.
+        - Flag each change to gate.ps1, global.json, nuget.config, Directory.Build.* or .editorconfig. These files are the gate.
+        - Flag WarningsNotAsErrors, MSBuildWarningsNotAsErrors, LangVersion, severity = none, [Ignore] and [Explicit].
+        - Comments warn about what the code does not show. Flag comments that narrate the code.
     - path: "Assets/**/*.cs"
       instructions: |
         Unity card-game framework. It is server-authoritative and event-sourced. Read docs/architecture.md.

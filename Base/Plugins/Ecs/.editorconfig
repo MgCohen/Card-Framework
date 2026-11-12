@@ -1,0 +1,3 @@
+# A key implements a Friflo marker through the Ecs markers. Only this module names the Friflo markers.
+[*.cs]
+vsa.VSA1007.allowed_bases = Friflo.Engine.ECS.IComponent, Friflo.Engine.ECS.ITag
