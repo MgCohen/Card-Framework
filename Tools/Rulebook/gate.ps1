@@ -133,6 +133,29 @@ function Invoke-Unity([string[]] $arguments, [string] $outFile) {
   return $p.ExitCode
 }
 
+# --- LFS files -------------------------------------------------------------------------------
+
+# A worktree that the Claude app makes can have LFS pointer files in place of the real files, and
+# Unity then cannot compile. The objects are in the shared .git/lfs store, so a local checkout fixes it.
+function Get-LfsPointers {
+  @(git -C $Root ls-files ':(attr:filter=lfs)') | Where-Object {
+    $path = Join-Path $Root $_
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $false }
+    $stream = [IO.File]::OpenRead($path)
+    try { $head = New-Object byte[] 24; $n = $stream.Read($head, 0, 24) } finally { $stream.Dispose() }
+    [Text.Encoding]::ASCII.GetString($head, 0, $n) -eq 'version https://git-lfs.'
+  }
+}
+if (Get-Command git -ErrorAction SilentlyContinue) {
+  $pointers = @(Get-LfsPointers)
+  if ($pointers.Count -gt 0) {
+    git -C $Root lfs checkout 2>&1 | Out-Null
+    if (@(Get-LfsPointers).Count -gt 0) { git -C $Root lfs pull 2>&1 | Out-Null }
+    $left = @(Get-LfsPointers).Count
+    Write-Host "WARN lfs: $($pointers.Count) LFS pointer file(s) found; $($pointers.Count - $left) replaced with the real files, $left left."
+  }
+}
+
 $runs = @()
 foreach ($mode in @('editmode', 'playmode')) {
   $enabledIds = @($stages | Where-Object { $_.enabled -and $_.kind -eq $mode } | ForEach-Object { $_.id })

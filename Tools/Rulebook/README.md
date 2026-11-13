@@ -17,6 +17,10 @@ powershell -NoProfile -File Tools/Rulebook/gate.ps1 -Rule ARCH-05   # one rule a
 
 Close the Unity Editor first: a batch run cannot open a project that the Editor has open.
 
+Before Unity starts, the gate looks for Git LFS pointer files in place of the real files. A worktree
+that the Claude app makes can have them. If it finds some, it runs `git lfs checkout` (and
+`git lfs pull` if objects are missing) and prints one `WARN lfs` line. The check takes about 0.5 s.
+
 The console prints one line per stage, then each failure with the rule, the file and line, and the
 fix. The exit code is 1 on FAIL and 0 on PASS or WARN. WARN means only advisory rules failed.
 Each run is kept in `Logs/gate/history/<yyyyMMdd-HHmmss>/` (the newest 50).
