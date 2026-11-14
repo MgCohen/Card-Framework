@@ -1,0 +1,16 @@
+<Project>
+  <!-- VSA.Sdk sets these values for the module projects. App/Host and the test projects use Microsoft.NET.Sdk,
+       so they get the values only from this file. -->
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!-- VSA.Sdk 0.1.0-preview.14 takes the folder of global.json as the app root, and global.json is in the repo root.
+       This VSA version does not know the Unity layout (modules in Source/), so the app root is set here.
+       Delete this group when Base moves to a VSA version that finds Source/ itself (M1). -->
+  <PropertyGroup>
+    <VsaAppRoot>$(MSBuildThisFileDirectory)</VsaAppRoot>
+  </PropertyGroup>
+</Project>

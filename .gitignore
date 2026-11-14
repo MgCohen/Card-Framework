@@ -51,6 +51,8 @@ ExportedObj/
 *.csproj
 *.unityproj
 *.sln
+/*.slnx
+!/CardFramework.slnx
 *.suo
 *.tmp
 *.user
@@ -109,12 +111,12 @@ InitTestScene*.unity*
 # Local agent-mail config (machine-specific paths)
 .agent-mail-config.json
 
-# Base/: the .NET base stack
-Base/**/bin/
-Base/**/obj/
-Base/**/bin~/
-Base/**/obj~/
-Base/**/TestResults/
-# The Unity rules above ignore *.csproj. Base/ keeps its project files in git.
-!Base/**/*.csproj
+# Source/: the .NET code
+Source/**/bin/
+Source/**/obj/
+Source/**/bin~/
+Source/**/obj~/
+Source/**/TestResults/
+# The Unity rules above ignore *.csproj. Source/ keeps its project files in git.
+!Source/**/*.csproj
 

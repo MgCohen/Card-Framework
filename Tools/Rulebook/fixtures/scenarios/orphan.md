@@ -1,1 +1,0 @@
-# Scenario with no test

@@ -1,0 +1,27 @@
+# Builds Source/ and runs the .NET tests. The Unity side needs a Unity license, so it runs on a dev machine.
+name: dotnet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # GITHUB_TOKEN reads the VSA packages from GitHub Packages (nuget.config).
+      - name: Test
+        run: dotnet test --solution CardFramework.slnx -c Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
