@@ -1,8 +1,0 @@
-<Project>
-  <!-- This file does not import a parent Directory.Build.props, so MSBuild sees nothing outside Base/. -->
-  <PropertyGroup>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-  </PropertyGroup>
-</Project>
