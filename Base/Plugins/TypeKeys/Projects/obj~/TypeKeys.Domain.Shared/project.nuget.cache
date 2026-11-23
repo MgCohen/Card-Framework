@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "HDf7j8CJSl8=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\Plugins\\TypeKeys\\Projects\\TypeKeys.Domain.Shared.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers\\0.1.0-preview.14\\vsa.analyzers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}

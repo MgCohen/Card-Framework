@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "dgSpecHash": "MYqOtMkCgwU=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\Plugins\\Ecs\\Projects\\Ecs.Infrastructure.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\friflo.engine.ecs\\3.6.0\\friflo.engine.ecs.3.6.0.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\friflo.json.burst\\1.0.4\\friflo.json.burst.1.0.4.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\friflo.json.fliox\\1.0.4\\friflo.json.fliox.1.0.4.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\friflo.json.fliox.annotation\\1.0.4\\friflo.json.fliox.annotation.1.0.4.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.14\\microsoft.extensions.dependencyinjection.abstractions.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers\\0.1.0-preview.14\\vsa.analyzers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.domain\\0.1.0-preview.14\\vsa.domain.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.infrastructure\\0.1.0-preview.14\\vsa.infrastructure.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}

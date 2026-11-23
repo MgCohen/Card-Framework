@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "hVNGrT5zA6I=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\Modules\\Cards\\Projects\\Cards.Contracts.Commands.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers\\0.1.0-preview.14\\vsa.analyzers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts\\0.1.0-preview.14\\vsa.contracts.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.commands\\0.1.0-preview.14\\vsa.contracts.commands.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}

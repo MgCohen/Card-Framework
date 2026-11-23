@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "TpzEsJhJijo=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\Plugins\\TypeKeys\\TypeKeys.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.configuration\\10.0.14\\microsoft.extensions.configuration.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.configuration.abstractions\\10.0.14\\microsoft.extensions.configuration.abstractions.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.configuration.binder\\10.0.14\\microsoft.extensions.configuration.binder.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.14\\microsoft.extensions.dependencyinjection.abstractions.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.14\\microsoft.extensions.primitives.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers\\0.1.0-preview.14\\vsa.analyzers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.module\\0.1.0-preview.14\\vsa.module.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}

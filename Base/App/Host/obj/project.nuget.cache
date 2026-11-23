@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "dgSpecHash": "mKz1JeWkTgQ=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\App\\Host\\App.Host.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.composition\\0.1.0-preview.14\\vsa.composition.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts\\0.1.0-preview.14\\vsa.contracts.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.commands\\0.1.0-preview.14\\vsa.contracts.commands.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.events\\0.1.0-preview.14\\vsa.contracts.events.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.requests\\0.1.0-preview.14\\vsa.contracts.requests.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.domain\\0.1.0-preview.14\\vsa.domain.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers\\0.1.0-preview.14\\vsa.handlers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers.commands\\0.1.0-preview.14\\vsa.handlers.commands.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers.events\\0.1.0-preview.14\\vsa.handlers.events.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers.requests\\0.1.0-preview.14\\vsa.handlers.requests.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.host\\0.1.0-preview.14\\vsa.host.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.infrastructure\\0.1.0-preview.14\\vsa.infrastructure.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.module\\0.1.0-preview.14\\vsa.module.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.presenters\\0.1.0-preview.14\\vsa.presenters.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.views\\0.1.0-preview.14\\vsa.views.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}

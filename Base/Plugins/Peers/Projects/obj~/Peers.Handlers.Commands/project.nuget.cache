@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "SBf2hbwUlo0=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\matheus.cohen\\Documents\\Projects\\Card-Framework\\Base\\Plugins\\Peers\\Projects\\Peers.Handlers.Commands.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\10.0.14\\microsoft.extensions.dependencyinjection.abstractions.10.0.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers\\0.1.0-preview.14\\vsa.analyzers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.analyzers.markers\\0.1.0-preview.14\\vsa.analyzers.markers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts\\0.1.0-preview.14\\vsa.contracts.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.commands\\0.1.0-preview.14\\vsa.contracts.commands.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.contracts.events\\0.1.0-preview.14\\vsa.contracts.events.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers\\0.1.0-preview.14\\vsa.handlers.0.1.0-preview.14.nupkg.sha512",
+    "C:\\Users\\matheus.cohen\\.nuget\\packages\\vsa.handlers.commands\\0.1.0-preview.14\\vsa.handlers.commands.0.1.0-preview.14.nupkg.sha512"
+  ],
+  "logs": []
+}
